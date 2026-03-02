@@ -1,0 +1,106 @@
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 42px;
+  min-height: 42px;
+  background: var(--bg-bar);
+  border-bottom: 1px solid var(--border);
+  padding: 0 16px;
+  z-index: 100;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo {
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+// ── Status dot ────────────────────────────────────────────────────────────────
+
+.statusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dot-idle);
+  transition: background $transition;
+
+  &.ok {
+    background: var(--dot-ok);
+    box-shadow: 0 0 6px var(--dot-ok);
+  }
+
+  &.error {
+    background: var(--dot-error);
+    box-shadow: 0 0 6px var(--dot-error);
+  }
+}
+
+.statusLabel {
+  font-size: 11px;
+  color: var(--text-secondary);
+  letter-spacing: 0.06em;
+  min-width: 60px;
+  font-family: var(--font-mono);
+}
+
+// ── Buttons ───────────────────────────────────────────────────────────────────
+
+.btnIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: $radius;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all $transition;
+  font-size: 13px;
+
+  &:hover {
+    background: var(--bg-handle);
+    color: var(--text-primary);
+    border-color: var(--bg-handle-h);
+  }
+}
+
+.btnRun {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  height: 28px;
+  background: var(--accent);
+  border: none;
+  border-radius: $radius;
+  cursor: pointer;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  transition: all $transition;
+  white-space: nowrap;
+
+  &:hover  { opacity: 0.85; }
+  &:active { transform: scale(0.97); }
+}

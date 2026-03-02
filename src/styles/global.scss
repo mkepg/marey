@@ -1,0 +1,121 @@
+@use "tokens" as *;
+
+// ── Google Fonts ──────────────────────────────────────────────────────────────
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;600;700;800&display=swap");
+
+// ── Reset ─────────────────────────────────────────────────────────────────────
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+// ── CSS Custom Properties — Dark theme (default) ──────────────────────────────
+:root {
+  --font-mono: #{$font-mono};
+  --font-ui:   #{$font-ui};
+  --radius:    #{$radius};
+  --transition: #{$transition};
+
+  // Backgrounds
+  --bg-app:      #0c0c0e;
+  --bg-bar:      #111114;
+  --bg-pane:     #0f0f12;
+  --bg-editor:   #0c0c0e;
+  --bg-terminal: #0a0a0c;
+  --bg-preview:  #111114;
+  --bg-handle:   #1e1e24;
+  --bg-handle-h: #2a2a35;
+
+  // Borders
+  --border:      #1e1e28;
+  --border-soft: #16161e;
+
+  // Text
+  --text-primary:   #e8e8f0;
+  --text-secondary: #6e6e88;
+  --text-muted:     #3a3a50;
+  --text-ok:        #4ade80;
+  --text-error:     #f87171;
+  --text-info:      #60a5fa;
+
+  // Accent
+  --accent:     #7c6af7;
+  --accent-dim: #2d2858;
+
+  // Status dots
+  --dot-ok:    #4ade80;
+  --dot-error: #f87171;
+  --dot-idle:  #3a3a50;
+}
+
+// ── CSS Custom Properties — Light theme ───────────────────────────────────────
+[data-theme="light"] {
+  --bg-app:      #f5f5f7;
+  --bg-bar:      #ffffff;
+  --bg-pane:     #f9f9fb;
+  --bg-editor:   #ffffff;
+  --bg-terminal: #f2f2f5;
+  --bg-preview:  #fafafc;
+  --bg-handle:   #e2e2e8;
+  --bg-handle-h: #d0d0da;
+
+  --border:      #e2e2e8;
+  --border-soft: #ebebf0;
+
+  --text-primary:   #111118;
+  --text-secondary: #6b6b80;
+  --text-muted:     #b0b0c0;
+  --text-ok:        #16a34a;
+  --text-error:     #dc2626;
+  --text-info:      #2563eb;
+
+  --accent:     #6355e8;
+  --accent-dim: #ede9fd;
+
+  --dot-ok:    #16a34a;
+  --dot-error: #dc2626;
+  --dot-idle:  #c0c0cc;
+}
+
+// ── Base ──────────────────────────────────────────────────────────────────────
+html,
+body {
+  height: 100%;
+  background: var(--bg-app);
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  height: 100%;
+}
+
+// ── Scrollbar ─────────────────────────────────────────────────────────────────
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+// ── Animations ────────────────────────────────────────────────────────────────
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

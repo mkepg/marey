@@ -1,0 +1,53 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: var(--bg-app);
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+
+.split {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+// ── Left pane ─────────────────────────────────────────────────────────────────
+
+.leftPane {
+  display: flex;
+  flex-direction: column;
+  min-width: 280px;
+  overflow: hidden;
+  background: var(--bg-pane);
+}
+
+.editorWrap {
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.terminal {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-terminal);
+  border-top: 1px solid var(--border);
+  overflow: hidden;
+  min-height: 60px;
+  flex-shrink: 0;
+}
+
+// ── Right pane ────────────────────────────────────────────────────────────────
+
+.rightPane {
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  overflow: hidden;
+  background: var(--bg-preview);
+}

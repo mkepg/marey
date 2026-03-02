@@ -1,0 +1,48 @@
+// Shared handle base
+%handle-base {
+  background: var(--border);
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
+  transition: background $transition;
+
+  &:hover {
+    background: var(--accent);
+  }
+
+  &::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--text-muted);
+    border-radius: 1px;
+  }
+}
+
+// ── Horizontal handle (between left and right panes) ──────────────────────────
+.horizontal {
+  @extend %handle-base;
+
+  width: 5px;
+  cursor: col-resize;
+
+  &::after {
+    width: 1px;
+    height: 28px;
+  }
+}
+
+// ── Vertical handle (between editor and terminal) ─────────────────────────────
+.vertical {
+  @extend %handle-base;
+
+  height: 5px;
+  cursor: row-resize;
+
+  &::after {
+    width: 28px;
+    height: 1px;
+  }
+}

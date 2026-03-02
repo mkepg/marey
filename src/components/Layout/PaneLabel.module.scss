@@ -1,0 +1,26 @@
+.label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 14px;
+  background: var(--bg-bar);
+  border-bottom: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  user-select: none;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+}
+
+.dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}

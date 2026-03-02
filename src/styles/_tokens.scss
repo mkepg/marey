@@ -1,0 +1,19 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Design tokens — consumed as CSS custom properties at runtime.
+// These SCSS variables are only used to generate the :root / [data-theme] blocks
+// below; all component styles reference var(--token-name) directly so that
+// runtime theme switching via data-theme works without recompilation.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Typography
+$font-mono: "'JetBrains Mono', monospace";
+$font-ui:   "'Syne', sans-serif";
+
+// Spacing
+$radius:     3px;
+$bar-height: 42px;
+$label-height: 32px;
+$handle-size: 5px;
+
+// Transitions
+$transition: 160ms ease;
