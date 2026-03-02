@@ -7,13 +7,8 @@ import type {
 } from "./types";
 import { NAMED_COLORS } from "./lexer";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Declare Parser  (recursive-descent, 1-token lookahead)
-// ─────────────────────────────────────────────────────────────────────────────
-
 export function parse(tokens: Token[]): SceneNode {
   let pos = 0;
-
   const peek = (): Token => tokens[pos];
 
   const consume = (expectedType?: Token["type"]): Token => {
@@ -30,7 +25,6 @@ export function parse(tokens: Token[]): SceneNode {
     return t;
   };
 
-  // ── Value parser ────────────────────────────────────────────────────────────
   function parseValue(): AstValue {
     const t = peek();
 
@@ -38,22 +32,22 @@ export function parse(tokens: Token[]): SceneNode {
       consume();
       return { kind: "number", value: t.value as number };
     }
-
     if (t.type === "HEX_COLOR") {
       consume();
       return { kind: "color", value: t.value as string };
     }
-
     if (t.type === "NAMED_COLOR") {
       consume();
       return { kind: "color", value: NAMED_COLORS[t.value as string] };
     }
-
     if (t.type === "STRING") {
       consume();
       return { kind: "string", value: t.value as string };
     }
-
+    if (t.type === "IDENT") {
+      consume();
+      return { kind: "string", value: t.value as string };
+    }
     if (t.type === "LPAREN") {
       consume("LPAREN");
       const x = consume("NUMBER");
@@ -62,7 +56,6 @@ export function parse(tokens: Token[]): SceneNode {
       consume("RPAREN");
       return { kind: "point", x: x.value as number, y: y.value as number };
     }
-
     if (t.type === "LBRACKET") {
       consume("LBRACKET");
       const pts: Array<{ x: number; y: number }> = [];
@@ -87,7 +80,6 @@ export function parse(tokens: Token[]): SceneNode {
     };
   }
 
-  // ── Object parser ───────────────────────────────────────────────────────────
   function parseObject(): ObjectNode {
     const typeTok = consume("KEYWORD");
     const nameTok = consume("IDENT");
@@ -107,7 +99,6 @@ export function parse(tokens: Token[]): SceneNode {
     }
 
     consume("RBRACE");
-
     return {
       type: typeTok.value as ObjectType,
       name: nameTok.value as string,
@@ -116,7 +107,6 @@ export function parse(tokens: Token[]): SceneNode {
     };
   }
 
-  // ── Scene root ──────────────────────────────────────────────────────────────
   const sceneTok = peek();
   if (sceneTok.type !== "KEYWORD" || sceneTok.value !== "scene") {
     throw {
@@ -126,6 +116,7 @@ export function parse(tokens: Token[]): SceneNode {
       col: sceneTok.col,
     };
   }
+
   consume("KEYWORD");
   consume("LBRACE");
 
