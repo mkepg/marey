@@ -1,15 +1,10 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// Declare Compiler — Shared Types
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ── Tokens ────────────────────────────────────────────────────────────────────
-
 export type TokenType =
   | "KEYWORD"
   | "IDENT"
   | "NUMBER"
   | "HEX_COLOR"
   | "NAMED_COLOR"
+  | "SCALE_MODE"
   | "STRING"
   | "LBRACE"
   | "RBRACE"
@@ -28,8 +23,6 @@ export interface Token {
   readonly col: number;
 }
 
-// ── AST Value Nodes ───────────────────────────────────────────────────────────
-
 export interface NumberValue {
   readonly kind: "number";
   readonly value: number;
@@ -37,7 +30,7 @@ export interface NumberValue {
 
 export interface ColorValue {
   readonly kind: "color";
-  readonly value: string; // always resolved to #rrggbb or #rgb
+  readonly value: string;
 }
 
 export interface StringValue {
@@ -56,14 +49,21 @@ export interface PointListValue {
   readonly value: ReadonlyArray<{ readonly x: number; readonly y: number }>;
 }
 
+/** Closed enum for the scaleMode property. Parsed as a first-class literal, not a string. */
+export type ScaleMode = "contain" | "cover" | "fill" | "none";
+
+export interface ScaleModeValue {
+  readonly kind: "scaleMode";
+  readonly value: ScaleMode;
+}
+
 export type AstValue =
   | NumberValue
   | ColorValue
   | StringValue
   | PointValue
-  | PointListValue;
-
-// ── AST Nodes ─────────────────────────────────────────────────────────────────
+  | PointListValue
+  | ScaleModeValue;
 
 export type ObjectType = "circle" | "rectangle" | "polygon" | "text" | "group";
 
@@ -82,8 +82,6 @@ export interface SceneNode {
 
 export type AstNode = SceneNode | ObjectNode;
 
-// ── Compiler Error ────────────────────────────────────────────────────────────
-
 export interface CompilerError {
   readonly phase: "LEX" | "PARSE" | "TYPE" | "RENDER";
   readonly message: string;
@@ -91,16 +89,12 @@ export interface CompilerError {
   readonly col?: number;
 }
 
-// ── Log Entry ─────────────────────────────────────────────────────────────────
-
 export type LogKind = "info" | "ok" | "error" | "sys";
 
 export interface LogEntry {
   readonly kind: LogKind;
   readonly text: string;
 }
-
-// ── Compile Result ────────────────────────────────────────────────────────────
 
 export interface CompileResult {
   readonly logs: LogEntry[];

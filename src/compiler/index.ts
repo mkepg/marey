@@ -1,22 +1,54 @@
 import type { CompileResult, LogEntry, CompilerError } from "./types";
-import { lex } from "./lexer";
-import { parse } from "./parser";
-import { typeCheck } from "./typeChecker";
+import { lex }         from "./lexer";
+import { parse }       from "./parser";
+import { typeCheck }   from "./typeChecker";
 import { renderScene } from "./renderer";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Declare Compiler — Pipeline Orchestrator
-//
-// The render stage is now async (PixiJS v8 requires await app.init()).
-// compile() therefore returns a Promise that resolves to a CompileResult
-// plus an optional cleanup function to destroy the PixiJS app between runs.
-// ─────────────────────────────────────────────────────────────────────────────
-
 export interface CompileResultWithCleanup extends CompileResult {
-  /** Destroys the PixiJS Application and frees GPU resources. Call before
-   *  every subsequent compile to prevent context/memory leaks. */
   cleanup: (() => void) | null;
 }
+
+// ─── Error normalisation ──────────────────────────────────────────────────────
+
+/**
+ * Safely extracts a structured CompilerError from anything that was thrown.
+ * The compiler throws plain objects conforming to CompilerError, but third-party
+ * code (e.g. PixiJS) may throw native Error instances or arbitrary values.
+ */
+function normaliseError(raw: unknown): { phase: string; message: string; location: string } {
+  // Our own structured errors
+  if (
+    raw !== null &&
+    typeof raw === "object" &&
+    "phase" in raw &&
+    "message" in raw
+  ) {
+    const e = raw as CompilerError;
+    const location =
+      e.line !== undefined && e.col !== undefined
+        ? ` — line ${e.line}, column ${e.col}`
+        : "";
+    return {
+      phase:    (e.phase ?? "error").toLowerCase(),
+      message:  e.message,
+      location,
+    };
+  }
+
+  // Native Error (e.g. from PixiJS or an unexpected runtime fault)
+  if (raw instanceof Error) {
+    return { phase: "runtime", message: raw.message, location: "" };
+  }
+
+  // Absolute fallback
+  return {
+    phase:   "error",
+    message: String(raw),
+    location: "",
+  };
+}
+
+// ─── Compile pipeline ─────────────────────────────────────────────────────────
 
 export async function compile(
   source: string,
@@ -41,7 +73,9 @@ export async function compile(
     logs.push({ kind: "info", text: "[type]    checking..." });
     const typeErrors = typeCheck(ast);
     if (typeErrors.length > 0) {
-      typeErrors.forEach((e) => logs.push({ kind: "error", text: `[type]    ${e}` }));
+      typeErrors.forEach((msg) =>
+        logs.push({ kind: "error", text: `[type]    ${msg}` })
+      );
       return { logs, success: false, cleanup: null };
     }
     logs.push({ kind: "ok", text: "[type]    no errors" });
@@ -49,17 +83,21 @@ export async function compile(
     logs.push({ kind: "info", text: "[pixi]    initialising renderer..." });
     const cleanup = await renderScene(ast, hostElement, isDark);
     const elapsed = (performance.now() - t0).toFixed(1);
-    logs.push({ kind: "ok", text: `[pixi]    rendered via WebGL/WebGPU in ${elapsed}ms` });
+    logs.push({
+      kind: "ok",
+      text: `[pixi]    rendered via WebGL/WebGPU in ${elapsed}ms`,
+    });
 
     return { logs, success: true, cleanup };
+
   } catch (raw: unknown) {
-    const e = raw as CompilerError;
-    const loc = e.line ? ` (${e.line}:${e.col})` : "";
-    const phase = (e.phase ?? "error").toLowerCase();
-    logs.push({ kind: "error", text: `[${phase}]  ${e.message}${loc}` });
+    const { phase, message, location } = normaliseError(raw);
+    logs.push({
+      kind: "error",
+      text: `[${phase}]  ${message}${location}`,
+    });
     return { logs, success: false, cleanup: null };
   }
 }
 
-// Re-export types consumed by the rest of the app
 export type { CompileResult, LogEntry, LogKind } from "./types";
