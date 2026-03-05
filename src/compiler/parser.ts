@@ -8,9 +8,6 @@ import type {
 } from "./types";
 import { NAMED_COLORS, KEYWORDS } from "./lexer";
 
-// ─── Human-readable token descriptions ────────────────────────────────────────
-// Never expose raw token type names (LBRACE, IDENT, etc.) in user-facing messages.
-
 function describeToken(t: Token): string {
   switch (t.type) {
     case "KEYWORD":     return `keyword '${t.value as string}'`;
@@ -32,21 +29,19 @@ function describeToken(t: Token): string {
   }
 }
 
-// ─── Parser ───────────────────────────────────────────────────────────────────
-
 export function parse(tokens: Token[]): SceneNode {
   let pos = 0;
+  let currentContext = "the scene"; // Tracks the local object scope for precise error attribution
 
   const peek = (): Token => tokens[pos];
-
+  
   const consume = (expectedType?: Token["type"]): Token => {
     const t = tokens[pos];
     if (expectedType && t.type !== expectedType) {
-      // Translate the expected type into something the author can act on.
       const expectedDesc = expectedTypeDescription(expectedType, t);
       throw {
         phase: "PARSE" as const,
-        message: `Expected ${expectedDesc}, but found ${describeToken(t)}.`,
+        message: `In ${currentContext}: Expected ${expectedDesc}, but found ${describeToken(t)}.`,
         line: t.line,
         col:  t.col,
       };
@@ -55,10 +50,6 @@ export function parse(tokens: Token[]): SceneNode {
     return t;
   };
 
-  /**
-   * Produces a context-aware description of what was expected,
-   * without leaking internal token type names.
-   */
   function expectedTypeDescription(expected: Token["type"], got: Token): string {
     switch (expected) {
       case "LBRACE":  return "'{' to open a block";
@@ -76,68 +67,54 @@ export function parse(tokens: Token[]): SceneNode {
     }
   }
 
-  // ─── Value parser ──────────────────────────────────────────────────────────
-
   function parseValue(): AstValue {
     const t = peek();
 
-    // Numeric literal
     if (t.type === "NUMBER") {
       consume();
       return { kind: "number", value: t.value as number };
     }
-
-    // Hex color literal (#RGB | #RRGGBB)
     if (t.type === "HEX_COLOR") {
       consume();
       return { kind: "color", value: t.value as string };
     }
-
-    // Named color keyword (red, blue, green, …)
     if (t.type === "NAMED_COLOR") {
       consume();
       return { kind: "color", value: NAMED_COLORS[t.value as string] };
     }
-
-    // Quoted string literal
     if (t.type === "STRING") {
       consume();
       return { kind: "string", value: t.value as string };
     }
-
-    // ScaleMode enum literal (contain | cover | fill | none)
     if (t.type === "SCALE_MODE") {
       consume();
       return { kind: "scaleMode", value: t.value as ScaleMode };
     }
 
-    // Point literal: ( number , number )
     if (t.type === "LPAREN") {
       const openTok = consume("LPAREN");
       const xTok    = consume("NUMBER");
       consume("COMMA");
       const yTok    = consume("NUMBER");
 
-      // Guard: extra numbers before the closing paren, e.g. (1, 2, 3)
       if (peek().type === "COMMA") {
         const extra = peek();
         throw {
           phase: "PARSE" as const,
           message:
-            `A point takes exactly two numbers, but found an extra ',' at ` +
+            `In ${currentContext}: A point takes exactly two numbers, but found an extra ',' at ` +
             `line ${extra.line}, column ${extra.col}. ` +
             `Point syntax is (x, y) — for example (400, 300).`,
           line: extra.line,
           col:  extra.col,
         };
       }
-
       if (peek().type !== "RPAREN") {
         const bad = peek();
         throw {
           phase: "PARSE" as const,
           message:
-            `Expected ')' to close the point opened at line ${openTok.line}, ` +
+            `In ${currentContext}: Expected ')' to close the point opened at line ${openTok.line}, ` +
             `column ${openTok.col}, but found ${describeToken(bad)}.`,
           line: bad.line,
           col:  bad.col,
@@ -147,7 +124,6 @@ export function parse(tokens: Token[]): SceneNode {
       return { kind: "point", x: xTok.value as number, y: yTok.value as number };
     }
 
-    // Point-list literal: [ ( n,n ) , ( n,n ) , … ]
     if (t.type === "LBRACKET") {
       const openTok = consume("LBRACKET");
       const pts: Array<{ x: number; y: number }> = [];
@@ -157,7 +133,7 @@ export function parse(tokens: Token[]): SceneNode {
           throw {
             phase: "PARSE" as const,
             message:
-              `Point list opened at line ${openTok.line}, column ${openTok.col} ` +
+              `In ${currentContext}: Point list opened at line ${openTok.line}, column ${openTok.col} ` +
               `was not closed before end of file. Add a closing ']'.`,
             line: openTok.line,
             col:  openTok.col,
@@ -168,13 +144,14 @@ export function parse(tokens: Token[]): SceneNode {
           throw {
             phase: "PARSE" as const,
             message:
-              `Expected a point '(x, y)' inside the point list, ` +
+              `In ${currentContext}: Expected a point '(x, y)' inside the point list, ` +
               `but found ${describeToken(bad)}. ` +
               `Each entry in a point list must be a point, e.g. [(0,0), (100,0), (50,80)].`,
             line: bad.line,
             col:  bad.col,
           };
         }
+
         const ptOpen = consume("LPAREN");
         const x      = consume("NUMBER");
         consume("COMMA");
@@ -185,7 +162,7 @@ export function parse(tokens: Token[]): SceneNode {
           throw {
             phase: "PARSE" as const,
             message:
-              `Expected ')' to close the point opened at line ${ptOpen.line}, ` +
+              `In ${currentContext}: Expected ')' to close the point opened at line ${ptOpen.line}, ` +
               `column ${ptOpen.col}, but found ${describeToken(bad)}.`,
             line: bad.line,
             col:  bad.col,
@@ -193,6 +170,7 @@ export function parse(tokens: Token[]): SceneNode {
         }
         consume("RPAREN");
         pts.push({ x: x.value as number, y: y.value as number });
+
         if (peek().type === "COMMA") consume("COMMA");
       }
 
@@ -200,26 +178,22 @@ export function parse(tokens: Token[]): SceneNode {
         throw {
           phase: "PARSE" as const,
           message:
-            `Empty point list '[]' is not valid. ` +
+            `In ${currentContext}: Empty point list '[]' is not valid. ` +
             `A point list must contain at least 3 points for polygon use, ` +
             `e.g. [(0,0), (100,0), (50,80)].`,
           line: openTok.line,
           col:  openTok.col,
         };
       }
-
       consume("RBRACKET");
       return { kind: "pointList", value: pts };
     }
 
-    // ── Specific, actionable errors for common mistakes ──────────────────────
-
-    // Bare identifier in a value position (e.g. color: myColor)
     if (t.type === "IDENT") {
       throw {
         phase: "PARSE" as const,
         message:
-          `'${t.value as string}' is not a recognised value. ` +
+          `In ${currentContext}: '${t.value as string}' is not a recognised value. ` +
           `Bare names cannot be used as values in Declare v1.0. ` +
           `For colors, use a hex code (e.g. #ff0000) or a color keyword ` +
           `(red, green, blue, white, black, yellow, cyan, magenta, orange). ` +
@@ -229,24 +203,22 @@ export function parse(tokens: Token[]): SceneNode {
       };
     }
 
-    // Object keyword in a value position (e.g. color: circle)
     if (t.type === "KEYWORD") {
       throw {
         phase: "PARSE" as const,
         message:
-          `'${t.value as string}' is an object keyword and cannot be used as a property value. ` +
+          `In ${currentContext}: '${t.value as string}' is an object keyword and cannot be used as a property value. ` +
           `If this was intended as a color, use a hex code or a named color keyword instead.`,
         line: t.line,
         col:  t.col,
       };
     }
 
-    // Stray closing brace/bracket/paren in a value position
     if (t.type === "RBRACE" || t.type === "RBRACKET" || t.type === "RPAREN") {
       throw {
         phase: "PARSE" as const,
         message:
-          `Unexpected ${describeToken(t)} where a property value was expected. ` +
+          `In ${currentContext}: Unexpected ${describeToken(t)} where a property value was expected. ` +
           `This may indicate a missing value, an extra closing bracket, ` +
           `or a misplaced '}'.`,
         line: t.line,
@@ -254,23 +226,21 @@ export function parse(tokens: Token[]): SceneNode {
       };
     }
 
-    // EOF inside a property value
     if (t.type === "EOF") {
       throw {
         phase: "PARSE" as const,
         message:
-          `Reached end of file while reading a property value. ` +
+          `In ${currentContext}: Reached end of file while reading a property value. ` +
           `A value (number, color, string, or point) is required after ':'.`,
         line: t.line,
         col:  t.col,
       };
     }
 
-    // Catch-all
     throw {
       phase: "PARSE" as const,
       message:
-        `Unexpected ${describeToken(t)} where a property value was expected. ` +
+        `In ${currentContext}: Unexpected ${describeToken(t)} where a property value was expected. ` +
         `Valid value types are: number, hex color (#rrggbb), color keyword, ` +
         `quoted string, point (x, y), or point list [(x,y), ...].`,
       line: t.line,
@@ -278,29 +248,21 @@ export function parse(tokens: Token[]): SceneNode {
     };
   }
 
-  // ─── Object block parser ───────────────────────────────────────────────────
-
   function parseObject(): ObjectNode {
     const typeTok = consume("KEYWORD");
     const objType = typeTok.value as string;
 
-    // Missing object name — another keyword or brace follows immediately.
     if (peek().type !== "IDENT") {
       const bad = peek();
       const hint =
         bad.type === "LBRACE"
-          ? ` Every object must have a name before its '{'. ` +
-            `For example: ${objType} myObject { ... }`
+          ? ` Every object must have a name before its '{'. For example: ${objType} myObject { ... }`
           : bad.type === "KEYWORD"
-          ? ` Another keyword was found instead. ` +
-            `Did you forget the object name? ` +
-            `For example: ${objType} myObject { ... }`
+          ? ` Another keyword was found instead. Did you forget the object name? For example: ${objType} myObject { ... }`
           : "";
       throw {
         phase: "PARSE" as const,
-        message:
-          `Expected a name for the '${objType}' object, ` +
-          `but found ${describeToken(bad)}.${hint}`,
+        message: `In ${currentContext}: Expected a name for the '${objType}' object, but found ${describeToken(bad)}.${hint}`,
         line: bad.line,
         col:  bad.col,
       };
@@ -309,14 +271,11 @@ export function parse(tokens: Token[]): SceneNode {
     const nameTok = consume("IDENT");
     const objName = nameTok.value as string;
 
-    // scaleMode / named-color / scale-mode words used as object names
-    // are caught by the lexer (they are not IDENT tokens), but if someone
-    // somehow uses a reserved-looking name, give a clear message.
     if (KEYWORDS.has(objName)) {
       throw {
         phase: "PARSE" as const,
         message:
-          `'${objName}' is a reserved keyword and cannot be used as an object name. ` +
+          `In ${currentContext}: '${objName}' is a reserved keyword and cannot be used as an object name. ` +
           `Choose a different name (e.g. '${objType}1' or 'my${objType}').`,
         line: nameTok.line,
         col:  nameTok.col,
@@ -325,22 +284,36 @@ export function parse(tokens: Token[]): SceneNode {
 
     consume("LBRACE");
 
+    // Establish block context
+    const previousContext = currentContext;
+    currentContext = `'${objType}' object '${objName}'`;
+
     const props: Record<string, AstValue> = {};
     const children: ObjectNode[]          = [];
     const seenProps  = new Set<string>();
     const seenNames  = new Set<string>();
 
     while (peek().type !== "RBRACE" && peek().type !== "EOF") {
-      // ── Child object declaration ───────────────────────────────────────────
       if (peek().type === "KEYWORD") {
-        const childNode = parseObject();
+        // Prevent primitive objects from swallowing a missing brace cascade
+        if (objType !== "group") {
+          const bad = peek();
+          throw {
+            phase: "PARSE" as const,
+            message:
+              `In ${currentContext}: Unexpected object keyword '${bad.value as string}'. ` +
+              `'${objType}' objects cannot contain child objects. Did you forget a closing '}' for '${objName}'?`,
+            line: bad.line,
+            col:  bad.col,
+          };
+        }
 
-        // Duplicate child name check inside this block.
+        const childNode = parseObject();
         if (seenNames.has(childNode.name)) {
           throw {
             phase: "PARSE" as const,
             message:
-              `Duplicate object name '${childNode.name}' inside '${objName}'. ` +
+              `In ${currentContext}: Duplicate object name '${childNode.name}' inside '${objName}'. ` +
               `Every object within the same block must have a unique name.`,
             line: peek().line,
             col:  peek().col,
@@ -351,29 +324,24 @@ export function parse(tokens: Token[]): SceneNode {
         continue;
       }
 
-      // ── Property declaration ───────────────────────────────────────────────
-
-      // A SCALE_MODE token as a property key is almost certainly a typo
-      // (e.g. `contain: ...` instead of `scaleMode: contain`).
       if (peek().type === "SCALE_MODE") {
         const bad = peek();
         throw {
           phase: "PARSE" as const,
           message:
-            `'${bad.value as string}' is a scaleMode value keyword, not a property name. ` +
+            `In ${currentContext}: '${bad.value as string}' is a scaleMode value keyword, not a property name. ` +
             `Did you mean: scaleMode: ${bad.value as string}`,
           line: bad.line,
           col:  bad.col,
         };
       }
 
-      // A NAMED_COLOR token as a property key (e.g. `red: ...`).
       if (peek().type === "NAMED_COLOR") {
         const bad = peek();
         throw {
           phase: "PARSE" as const,
           message:
-            `'${bad.value as string}' is a color keyword, not a property name. ` +
+            `In ${currentContext}: '${bad.value as string}' is a color keyword, not a property name. ` +
             `Property names must be plain identifiers (e.g. 'color', 'position').`,
           line: bad.line,
           col:  bad.col,
@@ -383,19 +351,18 @@ export function parse(tokens: Token[]): SceneNode {
       const key = consume("IDENT");
       const keyName = key.value as string;
 
-      // Duplicate property key inside this block.
       if (seenProps.has(keyName)) {
         throw {
           phase: "PARSE" as const,
           message:
-            `Property '${keyName}' is defined more than once inside '${objName}'. ` +
+            `In ${currentContext}: Property '${keyName}' is defined more than once inside '${objName}'. ` +
             `Each property may only appear once per block.`,
           line: key.line,
           col:  key.col,
         };
       }
-      seenProps.add(keyName);
 
+      seenProps.add(keyName);
       consume("COLON");
       props[keyName] = parseValue();
     }
@@ -404,7 +371,7 @@ export function parse(tokens: Token[]): SceneNode {
       throw {
         phase: "PARSE" as const,
         message:
-          `The '${objType}' block '${objName}' was not closed before end of file. ` +
+          `In ${currentContext}: The '${objType}' block '${objName}' was not closed before end of file. ` +
           `Add a closing '}'.`,
         line: typeTok.line,
         col:  typeTok.col,
@@ -412,6 +379,8 @@ export function parse(tokens: Token[]): SceneNode {
     }
 
     consume("RBRACE");
+    currentContext = previousContext; // Revert Context
+
     return {
       type: typeTok.value as ObjectType,
       name: objName,
@@ -420,10 +389,7 @@ export function parse(tokens: Token[]): SceneNode {
     };
   }
 
-  // ─── Top-level: exactly one scene block ───────────────────────────────────
-
   const firstTok = peek();
-
   if (firstTok.type === "EOF") {
     throw {
       phase: "PARSE" as const,
@@ -453,7 +419,7 @@ export function parse(tokens: Token[]): SceneNode {
     };
   }
 
-  consume("KEYWORD"); // 'scene'
+  consume("KEYWORD");
   consume("LBRACE");
 
   const sceneProps: Record<string, AstValue> = {};
@@ -464,12 +430,11 @@ export function parse(tokens: Token[]): SceneNode {
   while (peek().type !== "RBRACE" && peek().type !== "EOF") {
     if (peek().type === "KEYWORD") {
       const child = parseObject();
-
       if (seenSceneNames.has(child.name)) {
         throw {
           phase: "PARSE" as const,
           message:
-            `Duplicate object name '${child.name}' in the scene. ` +
+            `In ${currentContext}: Duplicate object name '${child.name}' in the scene. ` +
             `Every top-level object must have a unique name.`,
           line: peek().line,
           col:  peek().col,
@@ -485,7 +450,7 @@ export function parse(tokens: Token[]): SceneNode {
       throw {
         phase: "PARSE" as const,
         message:
-          `'${bad.value as string}' is a scaleMode value keyword, not a property name. ` +
+          `In ${currentContext}: '${bad.value as string}' is a scaleMode value keyword, not a property name. ` +
           `Did you mean: scaleMode: ${bad.value as string}`,
         line: bad.line,
         col:  bad.col,
@@ -497,7 +462,7 @@ export function parse(tokens: Token[]): SceneNode {
       throw {
         phase: "PARSE" as const,
         message:
-          `'${bad.value as string}' is a color keyword, not a property name. ` +
+          `In ${currentContext}: '${bad.value as string}' is a color keyword, not a property name. ` +
           `Property names must be plain identifiers (e.g. 'background', 'size').`,
         line: bad.line,
         col:  bad.col,
@@ -511,14 +476,13 @@ export function parse(tokens: Token[]): SceneNode {
       throw {
         phase: "PARSE" as const,
         message:
-          `Property '${keyName}' is defined more than once in the scene block. ` +
+          `In ${currentContext}: Property '${keyName}' is defined more than once in the scene block. ` +
           `Each property may only appear once.`,
         line: key.line,
         col:  key.col,
       };
     }
     seenSceneProps.add(keyName);
-
     consume("COLON");
     sceneProps[keyName] = parseValue();
   }
@@ -527,16 +491,14 @@ export function parse(tokens: Token[]): SceneNode {
     throw {
       phase: "PARSE" as const,
       message:
-        "The 'scene' block was not closed before end of file. Add a closing '}'.",
+        `In ${currentContext}: The 'scene' block was not closed before end of file. Add a closing '}'.`,
       line: firstTok.line,
       col:  firstTok.col,
     };
   }
 
-  consume("RBRACE"); // closing '}'
+  consume("RBRACE");
 
-  // ── Trailing-token check ───────────────────────────────────────────────────
-  // Nothing is permitted after the scene block closes.
   const trailing = peek();
   if (trailing.type !== "EOF") {
     let hint = "";
@@ -553,8 +515,7 @@ export function parse(tokens: Token[]): SceneNode {
     }
     throw {
       phase: "PARSE" as const,
-      message:
-        `Unexpected ${describeToken(trailing)} after the scene block closed.${hint}`,
+      message: `Unexpected ${describeToken(trailing)} after the scene block closed.${hint}`,
       line: trailing.line,
       col:  trailing.col,
     };
