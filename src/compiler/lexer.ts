@@ -1,6 +1,4 @@
-import type { Token, TokenType, ScaleMode } from "./types";
-
-// ─── Reserved word sets ────────────────────────────────────────────────────────
+import type { Token, TokenType, SceneFit } from "./types";
 
 export const KEYWORDS = new Set<string>([
   "scene",
@@ -23,11 +21,7 @@ export const NAMED_COLORS: Readonly<Record<string, string>> = {
   orange:  "#ffa500",
 };
 
-/**
- * Closed set of valid scaleMode enum literals.
- * Emitted as SCALE_MODE tokens — distinct from IDENT and KEYWORD.
- */
-export const SCALE_MODE_VALUES = new Set<string>([
+export const SCENE_FIT_VALUES = new Set<string>([
   "contain",
   "cover",
   "fill",
@@ -44,8 +38,6 @@ const SINGLE_CHAR_MAP: Readonly<Record<string, TokenType>> = {
   ",": "COMMA",
   ":": "COLON",
 };
-
-// ─── Lexer ─────────────────────────────────────────────────────────────────────
 
 export function lex(src: string): Token[] {
   const tokens: Token[] = [];
@@ -64,9 +56,8 @@ export function lex(src: string): Token[] {
   while (i < src.length) {
     const ch = src[i];
 
-    // ── Whitespace (spec §3.2 — both LF and CRLF accepted) ──────────────────
     if (ch === "\r") {
-      if (src[i + 1] === "\n") i++; // consume \r in \r\n pair
+      if (src[i + 1] === "\n") i++;
       line++;
       col = 1;
       i++;
@@ -84,13 +75,10 @@ export function lex(src: string): Token[] {
       continue;
     }
 
-    // ── Single-line comment (//) ─────────────────────────────────────────────
     if (ch === "/" && src[i + 1] === "/") {
       while (i < src.length && src[i] !== "\n" && src[i] !== "\r") i++;
       continue;
     }
-
-    // ── Lone '/' — likely a comment typo ────────────────────────────────────
     if (ch === "/") {
       err(
         "Unexpected character '/'. " +
@@ -98,7 +86,6 @@ export function lex(src: string): Token[] {
       );
     }
 
-    // ── Single-character tokens ──────────────────────────────────────────────
     const singleType = SINGLE_CHAR_MAP[ch];
     if (singleType) {
       push(singleType, ch);
@@ -107,7 +94,6 @@ export function lex(src: string): Token[] {
       continue;
     }
 
-    // ── Hex color literal: #RGB or #RRGGBB ──────────────────────────────────
     if (ch === "#") {
       let j = i + 1;
       while (j < src.length && /[0-9a-fA-F]/i.test(src[j])) j++;
@@ -126,19 +112,18 @@ export function lex(src: string): Token[] {
           `Use '#rgb' (e.g. #f00) or '#rrggbb' (e.g. #ff0000).`
         );
       }
-
       push("HEX_COLOR", raw);
       col += raw.length;
       i = j;
       continue;
     }
 
-    // ── String literal ───────────────────────────────────────────────────────
     if (ch === '"') {
       const startLine = line;
       const startCol  = col;
       let j = i + 1;
       let s = "";
+
       while (j < src.length && src[j] !== '"') {
         if (src[j] === "\n" || src[j] === "\r") {
           throw {
@@ -152,6 +137,7 @@ export function lex(src: string): Token[] {
         }
         s += src[j++];
       }
+
       if (j >= src.length) {
         throw {
           phase: "LEX" as const,
@@ -173,11 +159,10 @@ export function lex(src: string): Token[] {
       let j = i;
       if (src[j] === "-") j++;
       while (j < src.length && /[0-9]/.test(src[j])) j++;
-
+      
       if (j < src.length && src[j] === ".") {
         j++;
         if (j >= src.length || !/[0-9]/.test(src[j])) {
-          // e.g. "3." — decimal point with no following digits
           const raw = src.slice(i, j);
           err(
             `Invalid number '${raw}': a decimal point must be followed by at least one digit ` +
@@ -187,7 +172,6 @@ export function lex(src: string): Token[] {
         while (j < src.length && /[0-9]/.test(src[j])) j++;
       }
 
-      // Scientific notation is not supported by the spec.
       if (j < src.length && (src[j] === "e" || src[j] === "E")) {
         const raw = src.slice(i, j + 1);
         err(
@@ -202,7 +186,6 @@ export function lex(src: string): Token[] {
       continue;
     }
 
-    // ── Lone minus not preceding a digit ────────────────────────────────────
     if (ch === "-") {
       err(
         "Unexpected '-'. A minus sign must be immediately followed by a digit " +
@@ -210,7 +193,6 @@ export function lex(src: string): Token[] {
       );
     }
 
-    // ── Identifier / keyword / named color / scaleMode enum ─────────────────
     if (/[a-zA-Z_]/.test(ch)) {
       let j = i;
       while (j < src.length && /[a-zA-Z0-9_]/.test(src[j])) j++;
@@ -220,22 +202,23 @@ export function lex(src: string): Token[] {
         push("KEYWORD", word);
       } else if (word in NAMED_COLORS) {
         push("NAMED_COLOR", word);
-      } else if (SCALE_MODE_VALUES.has(word)) {
-        push("SCALE_MODE", word as ScaleMode);
+      } else if (SCENE_FIT_VALUES.has(word)) {
+        push("SCENE_FIT", word as SceneFit);
       } else {
         push("IDENT", word);
       }
+
       col += j - i;
       i = j;
       continue;
     }
 
-    // ── Unrecognised character ───────────────────────────────────────────────
     const code = ch.charCodeAt(0);
     const display =
       code >= 0x20 && code < 0x7f
         ? `'${ch}'`
         : `U+${code.toString(16).toUpperCase().padStart(4, "0")}`;
+    
     err(
       `Unexpected character ${display}. ` +
       `Declare source may only contain letters, digits, and the following ` +

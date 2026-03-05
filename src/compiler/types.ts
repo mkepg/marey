@@ -4,7 +4,7 @@ export type TokenType =
   | "NUMBER"
   | "HEX_COLOR"
   | "NAMED_COLOR"
-  | "SCALE_MODE"
+  | "SCENE_FIT"
   | "STRING"
   | "LBRACE"
   | "RBRACE"
@@ -49,12 +49,11 @@ export interface PointListValue {
   readonly value: ReadonlyArray<{ readonly x: number; readonly y: number }>;
 }
 
-/** Closed enum for the scaleMode property. Parsed as a first-class literal, not a string. */
-export type ScaleMode = "contain" | "cover" | "fill" | "none";
+export type SceneFit = "contain" | "cover" | "fill" | "none";
 
-export interface ScaleModeValue {
-  readonly kind: "scaleMode";
-  readonly value: ScaleMode;
+export interface SceneFitValue {
+  readonly kind: "sceneFit";
+  readonly value: SceneFit;
 }
 
 export type AstValue =
@@ -63,7 +62,7 @@ export type AstValue =
   | StringValue
   | PointValue
   | PointListValue
-  | ScaleModeValue;
+  | SceneFitValue;
 
 export type ObjectType = "circle" | "rectangle" | "polygon" | "text" | "group";
 

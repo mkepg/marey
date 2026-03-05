@@ -4,7 +4,7 @@ import type {
   ObjectNode,
   ObjectType,
   SceneNode,
-  ScaleMode,
+  SceneFit,
 } from "./types";
 import { NAMED_COLORS, KEYWORDS } from "./lexer";
 
@@ -15,7 +15,7 @@ function describeToken(t: Token): string {
     case "NUMBER":      return `number ${t.value as number}`;
     case "HEX_COLOR":   return `color '${t.value as string}'`;
     case "NAMED_COLOR": return `color keyword '${t.value as string}'`;
-    case "SCALE_MODE":  return `scaleMode value '${t.value as string}'`;
+    case "SCENE_FIT":   return `sceneFit value '${t.value as string}'`;
     case "STRING":      return `string "${t.value as string}"`;
     case "LBRACE":      return "'{'";
     case "RBRACE":      return "'}'";
@@ -31,10 +31,10 @@ function describeToken(t: Token): string {
 
 export function parse(tokens: Token[]): SceneNode {
   let pos = 0;
-  let currentContext = "the scene"; // Tracks the local object scope for precise error attribution
+  let currentContext = "the scene";
 
   const peek = (): Token => tokens[pos];
-  
+
   const consume = (expectedType?: Token["type"]): Token => {
     const t = tokens[pos];
     if (expectedType && t.type !== expectedType) {
@@ -86,9 +86,9 @@ export function parse(tokens: Token[]): SceneNode {
       consume();
       return { kind: "string", value: t.value as string };
     }
-    if (t.type === "SCALE_MODE") {
+    if (t.type === "SCENE_FIT") {
       consume();
-      return { kind: "scaleMode", value: t.value as ScaleMode };
+      return { kind: "sceneFit", value: t.value as SceneFit };
     }
 
     if (t.type === "LPAREN") {
@@ -109,6 +109,7 @@ export function parse(tokens: Token[]): SceneNode {
           col:  extra.col,
         };
       }
+
       if (peek().type !== "RPAREN") {
         const bad = peek();
         throw {
@@ -139,6 +140,7 @@ export function parse(tokens: Token[]): SceneNode {
             col:  openTok.col,
           };
         }
+
         if (peek().type !== "LPAREN") {
           const bad = peek();
           throw {
@@ -284,7 +286,6 @@ export function parse(tokens: Token[]): SceneNode {
 
     consume("LBRACE");
 
-    // Establish block context
     const previousContext = currentContext;
     currentContext = `'${objType}' object '${objName}'`;
 
@@ -295,7 +296,6 @@ export function parse(tokens: Token[]): SceneNode {
 
     while (peek().type !== "RBRACE" && peek().type !== "EOF") {
       if (peek().type === "KEYWORD") {
-        // Prevent primitive objects from swallowing a missing brace cascade
         if (objType !== "group") {
           const bad = peek();
           throw {
@@ -324,13 +324,13 @@ export function parse(tokens: Token[]): SceneNode {
         continue;
       }
 
-      if (peek().type === "SCALE_MODE") {
+      if (peek().type === "SCENE_FIT") {
         const bad = peek();
         throw {
           phase: "PARSE" as const,
           message:
-            `In ${currentContext}: '${bad.value as string}' is a scaleMode value keyword, not a property name. ` +
-            `Did you mean: scaleMode: ${bad.value as string}`,
+            `In ${currentContext}: '${bad.value as string}' is a sceneFit value keyword, not a property name. ` +
+            `Did you mean: sceneFit: ${bad.value as string}`,
           line: bad.line,
           col:  bad.col,
         };
@@ -361,9 +361,9 @@ export function parse(tokens: Token[]): SceneNode {
           col:  key.col,
         };
       }
-
       seenProps.add(keyName);
       consume("COLON");
+
       props[keyName] = parseValue();
     }
 
@@ -377,9 +377,8 @@ export function parse(tokens: Token[]): SceneNode {
         col:  typeTok.col,
       };
     }
-
     consume("RBRACE");
-    currentContext = previousContext; // Revert Context
+    currentContext = previousContext;
 
     return {
       type: typeTok.value as ObjectType,
@@ -445,13 +444,13 @@ export function parse(tokens: Token[]): SceneNode {
       continue;
     }
 
-    if (peek().type === "SCALE_MODE") {
+    if (peek().type === "SCENE_FIT") {
       const bad = peek();
       throw {
         phase: "PARSE" as const,
         message:
-          `In ${currentContext}: '${bad.value as string}' is a scaleMode value keyword, not a property name. ` +
-          `Did you mean: scaleMode: ${bad.value as string}`,
+          `In ${currentContext}: '${bad.value as string}' is a sceneFit value keyword, not a property name. ` +
+          `Did you mean: sceneFit: ${bad.value as string}`,
         line: bad.line,
         col:  bad.col,
       };
@@ -484,6 +483,7 @@ export function parse(tokens: Token[]): SceneNode {
     }
     seenSceneProps.add(keyName);
     consume("COLON");
+
     sceneProps[keyName] = parseValue();
   }
 
@@ -498,8 +498,8 @@ export function parse(tokens: Token[]): SceneNode {
   }
 
   consume("RBRACE");
-
   const trailing = peek();
+
   if (trailing.type !== "EOF") {
     let hint = "";
     if (trailing.type === "RPAREN") {
@@ -513,6 +513,7 @@ export function parse(tokens: Token[]): SceneNode {
         ` Only one scene block is allowed per file. ` +
         `All objects must be declared inside the scene block.`;
     }
+
     throw {
       phase: "PARSE" as const,
       message: `Unexpected ${describeToken(trailing)} after the scene block closed.${hint}`,
