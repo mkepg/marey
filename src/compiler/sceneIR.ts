@@ -12,7 +12,6 @@ export interface IRTransform {
   readonly position: IRPoint;
   readonly rotation: number;
   readonly scale: IRPoint;
-  readonly anchor: IRPoint;
 }
 
 export interface IRVisualBase {

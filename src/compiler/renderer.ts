@@ -5,6 +5,7 @@ import {
   Text,
   TextStyle
 } from "pixi.js";
+
 import type {
   IRSceneNode,
   IRObjectNode,
@@ -24,21 +25,17 @@ function applyAnchorAndPivot(
   localAnchor: { x: number, y: number },
   localPivot: { x: number, y: number }
 ) {
-  // Leverage native PixiJS transform properties instead of custom trigonometry
   wrapper.pivot.set(localPivot.x, localPivot.y);
-  
-  // Calculate the offset required by the anchor
   const anchorOffsetX = (localAnchor.x - localPivot.x) * props.scale.x;
   const anchorOffsetY = (localAnchor.y - localPivot.y) * props.scale.y;
-  
+
   wrapper.position.set(
     props.position.x - anchorOffsetX,
     props.position.y - anchorOffsetY
   );
-  
   wrapper.scale.set(props.scale.x, props.scale.y);
-  wrapper.rotation = props.rotation * (Math.PI / 180); // Pixi expects radians
-  wrapper.alpha = props.alpha; // Native alpha (no filters required)
+  wrapper.rotation = props.rotation * (Math.PI / 180);
+  wrapper.alpha = props.alpha;
 }
 
 function buildNode(node: IRObjectNode): Container {
@@ -52,11 +49,13 @@ function buildNode(node: IRObjectNode): Container {
         x: props.anchor.x * (props.radius * 2),
         y: props.anchor.y * (props.radius * 2)
       };
+
       applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
 
       const gfx = new Graphics()
         .circle(props.radius, props.radius, props.radius)
         .fill(props.color);
+
       wrapper.addChild(gfx);
       return wrapper;
     }
@@ -68,11 +67,13 @@ function buildNode(node: IRObjectNode): Container {
         x: props.anchor.x * props.width,
         y: props.anchor.y * props.height
       };
+
       applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
 
       const gfx = new Graphics()
         .rect(0, 0, props.width, props.height)
         .fill(props.color);
+
       wrapper.addChild(gfx);
       return wrapper;
     }
@@ -91,6 +92,7 @@ function buildNode(node: IRObjectNode): Container {
       }
 
       if (minX === Infinity) { minX = 0; maxX = 0; minY = 0; maxY = 0; }
+
       const w = maxX - minX;
       const h = maxY - minY;
 
@@ -99,6 +101,7 @@ function buildNode(node: IRObjectNode): Container {
         x: props.anchor.x * w,
         y: props.anchor.y * h
       };
+
       applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
 
       const flatPoints = new Array(len * 2);
@@ -110,6 +113,7 @@ function buildNode(node: IRObjectNode): Container {
       const gfx = new Graphics()
         .poly(flatPoints, true)
         .fill(props.color);
+
       wrapper.addChild(gfx);
       return wrapper;
     }
@@ -121,14 +125,14 @@ function buildNode(node: IRObjectNode): Container {
         fontSize:   props.fontSize,
         fill:       props.color,
       });
-      const textObj = new Text({ text: props.content, style });
 
+      const textObj = new Text({ text: props.content, style });
       const localPivot = { x: textObj.width / 2, y: textObj.height / 2 };
       const localAnchor = {
         x: props.anchor.x * textObj.width,
         y: props.anchor.y * textObj.height
       };
-      
+
       applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
       wrapper.addChild(textObj);
       return wrapper;
@@ -140,25 +144,17 @@ function buildNode(node: IRObjectNode): Container {
         wrapper.addChild(buildNode(child));
       }
 
-      const bounds = wrapper.getLocalBounds();
-      const bx = isFinite(bounds.x) ? bounds.x : 0;
-      const by = isFinite(bounds.y) ? bounds.y : 0;
-      const bw = isFinite(bounds.width) ? bounds.width : 0;
-      const bh = isFinite(bounds.height) ? bounds.height : 0;
+      // We explicitly freeze the local origin. Groups are now perfect abstract 
+      // coordinate spaces and will not snap around if child nodes resize or move.
+      const localPivot = { x: 0, y: 0 };
+      const localAnchor = { x: 0, y: 0 };
 
-      const localPivot = { x: bx + bw / 2, y: by + bh / 2 };
-      const localAnchor = {
-        x: bx + props.transform.anchor.x * bw,
-        y: by + props.transform.anchor.y * bh
-      };
-
-      // Pass the actual group alpha to the wrapper, no filters needed!
       applyAnchorAndPivot(wrapper, {
         position: props.transform.position,
         rotation: props.transform.rotation,
         scale: props.transform.scale,
-        anchor: props.transform.anchor,
-        alpha: props.alpha 
+        anchor: { x: 0, y: 0 }, // Hardcode anchor to zero
+        alpha: props.alpha
       }, localAnchor, localPivot);
 
       return wrapper;
@@ -178,32 +174,31 @@ export const pixiRendererAdapter: IRendererAdapter = {
     _isDark: boolean
   ): Promise<() => void> {
     await document.fonts.ready;
+
     const app = new Application();
-    
     await app.init({
       resizeTo:        hostElement,
       backgroundColor: scene.background,
-      autoStart:       true, // Changed to true to allow native rendering cycles
+      autoStart:       true,
       antialias:       true,
       resolution:      window.devicePixelRatio || 1,
       autoDensity:     true,
     });
-    
+
     hostElement.appendChild(app.canvas);
-    
     const sceneRoot = new Container();
     app.stage.addChild(sceneRoot);
-    
+
     for (const node of scene.children) {
       sceneRoot.addChild(buildNode(node));
     }
-    
+
     const logicalWidth  = scene.width;
     const logicalHeight = scene.height;
     const sceneFit      = scene.sceneFit;
 
     function updateLayout(): void {
-      if (!app.canvas) return; // Guard against destroyed app
+      if (!app.canvas) return;
 
       const sw = hostElement.clientWidth;
       const sh = hostElement.clientHeight;
@@ -231,11 +226,10 @@ export const pixiRendererAdapter: IRendererAdapter = {
       }
     }
 
-    // Replace ticker with highly efficient ResizeObserver
     const resizeObserver = new ResizeObserver(() => {
         updateLayout();
     });
-    
+
     resizeObserver.observe(hostElement);
     updateLayout();
 

@@ -63,12 +63,14 @@ export function lex(src: string): Token[] {
       i++;
       continue;
     }
+
     if (ch === "\n") {
       line++;
       col = 1;
       i++;
       continue;
     }
+
     if (ch === " " || ch === "\t") {
       col++;
       i++;
@@ -107,7 +109,6 @@ export function lex(src: string): Token[] {
           "Use 3 digits (e.g. #f00) or 6 digits (e.g. #ff0000)."
         );
       }
-      
       if (digits !== 3 && digits !== 6) {
         err(
           `Invalid color '${raw}': expected 3 or 6 hex digits after '#', got ${digits}. ` +
@@ -138,7 +139,21 @@ export function lex(src: string): Token[] {
             col:  startCol,
           };
         }
-        s += src[j++];
+
+        if (src[j] === '\\' && j + 1 < src.length) {
+          j++;
+          const esc = src[j];
+          switch (esc) {
+            case 'n': s += '\n'; break;
+            case 't': s += '\t'; break;
+            case '"': s += '"'; break;
+            case '\\': s += '\\'; break;
+            default: s += '\\' + esc; break;
+          }
+          j++;
+        } else {
+          s += src[j++];
+        }
       }
 
       if (j >= src.length) {
@@ -185,7 +200,7 @@ export function lex(src: string): Token[] {
 
       const rawNumStr = src.slice(i, j);
       const parsedVal = parseFloat(rawNumStr);
-      
+
       if (!isFinite(parsedVal)) {
         err(`Invalid number '${rawNumStr}': value is too large and evaluates to Infinity.`);
       }

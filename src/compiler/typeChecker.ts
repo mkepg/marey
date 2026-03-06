@@ -1,4 +1,4 @@
-import type { AstNode, ObjectNode, AstValue } from "./types";
+import type { AstNode, ObjectNode, AstValue, NumberValue, PointValue, StringValue, PointListValue, ColorValue } from "./types";
 import type {
   IRSceneNode,
   IRObjectNode,
@@ -34,7 +34,7 @@ const PROP_TYPES: Readonly<Record<string, Readonly<Record<string, PropContract>>
   rectangle: { position: "point", size: "point",   color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], anchor: "point", z: "number" },
   polygon:   { position: "point", points: "pointList", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], anchor: "point", z: "number" },
   text:      { position: "point", content: "string", fontSize: "number", color: "color", rotation: "number", scale: ["number", "point"], anchor: "point", z: "number" },
-  group:     { position: "point", rotation: "number", scale: ["number", "point"], anchor: "point", alpha: "number", z: "number" },
+  group:     { position: "point", rotation: "number", scale: ["number", "point"], alpha: "number", z: "number" },
 };
 
 const KIND_LABEL: Readonly<Record<PropKind, string>> = {
@@ -55,53 +55,59 @@ function normaliseColor(raw: string): IRColor {
   return `#${hex}`;
 }
 
+// Optional Resolvers using strict AST type casting
 function resolveColor(props: Record<string, AstValue>, key: string, fallback: IRColor): IRColor {
   const v = props[key];
-  if (v?.kind === "color") return normaliseColor(v.value as string);
+  if (v?.kind === "color") return normaliseColor((v as ColorValue).value);
   return fallback;
 }
 
 function resolveNumber(props: Record<string, AstValue>, key: string, fallback: number): number {
   const v = props[key];
-  if (v?.kind === "number") return v.value as number;
+  if (v?.kind === "number") return (v as NumberValue).value;
   return fallback;
 }
 
 function resolvePoint(props: Record<string, AstValue>, key: string, fallback: IRPoint): IRPoint {
   const v = props[key];
-  if (v?.kind === "point") return { x: v.x, y: v.y };
+  if (v?.kind === "point") return { x: (v as PointValue).x, y: (v as PointValue).y };
   return fallback;
 }
 
 function resolveScale(props: Record<string, AstValue>, key: string, fallback: IRPoint): IRPoint {
   const v = props[key];
   if (v?.kind === "number") {
-    return { x: v.value, y: v.value };
+    return { x: (v as NumberValue).value, y: (v as NumberValue).value };
   }
   if (v?.kind === "point") {
-    return { x: v.x, y: v.y };
+    return { x: (v as PointValue).x, y: (v as PointValue).y };
   }
   return fallback;
-}
-
-function resolveString(props: Record<string, AstValue>, key: string, fallback: string): string {
-  const v = props[key];
-  if (v?.kind === "string") return v.value as string;
-  return fallback;
-}
-
-function resolvePointList(props: Record<string, AstValue>, key: string): IRPointList {
-  const v = props[key];
-  if (v?.kind === "pointList") {
-    return v.value.map((pt) => ({ x: pt.x, y: pt.y }));
-  }
-  return [];
 }
 
 function resolveSceneFit(props: Record<string, AstValue>): IRSceneFit {
   const v = props["sceneFit"];
   if (v?.kind === "sceneFit") return v.value as IRSceneFit;
   return "contain";
+}
+
+// Strict Getters for Required Properties
+function getReqNumber(props: Record<string, AstValue>, key: string): number {
+  return (props[key] as NumberValue).value;
+}
+
+function getReqPoint(props: Record<string, AstValue>, key: string): IRPoint {
+  const v = props[key] as PointValue;
+  return { x: v.x, y: v.y };
+}
+
+function getReqString(props: Record<string, AstValue>, key: string): string {
+  return (props[key] as StringValue).value;
+}
+
+function getReqPointList(props: Record<string, AstValue>, key: string): IRPointList {
+  const v = props[key] as PointListValue;
+  return v.value.map((pt) => ({ x: pt.x, y: pt.y }));
 }
 
 function collectErrors(ast: AstNode): string[] {
@@ -124,6 +130,7 @@ function collectErrors(ast: AstNode): string[] {
 
     for (const [key, val] of Object.entries(node.props)) {
       const expected = contract[key];
+
       if (expected === undefined) {
         const knownList = Object.keys(contract).map((k) => `'${k}'`).join(", ");
         errors.push(
@@ -134,6 +141,7 @@ function collectErrors(ast: AstNode): string[] {
       }
 
       const isExpected = Array.isArray(expected) ? expected.includes(val.kind) : expected === val.kind;
+
       if (!isExpected) {
         if (key === "sceneFit" && val.kind === "string") {
           errors.push(
@@ -166,16 +174,19 @@ function collectErrors(ast: AstNode): string[] {
           );
         }
       }
+
       if (key === "radius" && val.kind === "number") {
         if (val.value <= 0) {
           errors.push(`${label}: 'radius' must be greater than 0, but got ${val.value}.`);
         }
       }
+
       if (key === "fontSize" && val.kind === "number") {
         if (val.value <= 0) {
           errors.push(`${label}: 'fontSize' must be greater than 0, but got ${val.value}.`);
         }
       }
+
       if (key === "anchor" && val.kind === "point") {
         if (val.x < 0 || val.x > 1 || val.y < 0 || val.y > 1) {
           errors.push(
@@ -183,6 +194,7 @@ function collectErrors(ast: AstNode): string[] {
           );
         }
       }
+
       if (key === "scale") {
         if (val.kind === "number" && val.value === 0) {
           errors.push(`[TYPE_ZERO_SCALE] ${label}: 'scale' cannot be exactly zero.`);
@@ -190,6 +202,7 @@ function collectErrors(ast: AstNode): string[] {
           errors.push(`[TYPE_ZERO_SCALE] ${label}: 'scale' components cannot be exactly zero, but got (${val.x}, ${val.y}).`);
         }
       }
+
       if (key === "size" && val.kind === "point") {
         if (val.x <= 0 && val.y <= 0) {
           errors.push(
@@ -201,6 +214,7 @@ function collectErrors(ast: AstNode): string[] {
           errors.push(`${label}: 'size' height must be greater than 0, but got ${val.y}.`);
         }
       }
+
       if (key === "points" && val.kind === "pointList") {
         if (val.value.length < 3) {
           errors.push(
@@ -213,6 +227,7 @@ function collectErrors(ast: AstNode): string[] {
           );
         }
       }
+
       if (key === "rotation" && val.kind === "number") {
         if (!isFinite(val.value)) {
           errors.push(
@@ -228,6 +243,7 @@ function collectErrors(ast: AstNode): string[] {
         `Move the nested objects into a 'group', or remove them.`
       );
     }
+
     node.children.forEach(checkNode);
   }
 
@@ -247,8 +263,8 @@ function buildIR(ast: AstNode): IRSceneNode {
       case "circle": {
         const circleProps: IRCircleProps = {
           kind:     "circle",
-          position: resolvePoint(p, "position", { x: 0, y: 0 }),
-          radius:   resolveNumber(p, "radius", 0),
+          position: getReqPoint(p, "position"),
+          radius:   getReqNumber(p, "radius"),
           color:    resolveColor(p, "color", "#ffffff"),
           alpha:    resolveNumber(p, "alpha", 1.0),
           rotation: resolveNumber(p, "rotation", 0),
@@ -260,12 +276,12 @@ function buildIR(ast: AstNode): IRSceneNode {
         break;
       }
       case "rectangle": {
-        const sizeVal = p["size"];
+        const sizeVal = p["size"] as PointValue;
         const rectProps: IRRectangleProps = {
           kind:     "rectangle",
-          position: resolvePoint(p, "position", { x: 0, y: 0 }),
-          width:    sizeVal?.kind === "point" ? sizeVal.x : 0,
-          height:   sizeVal?.kind === "point" ? sizeVal.y : 0,
+          position: getReqPoint(p, "position"),
+          width:    sizeVal.x,
+          height:   sizeVal.y,
           color:    resolveColor(p, "color", "#ffffff"),
           alpha:    resolveNumber(p, "alpha", 1.0),
           rotation: resolveNumber(p, "rotation", 0),
@@ -277,7 +293,7 @@ function buildIR(ast: AstNode): IRSceneNode {
         break;
       }
       case "polygon": {
-        const pts = resolvePointList(p, "points");
+        const pts = getReqPointList(p, "points");
         let defaultX = 0, defaultY = 0;
         if (pts.length > 0) {
           let minX = Infinity, minY = Infinity;
@@ -288,6 +304,7 @@ function buildIR(ast: AstNode): IRSceneNode {
           defaultX = minX;
           defaultY = minY;
         }
+
         const polyProps: IRPolygonProps = {
           kind:     "polygon",
           points:   pts,
@@ -305,8 +322,8 @@ function buildIR(ast: AstNode): IRSceneNode {
       case "text": {
         const textProps: IRTextProps = {
           kind:     "text",
-          position: resolvePoint(p, "position", { x: 0, y: 0 }),
-          content:  resolveString(p, "content", ""),
+          position: getReqPoint(p, "position"),
+          content:  getReqString(p, "content"),
           fontSize: resolveNumber(p, "fontSize", 16),
           color:    resolveColor(p, "color", "#ffffff"),
           alpha:    resolveNumber(p, "alpha", 1.0),
@@ -323,8 +340,8 @@ function buildIR(ast: AstNode): IRSceneNode {
           position: resolvePoint(p, "position", { x: 0, y: 0 }),
           rotation: resolveNumber(p, "rotation", 0),
           scale:    resolveScale(p, "scale", { x: 1, y: 1 }),
-          anchor:   resolvePoint(p, "anchor", { x: 0, y: 0 }),
         };
+
         const groupProps: IRGroupProps = {
           kind:      "group",
           transform,
@@ -344,6 +361,7 @@ function buildIR(ast: AstNode): IRSceneNode {
       node: buildObjectNode(child, `${id}.${child.name}`),
       index
     }));
+
     childrenNodes.sort((a, b) => {
       const diff = a.node.props.z - b.node.props.z;
       if (diff !== 0) return diff;
@@ -355,18 +373,19 @@ function buildIR(ast: AstNode): IRSceneNode {
       props,
       children: Object.freeze(childrenNodes.map(x => x.node)) as ReadonlyArray<IRObjectNode>,
     });
+
     registry[id] = irNode;
     return irNode;
   }
 
   const sceneAst = ast as AstNode & { type: "scene" };
-  const sizeVal  = sceneAst.props["size"];
+  const sizeVal  = sceneAst.props["size"] as PointValue;
 
   const topLevelChildrenNodes = sceneAst.children.map((child, index) => ({
     node: buildObjectNode(child, `scene.${child.name}`),
     index
   }));
-  
+
   topLevelChildrenNodes.sort((a, b) => {
     const diff = a.node.props.z - b.node.props.z;
     if (diff !== 0) return diff;
@@ -375,8 +394,8 @@ function buildIR(ast: AstNode): IRSceneNode {
 
   const sceneIR: IRSceneNode = Object.freeze({
     kind:       "scene",
-    width:      sizeVal?.kind === "point" ? sizeVal.x : 800,
-    height:     sizeVal?.kind === "point" ? sizeVal.y : 600,
+    width:      sizeVal.x,
+    height:     sizeVal.y,
     background: resolveColor(sceneAst.props, "background", "#000000"),
     sceneFit:   resolveSceneFit(sceneAst.props),
     children:   Object.freeze(topLevelChildrenNodes.map(x => x.node)) as ReadonlyArray<IRObjectNode>,
@@ -396,6 +415,7 @@ export function typeCheck(ast: AstNode): TypeCheckResult {
   if (errors.length > 0) {
     return { errors, ir: null };
   }
+
   const ir = buildIR(ast);
   return { errors: [], ir };
 }
