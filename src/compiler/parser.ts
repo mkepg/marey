@@ -109,7 +109,6 @@ export function parse(tokens: Token[]): SceneNode {
           col:  extra.col,
         };
       }
-
       if (peek().type !== "RPAREN") {
         const bad = peek();
         throw {
@@ -140,7 +139,6 @@ export function parse(tokens: Token[]): SceneNode {
             col:  openTok.col,
           };
         }
-
         if (peek().type !== "LPAREN") {
           const bad = peek();
           throw {
@@ -250,7 +248,16 @@ export function parse(tokens: Token[]): SceneNode {
     };
   }
 
-  function parseObject(): ObjectNode {
+  function parseObject(depth: number = 0): ObjectNode {
+    if (depth > 50) {
+      throw {
+        phase: "PARSE" as const,
+        message: `In ${currentContext}: Maximum nesting depth exceeded. Object nesting is limited to 50 levels to prevent stack overflows.`,
+        line: peek().line,
+        col:  peek().col,
+      };
+    }
+
     const typeTok = consume("KEYWORD");
     const objType = typeTok.value as string;
 
@@ -262,6 +269,7 @@ export function parse(tokens: Token[]): SceneNode {
           : bad.type === "KEYWORD"
           ? ` Another keyword was found instead. Did you forget the object name? For example: ${objType} myObject { ... }`
           : "";
+
       throw {
         phase: "PARSE" as const,
         message: `In ${currentContext}: Expected a name for the '${objType}' object, but found ${describeToken(bad)}.${hint}`,
@@ -291,6 +299,7 @@ export function parse(tokens: Token[]): SceneNode {
 
     const props: Record<string, AstValue> = {};
     const children: ObjectNode[]          = [];
+
     const seenProps  = new Set<string>();
     const seenNames  = new Set<string>();
 
@@ -308,7 +317,7 @@ export function parse(tokens: Token[]): SceneNode {
           };
         }
 
-        const childNode = parseObject();
+        const childNode = parseObject(depth + 1);
         if (seenNames.has(childNode.name)) {
           throw {
             phase: "PARSE" as const,
@@ -335,7 +344,6 @@ export function parse(tokens: Token[]): SceneNode {
           col:  bad.col,
         };
       }
-
       if (peek().type === "NAMED_COLOR") {
         const bad = peek();
         throw {
@@ -362,8 +370,8 @@ export function parse(tokens: Token[]): SceneNode {
         };
       }
       seenProps.add(keyName);
-      consume("COLON");
 
+      consume("COLON");
       props[keyName] = parseValue();
     }
 
@@ -377,6 +385,7 @@ export function parse(tokens: Token[]): SceneNode {
         col:  typeTok.col,
       };
     }
+
     consume("RBRACE");
     currentContext = previousContext;
 
@@ -389,6 +398,7 @@ export function parse(tokens: Token[]): SceneNode {
   }
 
   const firstTok = peek();
+
   if (firstTok.type === "EOF") {
     throw {
       phase: "PARSE" as const,
@@ -408,6 +418,7 @@ export function parse(tokens: Token[]): SceneNode {
         : firstTok.type === "IDENT"
         ? ` Did you forget to open with 'scene {'?`
         : "";
+
     throw {
       phase: "PARSE" as const,
       message:
@@ -423,12 +434,13 @@ export function parse(tokens: Token[]): SceneNode {
 
   const sceneProps: Record<string, AstValue> = {};
   const sceneChildren: ObjectNode[]          = [];
+
   const seenSceneProps = new Set<string>();
   const seenSceneNames = new Set<string>();
 
   while (peek().type !== "RBRACE" && peek().type !== "EOF") {
     if (peek().type === "KEYWORD") {
-      const child = parseObject();
+      const child = parseObject(1);
       if (seenSceneNames.has(child.name)) {
         throw {
           phase: "PARSE" as const,
@@ -482,8 +494,8 @@ export function parse(tokens: Token[]): SceneNode {
       };
     }
     seenSceneProps.add(keyName);
-    consume("COLON");
 
+    consume("COLON");
     sceneProps[keyName] = parseValue();
   }
 
@@ -498,8 +510,8 @@ export function parse(tokens: Token[]): SceneNode {
   }
 
   consume("RBRACE");
-  const trailing = peek();
 
+  const trailing = peek();
   if (trailing.type !== "EOF") {
     let hint = "";
     if (trailing.type === "RPAREN") {

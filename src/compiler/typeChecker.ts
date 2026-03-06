@@ -34,7 +34,7 @@ const PROP_TYPES: Readonly<Record<string, Readonly<Record<string, PropContract>>
   rectangle: { position: "point", size: "point",   color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], anchor: "point", z: "number" },
   polygon:   { position: "point", points: "pointList", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], anchor: "point", z: "number" },
   text:      { position: "point", content: "string", fontSize: "number", color: "color", rotation: "number", scale: ["number", "point"], anchor: "point", z: "number" },
-  group:     { position: "point", rotation: "number", scale: ["number", "point"], anchor: "point", z: "number" },
+  group:     { position: "point", rotation: "number", scale: ["number", "point"], anchor: "point", alpha: "number", z: "number" },
 };
 
 const KIND_LABEL: Readonly<Record<PropKind, string>> = {
@@ -73,10 +73,25 @@ function resolvePoint(props: Record<string, AstValue>, key: string, fallback: IR
   return fallback;
 }
 
+// Treat negative values as divisors to make the object smaller.
+// E.g. A scale of -2 will be mapped to 1/2 (0.5).
+function processScaleValue(val: number): number {
+  if (val === 0) return 0;
+  if (val < 0) {
+    return val <= -1 ? 1 / Math.abs(val) : Math.abs(val);
+  }
+  return val;
+}
+
 function resolveScale(props: Record<string, AstValue>, key: string, fallback: IRPoint): IRPoint {
   const v = props[key];
-  if (v?.kind === "number") return { x: v.value, y: v.value };
-  if (v?.kind === "point") return { x: v.x, y: v.y };
+  if (v?.kind === "number") {
+    const s = processScaleValue(v.value);
+    return { x: s, y: s };
+  }
+  if (v?.kind === "point") {
+    return { x: processScaleValue(v.x), y: processScaleValue(v.y) };
+  }
   return fallback;
 }
 
@@ -164,19 +179,16 @@ function collectErrors(ast: AstNode): string[] {
           );
         }
       }
-
       if (key === "radius" && val.kind === "number") {
         if (val.value <= 0) {
           errors.push(`${label}: 'radius' must be greater than 0, but got ${val.value}.`);
         }
       }
-
       if (key === "fontSize" && val.kind === "number") {
         if (val.value <= 0) {
           errors.push(`${label}: 'fontSize' must be greater than 0, but got ${val.value}.`);
         }
       }
-
       if (key === "anchor" && val.kind === "point") {
         if (val.x < 0 || val.x > 1 || val.y < 0 || val.y > 1) {
           errors.push(
@@ -184,15 +196,13 @@ function collectErrors(ast: AstNode): string[] {
           );
         }
       }
-
       if (key === "scale") {
         if (val.kind === "number" && val.value === 0) {
-          errors.push(`[TYPE_NONPOSITIVE_SCALE] ${label}: 'scale' cannot be zero.`);
+          errors.push(`[TYPE_NONPOSITIVE_SCALE] ${label}: 'scale' cannot be exactly zero.`);
         } else if (val.kind === "point" && (val.x === 0 || val.y === 0)) {
-          errors.push(`[TYPE_NONPOSITIVE_SCALE] ${label}: 'scale' components cannot be zero, but got (${val.x}, ${val.y}).`);
+          errors.push(`[TYPE_NONPOSITIVE_SCALE] ${label}: 'scale' components cannot be exactly zero, but got (${val.x}, ${val.y}).`);
         }
       }
-
       if (key === "size" && val.kind === "point") {
         if (val.x <= 0 && val.y <= 0) {
           errors.push(
@@ -204,12 +214,16 @@ function collectErrors(ast: AstNode): string[] {
           errors.push(`${label}: 'size' height must be greater than 0, but got ${val.y}.`);
         }
       }
-
+      
       if (key === "points" && val.kind === "pointList") {
         if (val.value.length < 3) {
           errors.push(
             `${label}: 'polygon' requires at least 3 points, ` +
             `but only ${val.value.length} ${val.value.length === 1 ? "was" : "were"} given.`
+          );
+        } else if (val.value.length > 10000) {
+          errors.push(
+            `[TYPE_POLYGON_TOO_LARGE] ${label}: 'polygon' exceeds the maximum safe limit of 10,000 points (got ${val.value.length}).`
           );
         }
       }
@@ -281,8 +295,6 @@ function buildIR(ast: AstNode): IRSceneNode {
       }
       case "polygon": {
         const pts = resolvePointList(p, "points");
-        
-        // Calculate bounding box min to use as the default position if omitted
         let defaultX = 0, defaultY = 0;
         if (pts.length > 0) {
           let minX = Infinity, minY = Infinity;
@@ -331,9 +343,11 @@ function buildIR(ast: AstNode): IRSceneNode {
           scale:    resolveScale(p, "scale", { x: 1, y: 1 }),
           anchor:   resolvePoint(p, "anchor", { x: 0, y: 0 }),
         };
+
         const groupProps: IRGroupProps = {
           kind:      "group",
           transform,
+          alpha:     resolveNumber(p, "alpha", 1.0),
           z:         resolveNumber(p, "z", 0),
         };
         props = groupProps;
@@ -361,7 +375,7 @@ function buildIR(ast: AstNode): IRSceneNode {
       props,
       children: Object.freeze(childrenNodes.map(x => x.node)) as ReadonlyArray<IRObjectNode>,
     });
-    
+
     registry[id] = irNode;
     return irNode;
   }
@@ -403,7 +417,6 @@ export function typeCheck(ast: AstNode): TypeCheckResult {
   if (errors.length > 0) {
     return { errors, ir: null };
   }
-
   const ir = buildIR(ast);
   return { errors: [], ir };
 }

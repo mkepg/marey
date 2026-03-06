@@ -6,7 +6,6 @@ export interface IRPoint {
 }
 
 export type IRPointList = ReadonlyArray<IRPoint>;
-
 export type IRSceneFit = "contain" | "cover" | "fill" | "none";
 
 export interface IRTransform {
@@ -51,6 +50,7 @@ export interface IRTextProps extends IRVisualBase {
 export interface IRGroupProps {
   readonly kind: "group";
   readonly transform: IRTransform;
+  readonly alpha: number;
   readonly z: number;
 }
 

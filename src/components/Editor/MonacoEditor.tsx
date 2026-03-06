@@ -4,10 +4,6 @@ import type { editor as MonacoEditorNS } from "monaco-editor";
 import { useMonaco } from "../../hooks/useMonaco";
 import { useAppStore } from "../../store";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Monaco theme definitions
-// ─────────────────────────────────────────────────────────────────────────────
-
 function defineThemes(monaco: typeof import("monaco-editor")): void {
   monaco.editor.defineTheme("Declare-dark", {
     base: "vs-dark",
@@ -59,18 +55,15 @@ function defineThemes(monaco: typeof import("monaco-editor")): void {
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Declare language registration
-// ─────────────────────────────────────────────────────────────────────────────
-
 function registerLanguage(monaco: typeof import("monaco-editor")): void {
-  // Avoid re-registering if already present
   if (monaco.languages.getLanguages().some((l) => l.id === "Declare")) return;
 
   monaco.languages.register({ id: "Declare" });
+
   monaco.languages.setMonarchTokensProvider("Declare", {
     keywords:    ["scene", "circle", "rectangle", "polygon", "text", "group"],
     namedColors: ["red", "green", "blue", "white", "black", "yellow", "cyan", "magenta", "orange"],
+
     tokenizer: {
       root: [
         [/\/\/.*$/, "comment"],
@@ -92,10 +85,6 @@ function registerLanguage(monaco: typeof import("monaco-editor")): void {
     },
   });
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Component
-// ─────────────────────────────────────────────────────────────────────────────
 
 interface MonacoEditorProps {
   onReady: (editor: MonacoEditorNS.IStandaloneCodeEditor) => void;
@@ -119,6 +108,7 @@ const EDITOR_OPTIONS: MonacoEditorNS.IStandaloneEditorConstructionOptions = {
   scrollbar: { verticalScrollbarSize: 4, horizontalScrollbarSize: 4 },
   folding: false,
   lineNumbersMinChars: 3,
+  automaticLayout: true, // Fixes Window Resize Desync
 };
 
 export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) => {
@@ -132,37 +122,50 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
 
   const codeRef  = useRef(code);
   const themeRef = useRef(theme);
+
   codeRef.current  = code;
   themeRef.current = theme;
 
-  // ── Initialize editor once Monaco is loaded ──────────────────────────────
   useEffect(() => {
     if (!monaco || !containerRef.current || editorRef.current) return;
 
-    registerLanguage(monaco);
-    defineThemes(monaco);
+    let isCancelled = false;
 
-    const editor = monaco.editor.create(containerRef.current, {
-      ...EDITOR_OPTIONS,
-      value: codeRef.current,
-      theme: themeRef.current === "dark" ? "Declare-dark" : "Declare-light",
-    });
+    const initEditor = async () => {
+      // Prevent FOUC: Ensure JetBrains Mono is parsed before Monaco calculates widths
+      await document.fonts.ready;
+      
+      if (isCancelled || !containerRef.current) return;
 
-    editor.onDidChangeModelContent(() => {
-      setCode(editor.getValue());
-    });
+      registerLanguage(monaco);
+      defineThemes(monaco);
 
-    editorRef.current = editor;
-    onReady(editor);
+      const editor = monaco.editor.create(containerRef.current, {
+        ...EDITOR_OPTIONS,
+        value: codeRef.current,
+        theme: themeRef.current === "dark" ? "Declare-dark" : "Declare-light",
+      });
+
+      editor.onDidChangeModelContent(() => {
+        setCode(editor.getValue());
+      });
+
+      editorRef.current = editor;
+      onReady(editor);
+    };
+
+    initEditor();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [monaco]);
 
-  // ── Sync theme changes ───────────────────────────────────────────────────
   useEffect(() => {
     if (!editorRef.current || !window.monaco) return;
     window.monaco.editor.setTheme(theme === "dark" ? "Declare-dark" : "Declare-light");
   }, [theme]);
 
-  // ── Keep model in sync with external code changes ────────────────────────
   useEffect(() => {
     if (!editorRef.current) return;
     if (editorRef.current.getValue() !== code) {
@@ -170,7 +173,6 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
     }
   }, [code]);
 
-  // ── Cleanup on unmount ───────────────────────────────────────────────────
   useEffect(() => {
     return () => {
       editorRef.current?.dispose();

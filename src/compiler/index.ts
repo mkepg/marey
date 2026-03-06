@@ -1,103 +1,83 @@
-import type { CompileResult, LogEntry, CompilerError } from "./types";
-import { lex }            from "./lexer";
-import { parse }          from "./parser";
-import { typeCheck }      from "./typeChecker";
-import { renderScene }    from "./renderer";
+import type { CompileResult, LogEntry } from "./types";
+import type { IRSceneNode } from "./sceneIR";
+import { renderScene } from "./renderer";
 
 export interface CompileResultWithCleanup extends CompileResult {
   cleanup: (() => void) | null;
 }
 
-function normaliseError(raw: unknown): { phase: string; message: string; location: string } {
-  if (
-    raw !== null &&
-    typeof raw === "object" &&
-    "phase" in raw &&
-    "message" in raw
-  ) {
-    const e = raw as CompilerError;
-    const location =
-      e.line !== undefined && e.col !== undefined
-        ? ` — line ${e.line}, column ${e.col}`
-        : "";
-    return {
-      phase:    (e.phase ?? "error").toLowerCase(),
-      message:  e.message,
-      location,
-    };
-  }
-  if (raw instanceof Error) {
-    return { phase: "runtime", message: raw.message, location: "" };
-  }
-  return {
-    phase:    "error",
-    message:  String(raw),
-    location: "",
-  };
-}
+// Persist the worker instance so we don't pay the startup cost on every keystroke
+let compilerWorker: Worker | null = null;
+let currentJobId = 0;
 
 /**
- * Full compile pipeline:
+ * Full compile pipeline (Decoupled):
  *
- *   Source → Lexer → Parser → Type Checker → Scene IR → Renderer Adapter → Canvas Output
- *
- * The AST is not accessible after the type-checking stage.
- * The renderer adapter receives only the Scene IR.
+ * [Main Thread]    Source String
+ * ↓ (postMessage)
+ * [Web Worker]     Lexer → Parser → Type Checker → Scene IR
+ * ↓ (postMessage)
+ * [Main Thread]    Scene IR → Renderer Adapter → Canvas Output
  */
 export async function compile(
   source: string,
   hostElement: HTMLDivElement,
   isDark: boolean
 ): Promise<CompileResultWithCleanup> {
-  const logs: LogEntry[] = [];
+  
+  if (!compilerWorker) {
+    // Vite handles this syntax natively to bundle the worker
+    compilerWorker = new Worker(new URL('./compiler.worker.ts', import.meta.url), { type: 'module' });
+  }
+
+  currentJobId += 1;
+  const jobId = currentJobId;
   const t0 = performance.now();
 
-  try {
-    // Stage 1: Lexer
-    logs.push({ kind: "info", text: "[lexer]   tokenizing..." });
-    const tokens = lex(source);
-    logs.push({ kind: "ok", text: `[lexer]   ${tokens.length - 1} tokens` });
+  return new Promise((resolve) => {
+    const handleMessage = async (e: MessageEvent) => {
+      const data = e.data;
+      
+      // Ignore stale responses if the user typed quickly and spawned a newer job
+      if (data.id !== jobId) return; 
 
-    // Stage 2: Parser
-    logs.push({ kind: "info", text: "[parser]  building AST..." });
-    const ast = parse(tokens);
-    logs.push({
-      kind: "ok",
-      text: `[parser]  AST root: scene, ${ast.children.length} top-level object(s)`,
-    });
+      compilerWorker?.removeEventListener('message', handleMessage);
 
-    // Stage 3: Type Checker → Scene IR
-    logs.push({ kind: "info", text: "[type]    checking + building Scene IR..." });
-    const { errors, ir } = typeCheck(ast);
+      const logs: LogEntry[] = data.logs;
 
-    if (errors.length > 0 || ir === null) {
-      errors.forEach((msg) =>
-        logs.push({ kind: "error", text: `[type]    ${msg}` })
-      );
-      return { logs, success: false, cleanup: null };
-    }
+      if (!data.success || !data.ir) {
+        resolve({ logs, success: false, cleanup: null });
+        return;
+      }
 
-    logs.push({ kind: "ok", text: `[type]    no errors — Scene IR ready (${Object.keys(ir.registry).length} node(s))` });
+      // The IR successfully crossed the thread boundary. Render it on the main DOM thread.
+      try {
+        const sceneIR = data.ir as IRSceneNode;
+        logs.push({ kind: "info", text: "[pixi]    initialising renderer..." });
+        
+        const cleanup = await renderScene(sceneIR, hostElement, isDark);
+        
+        const elapsed = (performance.now() - t0).toFixed(1);
+        logs.push({
+          kind: "ok",
+          text: `[pixi]    rendered via WebGL/WebGPU in ${elapsed}ms`,
+        });
+        
+        resolve({ logs, success: true, cleanup });
+      } catch (err: unknown) {
+        logs.push({ 
+          kind: "error", 
+          text: `[render]  ${err instanceof Error ? err.message : String(err)}` 
+        });
+        resolve({ logs, success: false, cleanup: null });
+      }
+    };
 
-    // Stage 4: Renderer Adapter (consumes Scene IR only — AST is no longer referenced)
-    logs.push({ kind: "info", text: "[pixi]    initialising renderer..." });
-    const cleanup = await renderScene(ir, hostElement, isDark);
-
-    const elapsed = (performance.now() - t0).toFixed(1);
-    logs.push({
-      kind: "ok",
-      text: `[pixi]    rendered via WebGL/WebGPU in ${elapsed}ms`,
-    });
-
-    return { logs, success: true, cleanup };
-  } catch (raw: unknown) {
-    const { phase, message, location } = normaliseError(raw);
-    logs.push({
-      kind:  "error",
-      text:  `[${phase}]  ${message}${location}`,
-    });
-    return { logs, success: false, cleanup: null };
-  }
+    compilerWorker?.addEventListener('message', handleMessage);
+    
+    // Send the raw source string to the background thread
+    compilerWorker?.postMessage({ id: jobId, source });
+  });
 }
 
 export type { CompileResult, LogEntry, LogKind } from "./types";

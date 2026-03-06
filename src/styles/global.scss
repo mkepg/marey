@@ -1,9 +1,30 @@
 @use "tokens" as *;
 
-// ── Google Fonts ──────────────────────────────────────────────────────────────
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;600;700;800&display=swap");
+// Define local font faces instead of Google Fonts @import
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMono-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block; // Forces the browser to hide text until the font loads
+}
 
-// ── Reset ─────────────────────────────────────────────────────────────────────
+@font-face {
+  font-family: 'Syne';
+  src: url('/fonts/Syne-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Syne';
+  src: url('/fonts/Syne-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 *,
 *::before,
 *::after {
@@ -12,14 +33,12 @@
   padding: 0;
 }
 
-// ── CSS Custom Properties — Dark theme (default) ──────────────────────────────
 :root {
   --font-mono: #{$font-mono};
   --font-ui:   #{$font-ui};
   --radius:    #{$radius};
   --transition: #{$transition};
 
-  // Backgrounds
   --bg-app:      #0c0c0e;
   --bg-bar:      #111114;
   --bg-pane:     #0f0f12;
@@ -29,29 +48,25 @@
   --bg-handle:   #1e1e24;
   --bg-handle-h: #2a2a35;
 
-  // Borders
   --border:      #1e1e28;
   --border-soft: #16161e;
 
-  // Text
   --text-primary:   #e8e8f0;
   --text-secondary: #6e6e88;
   --text-muted:     #3a3a50;
+  
   --text-ok:        #4ade80;
   --text-error:     #f87171;
   --text-info:      #60a5fa;
 
-  // Accent
   --accent:     #7c6af7;
   --accent-dim: #2d2858;
 
-  // Status dots
   --dot-ok:    #4ade80;
   --dot-error: #f87171;
   --dot-idle:  #3a3a50;
 }
 
-// ── CSS Custom Properties — Light theme ───────────────────────────────────────
 [data-theme="light"] {
   --bg-app:      #f5f5f7;
   --bg-bar:      #ffffff;
@@ -68,6 +83,7 @@
   --text-primary:   #111118;
   --text-secondary: #6b6b80;
   --text-muted:     #b0b0c0;
+  
   --text-ok:        #16a34a;
   --text-error:     #dc2626;
   --text-info:      #2563eb;
@@ -80,7 +96,6 @@
   --dot-idle:  #c0c0cc;
 }
 
-// ── Base ──────────────────────────────────────────────────────────────────────
 html,
 body {
   height: 100%;
@@ -95,7 +110,6 @@ body {
   height: 100%;
 }
 
-// ── Scrollbar ─────────────────────────────────────────────────────────────────
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
@@ -108,7 +122,6 @@ body {
   border-radius: 2px;
 }
 
-// ── Animations ────────────────────────────────────────────────────────────────
 @keyframes fade-in {
   from {
     opacity: 0;

@@ -4,6 +4,7 @@ import {
   Graphics,
   Text,
   TextStyle,
+  AlphaFilter
 } from "pixi.js";
 import type {
   IRSceneNode,
@@ -12,20 +13,14 @@ import type {
   IRendererAdapter,
 } from "./sceneIR";
 
-/**
- * Advanced transform logic:
- * Ensures that objects rotate exactly around their geometric pivot 
- * while keeping their defined Anchor precisely pinned to the World Position.
- * This prevents anchor drifting and shearing when nested inside non-uniform scaled parent groups.
- */
 function applyAnchorAndPivot(
   wrapper: Container,
-  props: { 
-    position: { x: number, y: number }, 
-    rotation: number, 
-    scale: { x: number, y: number }, 
+  props: {
+    position: { x: number, y: number },
+    rotation: number,
+    scale: { x: number, y: number },
     anchor: { x: number, y: number },
-    alpha: number 
+    alpha: number
   },
   localAnchor: { x: number, y: number },
   localPivot: { x: number, y: number }
@@ -34,22 +29,17 @@ function applyAnchorAndPivot(
   const sy = props.scale.y;
   const r = props.rotation * (Math.PI / 180);
 
-  // 1. Calculate the scaled distance vector from the Pivot to the Anchor
   const vx = sx * (localAnchor.x - localPivot.x);
   const vy = sy * (localAnchor.y - localPivot.y);
 
-  // 2. Apply the rotation matrix to this distance vector
-  // This ensures the anchor point mathematically tracks the rotation
   const vrx = vx * Math.cos(r) - vy * Math.sin(r);
   const vry = vx * Math.sin(r) + vy * Math.cos(r);
 
-  // 3. Pin the wrapper position exactly to the requested position minus the rotated offset
   wrapper.pivot.set(localPivot.x, localPivot.y);
   wrapper.position.set(
     props.position.x - vrx,
     props.position.y - vry
   );
-  
   wrapper.scale.set(sx, sy);
   wrapper.rotation = r;
   wrapper.alpha = props.alpha;
@@ -61,12 +51,10 @@ function buildNode(node: IRObjectNode): Container {
   switch (props.kind) {
     case "circle": {
       const wrapper = new Container();
-
-      // Local bounds derived from Graphics.circle(R, R, R) where bounds are [0, 2R]
       const localPivot = { x: props.radius, y: props.radius };
-      const localAnchor = { 
-        x: props.anchor.x * (props.radius * 2), 
-        y: props.anchor.y * (props.radius * 2) 
+      const localAnchor = {
+        x: props.anchor.x * (props.radius * 2),
+        y: props.anchor.y * (props.radius * 2)
       };
 
       applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
@@ -78,104 +66,127 @@ function buildNode(node: IRObjectNode): Container {
       wrapper.addChild(gfx);
       return wrapper;
     }
-    
+
     case "rectangle": {
       const wrapper = new Container();
-      
       const localPivot = { x: props.width / 2, y: props.height / 2 };
-      const localAnchor = { 
-        x: props.anchor.x * props.width, 
-        y: props.anchor.y * props.height 
+      const localAnchor = {
+        x: props.anchor.x * props.width,
+        y: props.anchor.y * props.height
       };
-      
+
       applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
 
       const gfx = new Graphics()
         .rect(0, 0, props.width, props.height)
         .fill(props.color);
-      
+        
       wrapper.addChild(gfx);
       return wrapper;
     }
-    
+
     case "polygon": {
       const wrapper = new Container();
-      
-      // Bounding Box approach: Foolproof for Convex, Concave, and Complex shapes
+      const len = props.points.length;
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-      for (const p of props.points) {
+
+      // Fast O(N) bounds calculation
+      for (let i = 0; i < len; i++) {
+        const p = props.points[i];
         if (p.x < minX) minX = p.x;
         if (p.x > maxX) maxX = p.x;
         if (p.y < minY) minY = p.y;
         if (p.y > maxY) maxY = p.y;
       }
-      
+
       if (minX === Infinity) { minX = 0; maxX = 0; minY = 0; maxY = 0; }
-      
       const w = maxX - minX;
       const h = maxY - minY;
-      
-      const localPivot = { x: minX + w / 2, y: minY + h / 2 };
-      const localAnchor = { 
-        x: minX + props.anchor.x * w, 
-        y: minY + props.anchor.y * h 
+
+      // Localize pivot and anchor relative to a zero-indexed bounding box
+      const localPivot = { x: w / 2, y: h / 2 };
+      const localAnchor = {
+        x: props.anchor.x * w,
+        y: props.anchor.y * h
       };
-      
+
       applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
 
-      const flatPoints = props.points.flatMap((pt) => [pt.x, pt.y]);
+      // Localize geometry points so they draw relative to wrapper.position
+      const flatPoints = new Array(len * 2);
+      for (let i = 0; i < len; i++) {
+        flatPoints[i * 2] = props.points[i].x - minX;
+        flatPoints[i * 2 + 1] = props.points[i].y - minY;
+      }
+
       const gfx = new Graphics()
         .poly(flatPoints, true)
         .fill(props.color);
-      
+        
       wrapper.addChild(gfx);
       return wrapper;
     }
-    
+
     case "text": {
       const wrapper = new Container();
-
       const style = new TextStyle({
         fontFamily: "'JetBrains Mono', monospace",
         fontSize:   props.fontSize,
         fill:       props.color,
       });
-      const textObj = new Text({ text: props.content, style });
-      
-      const localPivot = { x: textObj.width / 2, y: textObj.height / 2 };
-      const localAnchor = { 
-        x: props.anchor.x * textObj.width, 
-        y: props.anchor.y * textObj.height 
-      };
-      
-      applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
 
+      const textObj = new Text({ text: props.content, style });
+      const localPivot = { x: textObj.width / 2, y: textObj.height / 2 };
+      const localAnchor = {
+        x: props.anchor.x * textObj.width,
+        y: props.anchor.y * textObj.height
+      };
+
+      applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
       wrapper.addChild(textObj);
       return wrapper;
     }
-    
+
     case "group": {
-      const { transform, alpha } = props as any; // Groups default to 1.0 alpha implicitly
       const wrapper = new Container();
       
-      // Groups act strictly as mathematical transform matrices with no implicit bounds
-      const localPivot = { x: 0, y: 0 };
-      const localAnchor = { x: 0, y: 0 };
-      
-      applyAnchorAndPivot(wrapper, {
-        position: transform.position,
-        rotation: transform.rotation,
-        scale: transform.scale,
-        anchor: transform.anchor,
-        alpha: alpha ?? 1.0
-      }, localAnchor, localPivot);
-
+      // Build children first to compute spatial bounds
       for (const child of node.children) {
         wrapper.addChild(buildNode(child));
       }
+
+      // Compute local bounds for accurate anchoring
+      const bounds = wrapper.getLocalBounds();
+      
+      // Prevent degenerate bounds if the group is empty
+      const bx = isFinite(bounds.x) ? bounds.x : 0;
+      const by = isFinite(bounds.y) ? bounds.y : 0;
+      const bw = isFinite(bounds.width) ? bounds.width : 0;
+      const bh = isFinite(bounds.height) ? bounds.height : 0;
+
+      const localPivot = { x: bx + bw / 2, y: by + bh / 2 };
+      const localAnchor = {
+        x: bx + props.transform.anchor.x * bw,
+        y: by + props.transform.anchor.y * bh
+      };
+
+      // Set alpha to 1.0 here to prevent individual child blending
+      applyAnchorAndPivot(wrapper, {
+        position: props.transform.position,
+        rotation: props.transform.rotation,
+        scale: props.transform.scale,
+        anchor: props.transform.anchor,
+        alpha: 1.0 
+      }, localAnchor, localPivot);
+
+      // Apply grouped Alpha Blending via Filter if less than 1.0
+      if (props.alpha < 1.0) {
+         wrapper.filters = [new AlphaFilter({ alpha: props.alpha })];
+      }
+
       return wrapper;
     }
-    
+
     default: {
       const _never: never = props;
       throw new Error(`[PixiAdapter] Unknown IR node kind: ${String((_never as IRObjectProps).kind)}`);
@@ -190,7 +201,7 @@ export const pixiRendererAdapter: IRendererAdapter = {
     _isDark: boolean
   ): Promise<() => void> {
     await document.fonts.ready;
-
+    
     const app = new Application();
     await app.init({
       resizeTo:        hostElement,
@@ -200,6 +211,7 @@ export const pixiRendererAdapter: IRendererAdapter = {
       resolution:      window.devicePixelRatio || 1,
       autoDensity:     true,
     });
+
     hostElement.appendChild(app.canvas);
 
     const sceneRoot = new Container();
@@ -238,6 +250,7 @@ export const pixiRendererAdapter: IRendererAdapter = {
         sceneRoot.scale.set(1);
         sceneRoot.position.set(0, 0);
       }
+      
       app.render();
     }
 

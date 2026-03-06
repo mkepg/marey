@@ -25,40 +25,34 @@ export const DEFAULT_CODE = `scene {
     content: "Declare — Scene Preview"
     fontSize: 13
     color: #888899
-    z: 10
   }
 
   circle moon {
     position: (480, 80)
     radius: 38
-    color: #ffd166
+    color: yellow
     alpha: 0.92
     anchor: (0.5, 0.5)
-    z: 0
   }
 
   polygon mountain {
     points: [(60,340),(200,160),(340,340)]
     color: #2d2d44
-    z: 1
   }
 
   polygon mountain2 {
     points: [(180,340),(300,200),(440,340)]
     color: #252538
-    z: 2
   }
 
   rectangle ground {
     position: (0, 340)
     size: (600, 60)
     color: #1e1e2e
-    z: 3
   }
 
   group player {
     position: (130, 270)
-    z: 5
 
     circle body {
       position: (0, 0)
@@ -77,7 +71,6 @@ export const DEFAULT_CODE = `scene {
 
   group collectible {
     position: (310, 295)
-    z: 5
 
     circle glow {
       position: (0, 0)
@@ -86,16 +79,14 @@ export const DEFAULT_CODE = `scene {
       alpha: 0.25
       scale: 1.2
       anchor: (0.5, 0.5)
-      z: 0
     }
 
     circle gem {
       position: (0, 0)
       radius: 7
-      color: yellow
+      color: #ffd166
       rotation: 45
       anchor: (0.5, 0.5)
-      z: 1
     }
   }
 }`;

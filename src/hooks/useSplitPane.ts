@@ -1,11 +1,5 @@
-import { useCallback, useRef, useState } from "preact/hooks";
+import { useCallback, useRef, useState, useEffect } from "preact/hooks";
 import type { RefObject } from "preact";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// useSplitPane — returns a ratio [0..1] and a mousedown handler for a drag handle.
-// axis: "horizontal" measures clientX against container width
-//       "vertical"   measures clientY against container height
-// ─────────────────────────────────────────────────────────────────────────────
 
 interface SplitPaneOptions {
   axis: "horizontal" | "vertical";
@@ -29,6 +23,11 @@ export function useSplitPane({
 }: SplitPaneOptions): SplitPaneResult {
   const [ratio, setRatio] = useState(initial);
   const dragging = useRef(false);
+  
+  const listenersRef = useRef<{
+    move: ((ev: MouseEvent) => void) | null;
+    up: (() => void) | null;
+  }>({ move: null, up: null });
 
   const onHandleMouseDown = useCallback(
     (e: MouseEvent) => {
@@ -50,13 +49,26 @@ export function useSplitPane({
         dragging.current = false;
         window.removeEventListener("mousemove", onMove);
         window.removeEventListener("mouseup", onUp);
+        listenersRef.current.move = null;
+        listenersRef.current.up = null;
       };
+
+      listenersRef.current.move = onMove;
+      listenersRef.current.up = onUp;
 
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
     },
     [axis, min, max, containerRef]
   );
+
+  useEffect(() => {
+    return () => {
+      // Prevent memory leaks if unmounted while dragging
+      if (listenersRef.current.move) window.removeEventListener("mousemove", listenersRef.current.move);
+      if (listenersRef.current.up) window.removeEventListener("mouseup", listenersRef.current.up);
+    };
+  }, []);
 
   return { ratio, onHandleMouseDown };
 }

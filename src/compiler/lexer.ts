@@ -79,6 +79,7 @@ export function lex(src: string): Token[] {
       while (i < src.length && src[i] !== "\n" && src[i] !== "\r") i++;
       continue;
     }
+
     if (ch === "/") {
       err(
         "Unexpected character '/'. " +
@@ -106,12 +107,14 @@ export function lex(src: string): Token[] {
           "Use 3 digits (e.g. #f00) or 6 digits (e.g. #ff0000)."
         );
       }
+      
       if (digits !== 3 && digits !== 6) {
         err(
           `Invalid color '${raw}': expected 3 or 6 hex digits after '#', got ${digits}. ` +
-          `Use '#rgb' (e.g. #f00) or '#rrggbb' (e.g. #ff0000).`
+          `Use '#rgb' (e.g. #f00) or '#rrggbb' (e.g. #ff0000). To adjust opacity, use the 'alpha' property instead.`
         );
       }
+
       push("HEX_COLOR", raw);
       col += raw.length;
       i = j;
@@ -148,18 +151,18 @@ export function lex(src: string): Token[] {
           col:  startCol,
         };
       }
+
       push("STRING", s);
       col += j - i + 1;
       i = j + 1;
       continue;
     }
 
-    // ── Number literal (optional leading minus) ──────────────────────────────
     if (/[0-9]/.test(ch) || (ch === "-" && i + 1 < src.length && /[0-9]/.test(src[i + 1]))) {
       let j = i;
       if (src[j] === "-") j++;
       while (j < src.length && /[0-9]/.test(src[j])) j++;
-      
+
       if (j < src.length && src[j] === ".") {
         j++;
         if (j >= src.length || !/[0-9]/.test(src[j])) {
@@ -180,7 +183,14 @@ export function lex(src: string): Token[] {
         );
       }
 
-      push("NUMBER", parseFloat(src.slice(i, j)));
+      const rawNumStr = src.slice(i, j);
+      const parsedVal = parseFloat(rawNumStr);
+      
+      if (!isFinite(parsedVal)) {
+        err(`Invalid number '${rawNumStr}': value is too large and evaluates to Infinity.`);
+      }
+
+      push("NUMBER", parsedVal);
       col += j - i;
       i = j;
       continue;
@@ -218,7 +228,7 @@ export function lex(src: string): Token[] {
       code >= 0x20 && code < 0x7f
         ? `'${ch}'`
         : `U+${code.toString(16).toUpperCase().padStart(4, "0")}`;
-    
+
     err(
       `Unexpected character ${display}. ` +
       `Declare source may only contain letters, digits, and the following ` +
