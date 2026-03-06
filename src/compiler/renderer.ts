@@ -3,8 +3,7 @@ import {
   Container,
   Graphics,
   Text,
-  TextStyle,
-  AlphaFilter
+  TextStyle
 } from "pixi.js";
 import type {
   IRSceneNode,
@@ -25,24 +24,21 @@ function applyAnchorAndPivot(
   localAnchor: { x: number, y: number },
   localPivot: { x: number, y: number }
 ) {
-  const sx = props.scale.x;
-  const sy = props.scale.y;
-  const r = props.rotation * (Math.PI / 180);
-
-  const vx = sx * (localAnchor.x - localPivot.x);
-  const vy = sy * (localAnchor.y - localPivot.y);
-
-  const vrx = vx * Math.cos(r) - vy * Math.sin(r);
-  const vry = vx * Math.sin(r) + vy * Math.cos(r);
-
+  // Leverage native PixiJS transform properties instead of custom trigonometry
   wrapper.pivot.set(localPivot.x, localPivot.y);
+  
+  // Calculate the offset required by the anchor
+  const anchorOffsetX = (localAnchor.x - localPivot.x) * props.scale.x;
+  const anchorOffsetY = (localAnchor.y - localPivot.y) * props.scale.y;
+  
   wrapper.position.set(
-    props.position.x - vrx,
-    props.position.y - vry
+    props.position.x - anchorOffsetX,
+    props.position.y - anchorOffsetY
   );
-  wrapper.scale.set(sx, sy);
-  wrapper.rotation = r;
-  wrapper.alpha = props.alpha;
+  
+  wrapper.scale.set(props.scale.x, props.scale.y);
+  wrapper.rotation = props.rotation * (Math.PI / 180); // Pixi expects radians
+  wrapper.alpha = props.alpha; // Native alpha (no filters required)
 }
 
 function buildNode(node: IRObjectNode): Container {
@@ -56,13 +52,11 @@ function buildNode(node: IRObjectNode): Container {
         x: props.anchor.x * (props.radius * 2),
         y: props.anchor.y * (props.radius * 2)
       };
-
       applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
 
       const gfx = new Graphics()
         .circle(props.radius, props.radius, props.radius)
         .fill(props.color);
-      
       wrapper.addChild(gfx);
       return wrapper;
     }
@@ -74,13 +68,11 @@ function buildNode(node: IRObjectNode): Container {
         x: props.anchor.x * props.width,
         y: props.anchor.y * props.height
       };
-
       applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
 
       const gfx = new Graphics()
         .rect(0, 0, props.width, props.height)
         .fill(props.color);
-        
       wrapper.addChild(gfx);
       return wrapper;
     }
@@ -90,7 +82,6 @@ function buildNode(node: IRObjectNode): Container {
       const len = props.points.length;
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
-      // Fast O(N) bounds calculation
       for (let i = 0; i < len; i++) {
         const p = props.points[i];
         if (p.x < minX) minX = p.x;
@@ -103,16 +94,13 @@ function buildNode(node: IRObjectNode): Container {
       const w = maxX - minX;
       const h = maxY - minY;
 
-      // Localize pivot and anchor relative to a zero-indexed bounding box
       const localPivot = { x: w / 2, y: h / 2 };
       const localAnchor = {
         x: props.anchor.x * w,
         y: props.anchor.y * h
       };
-
       applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
 
-      // Localize geometry points so they draw relative to wrapper.position
       const flatPoints = new Array(len * 2);
       for (let i = 0; i < len; i++) {
         flatPoints[i * 2] = props.points[i].x - minX;
@@ -122,7 +110,6 @@ function buildNode(node: IRObjectNode): Container {
       const gfx = new Graphics()
         .poly(flatPoints, true)
         .fill(props.color);
-        
       wrapper.addChild(gfx);
       return wrapper;
     }
@@ -134,14 +121,14 @@ function buildNode(node: IRObjectNode): Container {
         fontSize:   props.fontSize,
         fill:       props.color,
       });
-
       const textObj = new Text({ text: props.content, style });
+
       const localPivot = { x: textObj.width / 2, y: textObj.height / 2 };
       const localAnchor = {
         x: props.anchor.x * textObj.width,
         y: props.anchor.y * textObj.height
       };
-
+      
       applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
       wrapper.addChild(textObj);
       return wrapper;
@@ -149,16 +136,11 @@ function buildNode(node: IRObjectNode): Container {
 
     case "group": {
       const wrapper = new Container();
-      
-      // Build children first to compute spatial bounds
       for (const child of node.children) {
         wrapper.addChild(buildNode(child));
       }
 
-      // Compute local bounds for accurate anchoring
       const bounds = wrapper.getLocalBounds();
-      
-      // Prevent degenerate bounds if the group is empty
       const bx = isFinite(bounds.x) ? bounds.x : 0;
       const by = isFinite(bounds.y) ? bounds.y : 0;
       const bw = isFinite(bounds.width) ? bounds.width : 0;
@@ -170,19 +152,14 @@ function buildNode(node: IRObjectNode): Container {
         y: by + props.transform.anchor.y * bh
       };
 
-      // Set alpha to 1.0 here to prevent individual child blending
+      // Pass the actual group alpha to the wrapper, no filters needed!
       applyAnchorAndPivot(wrapper, {
         position: props.transform.position,
         rotation: props.transform.rotation,
         scale: props.transform.scale,
         anchor: props.transform.anchor,
-        alpha: 1.0 
+        alpha: props.alpha 
       }, localAnchor, localPivot);
-
-      // Apply grouped Alpha Blending via Filter if less than 1.0
-      if (props.alpha < 1.0) {
-         wrapper.filters = [new AlphaFilter({ alpha: props.alpha })];
-      }
 
       return wrapper;
     }
@@ -201,33 +178,35 @@ export const pixiRendererAdapter: IRendererAdapter = {
     _isDark: boolean
   ): Promise<() => void> {
     await document.fonts.ready;
-    
     const app = new Application();
+    
     await app.init({
       resizeTo:        hostElement,
       backgroundColor: scene.background,
-      autoStart:       false,
+      autoStart:       true, // Changed to true to allow native rendering cycles
       antialias:       true,
       resolution:      window.devicePixelRatio || 1,
       autoDensity:     true,
     });
-
+    
     hostElement.appendChild(app.canvas);
-
+    
     const sceneRoot = new Container();
     app.stage.addChild(sceneRoot);
-
+    
     for (const node of scene.children) {
       sceneRoot.addChild(buildNode(node));
     }
-
+    
     const logicalWidth  = scene.width;
     const logicalHeight = scene.height;
-    const sceneFit     = scene.sceneFit;
+    const sceneFit      = scene.sceneFit;
 
     function updateLayout(): void {
-      const sw = app.screen.width;
-      const sh = app.screen.height;
+      if (!app.canvas) return; // Guard against destroyed app
+
+      const sw = hostElement.clientWidth;
+      const sh = hostElement.clientHeight;
 
       if (sceneFit === "contain") {
         const s = Math.min(sw / logicalWidth, sh / logicalHeight);
@@ -250,26 +229,18 @@ export const pixiRendererAdapter: IRendererAdapter = {
         sceneRoot.scale.set(1);
         sceneRoot.position.set(0, 0);
       }
-      
-      app.render();
     }
 
-    let lastW = -1;
-    let lastH = -1;
-
-    const layoutTick = (): void => {
-      if (app.screen.width !== lastW || app.screen.height !== lastH) {
-        lastW = app.screen.width;
-        lastH = app.screen.height;
+    // Replace ticker with highly efficient ResizeObserver
+    const resizeObserver = new ResizeObserver(() => {
         updateLayout();
-      }
-    };
-
-    app.ticker.add(layoutTick);
+    });
+    
+    resizeObserver.observe(hostElement);
     updateLayout();
 
     return () => {
-      app.ticker.remove(layoutTick);
+      resizeObserver.disconnect();
       app.destroy(true, { children: true });
     };
   },

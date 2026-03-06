@@ -29,6 +29,13 @@ function describeToken(t: Token): string {
   }
 }
 
+// Global list of reserved property names to prevent confusing object names
+const RESERVED_PROPS = new Set<string>([
+  "background", "size", "sceneFit", "position", "radius", "color",
+  "alpha", "rotation", "scale", "anchor", "z", "width", "height",
+  "points", "content", "fontSize"
+]);
+
 export function parse(tokens: Token[]): SceneNode {
   let pos = 0;
   let currentContext = "the scene";
@@ -69,7 +76,6 @@ export function parse(tokens: Token[]): SceneNode {
 
   function parseValue(): AstValue {
     const t = peek();
-
     if (t.type === "NUMBER") {
       consume();
       return { kind: "number", value: t.value as number };
@@ -109,6 +115,7 @@ export function parse(tokens: Token[]): SceneNode {
           col:  extra.col,
         };
       }
+
       if (peek().type !== "RPAREN") {
         const bad = peek();
         throw {
@@ -139,6 +146,7 @@ export function parse(tokens: Token[]): SceneNode {
             col:  openTok.col,
           };
         }
+
         if (peek().type !== "LPAREN") {
           const bad = peek();
           throw {
@@ -261,18 +269,18 @@ export function parse(tokens: Token[]): SceneNode {
     const typeTok = consume("KEYWORD");
     const objType = typeTok.value as string;
 
+    // Strict Object Name Guardrails
     if (peek().type !== "IDENT") {
       const bad = peek();
-      const hint =
-        bad.type === "LBRACE"
-          ? ` Every object must have a name before its '{'. For example: ${objType} myObject { ... }`
-          : bad.type === "KEYWORD"
-          ? ` Another keyword was found instead. Did you forget the object name? For example: ${objType} myObject { ... }`
-          : "";
+      let hint = "";
+      if (bad.type === "KEYWORD") hint = ` '${bad.value}' is a reserved object keyword.`;
+      else if (bad.type === "NAMED_COLOR") hint = ` '${bad.value}' is a reserved color keyword (like 'red').`;
+      else if (bad.type === "SCENE_FIT") hint = ` '${bad.value}' is a reserved sceneFit keyword.`;
+      else if (bad.type === "LBRACE") hint = ` Every object must have a name before its '{'. For example: ${objType} myObject { ... }`;
 
       throw {
         phase: "PARSE" as const,
-        message: `In ${currentContext}: Expected a name for the '${objType}' object, but found ${describeToken(bad)}.${hint}`,
+        message: `In ${currentContext}: Expected a valid, unique name for the '${objType}' object, but found ${describeToken(bad)}.${hint}`,
         line: bad.line,
         col:  bad.col,
       };
@@ -281,11 +289,24 @@ export function parse(tokens: Token[]): SceneNode {
     const nameTok = consume("IDENT");
     const objName = nameTok.value as string;
 
-    if (KEYWORDS.has(objName)) {
+    // Enforce standard naming convention: Must start with a-z or A-Z, followed by alphanumeric or underscores
+    if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(objName)) {
       throw {
         phase: "PARSE" as const,
         message:
-          `In ${currentContext}: '${objName}' is a reserved keyword and cannot be used as an object name. ` +
+          `In ${currentContext}: Invalid object name '${objName}'. ` +
+          `Object names must start with a letter (a-z, A-Z) and can only contain letters, numbers, and underscores.`,
+        line: nameTok.line,
+        col:  nameTok.col,
+      };
+    }
+
+    // Reject reserved properties and lexer keywords mapped as identifiers
+    if (RESERVED_PROPS.has(objName) || KEYWORDS.has(objName)) {
+      throw {
+        phase: "PARSE" as const,
+        message:
+          `In ${currentContext}: '${objName}' is a reserved word (property or keyword) and cannot be used as an object name. ` +
           `Choose a different name (e.g. '${objType}1' or 'my${objType}').`,
         line: nameTok.line,
         col:  nameTok.col,
@@ -293,13 +314,11 @@ export function parse(tokens: Token[]): SceneNode {
     }
 
     consume("LBRACE");
-
     const previousContext = currentContext;
     currentContext = `'${objType}' object '${objName}'`;
 
     const props: Record<string, AstValue> = {};
     const children: ObjectNode[]          = [];
-
     const seenProps  = new Set<string>();
     const seenNames  = new Set<string>();
 
@@ -344,6 +363,7 @@ export function parse(tokens: Token[]): SceneNode {
           col:  bad.col,
         };
       }
+
       if (peek().type === "NAMED_COLOR") {
         const bad = peek();
         throw {
@@ -385,7 +405,6 @@ export function parse(tokens: Token[]): SceneNode {
         col:  typeTok.col,
       };
     }
-
     consume("RBRACE");
     currentContext = previousContext;
 
@@ -398,7 +417,6 @@ export function parse(tokens: Token[]): SceneNode {
   }
 
   const firstTok = peek();
-
   if (firstTok.type === "EOF") {
     throw {
       phase: "PARSE" as const,
@@ -418,7 +436,7 @@ export function parse(tokens: Token[]): SceneNode {
         : firstTok.type === "IDENT"
         ? ` Did you forget to open with 'scene {'?`
         : "";
-
+    
     throw {
       phase: "PARSE" as const,
       message:
@@ -434,7 +452,6 @@ export function parse(tokens: Token[]): SceneNode {
 
   const sceneProps: Record<string, AstValue> = {};
   const sceneChildren: ObjectNode[]          = [];
-
   const seenSceneProps = new Set<string>();
   const seenSceneNames = new Set<string>();
 
@@ -510,8 +527,8 @@ export function parse(tokens: Token[]): SceneNode {
   }
 
   consume("RBRACE");
-
   const trailing = peek();
+
   if (trailing.type !== "EOF") {
     let hint = "";
     if (trailing.type === "RPAREN") {
