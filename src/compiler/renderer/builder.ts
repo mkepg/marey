@@ -1,17 +1,5 @@
-import {
-  Application,
-  Container,
-  Graphics,
-  Text,
-  TextStyle
-} from "pixi.js";
-
-import type {
-  IRSceneNode,
-  IRObjectNode,
-  IRObjectProps,
-  IRendererAdapter,
-} from "./sceneIR";
+import { Container, Graphics, Text, TextStyle } from "pixi.js";
+import type { IRObjectNode, IRObjectProps } from "../sceneIR";
 
 function applyAnchorAndPivot(
   wrapper: Container,
@@ -38,7 +26,7 @@ function applyAnchorAndPivot(
   wrapper.alpha = props.alpha;
 }
 
-function buildNode(node: IRObjectNode): Container {
+export function buildNode(node: IRObjectNode): Container {
   const props: IRObjectProps = node.props;
 
   switch (props.kind) {
@@ -144,8 +132,6 @@ function buildNode(node: IRObjectNode): Container {
         wrapper.addChild(buildNode(child));
       }
 
-      // We explicitly freeze the local origin. Groups are now perfect abstract 
-      // coordinate spaces and will not snap around if child nodes resize or move.
       const localPivot = { x: 0, y: 0 };
       const localAnchor = { x: 0, y: 0 };
 
@@ -153,7 +139,7 @@ function buildNode(node: IRObjectNode): Container {
         position: props.transform.position,
         rotation: props.transform.rotation,
         scale: props.transform.scale,
-        anchor: { x: 0, y: 0 }, // Hardcode anchor to zero
+        anchor: { x: 0, y: 0 },
         alpha: props.alpha
       }, localAnchor, localPivot);
 
@@ -165,85 +151,4 @@ function buildNode(node: IRObjectNode): Container {
       throw new Error(`[PixiAdapter] Unknown IR node kind: ${String((_never as IRObjectProps).kind)}`);
     }
   }
-}
-
-export const pixiRendererAdapter: IRendererAdapter = {
-  async render(
-    scene: IRSceneNode,
-    hostElement: HTMLDivElement,
-    _isDark: boolean
-  ): Promise<() => void> {
-    await document.fonts.ready;
-
-    const app = new Application();
-    await app.init({
-      resizeTo:        hostElement,
-      backgroundColor: scene.background,
-      autoStart:       true,
-      antialias:       true,
-      resolution:      window.devicePixelRatio || 1,
-      autoDensity:     true,
-    });
-
-    hostElement.appendChild(app.canvas);
-    const sceneRoot = new Container();
-    app.stage.addChild(sceneRoot);
-
-    for (const node of scene.children) {
-      sceneRoot.addChild(buildNode(node));
-    }
-
-    const logicalWidth  = scene.width;
-    const logicalHeight = scene.height;
-    const sceneFit      = scene.sceneFit;
-
-    function updateLayout(): void {
-      if (!app.canvas) return;
-
-      const sw = hostElement.clientWidth;
-      const sh = hostElement.clientHeight;
-
-      if (sceneFit === "contain") {
-        const s = Math.min(sw / logicalWidth, sh / logicalHeight);
-        sceneRoot.scale.set(s);
-        sceneRoot.position.set(
-          (sw - logicalWidth  * s) / 2,
-          (sh - logicalHeight * s) / 2
-        );
-      } else if (sceneFit === "cover") {
-        const s = Math.max(sw / logicalWidth, sh / logicalHeight);
-        sceneRoot.scale.set(s);
-        sceneRoot.position.set(
-          (sw - logicalWidth  * s) / 2,
-          (sh - logicalHeight * s) / 2
-        );
-      } else if (sceneFit === "fill") {
-        sceneRoot.scale.set(sw / logicalWidth, sh / logicalHeight);
-        sceneRoot.position.set(0, 0);
-      } else {
-        sceneRoot.scale.set(1);
-        sceneRoot.position.set(0, 0);
-      }
-    }
-
-    const resizeObserver = new ResizeObserver(() => {
-        updateLayout();
-    });
-
-    resizeObserver.observe(hostElement);
-    updateLayout();
-
-    return () => {
-      resizeObserver.disconnect();
-      app.destroy(true, { children: true });
-    };
-  },
-};
-
-export async function renderScene(
-  scene: IRSceneNode,
-  hostElement: HTMLDivElement,
-  isDark: boolean
-): Promise<() => void> {
-  return pixiRendererAdapter.render(scene, hostElement, isDark);
 }
