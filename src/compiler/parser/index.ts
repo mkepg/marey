@@ -2,9 +2,14 @@ import type { Token, SceneNode, AstValue, ObjectNode } from "../types";
 import { ParserState, describeToken } from "./state";
 import { parseObject } from "./parseObject";
 import { parseValue } from "./parseValue";
+import { parseDef } from "./parseDef";
 
 export function parse(tokens: Token[]): SceneNode {
   const state = new ParserState(tokens);
+  
+  while (state.peek().type === "KEYWORD" && state.peek().value === "def") {
+    parseDef(state);
+  }
 
   const firstTok = state.peek();
   if (firstTok.type === "EOF") {
@@ -21,7 +26,6 @@ export function parse(tokens: Token[]): SceneNode {
       ? ` '${firstTok.value as string}' is an object keyword — objects must be placed inside a scene block.`
       : firstTok.type === "IDENT"
       ? ` Did you forget to open with 'scene {'?` : "";
-    
     throw {
       phase: "PARSE" as const,
       message: `A Declare program must begin with the 'scene' keyword, but found ${describeToken(firstTok)}.${hint}`,
@@ -32,6 +36,9 @@ export function parse(tokens: Token[]): SceneNode {
 
   state.consume("KEYWORD");
   state.consume("LBRACE");
+  
+  const prevEnv = state.env;
+  state.env = Object.create(prevEnv);
 
   const sceneProps: Record<string, AstValue> = {};
   const sceneChildren: ObjectNode[]          = [];
@@ -40,6 +47,11 @@ export function parse(tokens: Token[]): SceneNode {
 
   while (state.peek().type !== "RBRACE" && state.peek().type !== "EOF") {
     if (state.peek().type === "KEYWORD") {
+      if (state.peek().value === "def") {
+        parseDef(state);
+        continue;
+      }
+      
       const child = parseObject(state, 1);
       if (seenSceneNames.has(child.name)) {
         throw {
@@ -66,7 +78,6 @@ export function parse(tokens: Token[]): SceneNode {
 
     const key     = state.consume("IDENT");
     const keyName = key.value as string;
-
     if (seenSceneProps.has(keyName)) {
       throw {
         phase: "PARSE" as const,
@@ -76,7 +87,6 @@ export function parse(tokens: Token[]): SceneNode {
       };
     }
     seenSceneProps.add(keyName);
-
     state.consume("COLON");
     sceneProps[keyName] = parseValue(state);
   }
@@ -91,8 +101,9 @@ export function parse(tokens: Token[]): SceneNode {
   }
 
   state.consume("RBRACE");
-  const trailing = state.peek();
+  state.env = prevEnv;
 
+  const trailing = state.peek();
   if (trailing.type !== "EOF") {
     let hint = "";
     if (trailing.type === "KEYWORD") hint = ` Only one scene block is allowed per file.`;

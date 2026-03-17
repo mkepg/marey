@@ -2,6 +2,7 @@ import type { ObjectNode, ObjectType, AstValue } from "../types";
 import { KEYWORDS } from "../lexer";
 import { ParserState, describeToken } from "./state";
 import { parseValue } from "./parseValue";
+import { parseDef } from "./parseDef";
 
 const RESERVED_PROPS = new Set<string>([
   "background", "size", "sceneFit", "position", "radius", "color",
@@ -29,7 +30,7 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
     else if (bad.type === "NAMED_COLOR") hint = ` '${bad.value}' is a reserved color keyword.`;
     else if (bad.type === "SCENE_FIT") hint = ` '${bad.value}' is a reserved sceneFit keyword.`;
     else if (bad.type === "LBRACE") hint = ` Every object must have a name before its '{'.`;
-
+    
     throw {
       phase: "PARSE" as const,
       message: `In ${state.currentContext}: Expected a valid, unique name for the '${objType}' object, but found ${describeToken(bad)}.${hint}`,
@@ -60,8 +61,12 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
   }
 
   state.consume("LBRACE");
+  
   const previousContext = state.currentContext;
   state.currentContext = `'${objType}' object '${objName}'`;
+  
+  const prevEnv = state.env;
+  state.env = Object.create(prevEnv);
 
   const props: Record<string, AstValue> = {};
   const children: ObjectNode[]          = [];
@@ -70,6 +75,11 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
 
   while (state.peek().type !== "RBRACE" && state.peek().type !== "EOF") {
     if (state.peek().type === "KEYWORD") {
+      if (state.peek().value === "def") {
+        parseDef(state);
+        continue;
+      }
+      
       if (objType !== "group") {
         const bad = state.peek();
         throw {
@@ -79,7 +89,7 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
           col:  bad.col,
         };
       }
-
+      
       const childNode = parseObject(state, depth + 1);
       if (seenNames.has(childNode.name)) {
         throw {
@@ -125,8 +135,8 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
         col:  key.col,
       };
     }
-    seenProps.add(keyName);
 
+    seenProps.add(keyName);
     state.consume("COLON");
     props[keyName] = parseValue(state);
   }
@@ -139,8 +149,9 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
       col:  typeTok.col,
     };
   }
-  
+
   state.consume("RBRACE");
+  state.env = prevEnv;
   state.currentContext = previousContext;
 
   return {

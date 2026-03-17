@@ -3,7 +3,7 @@ import { parse } from "./parser";
 import { typeCheck } from "./typeChecker";
 import type { LogEntry, CompilerError } from "./types";
 
-function normaliseError(raw: unknown): { phase: string; message: string; location: string } {
+function normaliseError(raw: unknown): CompilerError {
   if (
     raw !== null &&
     typeof raw === "object" &&
@@ -11,37 +11,34 @@ function normaliseError(raw: unknown): { phase: string; message: string; locatio
     "message" in raw
   ) {
     const e = raw as CompilerError;
-    const location =
-      e.line !== undefined && e.col !== undefined
-        ? ` — line ${e.line}, column ${e.col}`
-        : "";
     return {
-      phase:    (e.phase ?? "error").toLowerCase(),
+      phase:    (e.phase ?? "error").toUpperCase(),
       message:  e.message,
-      location,
+      line:     e.line,
+      col:      e.col,
     };
   }
+
   if (raw instanceof Error) {
-    return { phase: "runtime", message: raw.message, location: "" };
+    return { phase: "RUNTIME", message: raw.message };
   }
+
   return {
-    phase:    "error",
+    phase:    "ERROR",
     message:  String(raw),
-    location: "",
   };
 }
 
 self.addEventListener("message", (e: MessageEvent) => {
   const { id, source } = e.data;
   const logs: LogEntry[] = [];
+  const outErrors: CompilerError[] = [];
 
   try {
-    // Stage 1: Lexer
     logs.push({ kind: "info", text: "[lexer]   tokenizing..." });
     const tokens = lex(source);
     logs.push({ kind: "ok", text: `[lexer]   ${tokens.length - 1} tokens` });
 
-    // Stage 2: Parser
     logs.push({ kind: "info", text: "[parser]  building AST..." });
     const ast = parse(tokens);
     logs.push({
@@ -49,32 +46,37 @@ self.addEventListener("message", (e: MessageEvent) => {
       text: `[parser]  AST root: scene, ${ast.children.length} top-level object(s)`,
     });
 
-    // Stage 3: Type Checker & IR Generation
     logs.push({ kind: "info", text: "[type]    checking + building Scene IR..." });
     const { errors, ir } = typeCheck(ast);
 
     if (errors.length > 0 || ir === null) {
-      errors.forEach((msg) =>
-        logs.push({ kind: "error", text: `[type]    ${msg}` })
-      );
-      self.postMessage({ id, success: false, logs, ir: null });
+      errors.forEach((msg) => {
+        logs.push({ kind: "error", text: `[type]    ${msg}` });
+        outErrors.push({ phase: "TYPE", message: msg }); 
+      });
+      self.postMessage({ id, success: false, logs, errors: outErrors, ir: null });
       return;
     }
 
-    logs.push({ 
-      kind: "ok", 
-      text: `[type]    no errors — Scene IR ready (${Object.keys(ir.registry).length} node(s))` 
+    logs.push({
+      kind: "ok",
+      text: `[type]    no errors — Scene IR ready (${Object.keys(ir.registry).length} node(s))`
     });
-    
-    // Post the successful SceneIR back to the main thread
-    self.postMessage({ id, success: true, logs, ir });
+
+    self.postMessage({ id, success: true, logs, errors: [], ir });
 
   } catch (raw: unknown) {
-    const { phase, message, location } = normaliseError(raw);
+    const err = normaliseError(raw);
+    const location = err.line !== undefined && err.col !== undefined
+        ? ` — line ${err.line}, column ${err.col}`
+        : "";
+        
     logs.push({
       kind:  "error",
-      text:  `[${phase}]  ${message}${location}`,
+      text:  `[${err.phase.toLowerCase()}]  ${err.message}${location}`,
     });
-    self.postMessage({ id, success: false, logs, ir: null });
+    
+    outErrors.push(err);
+    self.postMessage({ id, success: false, logs, errors: outErrors, ir: null });
   }
 });

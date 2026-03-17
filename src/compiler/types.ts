@@ -14,6 +14,11 @@ export type TokenType =
   | "RPAREN"
   | "COMMA"
   | "COLON"
+  | "PLUS"
+  | "MINUS"
+  | "STAR"
+  | "SLASH"
+  | "EQUALS"
   | "EOF";
 
 export interface Token {
@@ -82,7 +87,7 @@ export interface SceneNode {
 export type AstNode = SceneNode | ObjectNode;
 
 export interface CompilerError {
-  readonly phase: "LEX" | "PARSE" | "TYPE" | "RENDER";
+  readonly phase: string;
   readonly message: string;
   readonly line?: number;
   readonly col?: number;
@@ -97,5 +102,6 @@ export interface LogEntry {
 
 export interface CompileResult {
   readonly logs: LogEntry[];
+  readonly errors: CompilerError[];
   readonly success: boolean;
 }

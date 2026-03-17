@@ -7,6 +7,7 @@ export const KEYWORDS = new Set<string>([
   "polygon",
   "text",
   "group",
+  "def",
 ]);
 
 export const NAMED_COLORS: Readonly<Record<string, string>> = {
@@ -37,4 +38,9 @@ export const SINGLE_CHAR_MAP: Readonly<Record<string, TokenType>> = {
   ")": "RPAREN",
   ",": "COMMA",
   ":": "COLON",
+  "+": "PLUS",
+  "-": "MINUS",
+  "*": "STAR",
+  "/": "SLASH",
+  "=": "EQUALS",
 };

@@ -1,4 +1,4 @@
-import type { Token } from "../types";
+import type { Token, AstValue } from "../types";
 
 export function describeToken(t: Token): string {
   switch (t.type) {
@@ -17,6 +17,11 @@ export function describeToken(t: Token): string {
     case "RPAREN":      return "')'";
     case "COMMA":       return "','";
     case "COLON":       return "':'";
+    case "PLUS":        return "'+'";
+    case "MINUS":       return "'-'";
+    case "STAR":        return "'*'";
+    case "SLASH":       return "'/'";
+    case "EQUALS":      return "'='";
     case "EOF":         return "end of file";
   }
 }
@@ -27,10 +32,11 @@ export function expectedTypeDescription(expected: Token["type"], got: Token): st
     case "RBRACE":  return "'}' to close the block";
     case "LBRACKET":return "'[' to open a point list";
     case "RBRACKET":return "']' to close the point list";
-    case "LPAREN":  return "'(' to open a point";
-    case "RPAREN":  return "')' to close the point";
+    case "LPAREN":  return "'(' to open a point or expression";
+    case "RPAREN":  return "')' to close the point or expression";
     case "COMMA":   return "','";
     case "COLON":   return "':' after the property name";
+    case "EQUALS":  return "'=' for variable assignment";
     case "NUMBER":  return `a number${got.type === "IDENT" ? ` (did you mean to write a numeric value here?)` : ""}`;
     case "IDENT":   return "an object or property name (an identifier)";
     case "KEYWORD": return "an object type keyword (circle, rectangle, polygon, text, or group)";
@@ -42,6 +48,7 @@ export class ParserState {
   pos = 0;
   currentContext = "the scene";
   tokens: Token[];
+  env: Record<string, AstValue> = {};
 
   constructor(tokens: Token[]) {
     this.tokens = tokens;

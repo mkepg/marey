@@ -1,6 +1,9 @@
-import type { CompileResult, LogEntry } from "./types";
+import type { CompileResult, LogEntry, CompilerError } from "./types";
 import type { IRSceneNode } from "./sceneIR";
 import { renderScene } from "./renderer";
+import { lex } from "./lexer";
+import { parse } from "./parser";
+import { typeCheck } from "./typeChecker";
 
 export interface CompileResultWithCleanup extends CompileResult {
   cleanup: (() => void) | null;
@@ -13,13 +16,12 @@ let activeMessageHandler: ((e: MessageEvent) => void) | null = null;
 
 function createWorker(): Worker {
   const worker = new Worker(new URL('./compiler.worker.ts', import.meta.url), { type: 'module' });
-  
-  // Handle fatal worker crashes (e.g., OOM or infinite loops)
   worker.onerror = (err: ErrorEvent) => {
     if (activeResolve) {
       activeResolve({
         success: false,
         logs: [{ kind: "error", text: `[system] Compiler crashed or ran out of memory: ${err.message}` }],
+        errors: [{ phase: "SYSTEM", message: `Compiler crashed: ${err.message}` }],
         cleanup: null
       });
       activeResolve = null;
@@ -28,7 +30,6 @@ function createWorker(): Worker {
         worker.removeEventListener('message', activeMessageHandler);
         activeMessageHandler = null;
     }
-    // Terminate the crashed worker and clear the reference to spawn a fresh one next time
     worker.terminate();
     compilerWorker = null;
   };
@@ -43,9 +44,8 @@ export async function compile(
   currentJobId += 1;
   const jobId = currentJobId;
 
-  // Optimize Worker Queue: Abort any ongoing compilation to process this new one immediately
   if (activeResolve) {
-    activeResolve({ logs: [], success: false, cleanup: null }); // safely ignored by the UI hook
+    activeResolve({ logs: [], errors: [], success: false, cleanup: null });
     activeResolve = null;
     if (compilerWorker) {
       compilerWorker.terminate();
@@ -57,14 +57,11 @@ export async function compile(
     compilerWorker = createWorker();
   }
 
-  // Capture the worker in a local constant to satisfy TypeScript's strict null checks
-  // and ensure we are listening to/posting to the correct instance.
   const workerInstance = compilerWorker;
   const t0 = performance.now();
 
   return new Promise((resolve) => {
     activeResolve = resolve;
-
     activeMessageHandler = async (e: MessageEvent) => {
       const data = e.data;
       if (data.id !== jobId) return;
@@ -76,27 +73,33 @@ export async function compile(
       activeResolve = null;
 
       const logs: LogEntry[] = data.logs;
+      const errors: CompilerError[] = data.errors || [];
+
       if (!data.success || !data.ir) {
-        resolve({ logs, success: false, cleanup: null });
+        resolve({ logs, errors, success: false, cleanup: null });
         return;
       }
 
       try {
         const sceneIR = data.ir as IRSceneNode;
         logs.push({ kind: "info", text: "[pixi]    initialising renderer..." });
+        
         const cleanup = await renderScene(sceneIR, hostElement, isDark);
         const elapsed = (performance.now() - t0).toFixed(1);
+        
         logs.push({
           kind: "ok",
           text: `[pixi]    rendered via WebGL/WebGPU in ${elapsed}ms`,
         });
-        resolve({ logs, success: true, cleanup });
+        
+        resolve({ logs, errors: [], success: true, cleanup });
       } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
         logs.push({
           kind: "error",
-          text: `[render]  ${err instanceof Error ? err.message : String(err)}`
+          text: `[render]  ${errorMsg}`
         });
-        resolve({ logs, success: false, cleanup: null });
+        resolve({ logs, errors: [{ phase: "RENDER", message: errorMsg }], success: false, cleanup: null });
       }
     };
 
@@ -105,4 +108,31 @@ export async function compile(
   });
 }
 
-export type { CompileResult, LogEntry, LogKind } from "./types";
+/**
+ * Synchronous linting function to be used for real-time editor feedback.
+ * Bypasses the Web Worker and Rendering pipeline completely.
+ */
+export function lint(source: string): CompilerError[] {
+  try {
+    const tokens = lex(source);
+    const ast = parse(tokens);
+    const { errors } = typeCheck(ast);
+    return errors.map(msg => ({ phase: "TYPE", message: msg }));
+  } catch (raw: unknown) {
+    if (raw !== null && typeof raw === "object" && "phase" in raw && "message" in raw) {
+      const e = raw as CompilerError;
+      return [{ 
+        phase: (e.phase ?? "error").toUpperCase(), 
+        message: e.message, 
+        line: e.line, 
+        col: e.col 
+      }];
+    }
+    if (raw instanceof Error) {
+      return [{ phase: "RUNTIME", message: raw.message }];
+    }
+    return [{ phase: "ERROR", message: String(raw) }];
+  }
+}
+
+export type { CompileResult, LogEntry, LogKind, CompilerError } from "./types";

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { LogEntry } from "../compiler";
+import type { LogEntry, CompilerError } from "../compiler";
 
 export type Theme = "dark" | "light";
 export type CompileStatus = "idle" | "ok" | "error";
@@ -8,10 +8,12 @@ export interface AppState {
   code: string;
   theme: Theme;
   logs: LogEntry[];
+  errors: CompilerError[];
   compileStatus: CompileStatus;
   setCode: (code: string) => void;
   toggleTheme: () => void;
   setLogs: (logs: LogEntry[]) => void;
+  setErrors: (errors: CompilerError[]) => void;
   setCompileStatus: (status: CompileStatus) => void;
 }
 
@@ -95,10 +97,12 @@ export const useAppStore = create<AppState>((set) => ({
   code: DEFAULT_CODE,
   theme: "dark",
   logs: [],
+  errors: [],
   compileStatus: "idle",
   setCode: (code) => set({ code }),
   toggleTheme: () =>
     set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
   setLogs: (logs) => set({ logs }),
+  setErrors: (errors) => set({ errors }),
   setCompileStatus: (compileStatus) => set({ compileStatus }),
 }));

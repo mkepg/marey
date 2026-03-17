@@ -5,9 +5,7 @@ import type { LexerState } from "./state";
 export function handleColor(state: LexerState): void {
   const startI = state.i;
   let j = startI + 1;
-  
   while (j < state.src.length && /[0-9a-fA-F]/i.test(state.src[j])) j++;
-  
   const digits = j - (startI + 1);
   const raw = state.src.slice(startI, j);
 
@@ -32,7 +30,6 @@ export function handleString(state: LexerState): void {
     if (state.src[j] === "\n" || state.src[j] === "\r") {
       throw { phase: "LEX" as const, message: `String opened at line ${startLine}, column ${startCol} was not closed before the end of the line. String values cannot span multiple lines.`, line: startLine, col: startCol };
     }
-
     if (state.src[j] === '\\' && j + 1 < state.src.length) {
       j++;
       const esc = state.src[j];
@@ -59,7 +56,6 @@ export function handleString(state: LexerState): void {
 
 export function handleNumber(state: LexerState): void {
   let j = state.i;
-  if (state.src[j] === "-") j++;
   
   while (j < state.src.length && /[0-9]/.test(state.src[j])) j++;
 
