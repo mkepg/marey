@@ -3,10 +3,11 @@ import { ParserState, describeToken } from "./state";
 import { parseObject } from "./parseObject";
 import { parseValue } from "./parseValue";
 import { parseDef } from "./parseDef";
+import { parseGenerate } from "./parseGenerate";
 
 export function parse(tokens: Token[]): SceneNode {
   const state = new ParserState(tokens);
-  
+
   while (state.peek().type === "KEYWORD" && state.peek().value === "def") {
     parseDef(state);
   }
@@ -36,7 +37,7 @@ export function parse(tokens: Token[]): SceneNode {
 
   state.consume("KEYWORD");
   state.consume("LBRACE");
-  
+
   const prevEnv = state.env;
   state.env = Object.create(prevEnv);
 
@@ -52,6 +53,23 @@ export function parse(tokens: Token[]): SceneNode {
         continue;
       }
       
+      if (state.peek().value === "generate") {
+        const generatedNodes = parseGenerate(state, 1);
+        for (const child of generatedNodes) {
+          if (seenSceneNames.has(child.name)) {
+            throw {
+              phase: "PARSE" as const,
+              message: `In ${state.currentContext}: Duplicate object name '${child.name}' generated in the scene. Every top-level object must have a unique name.`,
+              line: state.peek().line,
+              col:  state.peek().col,
+            };
+          }
+          seenSceneNames.add(child.name);
+          sceneChildren.push(child);
+        }
+        continue;
+      }
+
       const child = parseObject(state, 1);
       if (seenSceneNames.has(child.name)) {
         throw {
@@ -78,6 +96,7 @@ export function parse(tokens: Token[]): SceneNode {
 
     const key     = state.consume("IDENT");
     const keyName = key.value as string;
+
     if (seenSceneProps.has(keyName)) {
       throw {
         phase: "PARSE" as const,

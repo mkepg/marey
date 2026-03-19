@@ -3,6 +3,7 @@ import { KEYWORDS } from "../lexer";
 import { ParserState, describeToken } from "./state";
 import { parseValue } from "./parseValue";
 import { parseDef } from "./parseDef";
+import { parseGenerate } from "./parseGenerate";
 
 const RESERVED_PROPS = new Set<string>([
   "background", "size", "sceneFit", "position", "radius", "color",
@@ -30,7 +31,7 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
     else if (bad.type === "NAMED_COLOR") hint = ` '${bad.value}' is a reserved color keyword.`;
     else if (bad.type === "SCENE_FIT") hint = ` '${bad.value}' is a reserved sceneFit keyword.`;
     else if (bad.type === "LBRACE") hint = ` Every object must have a name before its '{'.`;
-    
+
     throw {
       phase: "PARSE" as const,
       message: `In ${state.currentContext}: Expected a valid, unique name for the '${objType}' object, but found ${describeToken(bad)}.${hint}`,
@@ -61,15 +62,16 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
   }
 
   state.consume("LBRACE");
-  
+
   const previousContext = state.currentContext;
   state.currentContext = `'${objType}' object '${objName}'`;
-  
+
   const prevEnv = state.env;
   state.env = Object.create(prevEnv);
 
   const props: Record<string, AstValue> = {};
   const children: ObjectNode[]          = [];
+
   const seenProps  = new Set<string>();
   const seenNames  = new Set<string>();
 
@@ -79,7 +81,34 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
         parseDef(state);
         continue;
       }
-      
+
+      if (state.peek().value === "generate") {
+        if (objType !== "group") {
+          const bad = state.peek();
+          throw {
+            phase: "PARSE" as const,
+            message: `In ${state.currentContext}: Unexpected 'generate' block. '${objType}' objects cannot contain child objects or blocks.`,
+            line: bad.line,
+            col:  bad.col,
+          };
+        }
+        
+        const generatedNodes = parseGenerate(state, depth + 1);
+        for (const child of generatedNodes) {
+          if (seenNames.has(child.name)) {
+            throw {
+              phase: "PARSE" as const,
+              message: `In ${state.currentContext}: Duplicate object name '${child.name}' generated inside '${objName}'.`,
+              line: state.peek().line,
+              col:  state.peek().col,
+            };
+          }
+          seenNames.add(child.name);
+          children.push(child);
+        }
+        continue;
+      }
+
       if (objType !== "group") {
         const bad = state.peek();
         throw {
@@ -89,7 +118,7 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
           col:  bad.col,
         };
       }
-      
+
       const childNode = parseObject(state, depth + 1);
       if (seenNames.has(childNode.name)) {
         throw {
@@ -113,7 +142,6 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
         col:  bad.col,
       };
     }
-
     if (state.peek().type === "NAMED_COLOR") {
       const bad = state.peek();
       throw {
@@ -135,7 +163,6 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
         col:  key.col,
       };
     }
-
     seenProps.add(keyName);
     state.consume("COLON");
     props[keyName] = parseValue(state);

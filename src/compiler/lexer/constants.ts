@@ -8,6 +8,9 @@ export const KEYWORDS = new Set<string>([
   "text",
   "group",
   "def",
+  "generate", // NEW
+  "from",     // NEW
+  "to",       // NEW
 ]);
 
 export const NAMED_COLORS: Readonly<Record<string, string>> = {

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "preact/hooks";
 import type { FunctionComponent } from "preact";
 import type { editor as MonacoEditorNS } from "monaco-editor";
+
 import { useMonaco } from "../../hooks/useMonaco";
 import { useAppStore } from "../../store";
 import { lint } from "../../compiler";
@@ -66,7 +67,8 @@ function registerLanguage(monaco: typeof import("monaco-editor")): void {
   monaco.languages.register({ id: "Declare" });
 
   monaco.languages.setMonarchTokensProvider("Declare", {
-    keywords:    ["scene", "circle", "rectangle", "polygon", "text", "group"],
+    // NEW: Added generate, from, and to
+    keywords:    ["scene", "circle", "rectangle", "polygon", "text", "group", "generate", "from", "to"],
     defKeyword:  ["def"],
     namedColors: ["red", "green", "blue", "white", "black", "yellow", "cyan", "magenta", "orange"],
     tokenizer: {
@@ -122,57 +124,54 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef    = useRef<MonacoEditorNS.IStandaloneCodeEditor | null>(null);
   const monaco       = useMonaco();
-  
+
   const code    = useAppStore((s) => s.code);
   const theme   = useAppStore((s) => s.theme);
   const setCode = useAppStore((s) => s.setCode);
-  
+
   const codeRef  = useRef(code);
   const themeRef = useRef(theme);
-  
   codeRef.current  = code;
   themeRef.current = theme;
 
-  // 1. Initialize Monaco Editor
   useEffect(() => {
     if (!monaco || !containerRef.current || editorRef.current) return;
-    
+
     let isCancelled = false;
+
     const initEditor = async () => {
       await document.fonts.ready;
       if (isCancelled || !containerRef.current) return;
-      
+
       registerLanguage(monaco);
       defineThemes(monaco);
-      
+
       const editor = monaco.editor.create(containerRef.current, {
         ...EDITOR_OPTIONS,
         value: codeRef.current,
         theme: themeRef.current === "dark" ? "Declare-dark" : "Declare-light",
       });
-      
+
       editor.onDidChangeModelContent(() => {
         setCode(editor.getValue());
       });
-      
+
       editorRef.current = editor;
       onReady(editor);
     };
-    
+
     initEditor();
-    
+
     return () => {
       isCancelled = true;
     };
   }, [monaco]);
 
-  // 2. Handle Theme Changes
   useEffect(() => {
     if (!editorRef.current || !window.monaco) return;
     window.monaco.editor.setTheme(theme === "dark" ? "Declare-dark" : "Declare-light");
   }, [theme]);
 
-  // 3. Keep External State in Sync
   useEffect(() => {
     if (!editorRef.current) return;
     if (editorRef.current.getValue() !== code) {
@@ -180,22 +179,22 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
     }
   }, [code]);
 
-  // 4. Live Linter for Real-Time Error Markers
   useEffect(() => {
     if (!monaco || !editorRef.current) return;
+
     const model = editorRef.current.getModel();
     if (!model) return;
 
     const timer = setTimeout(() => {
       const liveErrors = lint(code);
-      
+
       const markers: MonacoEditorNS.IMarkerData[] = liveErrors.map((err) => ({
         severity: monaco.MarkerSeverity.Error,
         message: `[${err.phase}] ${err.message}`,
         startLineNumber: err.line ?? 1,
         startColumn: err.col ?? 1,
         endLineNumber: err.line ?? 1,
-        endColumn: err.col ? err.col + 1 : 100, 
+        endColumn: err.col ? err.col + 1 : 100,
       }));
 
       monaco.editor.setModelMarkers(model, "declare-compiler", markers);
@@ -204,7 +203,6 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
     return () => clearTimeout(timer);
   }, [code, monaco]);
 
-  // 5. Cleanup
   useEffect(() => {
     return () => {
       editorRef.current?.dispose();
