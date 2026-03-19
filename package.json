@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "monaco-editor": "^0.55.1",
+    "monaco-editor": "^0.53.0",
     "pixi.js": "^8.16.0",
     "preact": "^10.27.2",
     "zustand": "^5.0.11"

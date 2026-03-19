@@ -3,13 +3,14 @@ import styles from "./Handle.module.scss";
 
 interface HandleProps {
   axis: "horizontal" | "vertical";
-  onMouseDown: (e: MouseEvent) => void;
+  // FIX: Updated to expect onPointerDown
+  onPointerDown: (e: PointerEvent) => void;
 }
 
-export const Handle: FunctionComponent<HandleProps> = ({ axis, onMouseDown }) => (
+export const Handle: FunctionComponent<HandleProps> = ({ axis, onPointerDown }) => (
   <div
     className={axis === "horizontal" ? styles.horizontal : styles.vertical}
-    onMouseDown={onMouseDown}
+    onPointerDown={onPointerDown}
     role="separator"
     aria-orientation={axis}
   />

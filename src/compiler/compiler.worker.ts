@@ -29,16 +29,42 @@ function normaliseError(raw: unknown): CompilerError {
   };
 }
 
+// FIX: Dedicated linting function that doesn't generate output logs
+function doLint(source: string): CompilerError[] {
+  try {
+    const tokens = lex(source);
+    const { ast, errors: parseErrors } = parse(tokens);
+    if (parseErrors.length > 0) return parseErrors;
+    
+    if (ast) {
+      const { errors } = typeCheck(ast);
+      return errors.map(msg => ({ phase: "TYPE", message: msg }));
+    }
+    return [];
+  } catch (raw: unknown) {
+    return [normaliseError(raw)];
+  }
+}
+
 self.addEventListener("message", (e: MessageEvent) => {
-  const { id, source } = e.data;
+  const { id, source, action = "compile" } = e.data;
+  
+  // FIX: Handle off-thread linting request
+  if (action === "lint") {
+    const errors = doLint(source);
+    self.postMessage({ id, action: "lint", errors });
+    return;
+  }
+
+  // Standard Compile Action
   const logs: LogEntry[] = [];
   const outErrors: CompilerError[] = [];
-
+  
   try {
     logs.push({ kind: "info", text: "[lexer]   tokenizing..." });
     const tokens = lex(source);
     logs.push({ kind: "ok", text: `[lexer]   ${tokens.length - 1} tokens` });
-
+    
     logs.push({ kind: "info", text: "[parser]  building AST..." });
     const { ast, errors: parseErrors } = parse(tokens);
     
@@ -47,34 +73,34 @@ self.addEventListener("message", (e: MessageEvent) => {
         logs.push({ kind: "error", text: `[parser]  ${err.message}` });
         outErrors.push(err);
       });
-      self.postMessage({ id, success: false, logs, errors: outErrors, ir: null });
+      self.postMessage({ id, action: "compile", success: false, logs, errors: outErrors, ir: null });
       return;
     }
-
+    
     if (ast) {
       logs.push({
         kind: "ok",
         text: `[parser]  AST root: scene, ${ast.children.length} top-level object(s)`,
       });
-
+      
       logs.push({ kind: "info", text: "[type]    checking + building Scene IR..." });
       const { errors, ir } = typeCheck(ast);
-
+      
       if (errors.length > 0 || ir === null) {
         errors.forEach((msg) => {
           logs.push({ kind: "error", text: `[type]    ${msg}` });
           outErrors.push({ phase: "TYPE", message: msg });
         });
-        self.postMessage({ id, success: false, logs, errors: outErrors, ir: null });
+        self.postMessage({ id, action: "compile", success: false, logs, errors: outErrors, ir: null });
         return;
       }
-
+      
       logs.push({
         kind: "ok",
         text: `[type]    no errors — Scene IR ready (${Object.keys(ir.registry).length} node(s))`
       });
-
-      self.postMessage({ id, success: true, logs, errors: [], ir });
+      
+      self.postMessage({ id, action: "compile", success: true, logs, errors: [], ir });
     }
   } catch (raw: unknown) {
     const err = normaliseError(raw);
@@ -86,6 +112,6 @@ self.addEventListener("message", (e: MessageEvent) => {
       text:  `[${err.phase.toLowerCase()}]  ${err.message}${location}`,
     });
     outErrors.push(err);
-    self.postMessage({ id, success: false, logs, errors: outErrors, ir: null });
+    self.postMessage({ id, action: "compile", success: false, logs, errors: outErrors, ir: null });
   }
 });

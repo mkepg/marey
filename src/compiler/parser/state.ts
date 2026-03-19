@@ -46,7 +46,6 @@ export function expectedTypeDescription(expected: Token["type"], got: Token): st
 
 export class ParseException extends Error {
   readonly error: CompilerError;
-
   constructor(error: CompilerError) {
     super(error.message);
     this.error = error;
@@ -59,6 +58,9 @@ export class ParserState {
   tokens: Token[];
   env: Record<string, AstValue> = {};
   errors: CompilerError[] = [];
+  
+  // FIX: Track global node count to prevent Out-Of-Memory crashes
+  globalNodeCount = 0; 
 
   constructor(tokens: Token[]) {
     this.tokens = tokens;
@@ -96,7 +98,6 @@ export class ParserState {
   synchronize(): void {
     let t = this.peek();
     if (t.type === "RBRACE" || t.type === "EOF") return;
-
     this.pos++;
     while (!this.isAtEnd()) {
       t = this.peek();
@@ -106,7 +107,6 @@ export class ParserState {
       ) {
         return;
       }
-      
       if (t.type === "IDENT") {
         const next = this.tokens[this.pos + 1];
         if (next && next.type === "COLON") {
