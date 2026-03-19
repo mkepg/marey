@@ -1,4 +1,4 @@
-import type { Token, AstValue } from "../types";
+import type { Token, AstValue, CompilerError } from "../types";
 
 export function describeToken(t: Token): string {
   switch (t.type) {
@@ -44,32 +44,76 @@ export function expectedTypeDescription(expected: Token["type"], got: Token): st
   }
 }
 
+export class ParseException extends Error {
+  readonly error: CompilerError;
+
+  constructor(error: CompilerError) {
+    super(error.message);
+    this.error = error;
+  }
+}
+
 export class ParserState {
   pos = 0;
   currentContext = "the scene";
   tokens: Token[];
   env: Record<string, AstValue> = {};
+  errors: CompilerError[] = [];
 
   constructor(tokens: Token[]) {
     this.tokens = tokens;
   }
 
   peek(): Token {
-    return this.tokens[this.pos];
+    return this.tokens[this.pos] || this.tokens[this.tokens.length - 1];
+  }
+
+  isAtEnd(): boolean {
+    return this.peek().type === "EOF";
   }
 
   consume(expectedType?: Token["type"]): Token {
     const t = this.tokens[this.pos];
     if (expectedType && t.type !== expectedType) {
       const expectedDesc = expectedTypeDescription(expectedType, t);
-      throw {
-        phase: "PARSE" as const,
-        message: `In ${this.currentContext}: Expected ${expectedDesc}, but found ${describeToken(t)}.`,
-        line: t.line,
-        col:  t.col,
-      };
+      this.throwError(`In ${this.currentContext}: Expected ${expectedDesc}, but found ${describeToken(t)}.`, t);
     }
-    this.pos++;
+    if (!this.isAtEnd()) this.pos++;
     return t;
+  }
+
+  throwError(message: string, token: Token = this.peek()): never {
+    throw new ParseException({
+      phase: "PARSE",
+      message,
+      line: token.line,
+      col: token.col,
+      endLine: token.line,
+      endCol: token.endCol,
+    });
+  }
+
+  synchronize(): void {
+    let t = this.peek();
+    if (t.type === "RBRACE" || t.type === "EOF") return;
+
+    this.pos++;
+    while (!this.isAtEnd()) {
+      t = this.peek();
+      if (
+        t.type === "RBRACE" ||
+        t.type === "KEYWORD"
+      ) {
+        return;
+      }
+      
+      if (t.type === "IDENT") {
+        const next = this.tokens[this.pos + 1];
+        if (next && next.type === "COLON") {
+          return;
+        }
+      }
+      this.pos++;
+    }
   }
 }

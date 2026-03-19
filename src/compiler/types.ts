@@ -26,6 +26,7 @@ export interface Token {
   readonly value: string | number | null;
   readonly line: number;
   readonly col: number;
+  readonly endCol: number;
 }
 
 export interface NumberValue {
@@ -91,6 +92,13 @@ export interface CompilerError {
   readonly message: string;
   readonly line?: number;
   readonly col?: number;
+  readonly endLine?: number;
+  readonly endCol?: number;
+}
+
+export interface ParseResult {
+  readonly ast: SceneNode | null;
+  readonly errors: CompilerError[];
 }
 
 export type LogKind = "info" | "ok" | "error" | "sys";

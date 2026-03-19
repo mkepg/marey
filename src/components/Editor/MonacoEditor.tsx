@@ -67,7 +67,6 @@ function registerLanguage(monaco: typeof import("monaco-editor")): void {
   monaco.languages.register({ id: "Declare" });
 
   monaco.languages.setMonarchTokensProvider("Declare", {
-    // NEW: Added generate, from, and to
     keywords:    ["scene", "circle", "rectangle", "polygon", "text", "group", "generate", "from", "to"],
     defKeyword:  ["def"],
     namedColors: ["red", "green", "blue", "white", "black", "yellow", "cyan", "magenta", "orange"],
@@ -123,6 +122,7 @@ const EDITOR_OPTIONS: MonacoEditorNS.IStandaloneEditorConstructionOptions = {
 export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef    = useRef<MonacoEditorNS.IStandaloneCodeEditor | null>(null);
+  const decorationsRef = useRef<MonacoEditorNS.IEditorDecorationsCollection | null>(null);
   const monaco       = useMonaco();
 
   const code    = useAppStore((s) => s.code);
@@ -151,6 +151,8 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
         value: codeRef.current,
         theme: themeRef.current === "dark" ? "Declare-dark" : "Declare-light",
       });
+
+      decorationsRef.current = editor.createDecorationsCollection([]);
 
       editor.onDidChangeModelContent(() => {
         setCode(editor.getValue());
@@ -181,23 +183,33 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
 
   useEffect(() => {
     if (!monaco || !editorRef.current) return;
-
     const model = editorRef.current.getModel();
     if (!model) return;
 
     const timer = setTimeout(() => {
       const liveErrors = lint(code);
-
+      
       const markers: MonacoEditorNS.IMarkerData[] = liveErrors.map((err) => ({
         severity: monaco.MarkerSeverity.Error,
         message: `[${err.phase}] ${err.message}`,
         startLineNumber: err.line ?? 1,
         startColumn: err.col ?? 1,
-        endLineNumber: err.line ?? 1,
-        endColumn: err.col ? err.col + 1 : 100,
+        endLineNumber: err.endLine ?? err.line ?? 1,
+        endColumn: err.endCol ?? (err.col ? err.col + 1 : 100),
       }));
-
       monaco.editor.setModelMarkers(model, "declare-compiler", markers);
+
+      if (decorationsRef.current) {
+        const decorations: MonacoEditorNS.IModelDeltaDecoration[] = liveErrors.map((err) => ({
+          range: new monaco.Range(err.line ?? 1, 1, err.endLine ?? err.line ?? 1, 1),
+          options: {
+            isWholeLine: true,
+            className: "declare-error-line",
+            linesDecorationsClassName: "declare-error-gutter",
+          },
+        }));
+        decorationsRef.current.set(decorations);
+      }
     }, 400);
 
     return () => clearTimeout(timer);

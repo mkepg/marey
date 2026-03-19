@@ -12,11 +12,11 @@ export class LexerState {
   }
 
   err(message: string): never {
-    throw { phase: "LEX" as const, message, line: this.line, col: this.col };
+    throw { phase: "LEX" as const, message, line: this.line, col: this.col, endCol: this.col + 1 };
   }
 
-  push(type: TokenType, value: Token["value"]): void {
-    this.tokens.push({ type, value, line: this.line, col: this.col });
+  push(type: TokenType, value: Token["value"], length: number = 0): void {
+    this.tokens.push({ type, value, line: this.line, col: this.col, endCol: this.col + length });
   }
 
   peek(offset = 0): string {

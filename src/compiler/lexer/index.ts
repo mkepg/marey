@@ -34,7 +34,7 @@ export function lex(src: string): Token[] {
 
     const singleType = SINGLE_CHAR_MAP[ch];
     if (singleType) {
-      state.push(singleType, ch);
+      state.push(singleType, ch, 1);
       state.advance();
       continue;
     }
@@ -64,7 +64,7 @@ export function lex(src: string): Token[] {
     state.err(`Unexpected character ${display}. Declare source may only contain letters, digits, and the following symbols: # " { } [ ] ( ) : , // + - * / =`);
   }
 
-  state.tokens.push({ type: "EOF", value: null, line: state.line, col: state.col });
+  state.tokens.push({ type: "EOF", value: null, line: state.line, col: state.col, endCol: state.col });
   return state.tokens;
 }
 

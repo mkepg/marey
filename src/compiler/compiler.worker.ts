@@ -16,13 +16,13 @@ function normaliseError(raw: unknown): CompilerError {
       message:  e.message,
       line:     e.line,
       col:      e.col,
+      endLine:  e.endLine,
+      endCol:   e.endCol
     };
   }
-
   if (raw instanceof Error) {
     return { phase: "RUNTIME", message: raw.message };
   }
-
   return {
     phase:    "ERROR",
     message:  String(raw),
@@ -40,42 +40,51 @@ self.addEventListener("message", (e: MessageEvent) => {
     logs.push({ kind: "ok", text: `[lexer]   ${tokens.length - 1} tokens` });
 
     logs.push({ kind: "info", text: "[parser]  building AST..." });
-    const ast = parse(tokens);
-    logs.push({
-      kind: "ok",
-      text: `[parser]  AST root: scene, ${ast.children.length} top-level object(s)`,
-    });
-
-    logs.push({ kind: "info", text: "[type]    checking + building Scene IR..." });
-    const { errors, ir } = typeCheck(ast);
-
-    if (errors.length > 0 || ir === null) {
-      errors.forEach((msg) => {
-        logs.push({ kind: "error", text: `[type]    ${msg}` });
-        outErrors.push({ phase: "TYPE", message: msg }); 
+    const { ast, errors: parseErrors } = parse(tokens);
+    
+    if (parseErrors.length > 0) {
+      parseErrors.forEach(err => {
+        logs.push({ kind: "error", text: `[parser]  ${err.message}` });
+        outErrors.push(err);
       });
       self.postMessage({ id, success: false, logs, errors: outErrors, ir: null });
       return;
     }
 
-    logs.push({
-      kind: "ok",
-      text: `[type]    no errors — Scene IR ready (${Object.keys(ir.registry).length} node(s))`
-    });
+    if (ast) {
+      logs.push({
+        kind: "ok",
+        text: `[parser]  AST root: scene, ${ast.children.length} top-level object(s)`,
+      });
 
-    self.postMessage({ id, success: true, logs, errors: [], ir });
+      logs.push({ kind: "info", text: "[type]    checking + building Scene IR..." });
+      const { errors, ir } = typeCheck(ast);
 
+      if (errors.length > 0 || ir === null) {
+        errors.forEach((msg) => {
+          logs.push({ kind: "error", text: `[type]    ${msg}` });
+          outErrors.push({ phase: "TYPE", message: msg });
+        });
+        self.postMessage({ id, success: false, logs, errors: outErrors, ir: null });
+        return;
+      }
+
+      logs.push({
+        kind: "ok",
+        text: `[type]    no errors — Scene IR ready (${Object.keys(ir.registry).length} node(s))`
+      });
+
+      self.postMessage({ id, success: true, logs, errors: [], ir });
+    }
   } catch (raw: unknown) {
     const err = normaliseError(raw);
     const location = err.line !== undefined && err.col !== undefined
         ? ` — line ${err.line}, column ${err.col}`
         : "";
-        
     logs.push({
       kind:  "error",
       text:  `[${err.phase.toLowerCase()}]  ${err.message}${location}`,
     });
-    
     outErrors.push(err);
     self.postMessage({ id, success: false, logs, errors: outErrors, ir: null });
   }

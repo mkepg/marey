@@ -1,12 +1,11 @@
 @use "tokens" as *;
 
-// Define local font faces instead of Google Fonts @import
 @font-face {
   font-family: 'JetBrains Mono';
   src: url('/fonts/JetBrainsMono-Regular.ttf') format('truetype');
   font-weight: 400;
   font-style: normal;
-  font-display: block; // Forces the browser to hide text until the font loads
+  font-display: block;
 }
 
 @font-face {
@@ -54,7 +53,6 @@
   --text-primary:   #e8e8f0;
   --text-secondary: #6e6e88;
   --text-muted:     #3a3a50;
-  
   --text-ok:        #4ade80;
   --text-error:     #f87171;
   --text-info:      #60a5fa;
@@ -83,7 +81,6 @@
   --text-primary:   #111118;
   --text-secondary: #6b6b80;
   --text-muted:     #b0b0c0;
-  
   --text-ok:        #16a34a;
   --text-error:     #dc2626;
   --text-info:      #2563eb;
@@ -114,9 +111,11 @@ body {
   width: 4px;
   height: 4px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 2px;
@@ -131,4 +130,18 @@ body {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* Monaco Editor Error Decorations */
+.declare-error-line {
+  background-color: rgba(248, 113, 113, 0.12);
+}
+
+.declare-error-gutter {
+  border-left: 3px solid var(--text-error) !important;
+  margin-left: 2px;
+}
+
+[data-theme="light"] .declare-error-line {
+  background-color: rgba(220, 38, 38, 0.1);
 }

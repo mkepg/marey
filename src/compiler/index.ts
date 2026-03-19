@@ -85,13 +85,13 @@ export async function compile(
         logs.push({ kind: "info", text: "[pixi]    initialising renderer..." });
         
         const cleanup = await renderScene(sceneIR, hostElement, isDark);
-        const elapsed = (performance.now() - t0).toFixed(1);
         
+        const elapsed = (performance.now() - t0).toFixed(1);
         logs.push({
           kind: "ok",
           text: `[pixi]    rendered via WebGL/WebGPU in ${elapsed}ms`,
         });
-        
+
         resolve({ logs, errors: [], success: true, cleanup });
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : String(err);
@@ -108,24 +108,38 @@ export async function compile(
   });
 }
 
-/**
- * Synchronous linting function to be used for real-time editor feedback.
- * Bypasses the Web Worker and Rendering pipeline completely.
- */
 export function lint(source: string): CompilerError[] {
   try {
     const tokens = lex(source);
-    const ast = parse(tokens);
-    const { errors } = typeCheck(ast);
-    return errors.map(msg => ({ phase: "TYPE", message: msg }));
+    const { ast, errors: parseErrors } = parse(tokens);
+    
+    if (parseErrors.length > 0) {
+       return parseErrors.map(err => ({
+           phase: "PARSE",
+           message: err.message,
+           line: err.line,
+           col: err.col,
+           endLine: err.endLine,
+           endCol: err.endCol
+       }));
+    }
+
+    if (ast) {
+        const { errors } = typeCheck(ast);
+        return errors.map(msg => ({ phase: "TYPE", message: msg }));
+    }
+    return [];
+
   } catch (raw: unknown) {
     if (raw !== null && typeof raw === "object" && "phase" in raw && "message" in raw) {
       const e = raw as CompilerError;
-      return [{ 
-        phase: (e.phase ?? "error").toUpperCase(), 
-        message: e.message, 
-        line: e.line, 
-        col: e.col 
+      return [{
+        phase: (e.phase ?? "error").toUpperCase(),
+        message: e.message,
+        line: e.line,
+        col: e.col,
+        endLine: e.endLine,
+        endCol: e.endCol
       }];
     }
     if (raw instanceof Error) {
