@@ -17,8 +17,9 @@ export function parseDef(state: ParserState): void {
     state.throwError(`In ${state.currentContext}: Invalid variable name '${varName}'. Variables must start with a letter and contain only alphanumeric chars or underscores.`, nameTok);
   }
 
-  if (varName in state.env) {
-    state.throwError(`In ${state.currentContext}: Variable '${varName}' is already defined. Variables in Declare are strictly immutable and cannot be shadowed or reassigned.`, nameTok);
+  // Use hasOwnProperty to only check the current scope, allowing shadowing of outer scopes.
+  if (Object.prototype.hasOwnProperty.call(state.env, varName)) {
+    state.throwError(`In ${state.currentContext}: Variable '${varName}' is already defined in this immediate scope.`, nameTok);
   }
 
   state.consume("EQUALS");
