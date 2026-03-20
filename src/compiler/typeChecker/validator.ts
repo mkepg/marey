@@ -38,6 +38,7 @@ export function collectErrors(ast: AstNode): string[] {
     const isScene  = typeName === "scene";
     const nodeName = isScene ? "scene" : (node as ObjectNode).name;
     const label    = isScene ? "The scene block" : `'${typeName}' object '${nodeName}'`;
+
     const required = REQUIRED_PROPS[typeName] ?? [];
     const contract = PROP_TYPES[typeName]    ?? {};
 
@@ -49,6 +50,7 @@ export function collectErrors(ast: AstNode): string[] {
 
     for (const [key, val] of Object.entries(node.props)) {
       const expected = contract[key];
+
       if (expected === undefined) {
         const knownList = Object.keys(contract).map((k) => `'${k}'`).join(", ");
         errors.push(`${label} has an unknown property '${key}'. Valid properties for '${typeName}' are: ${knownList}.`);
@@ -56,6 +58,7 @@ export function collectErrors(ast: AstNode): string[] {
       }
 
       const isExpected = Array.isArray(expected) ? expected.includes(val.kind) : expected === val.kind;
+
       if (!isExpected) {
         if (key === "sceneFit" && val.kind === "string") {
           errors.push(`${label}: 'sceneFit' must be an unquoted keyword. Remove the quotes around the value.`);
@@ -72,14 +75,15 @@ export function collectErrors(ast: AstNode): string[] {
       if (key === "alpha" && val.kind === "number") {
         if (val.value < 0 || val.value > 1) errors.push(`${label}: 'alpha' must be between 0.0 and 1.0 inclusive, but got ${val.value}.`);
       }
+
       if (key === "radius" && val.kind === "number") {
         if (val.value <= 0) errors.push(`${label}: 'radius' must be greater than 0, but got ${val.value}.`);
       }
+
       if (key === "fontSize" && val.kind === "number") {
         if (val.value <= 0) errors.push(`${label}: 'fontSize' must be greater than 0, but got ${val.value}.`);
       }
-      
-      // FIX: WebGL MAX_TEXTURE_SIZE Crash Prevention
+
       if (key === "content" && val.kind === "string") {
         if (val.value.length > 500) {
           errors.push(`[TYPE_TEXT_TOO_LONG] ${label}: 'content' string is too long (${val.value.length} chars). Maximum allowed is 500 characters to prevent rendering crashes.`);
@@ -91,15 +95,23 @@ export function collectErrors(ast: AstNode): string[] {
           errors.push(`[TYPE_ANCHOR_OUT_OF_RANGE] ${label}: 'anchor' must be in range [0.0, 1.0], but got (${val.x}, ${val.y}).`);
         }
       }
+
       if (key === "scale") {
-        if (val.kind === "number" && val.value === 0) errors.push(`[TYPE_ZERO_SCALE] ${label}: 'scale' cannot be exactly zero.`);
-        else if (val.kind === "point" && (val.x === 0 || val.y === 0)) errors.push(`[TYPE_ZERO_SCALE] ${label}: 'scale' components cannot be exactly zero, but got (${val.x}, ${val.y}).`);
+        // Enforce strictly positive scales to prevent negative bounds mirroring and zero-scale crashes
+        if (val.kind === "number" && val.value <= 0) {
+          errors.push(`[TYPE_INVALID_SCALE] ${label}: 'scale' must be greater than zero.`);
+        }
+        else if (val.kind === "point" && (val.x <= 0 || val.y <= 0)) {
+          errors.push(`[TYPE_INVALID_SCALE] ${label}: 'scale' components must be greater than zero, but got (${val.x}, ${val.y}).`);
+        }
       }
+
       if (key === "size" && val.kind === "point") {
         if (val.x <= 0 && val.y <= 0) errors.push(`${label}: 'size' width and height must both be greater than 0.`);
         else if (val.x <= 0) errors.push(`${label}: 'size' width must be greater than 0, but got ${val.x}.`);
         else if (val.y <= 0) errors.push(`${label}: 'size' height must be greater than 0, but got ${val.y}.`);
       }
+
       if (key === "points" && val.kind === "pointList") {
         if (val.value.length < 3) errors.push(`${label}: 'polygon' requires at least 3 points.`);
         else if (val.value.length > 10000) errors.push(`[TYPE_POLYGON_TOO_LARGE] ${label}: 'polygon' exceeds the maximum safe limit of 10,000 points.`);

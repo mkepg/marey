@@ -9,9 +9,19 @@ export const FallbackEditor: FunctionComponent = () => {
   const handleKeyDown = (e: KeyboardEvent): void => {
     if (e.key !== "Tab") return;
     e.preventDefault();
-    
-    // FIX: Preserves Ctrl+Z/Undo history and prevents destroying highlighted text
-    document.execCommand("insertText", false, "  ");
+
+    const target = e.currentTarget as HTMLTextAreaElement;
+    const start = target.selectionStart;
+    const end = target.selectionEnd;
+
+    // Safely insert spaces using string manipulation instead of the deprecated execCommand API
+    const newCode = code.substring(0, start) + "  " + code.substring(end);
+    setCode(newCode);
+
+    // Reposition the cursor accurately after the DOM has updated
+    requestAnimationFrame(() => {
+      target.selectionStart = target.selectionEnd = start + 2;
+    });
   };
 
   return (

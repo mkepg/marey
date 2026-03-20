@@ -64,10 +64,12 @@ function registerLanguage(monaco: typeof import("monaco-editor")): void {
   if (monaco.languages.getLanguages().some((l) => l.id === "Declare")) return;
 
   monaco.languages.register({ id: "Declare" });
+
   monaco.languages.setMonarchTokensProvider("Declare", {
     keywords:    ["scene", "circle", "rectangle", "polygon", "text", "group", "generate", "from", "to"],
     defKeyword:  ["def"],
     namedColors: ["red", "green", "blue", "white", "black", "yellow", "cyan", "magenta", "orange"],
+
     tokenizer: {
       root: [
         [/\/\/.*$/, "comment"],
@@ -98,7 +100,7 @@ interface MonacoEditorProps {
 
 const EDITOR_OPTIONS: MonacoEditorNS.IStandaloneEditorConstructionOptions = {
   language: "Declare",
-  fontFamily: "'JetBrains Mono', monospace",
+  fontFamily: "'JetBrains Mono', 'Consolas', 'Courier New', monospace",
   fontSize: 13,
   lineHeight: 22,
   minimap: { enabled: false },
@@ -121,7 +123,7 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef    = useRef<MonacoEditorNS.IStandaloneCodeEditor | null>(null);
   const decorationsRef = useRef<MonacoEditorNS.IEditorDecorationsCollection | null>(null);
-  
+
   const monaco  = useMonaco();
   const code    = useAppStore((s) => s.code);
   const theme   = useAppStore((s) => s.theme);
@@ -136,8 +138,14 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
     if (!monaco || !containerRef.current || editorRef.current) return;
 
     let isCancelled = false;
+
     const initEditor = async () => {
-      await document.fonts.ready;
+      // Race the font loading against a 2-second timeout to prevent indefinite stalling
+      await Promise.race([
+        document.fonts.ready,
+        new Promise((resolve) => setTimeout(resolve, 2000))
+      ]);
+
       if (isCancelled || !containerRef.current) return;
 
       registerLanguage(monaco);
@@ -166,7 +174,6 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
     };
   }, [monaco]);
 
-  // FIX: Swapped window.monaco for the local monaco instance
   useEffect(() => {
     if (!editorRef.current || !monaco) return;
     monaco.editor.setTheme(theme === "dark" ? "Declare-dark" : "Declare-light");
@@ -181,12 +188,13 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
 
   useEffect(() => {
     if (!monaco || !editorRef.current) return;
+
     const model = editorRef.current.getModel();
     if (!model) return;
 
     const timer = setTimeout(async () => {
       const liveErrors = await lint(code);
-      
+
       const markers: MonacoEditorNS.IMarkerData[] = liveErrors.map((err) => ({
         severity: monaco.MarkerSeverity.Error,
         message: `[${err.phase}] ${err.message}`,
@@ -195,9 +203,9 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
         endLineNumber: err.endLine ?? err.line ?? 1,
         endColumn: err.endCol ?? (err.col ? err.col + 1 : 100),
       }));
-      
+
       monaco.editor.setModelMarkers(model, "declare-compiler", markers);
-      
+
       if (decorationsRef.current) {
         const decorations: MonacoEditorNS.IModelDeltaDecoration[] = liveErrors.map((err) => ({
           range: new monaco.Range(err.line ?? 1, 1, err.endLine ?? err.line ?? 1, 1),

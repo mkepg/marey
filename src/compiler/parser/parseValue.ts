@@ -83,32 +83,34 @@ function parseMathExpr(state: ParserState, minPrec: number, depth: number): numb
 
 export function parseValue(state: ParserState): AstValue {
   const t = state.peek();
-  
+
   if (t.type === "HEX_COLOR") {
     state.consume();
     return { kind: "color", value: t.value as string };
   }
+
   if (t.type === "NAMED_COLOR") {
     state.consume();
     return { kind: "color", value: NAMED_COLORS[t.value as string] };
   }
+
   if (t.type === "STRING") {
     const strTok = state.consume();
-    // FIX: Catch confusing string concatenation attempts
     if (state.peek().type === "PLUS") {
       state.throwError(`In ${state.currentContext}: String concatenation using '+' is not supported.`, state.peek());
     }
     return { kind: "string", value: strTok.value as string };
   }
+
   if (t.type === "SCENE_FIT") {
     state.consume();
     return { kind: "sceneFit", value: t.value as SceneFit };
   }
-  
+
   if (t.type === "LBRACKET") {
     const openTok = state.consume("LBRACKET");
     const pts: Array<{ x: number; y: number }> = [];
-    
+
     while (state.peek().type !== "RBRACKET") {
       if (state.peek().type === "EOF") {
         state.throwError(`In ${state.currentContext}: Point list opened at line ${openTok.line}, column ${openTok.col} was not closed before end of file. Add a closing ']'.`, openTok);
@@ -117,31 +119,29 @@ export function parseValue(state: ParserState): AstValue {
         const bad = state.peek();
         state.throwError(`In ${state.currentContext}: Expected a point '(x, y)' inside the point list, but found ${describeToken(bad)}. Each entry in a point list must be a point, e.g. [(0,0), (100,0), (50,80)].`, bad);
       }
-      
+
       const ptOpen = state.consume("LPAREN");
       const x = parseMathExpr(state, 0, 0);
       state.consume("COMMA");
       const y = parseMathExpr(state, 0, 0);
-      
+
       if (state.peek().type !== "RPAREN") {
         const bad = state.peek();
         state.throwError(`In ${state.currentContext}: Expected ')' to close the point opened at line ${ptOpen.line}, column ${ptOpen.col}, but found ${describeToken(bad)}.`, bad);
       }
       state.consume("RPAREN");
       pts.push({ x, y });
-      
+
       if (state.peek().type !== "RBRACKET") {
         state.consume("COMMA");
       }
     }
-    
-    if (pts.length === 0) {
-      state.throwError(`In ${state.currentContext}: Empty point list '[]' is not valid. A point list must contain at least 3 points for polygon use.`, openTok);
-    }
+
+    // Delegation of minimum length checks to the semantic type checker removed from here
     state.consume("RBRACKET");
     return { kind: "pointList", value: pts };
   }
-  
+
   let isPoint = false;
   if (t.type === "LPAREN") {
     let nesting = 0;
@@ -157,13 +157,13 @@ export function parseValue(state: ParserState): AstValue {
       }
     }
   }
-  
+
   if (isPoint) {
     const openTok = state.consume("LPAREN");
     const x = parseMathExpr(state, 0, 0);
     state.consume("COMMA");
     const y = parseMathExpr(state, 0, 0);
-    
+
     if (state.peek().type === "COMMA") {
       const extra = state.peek();
       state.throwError(`In ${state.currentContext}: A point takes exactly two numbers, but found an extra ',' at line ${extra.line}, column ${extra.col}. Point syntax is (x, y) — for example (400, 300).`, extra);
@@ -172,35 +172,35 @@ export function parseValue(state: ParserState): AstValue {
       const bad = state.peek();
       state.throwError(`In ${state.currentContext}: Expected ')' to close the point opened at line ${openTok.line}, column ${openTok.col}, but found ${describeToken(bad)}.`, bad);
     }
-    
     state.consume("RPAREN");
     return { kind: "point", x, y };
   }
-  
+
   const isMathStart = t.type === "NUMBER" || t.type === "MINUS" || t.type === "LPAREN" ||
     (t.type === "IDENT" && state.env[t.value as string]?.kind === "number");
-    
+
   if (isMathStart) {
     const val = parseMathExpr(state, 0, 0);
     return { kind: "number", value: val };
   }
-  
+
   if (t.type === "IDENT") {
     const varName = t.value as string;
     if (varName in state.env) {
       state.consume("IDENT");
       return state.env[varName];
     }
-    state.throwError(`In ${state.currentContext}: Undefined variable '${varName}'. Bare names cannot be used as values unless they are declared with 'def'.`, t);
+    // Explicitly outline the declarative boundaries for missing identifiers
+    state.throwError(`In ${state.currentContext}: Undefined variable '${varName}'. Bare names cannot be used as values unless they are declared with 'def'. Variables defined inside 'generate' blocks are strictly block-scoped and cannot be accessed outside of them.`, t);
   }
-  
+
   if (t.type === "KEYWORD") {
     state.throwError(`In ${state.currentContext}: '${t.value as string}' is an object keyword and cannot be used as a property value.`, t);
   }
-  
+
   if (t.type === "RBRACE" || t.type === "RBRACKET" || t.type === "RPAREN" || t.type === "EOF") {
     state.throwError(`In ${state.currentContext}: Unexpected ${describeToken(t)} where a property value was expected.`, t);
   }
-  
+
   state.throwError(`In ${state.currentContext}: Unexpected ${describeToken(t)} where a property value was expected.`, t);
 }
