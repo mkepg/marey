@@ -3,7 +3,7 @@ import type { AstNode, ObjectNode, AstValue } from "../types";
 type PropKind = AstValue["kind"];
 type PropContract = PropKind | readonly PropKind[];
 
-const REQUIRED_PROPS: Readonly<Record<string, readonly string[]>> = {
+export const REQUIRED_PROPS: Readonly<Record<string, readonly string[]>> = {
   scene:     ["size"],
   circle:    ["position", "radius"],
   rectangle: ["position", "size"],
@@ -12,7 +12,7 @@ const REQUIRED_PROPS: Readonly<Record<string, readonly string[]>> = {
   group:     [],
 };
 
-const PROP_TYPES: Readonly<Record<string, Readonly<Record<string, PropContract>>>> = {
+export const PROP_TYPES: Readonly<Record<string, Readonly<Record<string, PropContract>>>> = {
   scene:     { background: "color", size: "point", sceneFit: "sceneFit" },
   circle:    { position: "point", radius: "number", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], anchor: "point", z: "number" },
   rectangle: { position: "point", size: "point",   color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], anchor: "point", z: "number" },
@@ -21,7 +21,7 @@ const PROP_TYPES: Readonly<Record<string, Readonly<Record<string, PropContract>>
   group:     { position: "point", rotation: "number", scale: ["number", "point"], alpha: "number", z: "number" },
 };
 
-const KIND_LABEL: Readonly<Record<PropKind, string>> = {
+export const KIND_LABEL: Readonly<Record<PropKind, string>> = {
   number:    "a number",
   color:     "a color (hex code or named color keyword)",
   string:    "a quoted string",
@@ -97,7 +97,6 @@ export function collectErrors(ast: AstNode): string[] {
       }
 
       if (key === "scale") {
-        // Enforce strictly positive scales to prevent negative bounds mirroring and zero-scale crashes
         if (val.kind === "number" && val.value <= 0) {
           errors.push(`[TYPE_INVALID_SCALE] ${label}: 'scale' must be greater than zero.`);
         }

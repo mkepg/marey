@@ -17,6 +17,7 @@ export function parse(tokens: Token[]): ParseResult {
     if (firstTok.type === "EOF") {
       state.throwError("The file is empty. A Declare program must contain a scene block.", firstTok);
     }
+
     if (firstTok.type !== "KEYWORD" || firstTok.value !== "scene") {
       const hint = firstTok.type === "KEYWORD"
         ? ` '${firstTok.value as string}' is an object keyword — objects must be placed inside a scene block.`
@@ -79,6 +80,7 @@ export function parse(tokens: Token[]): ParseResult {
 
         state.consume("COLON");
         sceneProps[keyName] = parseValue(state);
+
       } catch (e) {
         if (e instanceof ParseException) {
           state.errors.push(e.error);
@@ -104,11 +106,12 @@ export function parse(tokens: Token[]): ParseResult {
     }
 
     const ast: SceneNode = { type: "scene", props: sceneProps, children: sceneChildren };
-    return { ast, errors: state.errors };
+    return { ast, errors: state.errors, env: state.env };
+
   } catch (e) {
     if (e instanceof ParseException) {
       state.errors.push(e.error);
-      return { ast: null, errors: state.errors };
+      return { ast: null, errors: state.errors, env: state.env };
     }
     throw e;
   }

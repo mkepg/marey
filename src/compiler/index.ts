@@ -1,4 +1,4 @@
-import type { CompileResult, LogEntry, CompilerError } from "./types";
+import type { CompileResult, LogEntry, CompilerError, LintResult } from "./types";
 import type { IRSceneNode } from "./sceneIR";
 import { renderScene } from "./renderer";
 
@@ -10,7 +10,7 @@ export interface CompileResultWithCleanup extends CompileResult {
 let compilerWorker: Worker | null = null;
 let currentJobId = 0;
 let activeCompileResolve: ((val: CompileResultWithCleanup) => void) | null = null;
-const activeLintResolves = new Map<number, (errors: CompilerError[]) => void>();
+const activeLintResolves = new Map<number, (errors: LintResult) => void>();
 
 function createWorker(): Worker {
   const worker = new Worker(new URL('./compiler.worker.ts', import.meta.url), { type: 'module' });
@@ -26,7 +26,7 @@ function createWorker(): Worker {
       activeCompileResolve = null;
     }
     for (const resolve of activeLintResolves.values()) {
-        resolve([{ phase: "SYSTEM", message: `Linter crashed: ${err.message}` }]);
+        resolve({ errors: [{ phase: "SYSTEM", message: `Linter crashed: ${err.message}` }], symbols: [] });
     }
     activeLintResolves.clear();
     worker.terminate();
@@ -38,7 +38,7 @@ function createWorker(): Worker {
     if (data.action === "lint") {
       const resolve = activeLintResolves.get(data.id);
       if (resolve) {
-        resolve(data.errors || []);
+        resolve({ errors: data.errors || [], symbols: data.symbols || [] });
         activeLintResolves.delete(data.id);
       }
       return;
@@ -98,7 +98,6 @@ export async function compile(
         return;
       }
       try {
-        // Resolve the theme callback directly before mounting into the Pixi container
         const currentIsDark = typeof isDark === "function" ? isDark() : isDark;
         const cleanup = await renderScene(result._irPayload, hostElement, currentIsDark);
         
@@ -119,7 +118,7 @@ export async function compile(
   });
 }
 
-export async function lint(source: string): Promise<CompilerError[]> {
+export async function lint(source: string): Promise<LintResult> {
   currentJobId += 1;
   const jobId = currentJobId;
 
@@ -131,4 +130,4 @@ export async function lint(source: string): Promise<CompilerError[]> {
   });
 }
 
-export type { CompileResult, LogEntry, LogKind, CompilerError } from "./types";
+export type { CompileResult, LogEntry, LogKind, CompilerError, LintResult } from "./types";

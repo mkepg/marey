@@ -99,6 +99,12 @@ export interface CompilerError {
 export interface ParseResult {
   readonly ast: SceneNode | null;
   readonly errors: CompilerError[];
+  readonly env: Record<string, AstValue>;
+}
+
+export interface LintResult {
+  readonly errors: CompilerError[];
+  readonly symbols: string[];
 }
 
 export type LogKind = "info" | "ok" | "error" | "sys";
