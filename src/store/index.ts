@@ -31,7 +31,6 @@ export const DEFAULT_CODE = `scene {
     color: black
     content: "Hello World"
     fontSize: 18
-    z: 1
   }
 
   group sun {
@@ -72,7 +71,6 @@ export const DEFAULT_CODE = `scene {
   generate i from 1 to 5 {
     group lilypad {
       position: (i * 100 - 20, 370)
-      z: 2
 
       circle leaf {
         position: (0, 0)
