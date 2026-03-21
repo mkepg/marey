@@ -145,3 +145,17 @@ body {
 [data-theme="light"] .declare-error-line {
   background-color: rgba(220, 38, 38, 0.1);
 }
+
+/* ⚠️ WARNING: Brittle Monaco Editor Hack */
+
+/* Hide the opacity slider itself */
+.colorpicker-widget .monaco-slider.opacity,
+.colorpicker-widget .monaco-custom-slider.opacity,
+.colorpicker-widget .opacity-strip {
+  display: none !important;
+}
+
+/* Hide the opacity-related text in the header */
+.colorpicker-widget .colorpicker-header .rgba-text {
+  display: none !important; 
+}

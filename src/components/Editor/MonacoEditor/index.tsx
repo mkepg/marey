@@ -30,6 +30,7 @@ const EDITOR_OPTIONS: MonacoEditorNS.IStandaloneEditorConstructionOptions = {
   folding: false,
   lineNumbersMinChars: 3,
   automaticLayout: true,
+  fixedOverflowWidgets: true,
 };
 
 export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) => {

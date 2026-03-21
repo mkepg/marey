@@ -80,7 +80,6 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
     state.pos = blockStartPos;
     state.env = Object.create(prevEnv);
     
-    // FIX: Included line and col metadata from the loop variable token!
     state.env[loopVar] = { 
       kind: "number", 
       value: i,
@@ -94,6 +93,10 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
       try {
         const t = state.peek();
         if (t.type === "KEYWORD") {
+          // FIX: Explicitly reject templates inside loops
+          if (state.peek().value === "template") {
+            state.throwError(`In ${state.currentContext}: Unexpected keyword 'template'. Templates must be defined at the top level of the file, outside of the scene block.`, state.peek());
+          }
           if (t.value === "def") {
             parseDef(state);
             continue;

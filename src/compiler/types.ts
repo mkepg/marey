@@ -90,6 +90,7 @@ export interface ObjectNode {
   readonly children: ObjectNode[];
   readonly line: number;
   readonly col: number;
+  readonly isUse?: boolean;
 }
 
 export interface SceneNode {

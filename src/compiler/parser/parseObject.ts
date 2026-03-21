@@ -59,6 +59,10 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
   while (state.peek().type !== "RBRACE" && state.peek().type !== "EOF") {
     try {
       if (state.peek().type === "KEYWORD") {
+        // FIX: Explicitly reject templates inside objects
+        if (state.peek().value === "template") {
+          state.throwError(`In ${state.currentContext}: Unexpected keyword 'template'. Templates must be defined at the top level of the file, outside of the scene block.`, state.peek());
+        }
         if (state.peek().value === "def") {
           parseDef(state);
           continue;

@@ -37,7 +37,11 @@ export function collectErrors(ast: AstNode): CompilerError[] {
     const typeName = node.type;
     const isScene  = typeName === "scene";
     const nodeName = isScene ? "scene" : (node as ObjectNode).name;
-    const label    = isScene ? "The scene block" : `'${typeName}' object '${nodeName}'`;
+    
+    const isUseBlock = !isScene && (node as ObjectNode).isUse;
+    const label = isScene 
+        ? "The scene block" 
+        : `'${isUseBlock ? "use" : typeName}' ${isUseBlock ? "block" : "object"} '${nodeName}'`;
     
     const required = REQUIRED_PROPS[typeName] ?? [];
     const contract = PROP_TYPES[typeName]    ?? {};

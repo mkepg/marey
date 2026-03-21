@@ -96,6 +96,9 @@ export function parseUse(state: ParserState, depth: number): ObjectNode {
     try {
       const t = state.peek();
       if (t.type === "KEYWORD") {
+        if (state.peek().value === "template") {
+          state.throwError(`In ${state.currentContext}: Unexpected keyword 'template'. Templates must be defined at the top level of the file, outside of the scene block.`, state.peek());
+        }
         if (t.value === "def") {
           parseDef(state);
           continue;
@@ -151,6 +154,7 @@ export function parseUse(state: ParserState, depth: number): ObjectNode {
     props,
     children,
     line: useTok.line,
-    col: useTok.col
+    col: useTok.col,
+    isUse: true
   };
 }
