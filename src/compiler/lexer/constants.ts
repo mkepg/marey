@@ -1,5 +1,4 @@
 import type { TokenType } from "../types";
-
 export const KEYWORDS = new Set<string>([
   "scene",
   "circle",
@@ -8,11 +7,12 @@ export const KEYWORDS = new Set<string>([
   "text",
   "group",
   "def",
-  "generate", // NEW
-  "from",     // NEW
-  "to",       // NEW
+  "generate",
+  "from",
+  "to",
+  "template",
+  "use",
 ]);
-
 export const NAMED_COLORS: Readonly<Record<string, string>> = {
   red:     "#ff0000",
   green:   "#008000",
@@ -24,14 +24,12 @@ export const NAMED_COLORS: Readonly<Record<string, string>> = {
   magenta: "#ff00ff",
   orange:  "#ffa500",
 };
-
 export const SCENE_FIT_VALUES = new Set<string>([
   "contain",
   "cover",
   "fill",
   "none",
 ]);
-
 export const SINGLE_CHAR_MAP: Readonly<Record<string, TokenType>> = {
   "{": "LBRACE",
   "}": "RBRACE",

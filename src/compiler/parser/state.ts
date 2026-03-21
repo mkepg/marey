@@ -1,5 +1,4 @@
-import type { Token, AstValue, CompilerError } from "../types";
-
+import type { Token, AstValue, CompilerError, TemplateDef } from "../types";
 export function describeToken(t: Token): string {
   switch (t.type) {
     case "KEYWORD":     return `keyword '${t.value as string}'`;
@@ -25,7 +24,6 @@ export function describeToken(t: Token): string {
     case "EOF":         return "end of file";
   }
 }
-
 export function expectedTypeDescription(expected: Token["type"], got: Token): string {
   switch (expected) {
     case "LBRACE":  return "'{' to open a block";
@@ -43,7 +41,6 @@ export function expectedTypeDescription(expected: Token["type"], got: Token): st
     default:        return expected;
   }
 }
-
 export class ParseException extends Error {
   readonly error: CompilerError;
   constructor(error: CompilerError) {
@@ -51,29 +48,23 @@ export class ParseException extends Error {
     this.error = error;
   }
 }
-
 export class ParserState {
   pos = 0;
   currentContext = "the scene";
   tokens: Token[];
   env: Record<string, AstValue> = {};
   errors: CompilerError[] = [];
-  
-  // FIX: Track global node count to prevent Out-Of-Memory crashes
-  globalNodeCount = 0; 
-
+  globalNodeCount = 0;
+  templates: Record<string, TemplateDef> = {};
   constructor(tokens: Token[]) {
     this.tokens = tokens;
   }
-
   peek(): Token {
     return this.tokens[this.pos] || this.tokens[this.tokens.length - 1];
   }
-
   isAtEnd(): boolean {
     return this.peek().type === "EOF";
   }
-
   consume(expectedType?: Token["type"]): Token {
     const t = this.tokens[this.pos];
     if (expectedType && t.type !== expectedType) {
@@ -83,7 +74,6 @@ export class ParserState {
     if (!this.isAtEnd()) this.pos++;
     return t;
   }
-
   throwError(message: string, token: Token = this.peek()): never {
     throw new ParseException({
       phase: "PARSE",
@@ -94,7 +84,6 @@ export class ParserState {
       endCol: token.endCol,
     });
   }
-
   synchronize(): void {
     let t = this.peek();
     if (t.type === "RBRACE" || t.type === "EOF") return;

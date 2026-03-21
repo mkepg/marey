@@ -1,9 +1,10 @@
 export const KEYWORD_DOCS: Record<string, string> = {
+  template: `### \`template\`\nDefines a reusable component template structure.\n\n**Example:**\n\`\`\`declare\ntemplate Star(color) {\n  group {\n    circle { radius: 10, color: color }\n  }\n}\n\`\`\``,
+  use: `### \`use\`\nInstantiates a template into the scene.\n\n**Example:**\n\`\`\`declare\nuse Star(red) myStar {\n  position: (100, 100)\n  scale: 1.5\n}\n\`\`\``,
   generate: `### \`generate\`\nCreates a loop to generate multiple objects or groups. The loop variable can be used in math expressions inside the block to position or scale objects dynamically.\n\n**Example:**\n\`\`\`declare\ngenerate i from 1 to 5 {\n  circle dot {\n    position: (i * 50, 100)\n    radius: 10\n  }\n}\n\`\`\``,
   def: `### \`def\`\nDeclares a constant variable. Variables in Declare are strictly block-scoped and immutable.\n\n**Example:**\n\`\`\`declare\ndef spacing = 50\n\`\`\``,
   scene: `### \`scene\`\nThe root block of a Declare program. Contains all objects and global scene properties.\n\n**Required Property:** \`size\``
 };
-
 export const PROPERTY_DOCS: Record<string, string> = {
   position: `### \`position\`\nSets the \`(x, y)\` coordinates of the object in the scene.\n\n**Accepts:** \`point\`\n**Example:** \`position: (100, 200)\``,
   radius: `### \`radius\`\nSets the radius of a circle.\n\n**Accepts:** \`number\` (greater than 0)\n**Example:** \`radius: 50\``,
@@ -20,5 +21,4 @@ export const PROPERTY_DOCS: Record<string, string> = {
   background: `### \`background\`\nThe background color of the scene.\n\n**Accepts:** \`color\`\n**Example:** \`background: #222222\``,
   sceneFit: `### \`sceneFit\`\nHow the scene scales to the preview window.\n\n**Accepts:** \`contain\`, \`cover\`, \`fill\`, or \`none\`\n**Example:** \`sceneFit: contain\``,
 };
-
 export const namedColors = ["red", "green", "blue", "white", "black", "yellow", "cyan", "magenta", "orange"];

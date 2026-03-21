@@ -32,34 +32,45 @@ export interface Token {
 export interface NumberValue {
   readonly kind: "number";
   readonly value: number;
+  readonly line: number;
+  readonly col: number;
 }
 
 export interface ColorValue {
   readonly kind: "color";
   readonly value: string;
+  readonly line: number;
+  readonly col: number;
 }
 
 export interface StringValue {
   readonly kind: "string";
   readonly value: string;
+  readonly line: number;
+  readonly col: number;
 }
 
 export interface PointValue {
   readonly kind: "point";
   readonly x: number;
   readonly y: number;
+  readonly line: number;
+  readonly col: number;
 }
 
 export interface PointListValue {
   readonly kind: "pointList";
   readonly value: ReadonlyArray<{ readonly x: number; readonly y: number }>;
+  readonly line: number;
+  readonly col: number;
 }
 
 export type SceneFit = "contain" | "cover" | "fill" | "none";
-
 export interface SceneFitValue {
   readonly kind: "sceneFit";
   readonly value: SceneFit;
+  readonly line: number;
+  readonly col: number;
 }
 
 export type AstValue =
@@ -77,12 +88,16 @@ export interface ObjectNode {
   readonly name: string;
   readonly props: Record<string, AstValue>;
   readonly children: ObjectNode[];
+  readonly line: number;
+  readonly col: number;
 }
 
 export interface SceneNode {
   readonly type: "scene";
   readonly props: Record<string, AstValue>;
   readonly children: ObjectNode[];
+  readonly line: number;
+  readonly col: number;
 }
 
 export type AstNode = SceneNode | ObjectNode;
@@ -96,10 +111,18 @@ export interface CompilerError {
   readonly endCol?: number;
 }
 
+export interface TemplateDef {
+  readonly name: string;
+  readonly params: string[];
+  readonly startPos: number;
+  readonly endPos: number;
+}
+
 export interface ParseResult {
   readonly ast: SceneNode | null;
   readonly errors: CompilerError[];
   readonly env: Record<string, AstValue>;
+  readonly templates: Record<string, TemplateDef>;
 }
 
 export interface LintResult {
@@ -108,7 +131,6 @@ export interface LintResult {
 }
 
 export type LogKind = "info" | "ok" | "error" | "sys";
-
 export interface LogEntry {
   readonly kind: LogKind;
   readonly text: string;

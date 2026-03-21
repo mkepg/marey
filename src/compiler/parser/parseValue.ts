@@ -2,12 +2,10 @@ import type { AstValue, SceneFit } from "../types";
 import { NAMED_COLORS } from "../lexer";
 import { ParserState, describeToken } from "./state";
 
-// FIX: Added 'depth' to prevent Math Parser Stack Overflow
 function parseMathPrimary(state: ParserState, depth: number): number {
   if (depth > 50) {
     state.throwError(`In ${state.currentContext}: Math expression is too deeply nested. Maximum depth is 50.`, state.peek());
   }
-  
   const t = state.peek();
   if (t.type === "MINUS") {
     state.consume("MINUS");
@@ -39,7 +37,6 @@ function parseMathPrimary(state: ParserState, depth: number): number {
     state.consume("RPAREN");
     return val;
   }
-  
   state.throwError(`In ${state.currentContext}: Expected a number, variable, or math expression, but found ${describeToken(t)}.`, t);
 }
 
@@ -47,21 +44,16 @@ function parseMathExpr(state: ParserState, minPrec: number, depth: number): numb
   if (depth > 50) {
     state.throwError(`In ${state.currentContext}: Math expression is too deeply nested. Maximum depth is 50.`, state.peek());
   }
-
   let left = parseMathPrimary(state, depth);
-  
   while (true) {
     const t = state.peek();
     let prec = 0;
     if (t.type === "PLUS" || t.type === "MINUS") prec = 1;
     else if (t.type === "STAR" || t.type === "SLASH") prec = 2;
     else break;
-    
     if (prec < minPrec) break;
-    
     const opTok = state.consume();
     const right = parseMathExpr(state, prec + 1, depth);
-    
     if (opTok.type === "PLUS") left += right;
     else if (opTok.type === "MINUS") left -= right;
     else if (opTok.type === "STAR") left *= right;
@@ -72,45 +64,39 @@ function parseMathExpr(state: ParserState, minPrec: number, depth: number): numb
       left /= right;
     }
   }
-
-  // FIX: Unchecked Infinity in Math
   if (!isFinite(left)) {
     state.throwError(`In ${state.currentContext}: Math expression evaluated to Infinity or NaN.`, state.peek());
   }
-  
   return left;
 }
 
 export function parseValue(state: ParserState): AstValue {
   const t = state.peek();
+  const line = t.line;
+  const col = t.col;
 
   if (t.type === "HEX_COLOR") {
     state.consume();
-    return { kind: "color", value: t.value as string };
+    return { kind: "color", value: t.value as string, line, col };
   }
-
   if (t.type === "NAMED_COLOR") {
     state.consume();
-    return { kind: "color", value: NAMED_COLORS[t.value as string] };
+    return { kind: "color", value: NAMED_COLORS[t.value as string], line, col };
   }
-
   if (t.type === "STRING") {
     const strTok = state.consume();
     if (state.peek().type === "PLUS") {
       state.throwError(`In ${state.currentContext}: String concatenation using '+' is not supported.`, state.peek());
     }
-    return { kind: "string", value: strTok.value as string };
+    return { kind: "string", value: strTok.value as string, line, col };
   }
-
   if (t.type === "SCENE_FIT") {
     state.consume();
-    return { kind: "sceneFit", value: t.value as SceneFit };
+    return { kind: "sceneFit", value: t.value as SceneFit, line, col };
   }
-
   if (t.type === "LBRACKET") {
     const openTok = state.consume("LBRACKET");
     const pts: Array<{ x: number; y: number }> = [];
-
     while (state.peek().type !== "RBRACKET") {
       if (state.peek().type === "EOF") {
         state.throwError(`In ${state.currentContext}: Point list opened at line ${openTok.line}, column ${openTok.col} was not closed before end of file. Add a closing ']'.`, openTok);
@@ -119,27 +105,22 @@ export function parseValue(state: ParserState): AstValue {
         const bad = state.peek();
         state.throwError(`In ${state.currentContext}: Expected a point '(x, y)' inside the point list, but found ${describeToken(bad)}. Each entry in a point list must be a point, e.g. [(0,0), (100,0), (50,80)].`, bad);
       }
-
       const ptOpen = state.consume("LPAREN");
       const x = parseMathExpr(state, 0, 0);
       state.consume("COMMA");
       const y = parseMathExpr(state, 0, 0);
-
       if (state.peek().type !== "RPAREN") {
         const bad = state.peek();
         state.throwError(`In ${state.currentContext}: Expected ')' to close the point opened at line ${ptOpen.line}, column ${ptOpen.col}, but found ${describeToken(bad)}.`, bad);
       }
       state.consume("RPAREN");
       pts.push({ x, y });
-
       if (state.peek().type !== "RBRACKET") {
         state.consume("COMMA");
       }
     }
-
-    // Delegation of minimum length checks to the semantic type checker removed from here
     state.consume("RBRACKET");
-    return { kind: "pointList", value: pts };
+    return { kind: "pointList", value: pts, line, col };
   }
 
   let isPoint = false;
@@ -163,7 +144,6 @@ export function parseValue(state: ParserState): AstValue {
     const x = parseMathExpr(state, 0, 0);
     state.consume("COMMA");
     const y = parseMathExpr(state, 0, 0);
-
     if (state.peek().type === "COMMA") {
       const extra = state.peek();
       state.throwError(`In ${state.currentContext}: A point takes exactly two numbers, but found an extra ',' at line ${extra.line}, column ${extra.col}. Point syntax is (x, y) — for example (400, 300).`, extra);
@@ -173,24 +153,26 @@ export function parseValue(state: ParserState): AstValue {
       state.throwError(`In ${state.currentContext}: Expected ')' to close the point opened at line ${openTok.line}, column ${openTok.col}, but found ${describeToken(bad)}.`, bad);
     }
     state.consume("RPAREN");
-    return { kind: "point", x, y };
+    return { kind: "point", x, y, line, col };
   }
 
   const isMathStart = t.type === "NUMBER" || t.type === "MINUS" || t.type === "LPAREN" ||
     (t.type === "IDENT" && state.env[t.value as string]?.kind === "number");
-
+  
   if (isMathStart) {
     const val = parseMathExpr(state, 0, 0);
-    return { kind: "number", value: val };
+    return { kind: "number", value: val, line, col };
   }
 
   if (t.type === "IDENT") {
     const varName = t.value as string;
     if (varName in state.env) {
       state.consume("IDENT");
-      return state.env[varName];
+      // Environment values already contain their original line/col, 
+      // but we override it here so errors highlight where the variable is USED, not where it was declared.
+      const envVal = state.env[varName];
+      return { ...envVal, line, col };
     }
-    // Explicitly outline the declarative boundaries for missing identifiers
     state.throwError(`In ${state.currentContext}: Undefined variable '${varName}'. Bare names cannot be used as values unless they are declared with 'def'. Variables defined inside 'generate' blocks are strictly block-scoped and cannot be accessed outside of them.`, t);
   }
 

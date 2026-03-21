@@ -36,8 +36,8 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef    = useRef<MonacoEditorNS.IStandaloneCodeEditor | null>(null);
   const decorationsRef = useRef<MonacoEditorNS.IEditorDecorationsCollection | null>(null);
+
   const monaco  = useMonaco();
-  
   const code    = useAppStore((s) => s.code);
   const theme   = useAppStore((s) => s.theme);
   const setCode = useAppStore((s) => s.setCode);
@@ -78,7 +78,6 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
     };
 
     initEditor();
-
     return () => {
       isCancelled = true;
     };
@@ -98,13 +97,13 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
 
   useEffect(() => {
     if (!monaco || !editorRef.current) return;
-    
     const model = editorRef.current.getModel();
     if (!model) return;
 
     const timer = setTimeout(async () => {
       const result = await lint(code);
-      const liveErrors = Array.isArray(result) ? result : [];
+      // FIX: Access the errors array correctly from the LintResult object
+      const liveErrors = result && result.errors ? result.errors : [];
 
       const markers: MonacoEditorNS.IMarkerData[] = liveErrors.map((err) => ({
         severity: monaco.MarkerSeverity.Error,
@@ -114,6 +113,7 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
         endLineNumber: err.endLine ?? err.line ?? 1,
         endColumn: err.endCol ?? (err.col ? err.col + 1 : 100),
       }));
+
       monaco.editor.setModelMarkers(model, "declare-compiler", markers);
 
       if (decorationsRef.current) {

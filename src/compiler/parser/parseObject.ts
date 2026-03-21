@@ -4,6 +4,7 @@ import { ParserState, describeToken, ParseException } from "./state";
 import { parseValue } from "./parseValue";
 import { parseDef } from "./parseDef";
 import { parseGenerate } from "./parseGenerate";
+import { parseUse } from "./parseUse";
 
 const RESERVED_PROPS = new Set<string>([
   "background", "size", "sceneFit", "position", "radius", "color",
@@ -15,13 +16,11 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
   if (depth > 50) {
     state.throwError(`In ${state.currentContext}: Maximum nesting depth exceeded. Object nesting is limited to 50 levels.`, state.peek());
   }
-  
-  // FIX: Protect against OOM crashes from nested loops
   state.globalNodeCount++;
   if (state.globalNodeCount > 15000) {
     state.throwError(`In ${state.currentContext}: Global object limit exceeded. The scene contains too many objects (>15,000) and cannot be compiled.`, state.peek());
   }
-
+  
   const typeTok = state.consume("KEYWORD");
   const objType = typeTok.value as string;
   
@@ -79,10 +78,25 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
           }
           continue;
         }
+        if (state.peek().value === "use") {
+          if (objType !== "group") {
+            const bad = state.peek();
+            state.throwError(`In ${state.currentContext}: Unexpected 'use' block. '${objType}' objects cannot contain child objects or blocks.`, bad);
+          }
+          const usedNode = parseUse(state, depth + 1);
+          if (seenNames.has(usedNode.name)) {
+            state.throwError(`In ${state.currentContext}: Duplicate object name '${usedNode.name}' inside '${objName}'.`, state.peek());
+          }
+          seenNames.add(usedNode.name);
+          children.push(usedNode);
+          continue;
+        }
+        
         if (objType !== "group") {
           const bad = state.peek();
           state.throwError(`In ${state.currentContext}: Unexpected object keyword '${bad.value as string}'. '${objType}' objects cannot contain child objects.`, bad);
         }
+        
         const childNode = parseObject(state, depth + 1);
         if (seenNames.has(childNode.name)) {
           state.throwError(`In ${state.currentContext}: Duplicate object name '${childNode.name}' inside '${objName}'.`, state.peek());
@@ -107,8 +121,8 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
         state.throwError(`In ${state.currentContext}: Property '${keyName}' is defined more than once inside '${objName}'.`, key);
       }
       seenProps.add(keyName);
-      state.consume("COLON");
       
+      state.consume("COLON");
       props[keyName] = parseValue(state);
       
     } catch (e) {
@@ -134,5 +148,7 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
     name: objName,
     props,
     children,
+    line: typeTok.line,
+    col: typeTok.col
   };
 }
