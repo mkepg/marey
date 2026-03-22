@@ -45,405 +45,184 @@ export interface AppState {
   newFile: () => void;
 }
 
-export const DEFAULT_CODE = `scene {
-  size: (600, 400)
-  background: #08080f
-
-  // ── starfield layer 1 — pure loopers, no sequences ────────────────
-  generate i from 1 to 22 {
-    circle starA {
-      position: (i * 27 + 3, i * 17 + 5)
-      radius: 1
-      color: #ffffff
-      alpha: 0.12
-      anchor: (0.5, 0.5)
-
-      animate {
-        property: alpha
-        to: 0.04
-        duration: i * 0.35 + 0.9
-        easing: easeInOut
-        yoyo: true
-        loop: true
-      }
-    }
-  }
-
-  // ── starfield layer 2 — pure loopers, no sequences ────────────────
-  generate i from 1 to 14 {
-    circle starB {
-      position: (i * 43 + 15, i * 26 + 12)
-      radius: 1
-      color: #c4b5fd
-      alpha: 0.08
-      anchor: (0.5, 0.5)
-
-      animate {
-        property: alpha
-        to: 0.22
-        duration: i * 0.28 + 1.1
-        easing: easeInOut
-        yoyo: true
-        loop: true
-      }
-    }
-  }
-
-  // ── outer glow — pure looper ──────────────────────────────────────
-  circle glowOuter {
-    position: (300, 200)
-    radius: 160
-    color: #4c1d95
+export const DEFAULT_CODE = `// ── Reusable Ambient Star Template ────────────────────────────
+template Star(starColor) {
+  circle s {
+    position: (0, 0)
+    radius: 2
+    color: starColor
     alpha: 0.1
     anchor: (0.5, 0.5)
+    animate {
+      property: alpha
+      to: 0.8
+      duration: 1.5
+      easing: easeInOut
+      loop: true
+      yoyo: true
+    }
+  }
+}
 
+scene {
+  size: (800, 600)
+  background: #080811
+
+  // ── 1. Background Ambient Starfield ─────────────────────────
+  generate i from 1 to 20 {
+    use Star(#a78bfa) bgStar {
+      position: (i * 38, i * 25 - (i * i) / 2 + 100)
+      scale: (i / 10 + 0.5, i / 10 + 0.5)
+    }
+  }
+
+  // ── 2. Physics-Enabled Neon Cubes ───────────────────────────
+  generate j from 1 to 5 {
+    rectangle cube {
+      position: (j * 130 + 50, 20)
+      size: (12, 12)
+      color: #38bdf8
+      alpha: 0.4
+      anchor: (0.5, 0.5)
+      physics {
+        velocity: (j * 50 - 150, 0)
+        gravity: (0, 700)
+        friction: 0.99
+        bounce: 0.7 + j * 0.05
+        collideBounds: true
+        duration: indefinitely
+      }
+      // Fixed: Removed loop/yoyo to comply with sibling physics rule.
+      // Now it spins a fixed amount (1440 deg) and naturally eases to a stop.
+      animate {
+        property: rotation
+        to: 1440
+        duration: 4.0 + j
+        easing: easeOut
+      }
+    }
+  }
+
+  // ── 3. Central Pulsing Aura ─────────────────────────────────
+  // This is allowed to loop because it has no sequence or physics siblings.
+  circle ringOuter {
+    position: (400, 300)
+    radius: 180
+    color: #4c1d95
+    alpha: 0.15
+    anchor: (0.5, 0.5)
     animate {
       property: scale
-      to: (1.08, 1.08)
+      to: (1.1, 1.1)
       duration: 4.0
       easing: easeInOut
-      yoyo: true
       loop: true
+      yoyo: true
     }
   }
 
-  // ── inner glow — pure looper ──────────────────────────────────────
-  circle glowInner {
-    position: (300, 200)
-    radius: 70
-    color: #7c6af7
-    alpha: 0.16
-    anchor: (0.5, 0.5)
-
-    animate {
-      property: scale
-      to: (1.14, 1.14)
-      duration: 3.0
-      easing: easeInOut
-      yoyo: true
-      loop: true
-    }
-  }
-
-  // ── corner sparkle TL — pure looper ──────────────────────────────
-  circle cTL {
-    position: (40, 40)
-    radius: 2
-    color: #e2d9f3
+  // ── 4. Cinematic Reveal Framing Lines ───────────────────────
+  line ruleLeft {
+    position: (0, 0)
+    points: [(80, 300), (220, 300)]
+    thickness: 2
+    color: #38bdf8
     alpha: 0.0
-    anchor: (0.5, 0.5)
-
     animate {
       property: alpha
-      to: 0.55
-      duration: 2.3
-      easing: easeInOut
-      yoyo: true
-      loop: true
+      to: 0.0
+      duration: 1.0
+      easing: linear
+    }
+    sequence {
+      animate {
+        property: alpha
+        to: 0.6
+        duration: 1.0
+        easing: easeOut
+      }
     }
   }
 
-  // ── corner sparkle TR — pure looper ──────────────────────────────
-  circle cTR {
-    position: (560, 40)
-    radius: 2
-    color: #e2d9f3
+  line ruleRight {
+    position: (0, 0)
+    points: [(580, 300), (720, 300)]
+    thickness: 2
+    color: #38bdf8
     alpha: 0.0
-    anchor: (0.5, 0.5)
-
     animate {
       property: alpha
-      to: 0.55
-      duration: 1.9
-      easing: easeInOut
-      yoyo: true
-      loop: true
+      to: 0.0
+      duration: 1.0
+      easing: linear
+    }
+    sequence {
+      animate {
+        property: alpha
+        to: 0.6
+        duration: 1.0
+        easing: easeOut
+      }
     }
   }
 
-  // ── corner sparkle BL — pure looper ──────────────────────────────
-  circle cBL {
-    position: (40, 360)
-    radius: 2
-    color: #e2d9f3
+  // ── 5. Staggered Typography Reveal ──────────────────────────
+  text labelCreated {
+    position: (400, 255)
+    content: "CREATED BY"
+    fontSize: 14
+    color: #94a3b8
     alpha: 0.0
     anchor: (0.5, 0.5)
-
+    
     animate {
       property: alpha
-      to: 0.55
-      duration: 2.7
-      easing: easeInOut
-      yoyo: true
-      loop: true
+      to: 0.0
+      duration: 1.5
+      easing: linear
+    }
+    sequence {
+      animate {
+        property: alpha
+        to: 0.9
+        duration: 1.0
+        easing: easeOut
+      }
     }
   }
 
-  // ── corner sparkle BR — pure looper ──────────────────────────────
-  circle cBR {
-    position: (560, 360)
-    radius: 2
-    color: #e2d9f3
+  text labelName {
+    position: (400, 330)
+    content: "Mikhael Edman P. Gomez"
+    fontSize: 32
+    color: #f8fafc
     alpha: 0.0
     anchor: (0.5, 0.5)
-
+    
     animate {
       property: alpha
-      to: 0.55
-      duration: 2.1
-      easing: easeInOut
-      yoyo: true
-      loop: true
+      to: 0.0
+      duration: 2.2
+      easing: linear
     }
-  }
-
-  // ── dot left — pure looper ────────────────────────────────────────
-  circle dotL {
-    position: (232, 200)
-    radius: 3
-    color: #7c6af7
-    alpha: 0.85
-    anchor: (0.5, 0.5)
-
     animate {
       property: position
-      to: (232, 194)
-      duration: 1.8
-      easing: easeInOut
-      yoyo: true
-      loop: true
-    }
-  }
-
-  // ── dot right — pure looper ───────────────────────────────────────
-  circle dotR {
-    position: (368, 200)
-    radius: 3
-    color: #7c6af7
-    alpha: 0.85
-    anchor: (0.5, 0.5)
-
-    animate {
-      property: position
-      to: (368, 206)
-      duration: 1.8
-      easing: easeInOut
-      yoyo: true
-      loop: true
-    }
-  }
-
-  // ════════════════════════════════════════════════════════════════════
-  // SEQUENCED OBJECTS — animate blocks have NO loop or yoyo
-  // ════════════════════════════════════════════════════════════════════
-
-  // ── rule left — hold then reveal ─────────────────────────────────
-  line ruleL {
-    position: (0, 0)
-    points: [(48, 200), (228, 200)]
-    thickness: 1
-    color: #7c6af7
-    alpha: 0.0
-
-    animate {
-      property: alpha
-      to: 0.0
-      duration: 0.5
+      to: (400, 330)
+      duration: 2.2
       easing: linear
     }
-
+    
     sequence {
       animate {
-        property: alpha
-        to: 0.4
-        duration: 0.5
+        property: position
+        to: (400, 300)
+        duration: 1.2
         easing: easeOut
       }
-    }
-  }
-
-  // ── rule right — hold then reveal ────────────────────────────────
-  line ruleR {
-    position: (0, 0)
-    points: [(372, 200), (552, 200)]
-    thickness: 1
-    color: #7c6af7
-    alpha: 0.0
-
-    animate {
-      property: alpha
-      to: 0.0
-      duration: 0.5
-      easing: linear
-    }
-
-    sequence {
-      animate {
-        property: alpha
-        to: 0.4
-        duration: 0.5
-        easing: easeOut
-      }
-    }
-  }
-
-  // ── underline — hold then reveal ──────────────────────────────────
-  line underline {
-    position: (0, 0)
-    points: [(196, 250), (404, 250)]
-    thickness: 1
-    color: #7c6af7
-    alpha: 0.0
-
-    animate {
-      property: alpha
-      to: 0.0
-      duration: 0.9
-      easing: linear
-    }
-
-    sequence {
-      animate {
-        property: alpha
-        to: 0.35
-        duration: 0.4
-        easing: easeOut
-      }
-    }
-  }
-
-  // ── orbital particles — staggered entrance then oscillate ─────────
-  generate i from 1 to 6 {
-    circle orb {
-      position: (300 + i * 28, 200)
-      radius: 2
-      color: #a78bfa
-      alpha: 0.0
-      anchor: (0.5, 0.5)
-
-      animate {
-        property: alpha
-        to: 0.0
-        duration: i * 0.18 + 0.35
-        easing: linear
-      }
-
-      sequence {
-        animate {
-          property: alpha
-          to: 0.7
-          duration: 0.25
-          easing: easeOut
-        }
-      }
-
-      sequence {
-        animate {
-          property: position
-          to: (300 - i * 28, 200)
-          duration: i * 0.3 + 1.4
-          easing: easeInOut
-        }
-      }
-
-      sequence {
-        animate {
-          property: position
-          to: (300 + i * 28, 200)
-          duration: i * 0.3 + 1.4
-          easing: easeInOut
-        }
-      }
-    }
-  }
-
-  // ── "Created By" — fades in via sequence ──────────────────────────
-  text labelBy {
-    position: (300, 160)
-    content: "Created By"
-    fontSize: 11
-    color: #9988cc
-    alpha: 0.0
-    anchor: (0.5, 0.5)
-
-    animate {
-      property: alpha
-      to: 0.0
-      duration: 0.4
-      easing: linear
-    }
-
-    sequence {
-      animate {
-        property: alpha
-        to: 0.8
-        duration: 0.6
-        easing: easeOut
-      }
-    }
-  }
-
-  // ── first name — slides up and fades in ───────────────────────────
-  text nameFirst {
-    position: (300, 203)
-    content: "Mikhael Edman P."
-    fontSize: 28
-    color: #f0eeff
-    alpha: 0.0
-    anchor: (0.5, 0.5)
-
-    animate {
-      property: alpha
-      to: 0.0
-      duration: 0.55
-      easing: linear
-    }
-
-    animate {
-      property: position
-      to: (300, 200)
-      duration: 0.55
-      easing: easeOut
-    }
-
-    sequence {
       animate {
         property: alpha
         to: 1.0
-        duration: 0.7
-        easing: easeOut
-      }
-    }
-  }
-
-  // ── last name — slides up and fades in with slight delay ──────────
-  text nameLast {
-    position: (300, 236)
-    content: "Gomez"
-    fontSize: 28
-    color: #a78bfa
-    alpha: 0.0
-    anchor: (0.5, 0.5)
-
-    animate {
-      property: alpha
-      to: 0.0
-      duration: 0.75
-      easing: linear
-    }
-
-    animate {
-      property: position
-      to: (300, 233)
-      duration: 0.75
-      easing: easeOut
-    }
-
-    sequence {
-      animate {
-        property: alpha
-        to: 1.0
-        duration: 0.6
+        duration: 1.2
         easing: easeOut
       }
     }
