@@ -1,6 +1,7 @@
 import type { SceneFit } from "../types";
-import { KEYWORDS, NAMED_COLORS, SCENE_FIT_VALUES, BOOLEAN_VALUES, EASING_VALUES } from "./constants";
+import { KEYWORDS, NAMED_COLORS, SCENE_FIT_VALUES, BOOLEAN_VALUES, EASING_VALUES, DURATION_INDEFINITELY_VALUES } from "./constants";
 import type { LexerState } from "./state";
+
 export function handleColor(state: LexerState): void {
   const startI = state.i;
   let j = startI + 1;
@@ -16,6 +17,7 @@ export function handleColor(state: LexerState): void {
   state.push("HEX_COLOR", raw, raw.length);
   state.advance(raw.length);
 }
+
 export function handleString(state: LexerState): void {
   const startLine = state.line;
   const startCol = state.col;
@@ -50,6 +52,7 @@ export function handleString(state: LexerState): void {
   state.push("STRING", s, length);
   state.advance(length);
 }
+
 export function handleNumber(state: LexerState): void {
   let j = state.i;
   while (j < state.src.length && /[0-9]/.test(state.src[j])) j++;
@@ -74,6 +77,7 @@ export function handleNumber(state: LexerState): void {
   state.push("NUMBER", parsedVal, length);
   state.advance(length);
 }
+
 export function handleWord(state: LexerState): void {
   let j = state.i;
   while (j < state.src.length && /[a-zA-Z0-9_]/.test(state.src[j])) j++;
@@ -89,6 +93,9 @@ export function handleWord(state: LexerState): void {
     state.push("BOOLEAN", word === "true", length);
   } else if (EASING_VALUES.has(word)) {
     state.push("EASING", word, length);
+  } else if (DURATION_INDEFINITELY_VALUES.has(word)) {
+    // "indefinitely" is a special duration keyword for open-ended physics.
+    state.push("DURATION_INDEFINITELY", word, length);
   } else {
     state.push("IDENT", word, length);
   }

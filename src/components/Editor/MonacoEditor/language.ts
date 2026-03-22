@@ -5,16 +5,16 @@ import { analyzeContext } from "./scanner";
 
 export function registerLanguage(monaco: typeof import("monaco-editor")): void {
   if (monaco.languages.getLanguages().some((l) => l.id === "Declare")) return;
-
   monaco.languages.register({ id: "Declare" });
 
   monaco.languages.setMonarchTokensProvider("Declare", {
-    keywords:    ["scene", "circle", "rectangle", "polygon", "line", "text", "group", "generate", "template", "use", "animate", "physics"],
+    keywords:    ["scene", "circle", "rectangle", "polygon", "line", "text", "group", "generate", "template", "use", "animate", "physics", "sequence"],
     defKeyword:  ["def"],
     booleanValues: ["true", "false"],
     easingValues:  ["linear", "easeIn", "easeOut", "easeInOut"],
+    // "indefinitely" is a special duration keyword — highlight as a keyword
+    durationKeywords: ["indefinitely"],
     namedColors,
-
     tokenizer: {
       root: [
         [/\/\/.*$/, "comment"],
@@ -27,12 +27,13 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
           /[a-zA-Z_][a-zA-Z0-9_]*/,
           {
             cases: {
-              "@defKeyword":    "keyword.def",
-              "@keywords":      "keyword",
-              "@booleanValues": "keyword",
-              "@easingValues":  "keyword",
-              "@namedColors":   "color",
-              "@default":       "identifier",
+              "@defKeyword":       "keyword.def",
+              "@keywords":         "keyword",
+              "@booleanValues":    "keyword",
+              "@easingValues":     "keyword",
+              "@durationKeywords": "keyword",
+              "@namedColors":      "color",
+              "@default":          "identifier",
             },
           },
         ],
@@ -45,7 +46,6 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
       const text = model.getValue();
       const colors: MonacoLanguagesNS.IColorInformation[] = [];
       const regex = /#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})\b/g;
-
       let match;
       while ((match = regex.exec(text)) !== null) {
         const hex = match[1];
@@ -60,10 +60,10 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
           b = parseInt(hex.substring(4, 6), 16) / 255;
         }
         const startPos = model.getPositionAt(match.index);
-        const endPos = model.getPositionAt(match.index + match[0].length);
+        const endPos   = model.getPositionAt(match.index + match[0].length);
         colors.push({
           range: new monaco.Range(startPos.lineNumber, startPos.column, endPos.lineNumber, endPos.column),
-          color: { red: r, green: g, blue: b, alpha: 1 }
+          color: { red: r, green: g, blue: b, alpha: 1 },
         });
       }
       return colors;
@@ -76,78 +76,71 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
       };
       const hexString = `#${toHex(color.red)}${toHex(color.green)}${toHex(color.blue)}`;
       return [{ label: hexString }];
-    }
+    },
   });
 
   monaco.languages.registerHoverProvider("Declare", {
     provideHover: (model, position) => {
       const word = model.getWordAtPosition(position);
       if (!word) return null;
-
       const token = word.word;
       let md = "";
-
       if (token in KEYWORD_DOCS) {
         md = KEYWORD_DOCS[token];
-      }
-      else if (token in PROP_TYPES) {
-        const req = REQUIRED_PROPS[token as keyof typeof REQUIRED_PROPS] || [];
+      } else if (token in PROP_TYPES) {
+        const req   = REQUIRED_PROPS[token as keyof typeof REQUIRED_PROPS] || [];
         const props = PROP_TYPES[token as keyof typeof PROP_TYPES];
-
         md = `### \`${token}\` object\n---\n`;
-
         if (req.length > 0) {
           md += `**Required Properties:**\n- \`${req.join("`\n- `")}\`\n\n`;
         }
-
         const optional = Object.keys(props).filter(p => !req.includes(p));
         if (optional.length > 0) {
           md += `**Optional Properties:**\n- \`${optional.join("`\n- `")}\`\n`;
         }
-      }
-      else if (token in PROPERTY_DOCS) {
+      } else if (token in PROPERTY_DOCS) {
         md = PROPERTY_DOCS[token];
+      } else if (token === "indefinitely") {
+        md = `### \`indefinitely\`\nA special duration keyword for \`physics\` blocks. Means the simulation runs forever with no time limit.\n\nOnly valid on a top-level \`physics\` block (not inside a \`sequence\`). An object using \`duration: indefinitely\` cannot have a \`sequence\` block, because the sequence can never activate.\n\n**Example:** \`duration: indefinitely\``;
       }
-
       if (md) {
         return {
           range: new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn),
-          contents: [{ value: md }]
+          contents: [{ value: md }],
         };
       }
       return null;
-    }
+    },
   });
 
   monaco.languages.registerCompletionItemProvider("Declare", {
-    triggerCharacters: [':'],
+    triggerCharacters: [":"],
     provideCompletionItems: (model, position) => {
       const textUntilPosition = model.getValueInRange({
         startLineNumber: 1,
         startColumn: 1,
         endLineNumber: position.lineNumber,
-        endColumn: position.column
+        endColumn: position.column,
       });
       const lineUntilCursor = model.getValueInRange({
         startLineNumber: position.lineNumber,
         startColumn: 1,
         endLineNumber: position.lineNumber,
-        endColumn: position.column
+        endColumn: position.column,
       });
-
       const word = model.getWordUntilPosition(position);
       const range = {
         startLineNumber: position.lineNumber,
-        endLineNumber: position.lineNumber,
-        startColumn: word.startColumn,
-        endColumn: word.endColumn
+        endLineNumber:   position.lineNumber,
+        startColumn:     word.startColumn,
+        endColumn:       word.endColumn,
       };
 
       if (/^\s*def\s+[a-zA-Z0-9_]*$/.test(lineUntilCursor)) {
         return { suggestions: [] };
       }
 
-      const scopeChain = analyzeContext(textUntilPosition);
+      const scopeChain  = analyzeContext(textUntilPosition);
       const activeScope = scopeChain[scopeChain.length - 1];
       const currentBlock = activeScope.blockType;
 
@@ -160,7 +153,6 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
 
       const isTypingDefValue = /^\s*def\s+[a-zA-Z0-9_]*\s*=\s*(.*)$/.exec(lineUntilCursor);
       const isTypingGenerate = /^\s*generate\s+(.*)$/.exec(lineUntilCursor);
-
       if (isTypingDefValue || isTypingGenerate) {
         const suggestions: MonacoLanguagesNS.CompletionItem[] = [];
         for (const [sym, type] of Object.entries(reachableVars)) {
@@ -169,7 +161,7 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
             kind: monaco.languages.CompletionItemKind.Variable,
             insertText: sym,
             detail: `Variable (${type})`,
-            range
+            range,
           });
         }
         for (const color of namedColors) {
@@ -178,7 +170,7 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
             kind: monaco.languages.CompletionItemKind.Color,
             insertText: color,
             detail: "Built-in named color",
-            range
+            range,
           });
         }
         return { suggestions };
@@ -187,23 +179,23 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
       const needsLeadingSpace = /([a-zA-Z][a-zA-Z0-9_]*)\s*:$/.test(lineUntilCursor);
 
       const getPlaceholderForProp = (prop: string, propType: unknown, isScene: boolean = false): string => {
-        if (prop === "size") return isScene ? "(600, 400)" : "(100, 100)";
-        if (prop === "radius") return "50";
+        if (prop === "size")      return isScene ? "(600, 400)" : "(100, 100)";
+        if (prop === "radius")    return "50";
         if (prop === "thickness") return "4";
-        if (prop === "content") return '"Text"';
-
+        if (prop === "content")   return '"Text"';
+        if (prop === "duration")  return "1.0";
         const primaryType = Array.isArray(propType) ? propType[0] : propType;
         switch (primaryType) {
-          case "point": return "(0, 0)";
-          case "number": return "10";
-          case "color": return "black";
-          case "string": return '"text"';
-          case "pointList": return "[(50,0), (100,100), (0,100)]";
-          case "sceneFit": return "contain";
-          case "boolean": return "true";
-          case "easing": return "easeInOut";
+          case "point":        return "(0, 0)";
+          case "number":       return "10";
+          case "color":        return "black";
+          case "string":       return '"text"';
+          case "pointList":    return "[(50,0), (100,100), (0,100)]";
+          case "sceneFit":     return "contain";
+          case "boolean":      return "true";
+          case "easing":       return "easeInOut";
           case "animProperty": return "position";
-          default: return "value";
+          default:             return "value";
         }
       };
 
@@ -211,12 +203,12 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
       const suggestions: MonacoLanguagesNS.CompletionItem[] = [];
 
       if (currentBlock && isTypingValueMatch) {
-        const propName = isTypingValueMatch[1];
-        const propsDef = PROP_TYPES[currentBlock as keyof typeof PROP_TYPES];
-
+        // ── value completions ──────────────────────────────────────────
+        const propName  = isTypingValueMatch[1];
+        const propsDef  = PROP_TYPES[currentBlock as keyof typeof PROP_TYPES];
         if (propsDef && propName in propsDef) {
           const expectedTypeDef = propsDef[propName as keyof typeof propsDef];
-          const expectedTypes = Array.isArray(expectedTypeDef) ? expectedTypeDef : [expectedTypeDef];
+          const expectedTypes   = Array.isArray(expectedTypeDef) ? expectedTypeDef : [expectedTypeDef];
 
           if (expectedTypes.includes("color")) {
             for (const color of namedColors) {
@@ -225,28 +217,34 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
                 kind: monaco.languages.CompletionItemKind.Color,
                 insertText: needsLeadingSpace ? ` ${color}` : color,
                 detail: "Built-in named color",
-                range
+                range,
               });
             }
           }
-
           if (expectedTypes.includes("boolean")) {
-            suggestions.push({ label: "true", kind: monaco.languages.CompletionItemKind.Keyword, insertText: needsLeadingSpace ? " true" : "true", detail: "boolean", range });
+            suggestions.push({ label: "true",  kind: monaco.languages.CompletionItemKind.Keyword, insertText: needsLeadingSpace ? " true"  : "true",  detail: "boolean", range });
             suggestions.push({ label: "false", kind: monaco.languages.CompletionItemKind.Keyword, insertText: needsLeadingSpace ? " false" : "false", detail: "boolean", range });
           }
-
           if (expectedTypes.includes("easing")) {
-            ["linear", "easeIn", "easeOut", "easeInOut"].forEach(e => {
-                suggestions.push({ label: e, kind: monaco.languages.CompletionItemKind.Keyword, insertText: needsLeadingSpace ? ` ${e}` : e, detail: "easing", range });
-            });
+            for (const e of ["linear", "easeIn", "easeOut", "easeInOut"]) {
+              suggestions.push({ label: e, kind: monaco.languages.CompletionItemKind.Keyword, insertText: needsLeadingSpace ? ` ${e}` : e, detail: "easing", range });
+            }
           }
-
           if (expectedTypes.includes("animProperty")) {
-            ["position", "rotation", "scale", "alpha"].forEach(p => {
-                suggestions.push({ label: p, kind: monaco.languages.CompletionItemKind.Property, insertText: needsLeadingSpace ? ` ${p}` : p, detail: "animatable property", range });
+            for (const p of ["position", "rotation", "scale", "alpha"]) {
+              suggestions.push({ label: p, kind: monaco.languages.CompletionItemKind.Property, insertText: needsLeadingSpace ? ` ${p}` : p, detail: "animatable property", range });
+            }
+          }
+          // "indefinitely" is valid for physics.duration
+          if (propName === "duration" && (currentBlock === "physics")) {
+            suggestions.push({
+              label: "indefinitely",
+              kind: monaco.languages.CompletionItemKind.Keyword,
+              insertText: needsLeadingSpace ? " indefinitely" : "indefinitely",
+              detail: "Run physics simulation forever (not valid inside a sequence)",
+              range,
             });
           }
-
           for (const [sym, type] of Object.entries(reachableVars)) {
             if (expectedTypes.includes(type)) {
               suggestions.push({
@@ -254,107 +252,135 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
                 kind: monaco.languages.CompletionItemKind.Variable,
                 insertText: needsLeadingSpace ? ` ${sym}` : sym,
                 detail: `Variable (${type})`,
-                range
+                range,
               });
             }
           }
         }
-      }
-      else {
+      } else {
+        // ── keyword / block completions ───────────────────────────────
         if (currentBlock && currentBlock in PROP_TYPES) {
           const propsDef = PROP_TYPES[currentBlock as keyof typeof PROP_TYPES];
           for (const [prop, type] of Object.entries(propsDef)) {
-            const typeArray = Array.isArray(type) ? type : [type];
-            const displayTypes = typeArray.map(t => KIND_LABEL[t as keyof typeof KIND_LABEL] || t).join(" or ");
-
+            const typeArray    = Array.isArray(type) ? type : [type];
+            const displayTypes = typeArray
+              .map(t => KIND_LABEL[t as keyof typeof KIND_LABEL] || t)
+              .join(" or ");
             suggestions.push({
               label: prop,
               kind: monaco.languages.CompletionItemKind.Property,
               insertText: `${prop}: `,
               detail: `Property (${displayTypes})`,
               range,
-              command: {
-                id: "editor.action.triggerSuggest",
-                title: "Suggest values",
-              },
+              command: { id: "editor.action.triggerSuggest", title: "Suggest values" },
             });
           }
         }
 
-        const isContainer = currentBlock === "scene" || currentBlock === "group" || currentBlock === "generate" || currentBlock === "template" || currentBlock === "use";
+        const isContainer = currentBlock === "scene"
+          || currentBlock === "group"
+          || currentBlock === "generate"
+          || currentBlock === "template"
+          || currentBlock === "use";
 
         if (isContainer || !currentBlock) {
           const objects = ["circle", "rectangle", "polygon", "line", "text", "group"];
           for (const obj of objects) {
-            const reqProps = REQUIRED_PROPS[obj as keyof typeof REQUIRED_PROPS] || [];
-            const propsDef = PROP_TYPES[obj as keyof typeof PROP_TYPES];
-            let insertText = `${obj} \${1:name} {\n`;
-            let tabIndex = 2;
+            const reqProps  = REQUIRED_PROPS[obj as keyof typeof REQUIRED_PROPS] || [];
+            const propsDef  = PROP_TYPES[obj as keyof typeof PROP_TYPES];
+            let insertText  = `${obj} \${1:name} {\n`;
+            let tabIndex    = 2;
             for (const prop of reqProps) {
-              const propType = propsDef ? propsDef[prop as keyof typeof propsDef] : "unknown";
+              const propType    = propsDef ? propsDef[prop as keyof typeof propsDef] : "unknown";
               const placeholder = getPlaceholderForProp(prop, propType, false);
               insertText += `\t${prop}: \${${tabIndex}:${placeholder}}\n`;
               tabIndex++;
             }
             insertText += `\t$0\n}`;
-
             suggestions.push({
               label: obj,
               kind: monaco.languages.CompletionItemKind.Class,
               insertText,
               insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
               detail: `Create new ${obj} object`,
-              range
+              range,
             });
           }
-
           suggestions.push({
             label: "def",
             kind: monaco.languages.CompletionItemKind.Keyword,
             insertText: `def \${1:varName} = \${2:value}`,
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             detail: "Declare a constant variable",
-            range
+            range,
           });
-
           suggestions.push({
             label: "generate",
             kind: monaco.languages.CompletionItemKind.Keyword,
             insertText: `generate \${1:i} from \${2:1} to \${3:5} {\n\t$0\n}`,
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             detail: "Generate objects in a loop",
-            range
+            range,
           });
-
           suggestions.push({
             label: "use",
             kind: monaco.languages.CompletionItemKind.Keyword,
             insertText: `use \${1:Template}(\${2:args}) \${3:instanceName} {\n\t$0\n}`,
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             detail: "Instantiate a template",
-            range
+            range,
           });
         }
 
+        // ── animate / physics / sequence for renderable objects ───────
         const isRenderable = ["circle", "rectangle", "polygon", "line", "text", "group"].includes(currentBlock || "");
-
         if (isRenderable) {
-            suggestions.push({
-              label: "animate",
-              kind: monaco.languages.CompletionItemKind.Class,
-              insertText: `animate {\n\tproperty: \${1:position}\n\tto: \${2:(0, 0)}\n\tduration: \${3:1.0}\n\t$0\n}`,
-              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-              detail: "Create an animation block",
-              range
-            });
-            suggestions.push({
-              label: "physics",
-              kind: monaco.languages.CompletionItemKind.Class,
-              insertText: `physics {\n\tvelocity: \${1:(0, 0)}\n\tgravity: \${2:(0, 980)}\n\tbounce: \${3:0.65}\n\t$0\n}`,
-              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-              detail: "Create a physics simulation block",
-              range
-            });
+          suggestions.push({
+            label: "animate",
+            kind: monaco.languages.CompletionItemKind.Class,
+            insertText: `animate {\n\tproperty: \${1:position}\n\tto: \${2:(0, 0)}\n\tduration: \${3:1.0}\n\t$0\n}`,
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "Create an animation block",
+            range,
+          });
+          suggestions.push({
+            label: "physics",
+            kind: monaco.languages.CompletionItemKind.Class,
+            insertText: `physics {\n\tduration: \${1:indefinitely}\n\tvelocity: \${2:(0, 0)}\n\tgravity: \${3:(0, 980)}\n\tbounce: \${4:0.65}\n\t$0\n}`,
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "Create a physics simulation block",
+            range,
+          });
+          // sequence block — runs after all peer animate/physics finish
+          suggestions.push({
+            label: "sequence",
+            kind: monaco.languages.CompletionItemKind.Class,
+            insertText: `sequence {\n\t\${1:animate {\n\t\tproperty: alpha\n\t\tto: 0.0\n\t\tduration: \${2:0.5}\n\t\teasing: easeIn\n\t}}\n}`,
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "Chain a motion step — runs after all peer animate/physics complete",
+            range,
+          });
+        }
+
+        // ── animate / physics inside a sequence block ─────────────────
+        // When inside a sequence block, only animate and physics are valid children.
+        if (currentBlock === "sequence") {
+          suggestions.push({
+            label: "animate",
+            kind: monaco.languages.CompletionItemKind.Class,
+            insertText: `animate {\n\tproperty: \${1:position}\n\tto: \${2:(0, 0)}\n\tduration: \${3:1.0}\n\t$0\n}`,
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "Create an animation step inside a sequence",
+            range,
+          });
+          suggestions.push({
+            label: "physics",
+            kind: monaco.languages.CompletionItemKind.Class,
+            insertText: `physics {\n\tduration: \${1:1.5}\n\tgravity: \${2:(0, 980)}\n\tbounce: \${3:0.65}\n\t$0\n}`,
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "Create a physics step inside a sequence (must use numeric duration)",
+            range,
+          });
         }
 
         if (!currentBlock) {
@@ -364,34 +390,31 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
             insertText: `template \${1:Name}(\${2:param}) {\n\t$0\n}`,
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             detail: "Define a reusable template",
-            range
+            range,
           });
-
           const sceneReqProps = REQUIRED_PROPS["scene"] || [];
           const scenePropsDef = PROP_TYPES["scene"];
           let sceneInsertText = `scene {\n`;
-          let sceneTabIndex = 1;
-
+          let sceneTabIndex   = 1;
           for (const prop of sceneReqProps) {
-            const propType = scenePropsDef ? scenePropsDef[prop as keyof typeof scenePropsDef] : "unknown";
+            const propType    = scenePropsDef ? scenePropsDef[prop as keyof typeof scenePropsDef] : "unknown";
             const placeholder = getPlaceholderForProp(prop, propType, true);
             sceneInsertText += `\t${prop}: \${${sceneTabIndex}:${placeholder}}\n`;
             sceneTabIndex++;
           }
           sceneInsertText += `\t$0\n}`;
-
           suggestions.push({
             label: "scene",
             kind: monaco.languages.CompletionItemKind.Keyword,
             insertText: sceneInsertText,
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             detail: "Main scene block",
-            range
+            range,
           });
         }
       }
 
       return { suggestions };
-    }
+    },
   });
 }

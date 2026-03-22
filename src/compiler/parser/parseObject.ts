@@ -14,11 +14,75 @@ const RESERVED_PROPS = new Set<string>([
   "friction", "bounce", "collideBounds", "handOff"
 ]);
 
+/**
+ * Parses a `sequence { ... }` block.
+ * A sequence block contains only `animate` and `physics` children —
+ * no name token follows the keyword.
+ */
+function parseSequenceBlock(state: ParserState, parentContext: string): ObjectNode {
+  const seqTok = state.consume("KEYWORD"); // consume "sequence"
+  const braceTok = state.consume("LBRACE");
+
+  const prevContext = state.currentContext;
+  state.currentContext = `'sequence' block inside ${parentContext}`;
+
+  const children: ObjectNode[] = [];
+
+  while (state.peek().type !== "RBRACE" && state.peek().type !== "EOF") {
+    try {
+      if (state.peek().type !== "KEYWORD") {
+        const bad = state.consume();
+        state.throwError(
+          `In ${state.currentContext}: Expected 'animate' or 'physics' inside a 'sequence' block, but found ${describeToken(bad)}.`,
+          bad
+        );
+      }
+      const kw = state.peek().value as string;
+      if (kw !== "animate" && kw !== "physics") {
+        const bad = state.peek();
+        let hint = "";
+        if (kw === "sequence") hint = " Nested 'sequence' blocks are not allowed.";
+        state.throwError(
+          `In ${state.currentContext}: Only 'animate' and 'physics' blocks are allowed inside a 'sequence' block, but found '${kw}'.${hint}`,
+          bad
+        );
+      }
+      // Reuse parseObject for animate/physics — they have no name
+      const child = parseObject(state, 0);
+      children.push(child);
+    } catch (e) {
+      if (e instanceof ParseException) {
+        state.errors.push(e.error);
+        state.synchronize();
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  if (state.peek().type === "EOF") {
+    state.throwError(
+      `In ${state.currentContext}: The 'sequence' block was not closed before end of file. Add a closing '}'.`,
+      braceTok
+    );
+  }
+  state.consume("RBRACE");
+  state.currentContext = prevContext;
+
+  return {
+    type: "sequence",
+    name: `sequence_${seqTok.line}_${seqTok.col}`,
+    props: {},
+    children,
+    line: seqTok.line,
+    col: seqTok.col,
+  };
+}
+
 export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
   if (depth > 50) {
     state.throwError(`In ${state.currentContext}: Maximum nesting depth exceeded. Object nesting is limited to 50 levels.`, state.peek());
   }
-
   state.globalNodeCount++;
   if (state.globalNodeCount > 15000) {
     state.throwError(`In ${state.currentContext}: Global object limit exceeded. The scene contains too many objects (>15,000) and cannot be compiled.`, state.peek());
@@ -42,7 +106,6 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
     }
     const nameTok = state.consume("IDENT");
     objName = nameTok.value as string;
-
     if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(objName)) {
       state.throwError(`In ${state.currentContext}: Invalid object name '${objName}'. Must start with a letter and contain only alphanumeric chars or underscores.`, nameTok);
     }
@@ -54,7 +117,6 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
   state.consume("LBRACE");
   const previousContext = state.currentContext;
   state.currentContext = `'${objType}' ${objType === "animate" || objType === "physics" ? 'block' : `object '${objName}'`}`;
-
   const prevEnv = state.env;
   state.env = Object.create(prevEnv);
 
@@ -74,9 +136,26 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
           continue;
         }
         if (objType === "animate" || objType === "physics") {
-            const bad = state.peek();
-            state.throwError(`In ${state.currentContext}: '${objType}' blocks cannot contain nested objects or blocks. Found '${bad.value as string}'.`, bad);
+          const bad = state.peek();
+          state.throwError(`In ${state.currentContext}: '${objType}' blocks cannot contain nested objects or blocks. Found '${bad.value as string}'.`, bad);
         }
+
+        // ── sequence block ─────────────────────────────────────────────
+        if (state.peek().value === "sequence") {
+          if (objType !== "group"
+              && objType !== "circle"
+              && objType !== "rectangle"
+              && objType !== "polygon"
+              && objType !== "line"
+              && objType !== "text") {
+            const bad = state.peek();
+            state.throwError(`In ${state.currentContext}: Unexpected 'sequence' block inside '${objType}'. Sequence blocks are only allowed directly on renderable objects.`, bad);
+          }
+          const seqNode = parseSequenceBlock(state, state.currentContext);
+          children.push(seqNode);
+          continue;
+        }
+
         if (state.peek().value === "generate") {
           if (objType !== "group") {
             const bad = state.peek();
@@ -110,12 +189,10 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
           children.push(childNode);
           continue;
         }
-
         if (objType !== "group") {
           const bad = state.peek();
-          state.throwError(`In ${state.currentContext}: Unexpected object keyword '${bad.value as string}'. '${objType}' objects cannot contain child objects (except 'animate' and 'physics' blocks).`, bad);
+          state.throwError(`In ${state.currentContext}: Unexpected object keyword '${bad.value as string}'. '${objType}' objects cannot contain child objects (except 'animate', 'physics', and 'sequence' blocks).`, bad);
         }
-
         const childNode = parseObject(state, depth + 1);
         if (seenNames.has(childNode.name)) {
           state.throwError(`In ${state.currentContext}: Duplicate object name '${childNode.name}' inside '${objName}'.`, state.peek());
@@ -127,21 +204,18 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
 
       const peekType = state.peek().type;
       if (peekType === "IDENT" || peekType === "SCENE_FIT" || peekType === "NAMED_COLOR" || peekType === "BOOLEAN" || peekType === "EASING") {
-          const key = state.consume();
-          const keyName = key.value as string;
-
-          if (seenProps.has(keyName)) {
-            state.throwError(`In ${state.currentContext}: Property '${keyName}' is defined more than once.`, key);
-          }
-          seenProps.add(keyName);
-
-          state.consume("COLON");
-          props[keyName] = parseValue(state, keyName);
+        const key = state.consume();
+        const keyName = key.value as string;
+        if (seenProps.has(keyName)) {
+          state.throwError(`In ${state.currentContext}: Property '${keyName}' is defined more than once.`, key);
+        }
+        seenProps.add(keyName);
+        state.consume("COLON");
+        props[keyName] = parseValue(state, keyName);
       } else {
-          const bad = state.consume();
-          state.throwError(`In ${state.currentContext}: Expected a property name, but found ${describeToken(bad)}.`, bad);
+        const bad = state.consume();
+        state.throwError(`In ${state.currentContext}: Expected a property name, but found ${describeToken(bad)}.`, bad);
       }
-
     } catch (e) {
       if (e instanceof ParseException) {
         state.errors.push(e.error);
@@ -156,7 +230,6 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
     state.throwError(`In ${state.currentContext}: The block was not closed before end of file. Add a closing '}'.`, typeTok);
   }
   state.consume("RBRACE");
-
   state.env = prevEnv;
   state.currentContext = previousContext;
 

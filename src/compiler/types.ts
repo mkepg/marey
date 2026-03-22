@@ -8,6 +8,7 @@ export type TokenType =
   | "STRING"
   | "BOOLEAN"
   | "EASING"
+  | "DURATION_INDEFINITELY"
   | "LBRACE"
   | "RBRACE"
   | "LBRACKET"
@@ -97,6 +98,16 @@ export interface AnimPropertyValue {
   readonly col: number;
 }
 
+/**
+ * Represents the special `indefinitely` keyword used as a physics duration.
+ * Only valid on physics blocks that are NOT inside a sequence block.
+ */
+export interface IndefinitelyValue {
+  readonly kind: "indefinitely";
+  readonly line: number;
+  readonly col: number;
+}
+
 export type AstValue =
   | NumberValue
   | ColorValue
@@ -106,9 +117,19 @@ export type AstValue =
   | SceneFitValue
   | BooleanValue
   | EasingValue
-  | AnimPropertyValue;
+  | AnimPropertyValue
+  | IndefinitelyValue;
 
-export type ObjectType = "circle" | "rectangle" | "polygon" | "line" | "text" | "group" | "animate" | "physics";
+export type ObjectType =
+  | "circle"
+  | "rectangle"
+  | "polygon"
+  | "line"
+  | "text"
+  | "group"
+  | "animate"
+  | "physics"
+  | "sequence";
 
 export interface ObjectNode {
   readonly type: ObjectType;

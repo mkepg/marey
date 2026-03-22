@@ -51,29 +51,23 @@ function parseMathExpr(state: ParserState, minPrec: number, depth: number): numb
     if (t.type === "PLUS" || t.type === "MINUS") prec = 1;
     else if (t.type === "STAR" || t.type === "SLASH") prec = 2;
     else break;
-    if (prec < minPrec) break;
-    const opTok = state.consume();
-    const right = parseMathExpr(state, prec + 1, depth);
-    if (opTok.type === "PLUS") left += right;
-    else if (opTok.type === "MINUS") left -= right;
-    else if (opTok.type === "STAR") left *= right;
-    else if (opTok.type === "SLASH") {
-      if (right === 0) {
-        state.throwError(`In ${state.currentContext}: Division by zero.`, opTok);
-      }
-      left /= right;
+    if (prec <= minPrec) break;
+    state.consume();
+    const right = parseMathExpr(state, prec, depth + 1);
+    if (t.type === "PLUS")  left = left + right;
+    else if (t.type === "MINUS") left = left - right;
+    else if (t.type === "STAR")  left = left * right;
+    else if (t.type === "SLASH") {
+      if (right === 0) state.throwError(`In ${state.currentContext}: Division by zero.`, t);
+      left = left / right;
     }
-  }
-  if (!isFinite(left)) {
-    state.throwError(`In ${state.currentContext}: Math expression evaluated to Infinity or NaN.`, state.peek());
   }
   return left;
 }
 
 export function parseValue(state: ParserState, currentKey?: string): AstValue {
   const t = state.peek();
-  const line = t.line;
-  const col = t.col;
+  const { line, col } = t;
 
   if (t.type === "BOOLEAN") {
     state.consume();
@@ -102,6 +96,15 @@ export function parseValue(state: ParserState, currentKey?: string): AstValue {
     state.consume();
     return { kind: "sceneFit", value: t.value as SceneFit, line, col };
   }
+
+  // "indefinitely" is only valid as a duration value on physics blocks.
+  // We emit it as an IndefinitelyValue so the type checker can validate
+  // placement (e.g. forbid it inside sequence blocks).
+  if (t.type === "DURATION_INDEFINITELY") {
+    state.consume();
+    return { kind: "indefinitely", line, col };
+  }
+
   if (t.type === "LBRACKET") {
     const openTok = state.consume("LBRACKET");
     const pts: Array<{ x: number; y: number }> = [];
@@ -130,6 +133,7 @@ export function parseValue(state: ParserState, currentKey?: string): AstValue {
     state.consume("RBRACKET");
     return { kind: "pointList", value: pts, line, col };
   }
+
   let isPoint = false;
   if (t.type === "LPAREN") {
     let nesting = 0;
@@ -161,12 +165,14 @@ export function parseValue(state: ParserState, currentKey?: string): AstValue {
     state.consume("RPAREN");
     return { kind: "point", x, y, line, col };
   }
+
   const isMathStart = t.type === "NUMBER" || t.type === "MINUS" || t.type === "LPAREN" ||
     (t.type === "IDENT" && state.env[t.value as string]?.kind === "number");
   if (isMathStart) {
     const val = parseMathExpr(state, 0, 0);
     return { kind: "number", value: val, line, col };
   }
+
   if (t.type === "IDENT") {
     const varName = t.value as string;
     if (currentKey === "property") {
@@ -180,6 +186,7 @@ export function parseValue(state: ParserState, currentKey?: string): AstValue {
     }
     state.throwError(`In ${state.currentContext}: Undefined variable '${varName}'. Bare names cannot be used as values unless they are declared with 'def'. Variables defined inside 'generate' blocks are strictly block-scoped and cannot be accessed outside of them.`, t);
   }
+
   if (t.type === "KEYWORD") {
     state.throwError(`In ${state.currentContext}: '${t.value as string}' is an object keyword and cannot be used as a property value.`, t);
   }

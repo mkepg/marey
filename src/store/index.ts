@@ -46,66 +46,410 @@ export interface AppState {
 }
 
 export const DEFAULT_CODE = `scene {
-  def sceneWidth = 600
-  def sceneHeight = 400
-  size: (sceneWidth, sceneHeight)
-  background: white
-  def lightBlue = #ADD8E6
-  text greet {
-    position: (sceneWidth/2, sceneHeight/3)
+  size: (600, 400)
+  background: #08080f
+
+  // ── starfield layer 1 — pure loopers, no sequences ────────────────
+  generate i from 1 to 22 {
+    circle starA {
+      position: (i * 27 + 3, i * 17 + 5)
+      radius: 1
+      color: #ffffff
+      alpha: 0.12
+      anchor: (0.5, 0.5)
+
+      animate {
+        property: alpha
+        to: 0.04
+        duration: i * 0.35 + 0.9
+        easing: easeInOut
+        yoyo: true
+        loop: true
+      }
+    }
+  }
+
+  // ── starfield layer 2 — pure loopers, no sequences ────────────────
+  generate i from 1 to 14 {
+    circle starB {
+      position: (i * 43 + 15, i * 26 + 12)
+      radius: 1
+      color: #c4b5fd
+      alpha: 0.08
+      anchor: (0.5, 0.5)
+
+      animate {
+        property: alpha
+        to: 0.22
+        duration: i * 0.28 + 1.1
+        easing: easeInOut
+        yoyo: true
+        loop: true
+      }
+    }
+  }
+
+  // ── outer glow — pure looper ──────────────────────────────────────
+  circle glowOuter {
+    position: (300, 200)
+    radius: 160
+    color: #4c1d95
+    alpha: 0.1
     anchor: (0.5, 0.5)
-    color: black
-    content: "Hello World"
-    fontSize: 18
-  }
-  group sun {
-    position: (sceneWidth-25, 20)
-    circle glow {
-      position: (0, 0)
-      anchor: (0.5, 0.5)
-      color: yellow
-      radius: 100
-      alpha: 0.25
-    }
-    circle sphere {
-      position: (0, 0)
-      anchor: (0.5, 0.5)
-      color: yellow
-      radius: 80
+
+    animate {
+      property: scale
+      to: (1.08, 1.08)
+      duration: 4.0
+      easing: easeInOut
+      yoyo: true
+      loop: true
     }
   }
-  polygon mountain {
-    z: 1
-    points: [(60,340),(200,160),(340,340)]
-    color: #2d2d44
+
+  // ── inner glow — pure looper ──────────────────────────────────────
+  circle glowInner {
+    position: (300, 200)
+    radius: 70
+    color: #7c6af7
+    alpha: 0.16
+    anchor: (0.5, 0.5)
+
+    animate {
+      property: scale
+      to: (1.14, 1.14)
+      duration: 3.0
+      easing: easeInOut
+      yoyo: true
+      loop: true
+    }
   }
-  polygon mountain2 {
-    points: [(180,340),(300,200),(440,340)]
-    color: #252538
+
+  // ── corner sparkle TL — pure looper ──────────────────────────────
+  circle cTL {
+    position: (40, 40)
+    radius: 2
+    color: #e2d9f3
+    alpha: 0.0
+    anchor: (0.5, 0.5)
+
+    animate {
+      property: alpha
+      to: 0.55
+      duration: 2.3
+      easing: easeInOut
+      yoyo: true
+      loop: true
+    }
   }
-  rectangle river {
-    position: (0, 340)
-    size: (600, 60)
-    color: lightBlue
+
+  // ── corner sparkle TR — pure looper ──────────────────────────────
+  circle cTR {
+    position: (560, 40)
+    radius: 2
+    color: #e2d9f3
+    alpha: 0.0
+    anchor: (0.5, 0.5)
+
+    animate {
+      property: alpha
+      to: 0.55
+      duration: 1.9
+      easing: easeInOut
+      yoyo: true
+      loop: true
+    }
   }
-  generate i from 1 to 5 {
-    group lilypad {
-      position: (i * 100 - 20, 370)
-      circle leaf {
-        position: (0, 0)
-        radius: 18
-        color: #2e8b57
-        scale: (1.5, 0.4)
+
+  // ── corner sparkle BL — pure looper ──────────────────────────────
+  circle cBL {
+    position: (40, 360)
+    radius: 2
+    color: #e2d9f3
+    alpha: 0.0
+    anchor: (0.5, 0.5)
+
+    animate {
+      property: alpha
+      to: 0.55
+      duration: 2.7
+      easing: easeInOut
+      yoyo: true
+      loop: true
+    }
+  }
+
+  // ── corner sparkle BR — pure looper ──────────────────────────────
+  circle cBR {
+    position: (560, 360)
+    radius: 2
+    color: #e2d9f3
+    alpha: 0.0
+    anchor: (0.5, 0.5)
+
+    animate {
+      property: alpha
+      to: 0.55
+      duration: 2.1
+      easing: easeInOut
+      yoyo: true
+      loop: true
+    }
+  }
+
+  // ── dot left — pure looper ────────────────────────────────────────
+  circle dotL {
+    position: (232, 200)
+    radius: 3
+    color: #7c6af7
+    alpha: 0.85
+    anchor: (0.5, 0.5)
+
+    animate {
+      property: position
+      to: (232, 194)
+      duration: 1.8
+      easing: easeInOut
+      yoyo: true
+      loop: true
+    }
+  }
+
+  // ── dot right — pure looper ───────────────────────────────────────
+  circle dotR {
+    position: (368, 200)
+    radius: 3
+    color: #7c6af7
+    alpha: 0.85
+    anchor: (0.5, 0.5)
+
+    animate {
+      property: position
+      to: (368, 206)
+      duration: 1.8
+      easing: easeInOut
+      yoyo: true
+      loop: true
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // SEQUENCED OBJECTS — animate blocks have NO loop or yoyo
+  // ════════════════════════════════════════════════════════════════════
+
+  // ── rule left — hold then reveal ─────────────────────────────────
+  line ruleL {
+    position: (0, 0)
+    points: [(48, 200), (228, 200)]
+    thickness: 1
+    color: #7c6af7
+    alpha: 0.0
+
+    animate {
+      property: alpha
+      to: 0.0
+      duration: 0.5
+      easing: linear
+    }
+
+    sequence {
+      animate {
+        property: alpha
+        to: 0.4
+        duration: 0.5
+        easing: easeOut
       }
-      circle flower {
-        position: (0, -4)
-        radius: 6
-        color: #ff99cc
-        scale: (i * 0.15 + 0.5, i * 0.15 + 0.5)
+    }
+  }
+
+  // ── rule right — hold then reveal ────────────────────────────────
+  line ruleR {
+    position: (0, 0)
+    points: [(372, 200), (552, 200)]
+    thickness: 1
+    color: #7c6af7
+    alpha: 0.0
+
+    animate {
+      property: alpha
+      to: 0.0
+      duration: 0.5
+      easing: linear
+    }
+
+    sequence {
+      animate {
+        property: alpha
+        to: 0.4
+        duration: 0.5
+        easing: easeOut
       }
     }
   }
-}`;
+
+  // ── underline — hold then reveal ──────────────────────────────────
+  line underline {
+    position: (0, 0)
+    points: [(196, 250), (404, 250)]
+    thickness: 1
+    color: #7c6af7
+    alpha: 0.0
+
+    animate {
+      property: alpha
+      to: 0.0
+      duration: 0.9
+      easing: linear
+    }
+
+    sequence {
+      animate {
+        property: alpha
+        to: 0.35
+        duration: 0.4
+        easing: easeOut
+      }
+    }
+  }
+
+  // ── orbital particles — staggered entrance then oscillate ─────────
+  generate i from 1 to 6 {
+    circle orb {
+      position: (300 + i * 28, 200)
+      radius: 2
+      color: #a78bfa
+      alpha: 0.0
+      anchor: (0.5, 0.5)
+
+      animate {
+        property: alpha
+        to: 0.0
+        duration: i * 0.18 + 0.35
+        easing: linear
+      }
+
+      sequence {
+        animate {
+          property: alpha
+          to: 0.7
+          duration: 0.25
+          easing: easeOut
+        }
+      }
+
+      sequence {
+        animate {
+          property: position
+          to: (300 - i * 28, 200)
+          duration: i * 0.3 + 1.4
+          easing: easeInOut
+        }
+      }
+
+      sequence {
+        animate {
+          property: position
+          to: (300 + i * 28, 200)
+          duration: i * 0.3 + 1.4
+          easing: easeInOut
+        }
+      }
+    }
+  }
+
+  // ── "Created By" — fades in via sequence ──────────────────────────
+  text labelBy {
+    position: (300, 160)
+    content: "Created By"
+    fontSize: 11
+    color: #9988cc
+    alpha: 0.0
+    anchor: (0.5, 0.5)
+
+    animate {
+      property: alpha
+      to: 0.0
+      duration: 0.4
+      easing: linear
+    }
+
+    sequence {
+      animate {
+        property: alpha
+        to: 0.8
+        duration: 0.6
+        easing: easeOut
+      }
+    }
+  }
+
+  // ── first name — slides up and fades in ───────────────────────────
+  text nameFirst {
+    position: (300, 203)
+    content: "Mikhael Edman P."
+    fontSize: 28
+    color: #f0eeff
+    alpha: 0.0
+    anchor: (0.5, 0.5)
+
+    animate {
+      property: alpha
+      to: 0.0
+      duration: 0.55
+      easing: linear
+    }
+
+    animate {
+      property: position
+      to: (300, 200)
+      duration: 0.55
+      easing: easeOut
+    }
+
+    sequence {
+      animate {
+        property: alpha
+        to: 1.0
+        duration: 0.7
+        easing: easeOut
+      }
+    }
+  }
+
+  // ── last name — slides up and fades in with slight delay ──────────
+  text nameLast {
+    position: (300, 236)
+    content: "Gomez"
+    fontSize: 28
+    color: #a78bfa
+    alpha: 0.0
+    anchor: (0.5, 0.5)
+
+    animate {
+      property: alpha
+      to: 0.0
+      duration: 0.75
+      easing: linear
+    }
+
+    animate {
+      property: position
+      to: (300, 233)
+      duration: 0.75
+      easing: easeOut
+    }
+
+    sequence {
+      animate {
+        property: alpha
+        to: 1.0
+        duration: 0.6
+        easing: easeOut
+      }
+    }
+  }
+}
+`;
 
 // ─── Boot: resolve initial code once ─────────────────────────────────────────
 // resolveInitialCode handles the full priority hierarchy:

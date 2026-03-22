@@ -6,7 +6,9 @@ export interface IRPoint {
 }
 
 export type IRPointList = ReadonlyArray<IRPoint>;
+
 export type IRSceneFit = "contain" | "cover" | "fill" | "none";
+
 export type IREasing = "linear" | "easeIn" | "easeOut" | "easeInOut";
 
 export interface IRTransform {
@@ -25,12 +27,37 @@ export interface IRAnimation {
   readonly handOff: boolean;
 }
 
+/**
+ * A physics duration is either a finite number of seconds, or the sentinel
+ * value `"indefinitely"` which means the simulation runs forever.
+ * `"indefinitely"` is only valid when physics is NOT inside a sequence block.
+ */
+export type IRPhysicsDuration = number | "indefinitely";
+
 export interface IRPhysics {
   readonly velocity: IRPoint;
   readonly gravity: IRPoint;
   readonly friction: number;
   readonly bounce: number;
   readonly collideBounds: boolean;
+  /** How long this physics simulation runs before handing off. */
+  readonly duration: IRPhysicsDuration;
+}
+
+/**
+ * A sequence step is either an IRAnimation or an IRPhysics block.
+ * Both run in parallel within the same sequence step (the gate
+ * opens when ALL children complete).
+ */
+export type IRSequenceStep = IRAnimation | IRPhysics;
+
+/**
+ * A sequence block: runs after all peer animations/physics on the parent
+ * object complete. Multiple sequences are chained in source order.
+ * Each sequence contains at least one animate or physics child.
+ */
+export interface IRSequence {
+  readonly steps: ReadonlyArray<IRSequenceStep>;
 }
 
 export interface IRVisualBase {
@@ -43,6 +70,7 @@ export interface IRVisualBase {
   readonly z: number;
   readonly animations: ReadonlyArray<IRAnimation>;
   readonly physics?: IRPhysics;
+  readonly sequences: ReadonlyArray<IRSequence>;
 }
 
 export interface IRCircleProps extends IRVisualBase {
@@ -80,6 +108,7 @@ export interface IRGroupProps {
   readonly z: number;
   readonly animations: ReadonlyArray<IRAnimation>;
   readonly physics?: IRPhysics;
+  readonly sequences: ReadonlyArray<IRSequence>;
 }
 
 export type IRObjectProps =
