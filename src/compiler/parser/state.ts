@@ -22,6 +22,7 @@ export function describeToken(t: Token): string {
     case "SLASH":       return "'/'";
     case "EQUALS":      return "'='";
     case "EOF":         return "end of file";
+    default:                      return `token '${String(t.value)}'`;
   }
 }
 export function expectedTypeDescription(expected: Token["type"], got: Token): string {
