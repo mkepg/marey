@@ -11,7 +11,7 @@ export function analyzeContext(textUntilCursor: string): ScopeNode[] {
   let currentDefName = "";
   let expectingDefVal = false;
   let expectingGenName = false;
-  const validBlocks = new Set(["scene", "circle", "rectangle", "polygon", "text", "group", "generate", "template", "use"]);
+  const validBlocks = new Set(["scene", "circle", "rectangle", "polygon", "line", "text", "group", "generate", "template", "use", "animate"]);
   while (i < textUntilCursor.length) {
     const char = textUntilCursor[i];
     if (char === '/' && textUntilCursor[i+1] === '/') {
@@ -73,6 +73,10 @@ export function analyzeContext(textUntilCursor: string): ScopeNode[] {
                 scopes[scopes.length - 1].vars[currentDefName] = "sceneFit";
             } else if (namedColors.includes(word)) {
                 scopes[scopes.length - 1].vars[currentDefName] = "color";
+            } else if (["true", "false"].includes(word)) {
+                scopes[scopes.length - 1].vars[currentDefName] = "boolean";
+            } else if (["linear", "easeIn", "easeOut", "easeInOut"].includes(word)) {
+                scopes[scopes.length - 1].vars[currentDefName] = "easing";
             } else {
                 let inheritedType = "number";
                 for (let s = scopes.length - 1; s >= 0; s--) {

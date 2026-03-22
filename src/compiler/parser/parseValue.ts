@@ -70,11 +70,19 @@ function parseMathExpr(state: ParserState, minPrec: number, depth: number): numb
   return left;
 }
 
-export function parseValue(state: ParserState): AstValue {
+export function parseValue(state: ParserState, currentKey?: string): AstValue {
   const t = state.peek();
   const line = t.line;
   const col = t.col;
 
+  if (t.type === "BOOLEAN") {
+    state.consume();
+    return { kind: "boolean", value: t.value as boolean, line, col };
+  }
+  if (t.type === "EASING") {
+    state.consume();
+    return { kind: "easing", value: t.value as string, line, col };
+  }
   if (t.type === "HEX_COLOR") {
     state.consume();
     return { kind: "color", value: t.value as string, line, col };
@@ -122,7 +130,6 @@ export function parseValue(state: ParserState): AstValue {
     state.consume("RBRACKET");
     return { kind: "pointList", value: pts, line, col };
   }
-
   let isPoint = false;
   if (t.type === "LPAREN") {
     let nesting = 0;
@@ -138,7 +145,6 @@ export function parseValue(state: ParserState): AstValue {
       }
     }
   }
-
   if (isPoint) {
     const openTok = state.consume("LPAREN");
     const x = parseMathExpr(state, 0, 0);
@@ -155,34 +161,30 @@ export function parseValue(state: ParserState): AstValue {
     state.consume("RPAREN");
     return { kind: "point", x, y, line, col };
   }
-
   const isMathStart = t.type === "NUMBER" || t.type === "MINUS" || t.type === "LPAREN" ||
     (t.type === "IDENT" && state.env[t.value as string]?.kind === "number");
-  
   if (isMathStart) {
     const val = parseMathExpr(state, 0, 0);
     return { kind: "number", value: val, line, col };
   }
-
   if (t.type === "IDENT") {
     const varName = t.value as string;
+    if (currentKey === "property") {
+      state.consume("IDENT");
+      return { kind: "animProperty", value: varName, line, col };
+    }
     if (varName in state.env) {
       state.consume("IDENT");
-      // Environment values already contain their original line/col, 
-      // but we override it here so errors highlight where the variable is USED, not where it was declared.
       const envVal = state.env[varName];
       return { ...envVal, line, col };
     }
     state.throwError(`In ${state.currentContext}: Undefined variable '${varName}'. Bare names cannot be used as values unless they are declared with 'def'. Variables defined inside 'generate' blocks are strictly block-scoped and cannot be accessed outside of them.`, t);
   }
-
   if (t.type === "KEYWORD") {
     state.throwError(`In ${state.currentContext}: '${t.value as string}' is an object keyword and cannot be used as a property value.`, t);
   }
-
   if (t.type === "RBRACE" || t.type === "RBRACKET" || t.type === "RPAREN" || t.type === "EOF") {
     state.throwError(`In ${state.currentContext}: Unexpected ${describeToken(t)} where a property value was expected.`, t);
   }
-
   state.throwError(`In ${state.currentContext}: Unexpected ${describeToken(t)} where a property value was expected.`, t);
 }

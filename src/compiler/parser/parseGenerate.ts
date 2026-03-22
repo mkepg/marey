@@ -6,7 +6,7 @@ import { parseValue } from "./parseValue";
 import { parseUse } from "./parseUse";
 
 export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
-  state.consume("KEYWORD");
+  state.consume("KEYWORD"); // Consumes 'generate'
   
   if (state.peek().type !== "IDENT") {
     const bad = state.peek();
@@ -15,21 +15,22 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
   const loopVarTok = state.consume("IDENT");
   const loopVar = loopVarTok.value as string;
   
-  const fromTok = state.consume("KEYWORD");
+  // Contextual check for 'from'
+  const fromTok = state.consume("IDENT");
   if (fromTok.value !== "from") {
     state.throwError(`In ${state.currentContext}: Expected 'from' after loop variable, but found '${fromTok.value as string}'.`, fromTok);
   }
   
   const prevContext = state.currentContext;
   state.currentContext = `generate block loop bounds`;
-  
   const startVal = parseValue(state);
   if (startVal.kind !== "number") {
     state.throwError(`In ${state.currentContext}: Expected a numeric start value, but got ${startVal.kind}.`, state.peek());
   }
   const start = startVal.value;
   
-  const toTok = state.consume("KEYWORD");
+  // Contextual check for 'to'
+  const toTok = state.consume("IDENT");
   if (toTok.value !== "to") {
     state.throwError(`In ${state.currentContext}: Expected 'to' after start bound, but found '${toTok.value as string}'.`, toTok);
   }
@@ -79,21 +80,18 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
     
     state.pos = blockStartPos;
     state.env = Object.create(prevEnv);
-    
-    state.env[loopVar] = { 
-      kind: "number", 
+    state.env[loopVar] = {
+      kind: "number",
       value: i,
       line: loopVarTok.line,
       col: loopVarTok.col
     };
     
     const iterNodes: ObjectNode[] = [];
-    
     while (state.peek().type !== "RBRACE" && state.peek().type !== "EOF") {
       try {
         const t = state.peek();
         if (t.type === "KEYWORD") {
-          // FIX: Explicitly reject templates inside loops
           if (state.peek().value === "template") {
             state.throwError(`In ${state.currentContext}: Unexpected keyword 'template'. Templates must be defined at the top level of the file, outside of the scene block.`, state.peek());
           }
@@ -115,6 +113,7 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
             iterNodes.push(suffixedNode);
             continue;
           }
+          
           const child = parseObject(state, depth);
           const suffixedChild: ObjectNode = { ...child, name: `${child.name}_${i}` };
           iterNodes.push(suffixedChild);
@@ -136,6 +135,5 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
   
   state.pos = blockEndPos + 1;
   state.env = prevEnv;
-  
   return generatedNodes;
 }

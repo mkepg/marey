@@ -9,7 +9,8 @@ import { parseUse } from "./parseUse";
 const RESERVED_PROPS = new Set<string>([
   "background", "size", "sceneFit", "position", "radius", "color",
   "alpha", "rotation", "scale", "anchor", "z", "width", "height",
-  "points", "content", "fontSize"
+  "points", "content", "fontSize", "thickness", "property", "to",
+  "duration", "easing", "loop", "yoyo"
 ]);
 
 export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
@@ -20,46 +21,45 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
   if (state.globalNodeCount > 15000) {
     state.throwError(`In ${state.currentContext}: Global object limit exceeded. The scene contains too many objects (>15,000) and cannot be compiled.`, state.peek());
   }
-  
   const typeTok = state.consume("KEYWORD");
   const objType = typeTok.value as string;
-  
-  if (state.peek().type !== "IDENT") {
-    const bad = state.peek();
-    let hint = "";
-    if (bad.type === "KEYWORD") hint = ` '${bad.value}' is a reserved object keyword.`;
-    else if (bad.type === "NAMED_COLOR") hint = ` '${bad.value}' is a reserved color keyword.`;
-    else if (bad.type === "SCENE_FIT") hint = ` '${bad.value}' is a reserved sceneFit keyword.`;
-    else if (bad.type === "LBRACE") hint = ` Every object must have a name before its '{'.`;
-    state.throwError(`In ${state.currentContext}: Expected a valid, unique name for the '${objType}' object, but found ${describeToken(bad)}.${hint}`, bad);
+  let objName = "";
+
+  if (objType === "animate") {
+    objName = `anim_${Math.random().toString(36).slice(2, 8)}`;
+  } else {
+    if (state.peek().type !== "IDENT") {
+      const bad = state.peek();
+      let hint = "";
+      if (bad.type === "KEYWORD") hint = ` '${bad.value}' is a reserved object keyword.`;
+      else if (bad.type === "NAMED_COLOR") hint = ` '${bad.value}' is a reserved color keyword.`;
+      else if (bad.type === "SCENE_FIT") hint = ` '${bad.value}' is a reserved sceneFit keyword.`;
+      else if (bad.type === "LBRACE") hint = ` Every object must have a name before its '{'.`;
+      state.throwError(`In ${state.currentContext}: Expected a valid, unique name for the '${objType}' object, but found ${describeToken(bad)}.${hint}`, bad);
+    }
+    const nameTok = state.consume("IDENT");
+    objName = nameTok.value as string;
+    if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(objName)) {
+      state.throwError(`In ${state.currentContext}: Invalid object name '${objName}'. Must start with a letter and contain only alphanumeric chars or underscores.`, nameTok);
+    }
+    if (RESERVED_PROPS.has(objName) || KEYWORDS.has(objName)) {
+      state.throwError(`In ${state.currentContext}: '${objName}' is a reserved word and cannot be used as an object name.`, nameTok);
+    }
   }
-  
-  const nameTok = state.consume("IDENT");
-  const objName = nameTok.value as string;
-  
-  if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(objName)) {
-    state.throwError(`In ${state.currentContext}: Invalid object name '${objName}'. Must start with a letter and contain only alphanumeric chars or underscores.`, nameTok);
-  }
-  if (RESERVED_PROPS.has(objName) || KEYWORDS.has(objName)) {
-    state.throwError(`In ${state.currentContext}: '${objName}' is a reserved word and cannot be used as an object name.`, nameTok);
-  }
-  
+
   state.consume("LBRACE");
   const previousContext = state.currentContext;
   state.currentContext = `'${objType}' object '${objName}'`;
-  
   const prevEnv = state.env;
   state.env = Object.create(prevEnv);
-  
   const props: Record<string, AstValue> = {};
   const children: ObjectNode[]          = [];
   const seenProps  = new Set<string>();
   const seenNames  = new Set<string>();
-  
+
   while (state.peek().type !== "RBRACE" && state.peek().type !== "EOF") {
     try {
       if (state.peek().type === "KEYWORD") {
-        // FIX: Explicitly reject templates inside objects
         if (state.peek().value === "template") {
           state.throwError(`In ${state.currentContext}: Unexpected keyword 'template'. Templates must be defined at the top level of the file, outside of the scene block.`, state.peek());
         }
@@ -67,6 +67,13 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
           parseDef(state);
           continue;
         }
+
+        // Strict guard against children inside an animation block
+        if (objType === "animate") {
+            const bad = state.peek();
+            state.throwError(`In ${state.currentContext}: 'animate' blocks cannot contain nested objects or blocks. Found '${bad.value}'.`, bad);
+        }
+
         if (state.peek().value === "generate") {
           if (objType !== "group") {
             const bad = state.peek();
@@ -96,9 +103,15 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
           continue;
         }
         
+        if (state.peek().value === "animate") {
+          const childNode = parseObject(state, depth + 1);
+          children.push(childNode);
+          continue;
+        }
+        
         if (objType !== "group") {
           const bad = state.peek();
-          state.throwError(`In ${state.currentContext}: Unexpected object keyword '${bad.value as string}'. '${objType}' objects cannot contain child objects.`, bad);
+          state.throwError(`In ${state.currentContext}: Unexpected object keyword '${bad.value as string}'. '${objType}' objects cannot contain child objects (except 'animate' blocks).`, bad);
         }
         
         const childNode = parseObject(state, depth + 1);
@@ -110,25 +123,20 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
         continue;
       }
       
-      if (state.peek().type === "SCENE_FIT") {
-        const bad = state.peek();
-        state.throwError(`In ${state.currentContext}: '${bad.value as string}' is a sceneFit value keyword, not a property name.`, bad);
+      const peekType = state.peek().type;
+      if (peekType === "IDENT" || peekType === "SCENE_FIT" || peekType === "NAMED_COLOR" || peekType === "BOOLEAN" || peekType === "EASING") {
+          const key = state.consume();
+          const keyName = key.value as string;
+          if (seenProps.has(keyName)) {
+            state.throwError(`In ${state.currentContext}: Property '${keyName}' is defined more than once inside '${objName}'.`, key);
+          }
+          seenProps.add(keyName);
+          state.consume("COLON");
+          props[keyName] = parseValue(state, keyName);
+      } else {
+          const bad = state.consume();
+          state.throwError(`In ${state.currentContext}: Expected a property name, but found ${describeToken(bad)}.`, bad);
       }
-      if (state.peek().type === "NAMED_COLOR") {
-        const bad = state.peek();
-        state.throwError(`In ${state.currentContext}: '${bad.value as string}' is a color keyword, not a property name.`, bad);
-      }
-      
-      const key = state.consume("IDENT");
-      const keyName = key.value as string;
-      if (seenProps.has(keyName)) {
-        state.throwError(`In ${state.currentContext}: Property '${keyName}' is defined more than once inside '${objName}'.`, key);
-      }
-      seenProps.add(keyName);
-      
-      state.consume("COLON");
-      props[keyName] = parseValue(state);
-      
     } catch (e) {
       if (e instanceof ParseException) {
         state.errors.push(e.error);
@@ -138,15 +146,12 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
       }
     }
   }
-  
   if (state.peek().type === "EOF") {
     state.throwError(`In ${state.currentContext}: The '${objType}' block '${objName}' was not closed before end of file. Add a closing '}'.`, typeTok);
   }
-  
   state.consume("RBRACE");
   state.env = prevEnv;
   state.currentContext = previousContext;
-  
   return {
     type: typeTok.value as ObjectType,
     name: objName,

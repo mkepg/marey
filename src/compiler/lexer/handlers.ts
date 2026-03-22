@@ -1,7 +1,6 @@
 import type { SceneFit } from "../types";
-import { KEYWORDS, NAMED_COLORS, SCENE_FIT_VALUES } from "./constants";
+import { KEYWORDS, NAMED_COLORS, SCENE_FIT_VALUES, BOOLEAN_VALUES, EASING_VALUES } from "./constants";
 import type { LexerState } from "./state";
-
 export function handleColor(state: LexerState): void {
   const startI = state.i;
   let j = startI + 1;
@@ -17,24 +16,19 @@ export function handleColor(state: LexerState): void {
   state.push("HEX_COLOR", raw, raw.length);
   state.advance(raw.length);
 }
-
 export function handleString(state: LexerState): void {
   const startLine = state.line;
   const startCol = state.col;
   let j = state.i + 1;
   let s = "";
-  
   while (j < state.src.length && state.src[j] !== '"') {
     if (state.src[j] === "\n" || state.src[j] === "\r") {
       throw { phase: "LEX" as const, message: `String opened at line ${startLine}, column ${startCol} was not closed before the end of the line. String values cannot span multiple lines.`, line: startLine, col: startCol, endCol: startCol + 1 };
     }
-    
     if (state.src[j] === '\\') {
-      // FIX: Prevent infinite loop if escape character is at EOF
       if (j + 1 >= state.src.length) {
         throw { phase: "LEX" as const, message: `String opened at line ${startLine}, column ${startCol} ends with an incomplete escape character.`, line: startLine, col: startCol, endCol: startCol + 1 };
       }
-      
       j++;
       const esc = state.src[j];
       switch (esc) {
@@ -49,16 +43,13 @@ export function handleString(state: LexerState): void {
       s += state.src[j++];
     }
   }
-  
   if (j >= state.src.length) {
     throw { phase: "LEX" as const, message: `String opened at line ${startLine}, column ${startCol} was never closed. Add a closing double-quote (" ) before end of file.`, line: startLine, col: startCol, endCol: startCol + 1 };
   }
-  
   const length = j - state.i + 1;
   state.push("STRING", s, length);
   state.advance(length);
 }
-
 export function handleNumber(state: LexerState): void {
   let j = state.i;
   while (j < state.src.length && /[0-9]/.test(state.src[j])) j++;
@@ -83,7 +74,6 @@ export function handleNumber(state: LexerState): void {
   state.push("NUMBER", parsedVal, length);
   state.advance(length);
 }
-
 export function handleWord(state: LexerState): void {
   let j = state.i;
   while (j < state.src.length && /[a-zA-Z0-9_]/.test(state.src[j])) j++;
@@ -95,6 +85,10 @@ export function handleWord(state: LexerState): void {
     state.push("NAMED_COLOR", word, length);
   } else if (SCENE_FIT_VALUES.has(word)) {
     state.push("SCENE_FIT", word as SceneFit, length);
+  } else if (BOOLEAN_VALUES.has(word)) {
+    state.push("BOOLEAN", word === "true", length);
+  } else if (EASING_VALUES.has(word)) {
+    state.push("EASING", word, length);
   } else {
     state.push("IDENT", word, length);
   }
