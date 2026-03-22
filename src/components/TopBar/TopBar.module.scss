@@ -1,3 +1,5 @@
+@use "../../styles/tokens" as *;
+
 .topBar {
   display: flex;
   align-items: center;
@@ -11,13 +13,11 @@
   user-select: none;
   flex-shrink: 0;
 }
-
 .left {
   display: flex;
   align-items: center;
   gap: 10px;
 }
-
 .logo {
   font-family: var(--font-ui);
   font-weight: 800;
@@ -25,33 +25,26 @@
   letter-spacing: 0.04em;
   color: var(--text-primary);
 }
-
 .right {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-
-// ── Status dot ────────────────────────────────────────────────────────────────
-
 .statusDot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--dot-idle);
   transition: background $transition;
-
   &.ok {
     background: var(--dot-ok);
     box-shadow: 0 0 6px var(--dot-ok);
   }
-
   &.error {
     background: var(--dot-error);
     box-shadow: 0 0 6px var(--dot-error);
   }
 }
-
 .statusLabel {
   font-size: 11px;
   color: var(--text-secondary);
@@ -59,30 +52,47 @@
   min-width: 60px;
   font-family: var(--font-mono);
 }
-
-// ── Buttons ───────────────────────────────────────────────────────────────────
-
+.divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
 .btnIcon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
+  gap: 5px;
+  padding: 0 8px;
   height: 28px;
+  min-width: 28px;
   background: transparent;
   border: 1px solid var(--border);
   border-radius: $radius;
   cursor: pointer;
   color: var(--text-secondary);
   transition: all $transition;
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: var(--bg-handle);
     color: var(--text-primary);
     border-color: var(--bg-handle-h);
   }
-}
 
+  &:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  svg {
+    flex-shrink: 0;
+  }
+}
 .btnRun {
   display: flex;
   align-items: center;
@@ -100,7 +110,44 @@
   letter-spacing: 0.08em;
   transition: all $transition;
   white-space: nowrap;
-
   &:hover  { opacity: 0.85; }
   &:active { transform: scale(0.97); }
+}
+
+/* Destructive action — armed/confirm state */
+.btnConfirm {
+  color: var(--text-error) !important;
+  border-color: var(--text-error) !important;
+  background: rgba(248, 113, 113, 0.08) !important;
+}
+
+/* Tooltip wrapper — positions the tooltip relative to the button */
+.tooltipWrap {
+  position: relative;
+  display: flex;
+
+  &:hover .tooltip {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: none;
+  }
+}
+
+.tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: var(--bg-pane);
+  border: 1px solid var(--border);
+  border-radius: $radius;
+  padding: 5px 9px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity $transition, transform $transition;
+  pointer-events: none;
+  z-index: 200;
 }

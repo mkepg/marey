@@ -1,10 +1,10 @@
+import { useState } from "preact/hooks";
 import type { FunctionComponent } from "preact";
 import { useAppStore } from "../../store";
+import { useShare } from "../../hooks/useShare";
 import styles from "./TopBar.module.scss";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Icons
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Icons ────────────────────────────────────────────────────────────────────
 
 const SunIcon: FunctionComponent = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -32,43 +32,122 @@ const RunIcon: FunctionComponent = () => (
   </svg>
 );
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TopBar
-// ─────────────────────────────────────────────────────────────────────────────
+const ShareIcon: FunctionComponent = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="18" cy="5" r="3" />
+    <circle cx="6" cy="12" r="3" />
+    <circle cx="18" cy="19" r="3" />
+    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+  </svg>
+);
+
+const NewFileIcon: FunctionComponent = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <line x1="12" y1="11" x2="12" y2="17" />
+    <line x1="9"  y1="14" x2="15" y2="14" />
+  </svg>
+);
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 interface TopBarProps {
   onRun: () => void;
 }
 
 export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
-  const theme         = useAppStore((s) => s.theme);
-  const status        = useAppStore((s) => s.compileStatus);
-  const toggleTheme   = useAppStore((s) => s.toggleTheme);
+  const theme       = useAppStore((s) => s.theme);
+  const status      = useAppStore((s) => s.compileStatus);
+  const isTooLarge  = useAppStore((s) => s.isTooLargeToShare);
+  const toggleTheme = useAppStore((s) => s.toggleTheme);
+  const newFile     = useAppStore((s) => s.newFile);
 
-  const dotMod    = status === "ok" ? styles.ok : status === "error" ? styles.error : "";
+  const handleShare = useShare();
+
+  // Two-click confirmation state for "New File" — avoids window.confirm
+  const [confirmingNew, setConfirmingNew] = useState(false);
+
+  const dotMod     = status === "ok" ? styles.ok : status === "error" ? styles.error : "";
   const statusText = status === "ok" ? "compiled" : status === "error" ? "error" : "ready";
+
+  const handleNewClick = (): void => {
+    if (!confirmingNew) {
+      // First click: arm the confirmation
+      setConfirmingNew(true);
+      // Auto-cancel after 3 s if the user changes their mind
+      setTimeout(() => setConfirmingNew(false), 3_000);
+      return;
+    }
+    // Second click: confirmed
+    setConfirmingNew(false);
+    newFile();
+  };
+
+  const handleNewBlur = (): void => {
+    // If the button loses focus before second click, disarm
+    setTimeout(() => setConfirmingNew(false), 150);
+  };
 
   return (
     <header className={styles.topBar}>
       <div className={styles.left}>
-        <span className={styles.logo}>
-          Declare
-        </span>
+        <span className={styles.logo}>Declare</span>
       </div>
 
       <div className={styles.right}>
+        {/* Status indicator */}
         <div className={`${styles.statusDot} ${dotMod}`} />
         <span className={styles.statusLabel}>{statusText}</span>
 
+        <div className={styles.divider} />
+
+        {/* New file — two-click confirmation */}
+        <button
+          className={`${styles.btnIcon}${confirmingNew ? ` ${styles.btnConfirm}` : ""}`}
+          onClick={handleNewClick}
+          onBlur={handleNewBlur}
+          aria-label={confirmingNew ? "Click again to confirm new file" : "New file"}
+          title={confirmingNew ? "Click again to confirm — clears editor" : "New file"}
+        >
+          <NewFileIcon />
+          {confirmingNew ? "confirm?" : "new"}
+        </button>
+
+        {/* Share — disabled + tooltip when code is too large */}
+        <div className={styles.tooltipWrap}>
+          <button
+            className={styles.btnIcon}
+            onClick={() => { void handleShare(); }}
+            disabled={isTooLarge}
+            aria-label={isTooLarge ? "Code too large to share via URL" : "Share — copy link to clipboard"}
+            aria-disabled={isTooLarge}
+          >
+            <ShareIcon />
+            share
+          </button>
+          {isTooLarge && (
+            <span className={styles.tooltip} role="tooltip">
+              Code too large to share via URL
+            </span>
+          )}
+        </div>
+
+        <div className={styles.divider} />
+
+        {/* Theme toggle */}
         <button
           className={styles.btnIcon}
           title="Toggle theme"
           onClick={toggleTheme}
+          aria-label="Toggle theme"
         >
           {theme === "dark" ? <SunIcon /> : <MoonIcon />}
         </button>
 
-        <button className={styles.btnRun} onClick={onRun}>
+        {/* Run */}
+        <button className={styles.btnRun} onClick={onRun} aria-label="Run (Ctrl+Enter)">
           <RunIcon /> RUN
         </button>
       </div>
