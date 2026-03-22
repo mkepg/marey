@@ -10,10 +10,10 @@ export const KEYWORDS = new Set<string>([
   "group",
   "def",
   "generate",
-  // "from" and "to" are now contextual identifiers, not global reserved keywords
   "template",
   "use",
   "animate",
+  "physics",
 ]);
 
 export const NAMED_COLORS: Readonly<Record<string, string>> = {
@@ -36,6 +36,7 @@ export const SCENE_FIT_VALUES = new Set<string>([
 ]);
 
 export const BOOLEAN_VALUES = new Set<string>(["true", "false"]);
+
 export const EASING_VALUES = new Set<string>(["linear", "easeIn", "easeOut", "easeInOut"]);
 
 export const SINGLE_CHAR_MAP: Readonly<Record<string, TokenType>> = {

@@ -5,6 +5,7 @@ export const KEYWORD_DOCS: Record<string, string> = {
   def: `### \`def\`\nDeclares a constant variable. Variables in Declare are strictly block-scoped and immutable.\n\n**Example:**\n\`\`\`declare\ndef spacing = 50\n\`\`\``,
   scene: `### \`scene\`\nThe root block of a Declare program. Contains all objects and global scene properties.\n\n**Required Property:** \`size\``
 };
+
 export const PROPERTY_DOCS: Record<string, string> = {
   position: `### \`position\`\nSets the \`(x, y)\` coordinates of the object in the scene.\n\n**Accepts:** \`point\`\n**Example:** \`position: (100, 200)\``,
   radius: `### \`radius\`\nSets the radius of a circle.\n\n**Accepts:** \`number\` (greater than 0)\n**Example:** \`radius: 50\``,
@@ -27,5 +28,12 @@ export const PROPERTY_DOCS: Record<string, string> = {
   easing: `### \`easing\`\nThe rate of change over time.\n\n**Accepts:** \`linear\`, \`easeIn\`, \`easeOut\`, \`easeInOut\`\n**Example:** \`easing: easeInOut\``,
   loop: `### \`loop\`\nWhether the animation repeats endlessly.\n\n**Accepts:** \`true\`, \`false\`\n**Example:** \`loop: true\``,
   yoyo: `### \`yoyo\`\nWhether the animation smoothly reverses back to its starting position at the end of its duration.\n\n**Accepts:** \`true\`, \`false\`\n**Example:** \`yoyo: true\``,
+  handOff: `### \`handOff\`\nAllows an animation to seamlessly transfer its final momentum to the physics engine once completed. Requires a sibling \`physics\` block.\n\n**Accepts:** \`true\`, \`false\`\n**Example:** \`handOff: true\``,
+  velocity: `### \`velocity\`\nThe initial momentum vector of the object in pixels per second.\n\n**Accepts:** \`point\`\n**Example:** \`velocity: (200, -500)\``,
+  gravity: `### \`gravity\`\nThe continuous acceleration applied each frame. \`(0, 980)\` mimics real-world downward gravity.\n\n**Accepts:** \`point\`\n**Example:** \`gravity: (0, 980)\``,
+  friction: `### \`friction\`\nThe frame-rate independent drag coefficient between \`0.0\` and \`1.0\`. \`1.0\` means no drag. \`0.999\` is nearly frictionless air.\n\n**Accepts:** \`number\`\n**Example:** \`friction: 0.999\``,
+  bounce: `### \`bounce\`\nThe restitution coefficient when colliding with a boundary, mapping \`0.0\` (no bounce) to \`1.0\` (perfectly elastic).\n\n**Accepts:** \`number\`\n**Example:** \`bounce: 0.65\``,
+  collideBounds: `### \`collideBounds\`\nDetermines whether the object bounces against the logical edges of the scene window.\n\n**Accepts:** \`true\`, \`false\`\n**Example:** \`collideBounds: true\``,
 };
+
 export const namedColors = ["red", "green", "blue", "white", "black", "yellow", "cyan", "magenta", "orange"];

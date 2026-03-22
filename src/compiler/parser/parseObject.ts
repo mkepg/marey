@@ -10,23 +10,26 @@ const RESERVED_PROPS = new Set<string>([
   "background", "size", "sceneFit", "position", "radius", "color",
   "alpha", "rotation", "scale", "anchor", "z", "width", "height",
   "points", "content", "fontSize", "thickness", "property", "to",
-  "duration", "easing", "loop", "yoyo"
+  "duration", "easing", "loop", "yoyo", "velocity", "gravity",
+  "friction", "bounce", "collideBounds", "handOff"
 ]);
 
 export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
   if (depth > 50) {
     state.throwError(`In ${state.currentContext}: Maximum nesting depth exceeded. Object nesting is limited to 50 levels.`, state.peek());
   }
+
   state.globalNodeCount++;
   if (state.globalNodeCount > 15000) {
     state.throwError(`In ${state.currentContext}: Global object limit exceeded. The scene contains too many objects (>15,000) and cannot be compiled.`, state.peek());
   }
+
   const typeTok = state.consume("KEYWORD");
   const objType = typeTok.value as string;
-  let objName = "";
 
-  if (objType === "animate") {
-    objName = `anim_${Math.random().toString(36).slice(2, 8)}`;
+  let objName = "";
+  if (objType === "animate" || objType === "physics") {
+    objName = `${objType}_${Math.random().toString(36).slice(2, 8)}`;
   } else {
     if (state.peek().type !== "IDENT") {
       const bad = state.peek();
@@ -39,6 +42,7 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
     }
     const nameTok = state.consume("IDENT");
     objName = nameTok.value as string;
+
     if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(objName)) {
       state.throwError(`In ${state.currentContext}: Invalid object name '${objName}'. Must start with a letter and contain only alphanumeric chars or underscores.`, nameTok);
     }
@@ -49,9 +53,11 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
 
   state.consume("LBRACE");
   const previousContext = state.currentContext;
-  state.currentContext = `'${objType}' object '${objName}'`;
+  state.currentContext = `'${objType}' ${objType === "animate" || objType === "physics" ? 'block' : `object '${objName}'`}`;
+
   const prevEnv = state.env;
   state.env = Object.create(prevEnv);
+
   const props: Record<string, AstValue> = {};
   const children: ObjectNode[]          = [];
   const seenProps  = new Set<string>();
@@ -67,13 +73,10 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
           parseDef(state);
           continue;
         }
-
-        // Strict guard against children inside an animation block
-        if (objType === "animate") {
+        if (objType === "animate" || objType === "physics") {
             const bad = state.peek();
-            state.throwError(`In ${state.currentContext}: 'animate' blocks cannot contain nested objects or blocks. Found '${bad.value}'.`, bad);
+            state.throwError(`In ${state.currentContext}: '${objType}' blocks cannot contain nested objects or blocks. Found '${bad.value as string}'.`, bad);
         }
-
         if (state.peek().value === "generate") {
           if (objType !== "group") {
             const bad = state.peek();
@@ -102,18 +105,17 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
           children.push(usedNode);
           continue;
         }
-        
-        if (state.peek().value === "animate") {
+        if (state.peek().value === "animate" || state.peek().value === "physics") {
           const childNode = parseObject(state, depth + 1);
           children.push(childNode);
           continue;
         }
-        
+
         if (objType !== "group") {
           const bad = state.peek();
-          state.throwError(`In ${state.currentContext}: Unexpected object keyword '${bad.value as string}'. '${objType}' objects cannot contain child objects (except 'animate' blocks).`, bad);
+          state.throwError(`In ${state.currentContext}: Unexpected object keyword '${bad.value as string}'. '${objType}' objects cannot contain child objects (except 'animate' and 'physics' blocks).`, bad);
         }
-        
+
         const childNode = parseObject(state, depth + 1);
         if (seenNames.has(childNode.name)) {
           state.throwError(`In ${state.currentContext}: Duplicate object name '${childNode.name}' inside '${objName}'.`, state.peek());
@@ -122,21 +124,24 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
         children.push(childNode);
         continue;
       }
-      
+
       const peekType = state.peek().type;
       if (peekType === "IDENT" || peekType === "SCENE_FIT" || peekType === "NAMED_COLOR" || peekType === "BOOLEAN" || peekType === "EASING") {
           const key = state.consume();
           const keyName = key.value as string;
+
           if (seenProps.has(keyName)) {
-            state.throwError(`In ${state.currentContext}: Property '${keyName}' is defined more than once inside '${objName}'.`, key);
+            state.throwError(`In ${state.currentContext}: Property '${keyName}' is defined more than once.`, key);
           }
           seenProps.add(keyName);
+
           state.consume("COLON");
           props[keyName] = parseValue(state, keyName);
       } else {
           const bad = state.consume();
           state.throwError(`In ${state.currentContext}: Expected a property name, but found ${describeToken(bad)}.`, bad);
       }
+
     } catch (e) {
       if (e instanceof ParseException) {
         state.errors.push(e.error);
@@ -146,12 +151,15 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
       }
     }
   }
+
   if (state.peek().type === "EOF") {
-    state.throwError(`In ${state.currentContext}: The '${objType}' block '${objName}' was not closed before end of file. Add a closing '}'.`, typeTok);
+    state.throwError(`In ${state.currentContext}: The block was not closed before end of file. Add a closing '}'.`, typeTok);
   }
   state.consume("RBRACE");
+
   state.env = prevEnv;
   state.currentContext = previousContext;
+
   return {
     type: typeTok.value as ObjectType,
     name: objName,

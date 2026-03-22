@@ -11,6 +11,7 @@ export const REQUIRED_PROPS: Readonly<Record<string, readonly string[]>> = {
   line:      ["position", "points", "thickness"],
   text:      ["position", "content"],
   animate:   ["property", "to", "duration"],
+  physics:   [], 
   group:     [],
 };
 
@@ -21,7 +22,8 @@ export const PROP_TYPES: Readonly<Record<string, Readonly<Record<string, PropCon
   polygon:   { position: "point", points: "pointList", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], anchor: "point", z: "number" },
   line:      { position: "point", points: "pointList", thickness: "number", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], anchor: "point", z: "number" },
   text:      { position: "point", content: "string", fontSize: "number", color: "color", rotation: "number", scale: ["number", "point"], anchor: "point", z: "number" },
-  animate:   { property: "animProperty", to: ["number", "point"], duration: "number", easing: "easing", loop: "boolean", yoyo: "boolean" },
+  animate:   { property: "animProperty", to: ["number", "point"], duration: "number", easing: "easing", loop: "boolean", yoyo: "boolean", handOff: "boolean" },
+  physics:   { velocity: "point", gravity: "point", friction: "number", bounce: "number", collideBounds: "boolean" },
   group:     { position: "point", rotation: "number", scale: ["number", "point"], alpha: "number", z: "number" },
 };
 
@@ -39,26 +41,34 @@ export const KIND_LABEL: Readonly<Record<PropKind, string>> = {
 
 export function collectErrors(ast: AstNode): CompilerError[] {
   const errors: CompilerError[] = [];
-  function checkNode(node: AstNode, parentType: string | null = null): void {
+
+  function checkNode(node: AstNode, parentNode: AstNode | null = null, parentType: string | null = null): void {
     const typeName = node.type;
     const isScene  = typeName === "scene";
     const nodeName = isScene ? "scene" : (node as ObjectNode).name;
     const isUseBlock = !isScene && (node as ObjectNode).isUse;
+
     const label = isScene
         ? "The scene block"
-        : typeName === "animate" 
-        ? "The 'animate' block"
+        : typeName === "animate" || typeName === "physics"
+        ? `The '${typeName}' block`
         : `'${isUseBlock ? "use" : typeName}' ${isUseBlock ? "block" : "object"} '${nodeName}'`;
-        
+
     const required = REQUIRED_PROPS[typeName] ?? [];
     const contract = PROP_TYPES[typeName]    ?? {};
-    
+
+    if (typeName === "physics" && parentType === "scene") {
+      errors.push({ phase: "TYPE", message: "A 'physics' block must be placed inside a renderable object, not at the root of the scene.", line: node.line, col: node.col });
+    }
+
     if (typeName === "animate") {
       if (parentType === "scene") {
           errors.push({ phase: "TYPE", message: "An 'animate' block must be placed inside a renderable object (e.g., circle, group, etc.), not at the root of the scene.", line: node.line, col: node.col });
       }
+
       const propVal = node.props["property"];
       const toVal = node.props["to"];
+
       if (propVal && toVal && propVal.kind === "animProperty") {
           const p = propVal.value as string;
           if (!["position", "rotation", "scale", "alpha"].includes(p)) {
@@ -74,6 +84,29 @@ export function collectErrors(ast: AstNode): CompilerError[] {
               errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property '${p}' expects a number for 'to'.`, line: toVal.line, col: toVal.col });
           }
       }
+
+      // Physics handOff validation rules
+      const handOffVal = node.props["handOff"];
+      if (handOffVal?.kind === "boolean" && handOffVal.value === true) {
+        if (propVal?.kind === "animProperty" && propVal.value !== "position") {
+          errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_PROP] 'handOff: true' is only valid on 'property: position' animations.`, line: handOffVal.line, col: handOffVal.col });
+        }
+        const loopVal = node.props["loop"];
+        if (loopVal?.kind === "boolean" && loopVal.value === true) {
+          errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_LOOP] 'loop: true' and 'handOff: true' cannot coexist. A looping animation never ends.`, line: handOffVal.line, col: handOffVal.col });
+        }
+        
+        if (parentNode) {
+          const physicsNode = parentNode.children.find(c => c.type === "physics");
+          if (!physicsNode) {
+            errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_PHYSICS] 'handOff: true' requires a sibling 'physics' block on the same object.`, line: handOffVal.line, col: handOffVal.col });
+          } else if (physicsNode.props["velocity"] !== undefined) {
+            // NEW AMBIGUITY CHECK
+            const velNode = physicsNode.props["velocity"];
+            errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_AMBIGUITY] When 'handOff: true' is used, the 'physics' block cannot define an initial 'velocity' because the animation's exit momentum will completely overwrite it. Remove 'velocity' from the physics block.`, line: velNode.line, col: velNode.col });
+          }
+        }
+      }
     }
 
     for (const prop of required) {
@@ -85,7 +118,7 @@ export function collectErrors(ast: AstNode): CompilerError[] {
     for (const [key, val] of Object.entries(node.props)) {
       const expected = contract[key];
       const errPos = { line: val.line, col: val.col };
-      
+
       if (expected === undefined) {
         const knownList = Object.keys(contract).map((k) => `'${k}'`).join(", ");
         errors.push({ phase: "TYPE", message: `${label} has an unknown property '${key}'. Valid properties for '${typeName}' are: ${knownList}.`, ...errPos });
@@ -106,11 +139,15 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         continue;
       }
 
+      // Value bound constraints
       if (key === "duration" && val.kind === "number") {
         if (val.value <= 0) errors.push({ phase: "TYPE", message: `${label}: 'duration' must be strictly greater than 0, but got ${val.value}.`, ...errPos });
       }
       if (key === "alpha" && val.kind === "number") {
         if (val.value < 0 || val.value > 1) errors.push({ phase: "TYPE", message: `${label}: 'alpha' must be between 0.0 and 1.0 inclusive, but got ${val.value}.`, ...errPos });
+      }
+      if ((key === "friction" || key === "bounce") && val.kind === "number") {
+        if (val.value < 0 || val.value > 1) errors.push({ phase: "TYPE", message: `${label}: '${key}' must be between 0.0 and 1.0 inclusive, but got ${val.value}.`, ...errPos });
       }
       if (key === "radius" && val.kind === "number") {
         if (val.value <= 0) errors.push({ phase: "TYPE", message: `${label}: 'radius' must be greater than 0, but got ${val.value}.`, ...errPos });
@@ -150,14 +187,15 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         else if (val.value.length > 10000) errors.push({ phase: "TYPE", message: `[TYPE_POLYGON_TOO_LARGE] ${label}: '${typeName}' exceeds the maximum safe limit of 10,000 points.`, ...errPos });
       }
     }
-    
-    const hasVisualChildren = node.children.some(c => c.type !== "animate");
+
+    const hasVisualChildren = node.children.some(c => c.type !== "animate" && c.type !== "physics");
     if (!isScene && typeName !== "group" && hasVisualChildren) {
       errors.push({ phase: "TYPE", message: `${label} contains nested visual objects, but only 'group' blocks may have visual children.`, line: node.line, col: node.col });
     }
-    node.children.forEach((c) => checkNode(c, typeName));
+
+    node.children.forEach((c) => checkNode(c, node, typeName));
   }
-  
+
   checkNode(ast);
   return errors;
 }

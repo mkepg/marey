@@ -1,8 +1,10 @@
 import { namedColors } from "./constants";
+
 export interface ScopeNode {
   blockType: string | null;
   vars: Record<string, string>;
 }
+
 export function analyzeContext(textUntilCursor: string): ScopeNode[] {
   const scopes: ScopeNode[] = [{ blockType: null, vars: {} }];
   let i = 0;
@@ -11,13 +13,17 @@ export function analyzeContext(textUntilCursor: string): ScopeNode[] {
   let currentDefName = "";
   let expectingDefVal = false;
   let expectingGenName = false;
-  const validBlocks = new Set(["scene", "circle", "rectangle", "polygon", "line", "text", "group", "generate", "template", "use", "animate"]);
+
+  const validBlocks = new Set(["scene", "circle", "rectangle", "polygon", "line", "text", "group", "generate", "template", "use", "animate", "physics"]);
+
   while (i < textUntilCursor.length) {
     const char = textUntilCursor[i];
+
     if (char === '/' && textUntilCursor[i+1] === '/') {
       while (i < textUntilCursor.length && textUntilCursor[i] !== '\n') i++;
       continue;
     }
+
     if (char === '"') {
       i++;
       while (i < textUntilCursor.length) {
@@ -32,26 +38,31 @@ export function analyzeContext(textUntilCursor: string): ScopeNode[] {
       }
       continue;
     }
+
     if (char === '{') {
       scopes.push({ blockType: lastKeyword, vars: {} });
       lastKeyword = null;
       i++;
       continue;
     }
+
     if (char === '}') {
       if (scopes.length > 1) scopes.pop();
       lastKeyword = null;
       i++;
       continue;
     }
+
     if (/\s/.test(char)) {
       i++;
       continue;
     }
+
     if (/[a-zA-Z_]/.test(char)) {
       let start = i;
       while (i < textUntilCursor.length && /[a-zA-Z0-9_]/.test(textUntilCursor[i])) i++;
       const word = textUntilCursor.slice(start, i);
+
       if (word === "def") {
         expectingDefName = true;
       } else if (expectingDefName) {
@@ -68,6 +79,7 @@ export function analyzeContext(textUntilCursor: string): ScopeNode[] {
         if (validBlocks.has(word)) {
            lastKeyword = word;
         }
+
         if (expectingDefVal && currentDefName) {
             if (["contain", "cover", "fill", "none"].includes(word)) {
                 scopes[scopes.length - 1].vars[currentDefName] = "sceneFit";
@@ -93,15 +105,18 @@ export function analyzeContext(textUntilCursor: string): ScopeNode[] {
       }
       continue;
     }
+
     if (char === '=') {
        i++;
        continue;
     }
+
     if (expectingDefVal && currentDefName) {
        if (char === '#') scopes[scopes.length - 1].vars[currentDefName] = "color";
        else if (char === '[') scopes[scopes.length - 1].vars[currentDefName] = "pointList";
        else if (char === '(') scopes[scopes.length - 1].vars[currentDefName] = "point";
        else if (/[0-9\-]/.test(char)) scopes[scopes.length - 1].vars[currentDefName] = "number";
+
        expectingDefVal = false;
        currentDefName = "";
     }

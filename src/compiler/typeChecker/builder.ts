@@ -1,19 +1,22 @@
 import type { AstNode, ObjectNode, PointValue } from "../types";
-import type { IRSceneNode, IRObjectNode, IRObjectId, IRObjectProps, IRCircleProps, IRRectangleProps, IRPolygonProps, IRLineProps, IRTextProps, IRGroupProps, IRTransform, IRAnimation } from "../sceneIR";
+import type { IRSceneNode, IRObjectNode, IRObjectId, IRObjectProps, IRCircleProps, IRRectangleProps, IRPolygonProps, IRLineProps, IRTextProps, IRGroupProps, IRTransform, IRAnimation, IRPhysics } from "../sceneIR";
 import { resolveColor, resolveNumber, resolvePoint, resolveScale, resolveSceneFit, resolveBoolean, resolveEasing, getReqAnimProperty, resolveAnimToValue, getReqNumber, getReqPoint, getReqString, getReqPointList } from "./resolvers";
+
 export function buildIR(ast: AstNode): IRSceneNode {
   const registry: Record<IRObjectId, IRObjectNode> = {};
-  
+
   function buildObjectNode(node: ObjectNode, scopePath: string): IRObjectNode {
-    if (node.type === "animate") {
-      throw new Error("[IR] 'animate' nodes should not be passed to buildObjectNode");
+    if (node.type === "animate" || node.type === "physics") {
+      throw new Error(`[IR] '${node.type}' nodes should not be passed directly to buildObjectNode`);
     }
+
     const id: IRObjectId = scopePath;
     const p = node.props;
-    
+
     const animNodes = node.children.filter(c => c.type === "animate");
-    const visualNodes = node.children.filter(c => c.type !== "animate");
-    
+    const physicsNode = node.children.find(c => c.type === "physics");
+    const visualNodes = node.children.filter(c => c.type !== "animate" && c.type !== "physics");
+
     const animations: IRAnimation[] = animNodes.map(an => ({
         property: getReqAnimProperty(an.props, "property"),
         to: resolveAnimToValue(an.props, "to"),
@@ -21,9 +24,23 @@ export function buildIR(ast: AstNode): IRSceneNode {
         easing: resolveEasing(an.props, "easing", "easeInOut"),
         loop: resolveBoolean(an.props, "loop", false),
         yoyo: resolveBoolean(an.props, "yoyo", false),
+        handOff: resolveBoolean(an.props, "handOff", false)
     }));
 
+    let physics: IRPhysics | undefined;
+    if (physicsNode) {
+      const pp = physicsNode.props;
+      physics = {
+        velocity: resolvePoint(pp, "velocity", { x: 0, y: 0 }),
+        gravity: resolvePoint(pp, "gravity", { x: 0, y: 980 }),
+        friction: resolveNumber(pp, "friction", 0.999),
+        bounce: resolveNumber(pp, "bounce", 0.65),
+        collideBounds: resolveBoolean(pp, "collideBounds", true)
+      };
+    }
+
     let props: IRObjectProps;
+
     switch (node.type) {
       case "circle": {
         const circleProps: IRCircleProps = {
@@ -36,7 +53,8 @@ export function buildIR(ast: AstNode): IRSceneNode {
           scale:    resolveScale(p, "scale", { x: 1, y: 1 }),
           anchor:   resolvePoint(p, "anchor", { x: 0, y: 0 }),
           z:        resolveNumber(p, "z", 0),
-          animations
+          animations,
+          physics
         };
         props = circleProps;
         break;
@@ -54,7 +72,8 @@ export function buildIR(ast: AstNode): IRSceneNode {
           scale:    resolveScale(p, "scale", { x: 1, y: 1 }),
           anchor:   resolvePoint(p, "anchor", { x: 0, y: 0 }),
           z:        resolveNumber(p, "z", 0),
-          animations
+          animations,
+          physics
         };
         props = rectProps;
         break;
@@ -71,6 +90,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
           defaultX = minX;
           defaultY = minY;
         }
+
         const polyProps: IRPolygonProps = {
           kind:     "polygon",
           points:   pts,
@@ -81,7 +101,8 @@ export function buildIR(ast: AstNode): IRSceneNode {
           scale:    resolveScale(p, "scale", { x: 1, y: 1 }),
           anchor:   resolvePoint(p, "anchor", { x: 0, y: 0 }),
           z:        resolveNumber(p, "z", 0),
-          animations
+          animations,
+          physics
         };
         props = polyProps;
         break;
@@ -98,6 +119,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
           defaultX = minX;
           defaultY = minY;
         }
+
         const lineProps: IRLineProps = {
           kind:      "line",
           points:    pts,
@@ -109,7 +131,8 @@ export function buildIR(ast: AstNode): IRSceneNode {
           scale:     resolveScale(p, "scale", { x: 1, y: 1 }),
           anchor:    resolvePoint(p, "anchor", { x: 0, y: 0 }),
           z:         resolveNumber(p, "z", 0),
-          animations
+          animations,
+          physics
         };
         props = lineProps;
         break;
@@ -126,7 +149,8 @@ export function buildIR(ast: AstNode): IRSceneNode {
           scale:    resolveScale(p, "scale", { x: 1, y: 1 }),
           anchor:   resolvePoint(p, "anchor", { x: 0, y: 0 }),
           z:        resolveNumber(p, "z", 0),
-          animations
+          animations,
+          physics
         };
         props = textProps;
         break;
@@ -142,7 +166,8 @@ export function buildIR(ast: AstNode): IRSceneNode {
           transform,
           alpha:     resolveNumber(p, "alpha", 1.0),
           z:         resolveNumber(p, "z", 0),
-          animations
+          animations,
+          physics
         };
         props = groupProps;
         break;
@@ -152,6 +177,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
         throw new Error(`[IR] Unknown object type: ${String(_never)}`);
       }
     }
+
     const childrenNodes = visualNodes.map((child, index) => ({
       node: buildObjectNode(child, `${id}.${child.name}`),
       index
@@ -161,28 +187,32 @@ export function buildIR(ast: AstNode): IRSceneNode {
       if (diff !== 0) return diff;
       return a.index - b.index;
     });
+
     const irNode: IRObjectNode = Object.freeze({
       id,
       props,
       children: Object.freeze(childrenNodes.map(x => x.node)) as ReadonlyArray<IRObjectNode>,
     });
+
     registry[id] = irNode;
     return irNode;
   }
+
   const sceneAst = ast as AstNode & { type: "scene" };
   const sizeVal  = sceneAst.props["size"] as PointValue;
-  
-  const visualNodes = sceneAst.children.filter(c => c.type !== "animate");
-  
+
+  const visualNodes = sceneAst.children.filter(c => c.type !== "animate" && c.type !== "physics");
   const topLevelChildrenNodes = visualNodes.map((child, index) => ({
     node: buildObjectNode(child, `scene.${child.name}`),
     index
   }));
+
   topLevelChildrenNodes.sort((a, b) => {
     const diff = a.node.props.z - b.node.props.z;
     if (diff !== 0) return diff;
     return a.index - b.index;
   });
+
   return Object.freeze({
     kind:       "scene",
     width:      sizeVal.x,
