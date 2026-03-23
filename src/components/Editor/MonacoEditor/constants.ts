@@ -38,3 +38,17 @@ export const PROPERTY_DOCS: Record<string, string> = {
 };
 
 export const namedColors = ["red", "green", "blue", "white", "black", "yellow", "cyan", "magenta", "orange"];
+
+export const VALUE_DOCS: Record<string, string> = {
+  "true": `### \`true\`\n**Type:** boolean\n\nRepresents a boolean true value.\n\n**Example:** \`loop: true\``,
+  "false": `### \`false\`\n**Type:** boolean\n\nRepresents a boolean false value.\n\n**Example:** \`collideBounds: false\``,
+  "indefinitely": `### \`indefinitely\`\n**Type:** duration\n\nA special duration keyword for \`physics\` blocks. Means the simulation runs forever with no time limit.\n\nOnly valid on a top-level \`physics\` block (not inside a \`sequence\`). An object using \`duration: indefinitely\` cannot have a \`sequence\` block, because the sequence can never activate.\n\n**Example:** \`duration: indefinitely\``,
+  "contain": `### \`contain\`\n**Type:** sceneFit\n\nScales the scene to fit inside the preview window while preserving aspect ratio. The entire scene is visible, but there may be letterboxing.\n\n**Example:** \`sceneFit: contain\``,
+  "cover": `### \`cover\`\n**Type:** sceneFit\n\nScales the scene to cover the entire preview window while preserving aspect ratio. The scene may be cropped.\n\n**Example:** \`sceneFit: cover\``,
+  "fill": `### \`fill\`\n**Type:** sceneFit\n\nStretches the scene to exactly fill the preview window, ignoring aspect ratio.\n\n**Example:** \`sceneFit: fill\``,
+  "none": `### \`none\`\n**Type:** sceneFit\n\nDisables scaling; the scene is displayed at its original size.\n\n**Example:** \`sceneFit: none\``,
+  "linear": `### \`linear\`\n**Type:** easing\n\nConstant speed animation. No acceleration or deceleration.\n\n**Example:** \`easing: linear\``,
+  "easeIn": `### \`easeIn\`\n**Type:** easing\n\nStarts slow and accelerates towards the end. Useful for objects leaving the screen.\n\n**Example:** \`easing: easeIn\``,
+  "easeOut": `### \`easeOut\`\n**Type:** easing\n\nStarts fast and decelerates to a stop. Creates a natural landing effect.\n\n**Example:** \`easing: easeOut\``,
+  "easeInOut": `### \`easeInOut\`\n**Type:** easing\n\nStarts slow, speeds up, then slows down. Gives a smooth, professional feel.\n\n**Example:** \`easing: easeInOut\``,
+};

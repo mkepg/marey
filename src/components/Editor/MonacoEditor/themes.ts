@@ -12,6 +12,7 @@ export function defineThemes(monaco: typeof import("monaco-editor")): void {
       { token: "operator",    foreground: "89ddff" },
       { token: "identifier",  foreground: "82aaff" },
       { token: "delimiter",   foreground: "89ddff" },
+      { token: "value",       foreground: "f78c6c" },
     ],
     colors: {
       "editor.background":                  "#0c0c0e",
@@ -40,6 +41,7 @@ export function defineThemes(monaco: typeof import("monaco-editor")): void {
       { token: "operator",    foreground: "374151" },
       { token: "identifier",  foreground: "1e40af" },
       { token: "delimiter",   foreground: "374151" },
+      { token: "value",       foreground: "c2410c" },
     ],
     colors: {
       "editor.background":                 "#ffffff",

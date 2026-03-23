@@ -1,10 +1,11 @@
 import type { languages as MonacoLanguagesNS } from "monaco-editor";
 import { REQUIRED_PROPS, PROP_TYPES, KIND_LABEL } from "../../../compiler/typeChecker/validator";
-import { KEYWORD_DOCS, PROPERTY_DOCS, namedColors } from "./constants";
+import { KEYWORD_DOCS, PROPERTY_DOCS, namedColors, VALUE_DOCS } from "./constants";
 import { analyzeContext } from "./scanner";
 
 export function registerLanguage(monaco: typeof import("monaco-editor")): void {
   if (monaco.languages.getLanguages().some((l) => l.id === "Declare")) return;
+
   monaco.languages.register({ id: "Declare" });
 
   monaco.languages.setMonarchTokensProvider("Declare", {
@@ -12,8 +13,8 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
     defKeyword:  ["def"],
     booleanValues: ["true", "false"],
     easingValues:  ["linear", "easeIn", "easeOut", "easeInOut"],
-    // "indefinitely" is a special duration keyword — highlight as a keyword
     durationKeywords: ["indefinitely"],
+    sceneFitValues: ["contain", "cover", "fill", "none"],
     namedColors,
     tokenizer: {
       root: [
@@ -29,9 +30,10 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
             cases: {
               "@defKeyword":       "keyword.def",
               "@keywords":         "keyword",
-              "@booleanValues":    "keyword",
-              "@easingValues":     "keyword",
-              "@durationKeywords": "keyword",
+              "@booleanValues":    "value",
+              "@easingValues":     "value",
+              "@durationKeywords": "value",
+              "@sceneFitValues":   "value",
               "@namedColors":      "color",
               "@default":          "identifier",
             },
@@ -100,8 +102,8 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
         }
       } else if (token in PROPERTY_DOCS) {
         md = PROPERTY_DOCS[token];
-      } else if (token === "indefinitely") {
-        md = `### \`indefinitely\`\nA special duration keyword for \`physics\` blocks. Means the simulation runs forever with no time limit.\n\nOnly valid on a top-level \`physics\` block (not inside a \`sequence\`). An object using \`duration: indefinitely\` cannot have a \`sequence\` block, because the sequence can never activate.\n\n**Example:** \`duration: indefinitely\``;
+      } else if (token in VALUE_DOCS) {
+        md = VALUE_DOCS[token];
       }
       if (md) {
         return {
@@ -177,7 +179,6 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
       }
 
       const needsLeadingSpace = /([a-zA-Z][a-zA-Z0-9_]*)\s*:$/.test(lineUntilCursor);
-
       const getPlaceholderForProp = (prop: string, propType: unknown, isScene: boolean = false): string => {
         if (prop === "size")      return isScene ? "(600, 400)" : "(100, 100)";
         if (prop === "radius")    return "50";
@@ -203,7 +204,6 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
       const suggestions: MonacoLanguagesNS.CompletionItem[] = [];
 
       if (currentBlock && isTypingValueMatch) {
-        // ── value completions ──────────────────────────────────────────
         const propName  = isTypingValueMatch[1];
         const propsDef  = PROP_TYPES[currentBlock as keyof typeof PROP_TYPES];
         if (propsDef && propName in propsDef) {
@@ -235,7 +235,18 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
               suggestions.push({ label: p, kind: monaco.languages.CompletionItemKind.Property, insertText: needsLeadingSpace ? ` ${p}` : p, detail: "animatable property", range });
             }
           }
-          // "indefinitely" is valid for physics.duration
+          if (expectedTypes.includes("sceneFit")) {
+            const values = ["contain", "cover", "fill", "none"];
+            for (const val of values) {
+              suggestions.push({
+                label: val,
+                kind: monaco.languages.CompletionItemKind.Enum,
+                insertText: needsLeadingSpace ? ` ${val}` : val,
+                detail: "sceneFit mode",
+                range,
+              });
+            }
+          }
           if (propName === "duration" && (currentBlock === "physics")) {
             suggestions.push({
               label: "indefinitely",
@@ -258,7 +269,6 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
           }
         }
       } else {
-        // ── keyword / block completions ───────────────────────────────
         if (currentBlock && currentBlock in PROP_TYPES) {
           const propsDef = PROP_TYPES[currentBlock as keyof typeof PROP_TYPES];
           for (const [prop, type] of Object.entries(propsDef)) {
@@ -282,7 +292,6 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
           || currentBlock === "generate"
           || currentBlock === "template"
           || currentBlock === "use";
-
         if (isContainer || !currentBlock) {
           const objects = ["circle", "rectangle", "polygon", "line", "text", "group"];
           for (const obj of objects) {
@@ -332,7 +341,6 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
           });
         }
 
-        // ── animate / physics / sequence for renderable objects ───────
         const isRenderable = ["circle", "rectangle", "polygon", "line", "text", "group"].includes(currentBlock || "");
         if (isRenderable) {
           suggestions.push({
@@ -351,7 +359,6 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
             detail: "Create a physics simulation block",
             range,
           });
-          // sequence block — runs after all peer animate/physics finish
           suggestions.push({
             label: "sequence",
             kind: monaco.languages.CompletionItemKind.Class,
@@ -362,8 +369,6 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
           });
         }
 
-        // ── animate / physics inside a sequence block ─────────────────
-        // When inside a sequence block, only animate and physics are valid children.
         if (currentBlock === "sequence") {
           suggestions.push({
             label: "animate",
