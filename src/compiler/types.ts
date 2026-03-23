@@ -37,6 +37,8 @@ export interface NumberValue {
   readonly value: number;
   readonly line: number;
   readonly col: number;
+  readonly endLine: number;
+  readonly endCol: number;
 }
 
 export interface ColorValue {
@@ -44,6 +46,8 @@ export interface ColorValue {
   readonly value: string;
   readonly line: number;
   readonly col: number;
+  readonly endLine: number;
+  readonly endCol: number;
 }
 
 export interface StringValue {
@@ -51,6 +55,8 @@ export interface StringValue {
   readonly value: string;
   readonly line: number;
   readonly col: number;
+  readonly endLine: number;
+  readonly endCol: number;
 }
 
 export interface PointValue {
@@ -59,6 +65,8 @@ export interface PointValue {
   readonly y: number;
   readonly line: number;
   readonly col: number;
+  readonly endLine: number;
+  readonly endCol: number;
 }
 
 export interface PointListValue {
@@ -66,6 +74,8 @@ export interface PointListValue {
   readonly value: ReadonlyArray<{ readonly x: number; readonly y: number }>;
   readonly line: number;
   readonly col: number;
+  readonly endLine: number;
+  readonly endCol: number;
 }
 
 export type SceneFit = "contain" | "cover" | "fill" | "none";
@@ -75,6 +85,8 @@ export interface SceneFitValue {
   readonly value: SceneFit;
   readonly line: number;
   readonly col: number;
+  readonly endLine: number;
+  readonly endCol: number;
 }
 
 export interface BooleanValue {
@@ -82,6 +94,8 @@ export interface BooleanValue {
   readonly value: boolean;
   readonly line: number;
   readonly col: number;
+  readonly endLine: number;
+  readonly endCol: number;
 }
 
 export interface EasingValue {
@@ -89,6 +103,8 @@ export interface EasingValue {
   readonly value: string;
   readonly line: number;
   readonly col: number;
+  readonly endLine: number;
+  readonly endCol: number;
 }
 
 export interface AnimPropertyValue {
@@ -96,16 +112,16 @@ export interface AnimPropertyValue {
   readonly value: string;
   readonly line: number;
   readonly col: number;
+  readonly endLine: number;
+  readonly endCol: number;
 }
 
-/**
- * Represents the special `indefinitely` keyword used as a physics duration.
- * Only valid on physics blocks that are NOT inside a sequence block.
- */
 export interface IndefinitelyValue {
   readonly kind: "indefinitely";
   readonly line: number;
   readonly col: number;
+  readonly endLine: number;
+  readonly endCol: number;
 }
 
 export type AstValue =
@@ -138,6 +154,8 @@ export interface ObjectNode {
   readonly children: ObjectNode[];
   readonly line: number;
   readonly col: number;
+  readonly endLine: number;
+  readonly endCol: number;
   readonly isUse?: boolean;
 }
 
@@ -147,6 +165,8 @@ export interface SceneNode {
   readonly children: ObjectNode[];
   readonly line: number;
   readonly col: number;
+  readonly endLine: number;
+  readonly endCol: number;
 }
 
 export type AstNode = SceneNode | ObjectNode;

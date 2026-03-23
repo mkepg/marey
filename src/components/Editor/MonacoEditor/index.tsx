@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { FunctionComponent } from "preact";
 import type { editor as MonacoEditorNS } from "monaco-editor";
+
 import { useMonaco } from "../../../hooks/useMonaco";
 import { useAppStore } from "../../../store";
 import { lint } from "../../../compiler";
@@ -37,6 +38,9 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef    = useRef<MonacoEditorNS.IStandaloneCodeEditor | null>(null);
   const decorationsRef = useRef<MonacoEditorNS.IEditorDecorationsCollection | null>(null);
+  
+  // Track when the editor has finished its async font-loading boot sequence
+  const [isReady, setIsReady] = useState(false);
 
   const monaco  = useMonaco();
   const code    = useAppStore((s) => s.code);
@@ -52,11 +56,14 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
     if (!monaco || !containerRef.current || editorRef.current) return;
 
     let isCancelled = false;
+
     const initEditor = async () => {
+      // Wait for fonts to avoid measurement jitter
       await Promise.race([
         document.fonts.ready,
         new Promise((resolve) => setTimeout(resolve, 2000))
       ]);
+
       if (isCancelled || !containerRef.current) return;
 
       registerLanguage(monaco);
@@ -75,10 +82,12 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
       });
 
       editorRef.current = editor;
+      setIsReady(true); // Signal to the linting effect that we are good to go
       onReady(editor);
     };
 
     initEditor();
+
     return () => {
       isCancelled = true;
     };
@@ -97,13 +106,14 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
   }, [code]);
 
   useEffect(() => {
-    if (!monaco || !editorRef.current) return;
+    // Rely on isReady to ensure editorRef.current is populated
+    if (!monaco || !editorRef.current || !isReady) return;
+
     const model = editorRef.current.getModel();
     if (!model) return;
 
     const timer = setTimeout(async () => {
       const result = await lint(code);
-      // FIX: Access the errors array correctly from the LintResult object
       const liveErrors = result && result.errors ? result.errors : [];
 
       const markers: MonacoEditorNS.IMarkerData[] = liveErrors.map((err) => ({
@@ -131,7 +141,7 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [code, monaco]);
+  }, [code, monaco, isReady]); // Include isReady as a dependency
 
   useEffect(() => {
     return () => {

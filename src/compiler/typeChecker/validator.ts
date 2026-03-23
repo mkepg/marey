@@ -51,6 +51,9 @@ export function collectErrors(ast: AstNode): CompilerError[] {
     parentType: string | null = null,
     ancestors: ObjectNode[] = []
   ): void {
+    // Bail out early to prevent worker crashes from error avalanches
+    if (errors.length >= 50) return; 
+
     const typeName = node.type;
     const isScene  = typeName === "scene";
     const nodeName = isScene ? "scene" : (node as ObjectNode).name;
@@ -65,35 +68,33 @@ export function collectErrors(ast: AstNode): CompilerError[] {
     const required = REQUIRED_PROPS[typeName] ?? [];
     const contract = PROP_TYPES[typeName]    ?? {};
 
-    // ── sequence placement rules ──────────────────────────────────────────
     if (typeName === "sequence") {
       const isValidParent = parentType !== null
         && parentType !== "scene"
         && parentType !== "animate"
         && parentType !== "physics"
-        && parentType !== "sequence"; // no nested sequence in v1
+        && parentType !== "sequence";
+
       if (!isValidParent) {
         errors.push({
           phase: "TYPE",
           message: parentType === "sequence"
             ? "Nested 'sequence' blocks are not allowed. A 'sequence' block cannot contain another 'sequence'."
             : "A 'sequence' block must be placed inside a renderable object (e.g., circle, group), not at the scene root.",
-          line: node.line, col: node.col,
+          line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol,
         });
       }
 
-      // Must contain at least one animate or physics child
       const seqChildren = (node as ObjectNode).children;
       const hasValidChild = seqChildren.some(c => c.type === "animate" || c.type === "physics");
       if (!hasValidChild) {
         errors.push({
           phase: "TYPE",
           message: "A 'sequence' block must contain at least one 'animate' or 'physics' child.",
-          line: node.line, col: node.col,
+          line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol,
         });
       }
 
-      // Sequence may not contain loop:true or yoyo:true animate blocks
       for (const child of seqChildren) {
         if (child.type === "animate") {
           const loopVal = child.props["loop"];
@@ -101,7 +102,7 @@ export function collectErrors(ast: AstNode): CompilerError[] {
             errors.push({
               phase: "TYPE",
               message: "[TYPE_SEQ_LOOP] 'loop: true' is not allowed inside a 'sequence' block — a looping animation never finishes and would prevent the gate from ever opening.",
-              line: loopVal.line, col: loopVal.col,
+              line: loopVal.line, col: loopVal.col, endLine: loopVal.endLine, endCol: loopVal.endCol,
             });
           }
           const yoyoVal = child.props["yoyo"];
@@ -109,101 +110,96 @@ export function collectErrors(ast: AstNode): CompilerError[] {
             errors.push({
               phase: "TYPE",
               message: "[TYPE_SEQ_YOYO] 'yoyo: true' is not allowed inside a 'sequence' block — a yoyo animation never fully finishes and would prevent the gate from ever opening.",
-              line: yoyoVal.line, col: yoyoVal.col,
+              line: yoyoVal.line, col: yoyoVal.col, endLine: yoyoVal.endLine, endCol: yoyoVal.endCol,
             });
           }
         }
-        // physics inside a sequence must have a numeric duration (not indefinitely)
         if (child.type === "physics") {
           const durVal = child.props["duration"];
           if (!durVal) {
             errors.push({
               phase: "TYPE",
               message: "[TYPE_SEQ_PHYSICS_DUR] A 'physics' block inside a 'sequence' requires a numeric 'duration'. Add 'duration: <seconds>'.",
-              line: child.line, col: child.col,
+              line: child.line, col: child.col, endLine: child.endLine, endCol: child.endCol,
             });
           } else if (durVal.kind === "indefinitely") {
             errors.push({
               phase: "TYPE",
               message: "[TYPE_SEQ_PHYSICS_INDEFINITELY] 'duration: indefinitely' is not allowed inside a 'sequence' block — the simulation would never finish, so the sequence gate could never open. Use a numeric duration instead.",
-              line: durVal.line, col: durVal.col,
+              line: durVal.line, col: durVal.col, endLine: durVal.endLine, endCol: durVal.endCol,
             });
           }
         }
       }
 
-      // Validate children, then return early (sequence has no own props to check)
       for (const child of seqChildren) {
         checkNode(child, node as AstNode, typeName, [...ancestors, node as ObjectNode]);
       }
       return;
     }
 
-    // ── physics placement rules ───────────────────────────────────────────
     if (typeName === "physics") {
       if (parentType === "scene") {
-        errors.push({ phase: "TYPE", message: "A 'physics' block must be placed inside a renderable object, not at the root of the scene.", line: node.line, col: node.col });
+        errors.push({ phase: "TYPE", message: "A 'physics' block must be placed inside a renderable object, not at the root of the scene.", line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol });
       }
 
-      // duration: indefinitely is only valid outside a sequence
       const durVal = node.props["duration"];
       if (durVal?.kind === "indefinitely") {
-        // Check that the sibling list (parentNode children) has no sequence blocks
         if (parentNode && parentNode.children.some(c => c.type === "sequence")) {
           errors.push({
             phase: "TYPE",
             message: "[TYPE_INDEFINITELY_WITH_SEQ] 'duration: indefinitely' cannot be used on an object that also has a 'sequence' block, because the sequence can never activate after an indefinite simulation.",
-            line: durVal.line, col: durVal.col,
+            line: durVal.line, col: durVal.col, endLine: durVal.endLine, endCol: durVal.endCol,
           });
         }
       }
     }
 
-    // ── animate placement and validation ─────────────────────────────────
     if (typeName === "animate") {
       if (parentType === "scene") {
-        errors.push({ phase: "TYPE", message: "An 'animate' block must be placed inside a renderable object (e.g., circle, group, etc.), not at the root of the scene.", line: node.line, col: node.col });
+        errors.push({ phase: "TYPE", message: "An 'animate' block must be placed inside a renderable object (e.g., circle, group, etc.), not at the root of the scene.", line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol });
       }
 
       const propVal = node.props["property"];
       const toVal = node.props["to"];
+
       if (propVal && toVal && propVal.kind === "animProperty") {
         const p = propVal.value as string;
         if (!["position", "rotation", "scale", "alpha"].includes(p)) {
-          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_PROP] Cannot animate property '${p}'. Supported properties are: position, rotation, scale, alpha.`, line: propVal.line, col: propVal.col });
+          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_PROP] Cannot animate property '${p}'. Supported properties are: position, rotation, scale, alpha.`, line: propVal.line, col: propVal.col, endLine: propVal.endLine, endCol: propVal.endCol });
         }
         if (p === "position" && toVal.kind !== "point") {
-          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property 'position' expects a point for 'to' (e.g., to: (100, 100)).`, line: toVal.line, col: toVal.col });
+          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property 'position' expects a point for 'to' (e.g., to: (100, 100)).`, line: toVal.line, col: toVal.col, endLine: toVal.endLine, endCol: toVal.endCol });
         }
         if (p === "scale" && toVal.kind !== "point" && toVal.kind !== "number") {
-          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property 'scale' expects a number or point for 'to'.`, line: toVal.line, col: toVal.col });
+          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property 'scale' expects a number or point for 'to'.`, line: toVal.line, col: toVal.col, endLine: toVal.endLine, endCol: toVal.endCol });
         }
         if ((p === "rotation" || p === "alpha") && toVal.kind !== "number") {
-          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property '${p}' expects a number for 'to'.`, line: toVal.line, col: toVal.col });
+          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property '${p}' expects a number for 'to'.`, line: toVal.line, col: toVal.col, endLine: toVal.endLine, endCol: toVal.endCol });
         }
       }
 
       const handOffVal = node.props["handOff"];
       if (handOffVal?.kind === "boolean" && handOffVal.value === true) {
         if (propVal?.kind === "animProperty" && propVal.value !== "position") {
-          errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_PROP] 'handOff: true' is only valid on 'property: position' animations.`, line: handOffVal.line, col: handOffVal.col });
+          errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_PROP] 'handOff: true' is only valid on 'property: position' animations.`, line: handOffVal.line, col: handOffVal.col, endLine: handOffVal.endLine, endCol: handOffVal.endCol });
         }
         const loopVal = node.props["loop"];
         if (loopVal?.kind === "boolean" && loopVal.value === true) {
-          errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_LOOP] 'loop: true' and 'handOff: true' cannot coexist. A looping animation never ends.`, line: handOffVal.line, col: handOffVal.col });
+          errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_LOOP] 'loop: true' and 'handOff: true' cannot coexist. A looping animation never ends.`, line: handOffVal.line, col: handOffVal.col, endLine: handOffVal.endLine, endCol: handOffVal.endCol });
         }
+
         if (parentNode) {
           const physicsNode = parentNode.children.find(c => c.type === "physics");
           if (!physicsNode) {
-            errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_PHYSICS] 'handOff: true' requires a sibling 'physics' block on the same object.`, line: handOffVal.line, col: handOffVal.col });
+            errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_PHYSICS] 'handOff: true' requires a sibling 'physics' block on the same object.`, line: handOffVal.line, col: handOffVal.col, endLine: handOffVal.endLine, endCol: handOffVal.endCol });
           } else if (physicsNode.props["velocity"] !== undefined) {
             const velNode = physicsNode.props["velocity"];
-            errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_AMBIGUITY] When 'handOff: true' is used, the 'physics' block cannot define an initial 'velocity' because the animation's exit momentum will completely overwrite it. Remove 'velocity' from the physics block.`, line: velNode.line, col: velNode.col });
+            errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_AMBIGUITY] When 'handOff: true' is used, the 'physics' block cannot define an initial 'velocity' because the animation's exit momentum will completely overwrite it. Remove 'velocity' from the physics block.`, line: velNode.line, col: velNode.col, endLine: velNode.endLine, endCol: velNode.endCol });
           }
         }
       }
 
-      // loop/yoyo on objects with sibling sequences or physics is illegal
       if (parentNode) {
         const hasSiblingSequence = parentNode.children.some(c => c.type === "sequence");
         const hasSiblingPhysics  = parentNode.children.some(c => c.type === "physics");
@@ -213,7 +209,7 @@ export function collectErrors(ast: AstNode): CompilerError[] {
             errors.push({
               phase: "TYPE",
               message: "[TYPE_LOOP_BLOCKED] 'loop: true' is not allowed on an 'animate' block that has a sibling 'physics' or 'sequence' block, because a looping animation never finishes and would prevent the gate from ever opening.",
-              line: loopVal.line, col: loopVal.col,
+              line: loopVal.line, col: loopVal.col, endLine: loopVal.endLine, endCol: loopVal.endCol,
             });
           }
           const yoyoVal = node.props["yoyo"];
@@ -221,25 +217,22 @@ export function collectErrors(ast: AstNode): CompilerError[] {
             errors.push({
               phase: "TYPE",
               message: "[TYPE_YOYO_BLOCKED] 'yoyo: true' is not allowed on an 'animate' block that has a sibling 'physics' or 'sequence' block, because a yoyo animation never finishes and would prevent the gate from ever opening.",
-              line: yoyoVal.line, col: yoyoVal.col,
+              line: yoyoVal.line, col: yoyoVal.col, endLine: yoyoVal.endLine, endCol: yoyoVal.endCol,
             });
           }
         }
       }
     }
 
-    // ── general required-prop check ───────────────────────────────────────
     for (const prop of required) {
       if (!(prop in node.props)) {
-        // physics.duration is required only if not already caught above
-        errors.push({ phase: "TYPE", message: `${label} is missing the required property '${prop}'.`, line: node.line, col: node.col });
+        errors.push({ phase: "TYPE", message: `${label} is missing the required property '${prop}'.`, line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol });
       }
     }
 
-    // ── per-prop type checks ──────────────────────────────────────────────
     for (const [key, val] of Object.entries(node.props)) {
       const expected = contract[key];
-      const errPos = { line: val.line, col: val.col };
+      const errPos = { line: val.line, col: val.col, endLine: val.endLine, endCol: val.endCol };
 
       if (expected === undefined) {
         const knownList = Object.keys(contract).map((k) => `'${k}'`).join(", ");
@@ -247,7 +240,6 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         continue;
       }
 
-      // For physics duration, allow both number and indefinitely
       const effectiveExpected = (typeName === "physics" && key === "duration")
         ? (["number", "indefinitely"] as readonly PropKind[])
         : expected;
@@ -308,11 +300,13 @@ export function collectErrors(ast: AstNode): CompilerError[] {
           errors.push({ phase: "TYPE", message: `[TYPE_INVALID_SCALE] ${label}: 'scale' components must be greater than zero, but got (${val.x}, ${val.y}).`, ...errPos });
         }
       }
+
       if (key === "size" && val.kind === "point") {
         if (val.x <= 0 && val.y <= 0) errors.push({ phase: "TYPE", message: `${label}: 'size' width and height must both be greater than 0.`, ...errPos });
         else if (val.x <= 0) errors.push({ phase: "TYPE", message: `${label}: 'size' width must be greater than 0, but got ${val.x}.`, ...errPos });
         else if (val.y <= 0) errors.push({ phase: "TYPE", message: `${label}: 'size' height must be greater than 0, but got ${val.y}.`, ...errPos });
       }
+
       if (key === "points" && val.kind === "pointList") {
         if (typeName === "polygon" && val.value.length < 3) errors.push({ phase: "TYPE", message: `${label}: 'polygon' requires at least 3 points.`, ...errPos });
         else if (typeName === "line" && val.value.length < 2) errors.push({ phase: "TYPE", message: `${label}: 'line' requires at least 2 points.`, ...errPos });
@@ -320,15 +314,14 @@ export function collectErrors(ast: AstNode): CompilerError[] {
       }
     }
 
-    // ── visual-child containment rules ────────────────────────────────────
     const hasVisualChildren = node.children.some(
       c => c.type !== "animate" && c.type !== "physics" && c.type !== "sequence"
     );
+
     if (!isScene && typeName !== "group" && hasVisualChildren) {
-      errors.push({ phase: "TYPE", message: `${label} contains nested visual objects, but only 'group' blocks may have visual children.`, line: node.line, col: node.col });
+      errors.push({ phase: "TYPE", message: `${label} contains nested visual objects, but only 'group' blocks may have visual children.`, line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol });
     }
 
-    // Recurse into children (skip sequence children — already handled above)
     const childAncestors = isScene ? ancestors : [...ancestors, node as ObjectNode];
     for (const c of node.children) {
       if (c.type !== "sequence") {
