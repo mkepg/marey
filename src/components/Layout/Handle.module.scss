@@ -1,4 +1,3 @@
-// Shared handle base
 %handle-base {
   background: var(--border);
   position: relative;
@@ -21,10 +20,8 @@
   }
 }
 
-// ── Horizontal handle (between left and right panes) ──────────────────────────
 .horizontal {
   @extend %handle-base;
-
   width: 5px;
   cursor: col-resize;
 
@@ -32,12 +29,22 @@
     width: 1px;
     height: 28px;
   }
+
+  /* Automatically convert to a vertical handle on stacked mobile layouts */
+  @media (max-width: 768px) {
+    width: 100%;
+    height: 5px;
+    cursor: row-resize;
+    
+    &::after {
+      width: 28px;
+      height: 1px;
+    }
+  }
 }
 
-// ── Vertical handle (between editor and terminal) ─────────────────────────────
 .vertical {
   @extend %handle-base;
-
   height: 5px;
   cursor: row-resize;
 

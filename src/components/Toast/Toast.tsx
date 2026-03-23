@@ -1,53 +1,26 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import type { FunctionComponent } from "preact";
 import { useAppStore } from "../../store";
-import type { ToastState } from "../../store";
+import type { ActiveToast } from "../../store";
 import styles from "./Toast.module.scss";
 
-/** How long the toast is visible before auto-dismissing. */
-const VISIBLE_MS = 2_800;
-/** How long the exit animation runs (must match CSS). */
+const VISIBLE_MS = 2800;
 const EXIT_MS = 180;
 
-export const Toast: FunctionComponent = () => {
-  const toast       = useAppStore((s) => s.toast);
+const ToastItem: FunctionComponent<{ toast: ActiveToast }> = ({ toast }) => {
   const dismissToast = useAppStore((s) => s.dismissToast);
-
-  // We keep a local snapshot so the toast text doesn't vanish mid-exit-animation
-  const [visible, setVisible] = useState<ToastState | null>(null);
   const [exiting, setExiting] = useState(false);
 
-  const autoHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const exitTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // When a new toast arrives, reset any pending timers and restart
   useEffect(() => {
-    if (toast === null) return;
-
-    // Clear any in-flight timers
-    if (autoHideTimer.current !== null) clearTimeout(autoHideTimer.current);
-    if (exitTimer.current !== null)     clearTimeout(exitTimer.current);
-
-    setExiting(false);
-    setVisible(toast);
-
-    autoHideTimer.current = setTimeout(() => {
+    const autoHideTimer = setTimeout(() => {
       setExiting(true);
-      exitTimer.current = setTimeout(() => {
-        setVisible(null);
-        setExiting(false);
-        dismissToast();
+      setTimeout(() => {
+        dismissToast(toast.id);
       }, EXIT_MS);
     }, VISIBLE_MS);
 
-    return () => {
-      if (autoHideTimer.current !== null) clearTimeout(autoHideTimer.current);
-      if (exitTimer.current !== null)     clearTimeout(exitTimer.current);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast]);
-
-  if (visible === null) return null;
+    return () => clearTimeout(autoHideTimer);
+  }, [toast.id, dismissToast]);
 
   return (
     <div
@@ -55,8 +28,22 @@ export const Toast: FunctionComponent = () => {
       role="status"
       aria-live="polite"
     >
-      <span className={`${styles.dot} ${styles[visible.kind]}`} />
-      {visible.message}
+      <span className={`${styles.dot} ${styles[toast.kind]}`} />
+      {toast.message}
+    </div>
+  );
+};
+
+export const Toast: FunctionComponent = () => {
+  const toasts = useAppStore((s) => s.toasts);
+
+  if (toasts.length === 0) return null;
+
+  return (
+    <div className={styles.toastContainer}>
+      {toasts.map((t) => (
+        <ToastItem key={t.id} toast={t} />
+      ))}
     </div>
   );
 };

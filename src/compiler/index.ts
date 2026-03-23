@@ -35,6 +35,7 @@ function createWorker(): Worker {
 
   worker.onmessage = async (e: MessageEvent) => {
     const data = e.data;
+
     if (data.action === "lint") {
       const resolve = activeLintResolves.get(data.id);
       if (resolve) {
@@ -57,7 +58,8 @@ function createWorker(): Worker {
       }
 
       try {
-        const sceneIR = data.ir as IRSceneNode;
+        // Optimization: Parse the JSON string payload 
+        const sceneIR = (typeof data.ir === "string" ? JSON.parse(data.ir) : data.ir) as IRSceneNode;
         logs.push({ kind: "info", text: "[pixi]    initialising renderer..." });
         resolve({ logs, errors: [], success: true, cleanup: null, _irPayload: sceneIR });
       } catch (err: unknown) {
@@ -97,6 +99,7 @@ export async function compile(
         resolve(result);
         return;
       }
+
       try {
         const currentIsDark = typeof isDark === "function" ? isDark() : isDark;
         const cleanup = await renderScene(result._irPayload, hostElement, currentIsDark);
@@ -106,6 +109,7 @@ export async function compile(
           kind: "ok",
           text: `[pixi]    rendered via WebGL/WebGPU in ${elapsed}ms`,
         });
+
         resolve({ ...result, cleanup });
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : String(err);

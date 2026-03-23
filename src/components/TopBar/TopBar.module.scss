@@ -13,11 +13,13 @@
   user-select: none;
   flex-shrink: 0;
 }
+
 .left {
   display: flex;
   align-items: center;
   gap: 10px;
 }
+
 .logo {
   font-family: var(--font-ui);
   font-weight: 800;
@@ -25,17 +27,20 @@
   letter-spacing: 0.04em;
   color: var(--text-primary);
 }
+
 .right {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 .statusDot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--dot-idle);
   transition: background $transition;
+
   &.ok {
     background: var(--dot-ok);
     box-shadow: 0 0 6px var(--dot-ok);
@@ -45,6 +50,7 @@
     box-shadow: 0 0 6px var(--dot-error);
   }
 }
+
 .statusLabel {
   font-size: 11px;
   color: var(--text-secondary);
@@ -52,6 +58,7 @@
   min-width: 60px;
   font-family: var(--font-mono);
 }
+
 .divider {
   width: 1px;
   height: 16px;
@@ -59,6 +66,64 @@
   margin: 0 2px;
   flex-shrink: 0;
 }
+
+// ─── Auto-Run Switch Improvement ──────────────────────────────────────────
+
+.autoRunControl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+}
+
+.autoRunLabel {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: var(--font-mono);
+}
+
+.switch {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  background: var(--bg-handle);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background $transition, border-color $transition;
+  padding: 0;
+  outline: none;
+
+  &:hover {
+    border-color: var(--text-muted);
+  }
+
+  &.active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+
+    .knob {
+      transform: translateX(12px);
+      background: var(--accent);
+    }
+  }
+}
+
+.knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition: transform $transition, background $transition;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 .btnIcon {
   display: flex;
   align-items: center;
@@ -93,6 +158,7 @@
     flex-shrink: 0;
   }
 }
+
 .btnRun {
   display: flex;
   align-items: center;
@@ -110,22 +176,20 @@
   letter-spacing: 0.08em;
   transition: all $transition;
   white-space: nowrap;
+
   &:hover  { opacity: 0.85; }
   &:active { transform: scale(0.97); }
 }
 
-/* Destructive action — armed/confirm state */
 .btnConfirm {
   color: var(--text-error) !important;
   border-color: var(--text-error) !important;
   background: rgba(248, 113, 113, 0.08) !important;
 }
 
-/* Tooltip wrapper — positions the tooltip relative to the button */
 .tooltipWrap {
   position: relative;
   display: flex;
-
   &:hover .tooltip {
     opacity: 1;
     transform: translateY(0);

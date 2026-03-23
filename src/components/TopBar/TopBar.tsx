@@ -4,8 +4,6 @@ import { useAppStore } from "../../store";
 import { useShare } from "../../hooks/useShare";
 import styles from "./TopBar.module.scss";
 
-// ─── Icons ────────────────────────────────────────────────────────────────────
-
 const SunIcon: FunctionComponent = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <circle cx="12" cy="12" r="5" />
@@ -51,8 +49,6 @@ const NewFileIcon: FunctionComponent = () => (
   </svg>
 );
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
 interface TopBarProps {
   onRun: () => void;
 }
@@ -60,13 +56,13 @@ interface TopBarProps {
 export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
   const theme       = useAppStore((s) => s.theme);
   const status      = useAppStore((s) => s.compileStatus);
+  const autoRun     = useAppStore((s) => s.autoRun);
   const isTooLarge  = useAppStore((s) => s.isTooLargeToShare);
   const toggleTheme = useAppStore((s) => s.toggleTheme);
   const newFile     = useAppStore((s) => s.newFile);
-
+  const setAutoRun  = useAppStore((s) => s.setAutoRun);
   const handleShare = useShare();
 
-  // Two-click confirmation state for "New File" — avoids window.confirm
   const [confirmingNew, setConfirmingNew] = useState(false);
 
   const dotMod     = status === "ok" ? styles.ok : status === "error" ? styles.error : "";
@@ -74,19 +70,15 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
 
   const handleNewClick = (): void => {
     if (!confirmingNew) {
-      // First click: arm the confirmation
       setConfirmingNew(true);
-      // Auto-cancel after 3 s if the user changes their mind
       setTimeout(() => setConfirmingNew(false), 3_000);
       return;
     }
-    // Second click: confirmed
     setConfirmingNew(false);
     newFile();
   };
 
   const handleNewBlur = (): void => {
-    // If the button loses focus before second click, disarm
     setTimeout(() => setConfirmingNew(false), 150);
   };
 
@@ -97,13 +89,26 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
       </div>
 
       <div className={styles.right}>
-        {/* Status indicator */}
         <div className={`${styles.statusDot} ${dotMod}`} />
         <span className={styles.statusLabel}>{statusText}</span>
+        
+        <div className={styles.divider} />
+
+        {/* Improved Auto-Run Toggle Switch */}
+        <div className={styles.autoRunControl} title="Compile automatically as you type">
+          <span className={styles.autoRunLabel}>Auto-Run</span>
+          <button 
+            className={`${styles.switch} ${autoRun ? styles.active : ""}`}
+            onClick={() => setAutoRun(!autoRun)}
+            aria-pressed={autoRun}
+            role="switch"
+          >
+            <div className={styles.knob} />
+          </button>
+        </div>
 
         <div className={styles.divider} />
 
-        {/* New file — two-click confirmation */}
         <button
           className={`${styles.btnIcon}${confirmingNew ? ` ${styles.btnConfirm}` : ""}`}
           onClick={handleNewClick}
@@ -115,7 +120,6 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
           {confirmingNew ? "confirm?" : "new"}
         </button>
 
-        {/* Share — disabled + tooltip when code is too large */}
         <div className={styles.tooltipWrap}>
           <button
             className={styles.btnIcon}
@@ -136,7 +140,6 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
 
         <div className={styles.divider} />
 
-        {/* Theme toggle */}
         <button
           className={styles.btnIcon}
           title="Toggle theme"
@@ -146,7 +149,6 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
           {theme === "dark" ? <SunIcon /> : <MoonIcon />}
         </button>
 
-        {/* Run */}
         <button className={styles.btnRun} onClick={onRun} aria-label="Run (Ctrl+Enter)">
           <RunIcon /> RUN
         </button>

@@ -24,7 +24,6 @@ declare module "pixi.js" {
       velocity: { x: number; y: number };
       active: boolean;
       skipNextFrame?: boolean;
-      /** Elapsed ms for timed physics; undefined means indefinitely. */
       elapsed?: number;
     };
     __sequences?: ReadonlyArray<IRSequence>;
@@ -45,6 +44,7 @@ function applyAnchorAndPivot(
   localPivot: { x: number; y: number }
 ): void {
   wrapper.pivot.set(localPivot.x, localPivot.y);
+  
   wrapper.__declareLayout = {
     localAnchorX: localAnchor.x,
     localAnchorY: localAnchor.y,
@@ -53,6 +53,7 @@ function applyAnchorAndPivot(
     currentPos: { x: props.position.x, y: props.position.y },
     currentScale: { x: props.scale.x, y: props.scale.y },
   };
+
   wrapper.__updateLayout = () => {
     const layout = wrapper.__declareLayout!;
     const ax = (layout.localAnchorX - layout.localPivotX) * layout.currentScale.x;
@@ -61,6 +62,7 @@ function applyAnchorAndPivot(
     wrapper.scale.set(layout.currentScale.x, layout.currentScale.y);
   };
   wrapper.__updateLayout();
+
   wrapper.rotation = props.rotation * (Math.PI / 180);
   wrapper.alpha = props.alpha;
 }
@@ -77,14 +79,18 @@ export function buildNode(node: IRObjectNode): Container {
         x: props.anchor.x * (props.radius * 2),
         y: props.anchor.y * (props.radius * 2),
       };
+
       applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
+
       const gfx = new Graphics()
         .circle(props.radius, props.radius, props.radius)
         .fill(props.color);
+
       wrapper.addChild(gfx);
       wrapper.__baseSize = { w: props.radius * 2, h: props.radius * 2 };
       break;
     }
+
     case "rectangle": {
       wrapper = new Container();
       const localPivot = { x: props.width / 2, y: props.height / 2 };
@@ -92,18 +98,23 @@ export function buildNode(node: IRObjectNode): Container {
         x: props.anchor.x * props.width,
         y: props.anchor.y * props.height,
       };
+
       applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
+
       const gfx = new Graphics()
         .rect(0, 0, props.width, props.height)
         .fill(props.color);
+
       wrapper.addChild(gfx);
       wrapper.__baseSize = { w: props.width, h: props.height };
       break;
     }
+
     case "polygon": {
       wrapper = new Container();
       const len = props.points.length;
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
       for (let i = 0; i < len; i++) {
         const p = props.points[i];
         if (p.x < minX) minX = p.x;
@@ -112,30 +123,39 @@ export function buildNode(node: IRObjectNode): Container {
         if (p.y > maxY) maxY = p.y;
       }
       if (minX === Infinity) { minX = 0; maxX = 0; minY = 0; maxY = 0; }
+
       const w = maxX - minX;
       const h = maxY - minY;
-      const localPivot = { x: w / 2, y: h / 2 };
+
+      const localPivot = { x: minX + w / 2, y: minY + h / 2 };
       const localAnchor = {
-        x: props.anchor.x * w,
-        y: props.anchor.y * h,
+        x: minX + props.anchor.x * w,
+        y: minY + props.anchor.y * h,
       };
+
       applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
+
       const flatPoints = new Array(len * 2);
       for (let i = 0; i < len; i++) {
-        flatPoints[i * 2]     = props.points[i].x - minX;
-        flatPoints[i * 2 + 1] = props.points[i].y - minY;
+        // Render exactly at the user-defined coordinates
+        flatPoints[i * 2]     = props.points[i].x;
+        flatPoints[i * 2 + 1] = props.points[i].y;
       }
+
       const gfx = new Graphics()
         .poly(flatPoints, true)
         .fill(props.color);
+
       wrapper.addChild(gfx);
       wrapper.__baseSize = { w, h };
       break;
     }
+
     case "line": {
       wrapper = new Container();
       const len = props.points.length;
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
       for (let i = 0; i < len; i++) {
         const p = props.points[i];
         if (p.x < minX) minX = p.x;
@@ -144,26 +164,34 @@ export function buildNode(node: IRObjectNode): Container {
         if (p.y > maxY) maxY = p.y;
       }
       if (minX === Infinity) { minX = 0; maxX = 0; minY = 0; maxY = 0; }
+
       const w = maxX - minX;
       const h = maxY - minY;
-      const localPivot = { x: w / 2, y: h / 2 };
+
+      const localPivot = { x: minX + w / 2, y: minY + h / 2 };
       const localAnchor = {
-        x: props.anchor.x * w,
-        y: props.anchor.y * h,
+        x: minX + props.anchor.x * w,
+        y: minY + props.anchor.y * h,
       };
+
       applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
+
       const flatPoints = new Array(len * 2);
       for (let i = 0; i < len; i++) {
-        flatPoints[i * 2]     = props.points[i].x - minX;
-        flatPoints[i * 2 + 1] = props.points[i].y - minY;
+        // Render exactly at the user-defined coordinates
+        flatPoints[i * 2]     = props.points[i].x;
+        flatPoints[i * 2 + 1] = props.points[i].y;
       }
+
       const gfx = new Graphics()
         .poly(flatPoints, false)
         .stroke({ width: props.thickness, color: props.color });
+
       wrapper.addChild(gfx);
       wrapper.__baseSize = { w, h };
       break;
     }
+
     case "text": {
       wrapper = new Container();
       const style = new TextStyle({
@@ -172,23 +200,29 @@ export function buildNode(node: IRObjectNode): Container {
         fill: props.color,
       });
       const textObj = new Text({ text: props.content, style });
+
       const localPivot = { x: textObj.width / 2, y: textObj.height / 2 };
       const localAnchor = {
         x: props.anchor.x * textObj.width,
         y: props.anchor.y * textObj.height,
       };
+
       applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
+
       wrapper.addChild(textObj);
       wrapper.__baseSize = { w: textObj.width, h: textObj.height };
       break;
     }
+
     case "group": {
       wrapper = new Container();
       for (const child of node.children) {
         wrapper.addChild(buildNode(child));
       }
+
       const localPivot = { x: 0, y: 0 };
       const localAnchor = { x: 0, y: 0 };
+
       applyAnchorAndPivot(
         wrapper,
         {
@@ -201,9 +235,11 @@ export function buildNode(node: IRObjectNode): Container {
         localAnchor,
         localPivot
       );
+
       wrapper.__baseSize = { w: 0, h: 0 };
       break;
     }
+
     default: {
       const _never: never = props;
       throw new Error(`[PixiAdapter] Unknown IR node kind: ${String((_never as IRObjectProps).kind)}`);
@@ -217,6 +253,7 @@ export function buildNode(node: IRObjectNode): Container {
   let startScale = { x: 1, y: 1 };
   let startRot   = 0;
   let startAlpha = 1;
+
   if (props.kind === "group") {
     startPos   = props.transform.position;
     startScale = props.transform.scale;
@@ -228,6 +265,7 @@ export function buildNode(node: IRObjectNode): Container {
     startRot   = props.rotation;
     startAlpha = props.alpha;
   }
+
   wrapper.__startProps = {
     position: { x: startPos.x, y: startPos.y },
     rotation: startRot,

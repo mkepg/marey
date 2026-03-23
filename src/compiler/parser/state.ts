@@ -23,7 +23,7 @@ export function describeToken(t: Token): string {
     case "SLASH":       return "'/'";
     case "EQUALS":      return "'='";
     case "EOF":         return "end of file";
-    default:                      return `token '${String(t.value)}'`;
+    default:            return `token '${String(t.value)}'`;
   }
 }
 
@@ -94,29 +94,34 @@ export class ParserState {
       endCol: token.endCol,
     };
 
-    // Hard cap to prevent worker serialization crashes
     if (this.errors.length >= 50) {
       const maxErrorMessage = "Maximum error limit reached. Further parsing aborted.";
-      // Throwing a standard Error bypasses the local `instanceof ParseException` catches and forces a hard failure
       throw new Error(maxErrorMessage);
     }
-
     throw new ParseException(errorObj);
   }
 
   synchronize(): void {
     let t = this.peek();
+    
+    // If we're already at a closing boundary or EOF, stop advancing.
     if (t.type === "RBRACE" || t.type === "EOF") return;
     this.pos++;
 
     while (!this.isAtEnd()) {
       t = this.peek();
+      
+      // We explicitly include LBRACE here to prevent the synchronizer from 
+      // skipping into a new block and ruining the parser's structural depth logic.
       if (
         t.type === "RBRACE" ||
+        t.type === "LBRACE" ||
         t.type === "KEYWORD"
       ) {
         return;
       }
+      
+      // Stop if we see a valid property declaration signature
       if (t.type === "IDENT") {
         const next = this.tokens[this.pos + 1];
         if (next && next.type === "COLON") {

@@ -44,6 +44,10 @@ export const KIND_LABEL: Readonly<Record<PropKind, string>> = {
 
 export function collectErrors(ast: AstNode): CompilerError[] {
   const errors: CompilerError[] = [];
+  
+  // VRAM Protection Limit
+  const MAX_TEXT_NODES = 500;
+  let textNodeCount = 0;
 
   function checkNode(
     node: AstNode,
@@ -51,8 +55,7 @@ export function collectErrors(ast: AstNode): CompilerError[] {
     parentType: string | null = null,
     ancestors: ObjectNode[] = []
   ): void {
-    // Bail out early to prevent worker crashes from error avalanches
-    if (errors.length >= 50) return; 
+    if (errors.length >= 50) return;
 
     const typeName = node.type;
     const isScene  = typeName === "scene";
@@ -67,6 +70,19 @@ export function collectErrors(ast: AstNode): CompilerError[] {
 
     const required = REQUIRED_PROPS[typeName] ?? [];
     const contract = PROP_TYPES[typeName]    ?? {};
+
+    // Check VRAM exhausting nodes
+    if (typeName === "text") {
+      textNodeCount++;
+      if (textNodeCount > MAX_TEXT_NODES) {
+        errors.push({
+          phase: "TYPE",
+          message: `[TYPE_TEXT_LIMIT] Scene contains too many 'text' objects (${textNodeCount}). Maximum allowed is ${MAX_TEXT_NODES} to prevent VRAM exhaustion and browser crashes.`,
+          line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol
+        });
+        return; // Early return to prevent flooding errors
+      }
+    }
 
     if (typeName === "sequence") {
       const isValidParent = parentType !== null
@@ -184,6 +200,7 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         if (propVal?.kind === "animProperty" && propVal.value !== "position") {
           errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_PROP] 'handOff: true' is only valid on 'property: position' animations.`, line: handOffVal.line, col: handOffVal.col, endLine: handOffVal.endLine, endCol: handOffVal.endCol });
         }
+
         const loopVal = node.props["loop"];
         if (loopVal?.kind === "boolean" && loopVal.value === true) {
           errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_LOOP] 'loop: true' and 'handOff: true' cannot coexist. A looping animation never ends.`, line: handOffVal.line, col: handOffVal.col, endLine: handOffVal.endLine, endCol: handOffVal.endCol });
@@ -300,13 +317,11 @@ export function collectErrors(ast: AstNode): CompilerError[] {
           errors.push({ phase: "TYPE", message: `[TYPE_INVALID_SCALE] ${label}: 'scale' components must be greater than zero, but got (${val.x}, ${val.y}).`, ...errPos });
         }
       }
-
       if (key === "size" && val.kind === "point") {
         if (val.x <= 0 && val.y <= 0) errors.push({ phase: "TYPE", message: `${label}: 'size' width and height must both be greater than 0.`, ...errPos });
         else if (val.x <= 0) errors.push({ phase: "TYPE", message: `${label}: 'size' width must be greater than 0, but got ${val.x}.`, ...errPos });
         else if (val.y <= 0) errors.push({ phase: "TYPE", message: `${label}: 'size' height must be greater than 0, but got ${val.y}.`, ...errPos });
       }
-
       if (key === "points" && val.kind === "pointList") {
         if (typeName === "polygon" && val.value.length < 3) errors.push({ phase: "TYPE", message: `${label}: 'polygon' requires at least 3 points.`, ...errPos });
         else if (typeName === "line" && val.value.length < 2) errors.push({ phase: "TYPE", message: `${label}: 'line' requires at least 2 points.`, ...errPos });
@@ -323,6 +338,7 @@ export function collectErrors(ast: AstNode): CompilerError[] {
     }
 
     const childAncestors = isScene ? ancestors : [...ancestors, node as ObjectNode];
+
     for (const c of node.children) {
       if (c.type !== "sequence") {
         checkNode(c, node as AstNode, typeName, childAncestors);

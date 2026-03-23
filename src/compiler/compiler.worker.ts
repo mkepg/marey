@@ -46,15 +46,15 @@ function doLint(source: string): LintResult {
     const tokens = lex(source);
     const { ast, errors: parseErrors, env } = parse(tokens);
     const symbols = new Set<string>();
-
+    
     if (env) {
       Object.keys(env).forEach(k => symbols.add(k));
     }
-
+    
     if (parseErrors.length > 0) {
       return { errors: parseErrors, symbols: Array.from(symbols) };
     }
-
+    
     if (ast) {
       const { errors } = typeCheck(ast);
       const astSymbols = getAstSymbols(ast);
@@ -64,7 +64,6 @@ function doLint(source: string): LintResult {
         symbols: Array.from(symbols)
       };
     }
-
     return { errors: [], symbols: Array.from(symbols) };
   } catch (raw: unknown) {
     return { errors: [normaliseError(raw)], symbols: [] };
@@ -90,7 +89,7 @@ self.addEventListener("message", (e: MessageEvent) => {
 
     logs.push({ kind: "info", text: "[parser]  building AST..." });
     const { ast, errors: parseErrors } = parse(tokens);
-    
+
     if (parseErrors.length > 0) {
       parseErrors.forEach(err => {
         logs.push({ kind: "error", text: `[parser]  ${err.message}` });
@@ -108,7 +107,7 @@ self.addEventListener("message", (e: MessageEvent) => {
 
       logs.push({ kind: "info", text: "[type]    checking + building Scene IR..." });
       const { errors, ir } = typeCheck(ast);
-      
+
       if (errors.length > 0 || ir === null) {
         errors.forEach((err) => {
           logs.push({ kind: "error", text: `[type]    ${err.message}` });
@@ -123,20 +122,20 @@ self.addEventListener("message", (e: MessageEvent) => {
         text: `[type]    no errors — Scene IR ready (${Object.keys(ir.registry).length} node(s))`
       });
 
-      self.postMessage({ id, action: "compile", success: true, logs, errors: [], ir });
+      // Optimization: JSON stringify to avoid structured clone bottleneck on massive IR payloads
+      const irPayload = JSON.stringify(ir);
+      self.postMessage({ id, action: "compile", success: true, logs, errors: [], ir: irPayload });
     }
   } catch (raw: unknown) {
     const err = normaliseError(raw);
     const location = err.line !== undefined && err.col !== undefined
         ? ` — line ${err.line}, column ${err.col}`
         : "";
-    
     logs.push({
       kind:  "error",
       text:  `[${err.phase.toLowerCase()}]  ${err.message}${location}`,
     });
     outErrors.push(err);
-    
     self.postMessage({ id, action: "compile", success: false, logs, errors: outErrors, ir: null });
   }
 });

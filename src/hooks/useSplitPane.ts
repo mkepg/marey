@@ -24,8 +24,8 @@ export function useSplitPane({
 }: SplitPaneOptions): SplitPaneResult {
   const [ratio, setRatio] = useState(initial);
   const [isDragging, setIsDragging] = useState(false);
-  
   const draggingRef = useRef(false);
+
   const listenersRef = useRef<{
     move: ((ev: PointerEvent) => void) | null;
     up: (() => void) | null;
@@ -40,20 +40,36 @@ export function useSplitPane({
       const onMove = (ev: PointerEvent): void => {
         const container = containerRef.current;
         if (!container) return;
+        
         const rect = container.getBoundingClientRect();
-        const raw =
-          axis === "horizontal"
-            ? (ev.clientX - rect.left) / rect.width
-            : (ev.clientY - rect.top) / rect.height;
-        setRatio(Math.max(min, Math.min(max, raw)));
+
+        setRatio((prevRatio) => {
+          const delta = axis === "horizontal"
+            ? ev.movementX / rect.width
+            : ev.movementY / rect.height;
+            
+          let newRatio = prevRatio + delta;
+          
+          // Enable collapsing by snapping to 0 or 1 if dragged past the min/max limits
+          const SNAP_THRESHOLD = 0.08; 
+          if (newRatio < min) {
+            newRatio = (newRatio < min - SNAP_THRESHOLD) ? 0 : min;
+          } else if (newRatio > max) {
+            newRatio = (newRatio > max + SNAP_THRESHOLD) ? 1 : max;
+          }
+
+          return newRatio;
+        });
       };
 
       const onUp = (): void => {
         draggingRef.current = false;
         setIsDragging(false);
+
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onUp);
         window.removeEventListener("pointercancel", onUp);
+        
         listenersRef.current.move = null;
         listenersRef.current.up = null;
       };

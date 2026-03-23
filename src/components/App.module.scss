@@ -14,16 +14,23 @@
   flex: 1;
   overflow: hidden;
   min-height: 0;
-}
 
-// ── Left pane ─────────────────────────────────────────────────────────────────
+  /* Stack panes vertically on mobile */
+  @media (max-width: 768px) {
+    flex-direction: column;
+  }
+}
 
 .leftPane {
   display: flex;
   flex-direction: column;
-  min-width: 280px;
   overflow: hidden;
   background: var(--bg-pane);
+
+  @media (max-width: 768px) {
+    width: 100% !important;
+    height: 50% !important;
+  }
 }
 
 .editorWrap {
@@ -38,16 +45,18 @@
   background: var(--bg-terminal);
   border-top: 1px solid var(--border);
   overflow: hidden;
-  min-height: 60px;
+  min-height: 0;
   flex-shrink: 0;
 }
-
-// ── Right pane ────────────────────────────────────────────────────────────────
 
 .rightPane {
   display: flex;
   flex-direction: column;
-  min-width: 200px;
   overflow: hidden;
   background: var(--bg-preview);
+
+  @media (max-width: 768px) {
+    width: 100% !important;
+    height: 50% !important;
+  }
 }

@@ -7,15 +7,15 @@ interface PreviewProps {
 }
 
 export const Preview: FunctionComponent<PreviewProps> = ({ hostRef }) => {
-  const status = useAppStore((s) => s.compileStatus);
-  const hasOutput = status === "ok";
+  const status      = useAppStore((s) => s.compileStatus);
+  const isCompiling = useAppStore((s) => s.isCompiling);
+  const hasOutput   = status === "ok";
 
   return (
     <div className={styles.wrap}>
-      {/* Always render the host element and maintain its layout space.
-        Using opacity ensures PixiJS's resizeTo measures the correct 
-        dimensions on the initial mount without being squished.
-      */}
+      {isCompiling && (
+        <div className={styles.loadingOverlay}>Compiling...</div>
+      )}
       <div
         ref={hostRef}
         className={styles.host}
@@ -24,8 +24,7 @@ export const Preview: FunctionComponent<PreviewProps> = ({ hostRef }) => {
           pointerEvents: hasOutput ? "auto" : "none"
         }}
       />
-      
-      {!hasOutput && (
+      {!hasOutput && !isCompiling && (
         <div className={styles.empty}>
           <div className={styles.emptyIcon}>◻</div>
           <div className={styles.emptyText}>no preview</div>

@@ -39,9 +39,8 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
   const editorRef    = useRef<MonacoEditorNS.IStandaloneCodeEditor | null>(null);
   const decorationsRef = useRef<MonacoEditorNS.IEditorDecorationsCollection | null>(null);
   
-  // Track when the editor has finished its async font-loading boot sequence
   const [isReady, setIsReady] = useState(false);
-
+  
   const monaco  = useMonaco();
   const code    = useAppStore((s) => s.code);
   const theme   = useAppStore((s) => s.theme);
@@ -58,11 +57,12 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
     let isCancelled = false;
 
     const initEditor = async () => {
-      // Wait for fonts to avoid measurement jitter
-      await Promise.race([
-        document.fonts.ready,
-        new Promise((resolve) => setTimeout(resolve, 2000))
-      ]);
+      // Explicitly wait for the font to load so Monaco measures characters correctly
+      try {
+        await document.fonts.load("13px 'JetBrains Mono'");
+      } catch {
+        // Proceed with fallback font if it fails
+      }
 
       if (isCancelled || !containerRef.current) return;
 
@@ -82,7 +82,7 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
       });
 
       editorRef.current = editor;
-      setIsReady(true); // Signal to the linting effect that we are good to go
+      setIsReady(true);
       onReady(editor);
     };
 
@@ -106,7 +106,6 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
   }, [code]);
 
   useEffect(() => {
-    // Rely on isReady to ensure editorRef.current is populated
     if (!monaco || !editorRef.current || !isReady) return;
 
     const model = editorRef.current.getModel();
@@ -141,7 +140,7 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [code, monaco, isReady]); // Include isReady as a dependency
+  }, [code, monaco, isReady]);
 
   useEffect(() => {
     return () => {

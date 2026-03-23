@@ -8,21 +8,31 @@ const MAX_LOGS = 500;
 export const Terminal: FunctionComponent = () => {
   const logs    = useAppStore((s) => s.logs);
   const bodyRef = useRef<HTMLDivElement>(null);
+  
+  // Track if the user is actively looking at the bottom of the logs
+  const isAtBottomRef = useRef(true);
+
+  const handleScroll = () => {
+    if (!bodyRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = bodyRef.current;
+    // 40px threshold to be considered "at the bottom"
+    isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 40;
+  };
 
   useEffect(() => {
-    if (bodyRef.current) {
+    // Only yank the scrollbar down if the user is already at the bottom
+    if (bodyRef.current && isAtBottomRef.current) {
       bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
     }
   }, [logs]);
 
-  // FIX: Cap logs to prevent DOM explosion and frame drops
   const displayLogs = logs.length > MAX_LOGS ? logs.slice(-MAX_LOGS) : logs;
   const truncated = logs.length > MAX_LOGS;
 
   return (
-    <div className={styles.body} ref={bodyRef}>
+    <div className={styles.body} ref={bodyRef} onScroll={handleScroll}>
       {logs.length === 0 ? (
-        <span className={styles.empty}>// output will appear here</span>
+        <span className={styles.empty}></span>
       ) : (
         <>
           {truncated && (
