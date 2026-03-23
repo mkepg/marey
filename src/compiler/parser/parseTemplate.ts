@@ -1,4 +1,9 @@
-import { ParserState, describeToken } from "./state";
+// Updated src/compiler/parser/parseTemplate.ts
+import { ParserState, describeToken, ParseException } from "./state";
+import { parseObject } from "./parseObject";
+import { parseDef } from "./parseDef";
+import { parseGenerate } from "./parseGenerate";
+import { parseUse } from "./parseUse";
 
 export function parseTemplate(state: ParserState): void {
   state.consume("KEYWORD");
@@ -17,56 +22,66 @@ export function parseTemplate(state: ParserState): void {
 
   state.consume("LPAREN");
   const params: string[] = [];
-
   while (state.peek().type !== "RPAREN" && state.peek().type !== "EOF") {
     if (state.peek().type !== "IDENT") {
       const bad = state.peek();
       state.throwError(`Expected a parameter name, but found ${describeToken(bad)}.`, bad);
     }
-    
     const paramTok = state.consume("IDENT");
     const paramName = paramTok.value as string;
-    
-    // Safety check: Prevent template parameter shadowing
     if (params.includes(paramName)) {
-      state.throwError(`Duplicate parameter name '${paramName}' in template '${templateName}'. Parameter names must be unique.`, paramTok);
+      state.throwError(`Duplicate parameter name '${paramName}' in template '${templateName}'.`, paramTok);
     }
-    
     params.push(paramName);
-
-    if (state.peek().type !== "RPAREN") {
-      state.consume("COMMA");
-    }
+    if (state.peek().type !== "RPAREN") state.consume("COMMA");
   }
-  
   state.consume("RPAREN");
 
   const braceTok = state.consume("LBRACE");
   const startPos = state.pos;
-  let nesting = 1;
-  let endPos = state.pos;
 
-  // Fast-forward to find the end of the template block for delayed evaluation
-  while (endPos < state.tokens.length) {
-    const t = state.tokens[endPos];
-    if (t.type === "LBRACE") nesting++;
-    else if (t.type === "RBRACE") {
-      nesting--;
-      if (nesting === 0) break;
+  // --- NEW: Dry-Run Syntax Validation ---
+  const snapshot = { pos: state.pos, env: state.env, count: state.globalNodeCount };
+  state.env = Object.create(state.env);
+  params.forEach(p => { 
+    state.env[p] = { kind: "number", value: 0, line: 0, col: 0, endLine: 0, endCol: 0 }; 
+  });
+
+  let nesting = 1;
+  while (state.pos < state.tokens.length) {
+    const t = state.peek();
+    try {
+      if (t.type === "LBRACE") nesting++;
+      if (t.type === "RBRACE") {
+        nesting--;
+        if (nesting === 0) break;
+      }
+      // Briefly validate tokens without committing nodes to the scene
+      if (t.type === "KEYWORD") {
+        if (t.value === "def") parseDef(state);
+        else if (t.value === "generate") parseGenerate(state, 1);
+        else if (t.value === "use") parseUse(state, 1);
+        else parseObject(state, 1);
+      } else {
+        state.pos++;
+      }
+    } catch (e) {
+      if (e instanceof ParseException) {
+        state.errors.push(e.error);
+        state.synchronize();
+      } else throw e;
     }
-    endPos++;
   }
+  const endPos = state.pos;
+  state.pos = snapshot.pos;
+  state.env = snapshot.env;
+  state.globalNodeCount = snapshot.count;
+  // ---------------------------------------
 
   if (nesting !== 0) {
-    state.throwError(`Template '${templateName}' was not closed before end of file. Add a closing '}'.`, braceTok);
+    state.throwError(`Template '${templateName}' was not closed.`, braceTok);
   }
 
-  state.templates[templateName] = {
-    name: templateName,
-    params,
-    startPos,
-    endPos
-  };
-
+  state.templates[templateName] = { name: templateName, params, startPos, endPos };
   state.pos = endPos + 1;
 }
