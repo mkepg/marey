@@ -14,19 +14,21 @@ export const REQUIRED_PROPS: Readonly<Record<string, readonly string[]>> = {
   physics:   ["duration"],
   group:     [],
   sequence:  [],
+  parallel:  [],
 };
 
 export const PROP_TYPES: Readonly<Record<string, Readonly<Record<string, PropContract>>>> = {
   scene:     { background: "color", size: "point", sceneFit: "sceneFit" },
-  circle:    { position: "point", radius: "number", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], anchor: "point", z: "number" },
-  rectangle: { position: "point", size: "point",   color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], anchor: "point", z: "number" },
-  polygon:   { position: "point", points: "pointList", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], anchor: "point", z: "number" },
-  line:      { position: "point", points: "pointList", thickness: "number", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], anchor: "point", z: "number" },
-  text:      { position: "point", content: "string", fontSize: "number", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], anchor: "point", z: "number" },
+  circle:    { position: "point", radius: "number", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], z: "number" },
+  rectangle: { position: "point", size: "point",   color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], z: "number" },
+  polygon:   { position: "point", points: "pointList", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], z: "number" },
+  line:      { position: "point", points: "pointList", thickness: "number", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], z: "number" },
+  text:      { position: "point", content: "string", fontSize: "number", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], z: "number" },
   animate:   { property: "animProperty", to: ["number", "point"], duration: "number", easing: "easing", loop: "boolean", yoyo: "boolean", handOff: "boolean" },
-  physics:   { velocity: "point", gravity: "point", friction: "number", bounce: "number", collideBounds: "boolean", duration: ["number", "indefinitely"] },
+  physics:   { velocity: "point", gravity: "point", airDrag: "number", bounce: "number", collideBounds: "boolean", duration: ["number", "indefinitely"] },
   group:     { position: "point", rotation: "number", scale: ["number", "point"], alpha: "number", z: "number" },
   sequence:  {},
+  parallel:  {},
 };
 
 export const KIND_LABEL: Readonly<Record<PropKind, string>> = {
@@ -44,8 +46,6 @@ export const KIND_LABEL: Readonly<Record<PropKind, string>> = {
 
 export function collectErrors(ast: AstNode): CompilerError[] {
   const errors: CompilerError[] = [];
-  
-  // VRAM Protection Limit
   const MAX_TEXT_NODES = 500;
   let textNodeCount = 0;
 
@@ -64,14 +64,13 @@ export function collectErrors(ast: AstNode): CompilerError[] {
 
     const label = isScene
         ? "The scene block"
-        : typeName === "animate" || typeName === "physics" || typeName === "sequence"
+        : typeName === "animate" || typeName === "physics" || typeName === "sequence" || typeName === "parallel"
         ? `The '${typeName}' block`
         : `'${isUseBlock ? "use" : typeName}' ${isUseBlock ? "block" : "object"} '${nodeName}'`;
 
     const required = REQUIRED_PROPS[typeName] ?? [];
     const contract = PROP_TYPES[typeName]    ?? {};
 
-    // Check VRAM exhausting nodes
     if (typeName === "text") {
       textNodeCount++;
       if (textNodeCount > MAX_TEXT_NODES) {
@@ -80,44 +79,69 @@ export function collectErrors(ast: AstNode): CompilerError[] {
           message: `[TYPE_TEXT_LIMIT] Scene contains too many 'text' objects (${textNodeCount}). Maximum allowed is ${MAX_TEXT_NODES} to prevent VRAM exhaustion and browser crashes.`,
           line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol
         });
-        return; // Early return to prevent flooding errors
+        return;
       }
     }
 
-    if (typeName === "sequence") {
-      const isValidParent = parentType !== null
-        && parentType !== "scene"
-        && parentType !== "animate"
-        && parentType !== "physics"
-        && parentType !== "sequence";
+    const seqChildren = node.children.filter(c => c.type === "sequence");
+    if (seqChildren.length > 1) {
+      errors.push({
+        phase: "TYPE",
+        message: `[TYPE_ONE_STORY] An object can have a maximum of one 'sequence' block. Found ${seqChildren.length} on '${nodeName}'. Please combine them into a single timeline.`,
+        line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol
+      });
+    }
 
-      if (!isValidParent) {
-        errors.push({
-          phase: "TYPE",
-          message: parentType === "sequence"
-            ? "Nested 'sequence' blocks are not allowed. A 'sequence' block cannot contain another 'sequence'."
-            : "A 'sequence' block must be placed inside a renderable object (e.g., circle, group), not at the scene root.",
-          line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol,
-        });
+    if (typeName === "sequence" || typeName === "parallel") {
+      const isParallel = typeName === "parallel";
+
+      if (isParallel) {
+        const isValidParent = parentType === "sequence";
+        if (!isValidParent) {
+          errors.push({
+            phase: "TYPE",
+            message: "A 'parallel' block must be placed directly inside a 'sequence' block.",
+            line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol,
+          });
+        }
+      } else {
+        const isValidParent = parentType !== null
+          && parentType !== "scene"
+          && parentType !== "animate"
+          && parentType !== "physics"
+          && parentType !== "sequence"
+          && parentType !== "parallel";
+        if (!isValidParent) {
+          errors.push({
+            phase: "TYPE",
+            message: "A 'sequence' block must be placed inside a renderable object (e.g., circle, group), not at the scene root or inside another sequence.",
+            line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol,
+          });
+        }
       }
 
-      const seqChildren = (node as ObjectNode).children;
-      const hasValidChild = seqChildren.some(c => c.type === "animate" || c.type === "physics");
+      const blockChildren = (node as ObjectNode).children;
+      const validTarget = isParallel ? "animate' or 'physics" : "animate', 'physics', or 'parallel";
+      
+      const hasValidChild = blockChildren.some(c => 
+        c.type === "animate" || c.type === "physics" || (!isParallel && c.type === "parallel")
+      );
+      
       if (!hasValidChild) {
         errors.push({
           phase: "TYPE",
-          message: "A 'sequence' block must contain at least one 'animate' or 'physics' child.",
+          message: `A '${typeName}' block must contain at least one '${validTarget}' child.`,
           line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol,
         });
       }
 
-      for (const child of seqChildren) {
+      for (const child of blockChildren) {
         if (child.type === "animate") {
           const loopVal = child.props["loop"];
           if (loopVal?.kind === "boolean" && loopVal.value === true) {
             errors.push({
               phase: "TYPE",
-              message: "[TYPE_SEQ_LOOP] 'loop: true' is not allowed inside a 'sequence' block — a looping animation never finishes and would prevent the gate from ever opening.",
+              message: `[TYPE_SEQ_LOOP] 'loop: true' is not allowed inside a '${typeName}' block — a looping animation never finishes and would prevent the timeline from advancing.`,
               line: loopVal.line, col: loopVal.col, endLine: loopVal.endLine, endCol: loopVal.endCol,
             });
           }
@@ -125,7 +149,7 @@ export function collectErrors(ast: AstNode): CompilerError[] {
           if (yoyoVal?.kind === "boolean" && yoyoVal.value === true) {
             errors.push({
               phase: "TYPE",
-              message: "[TYPE_SEQ_YOYO] 'yoyo: true' is not allowed inside a 'sequence' block — a yoyo animation never fully finishes and would prevent the gate from ever opening.",
+              message: `[TYPE_SEQ_YOYO] 'yoyo: true' is not allowed inside a '${typeName}' block — a yoyo animation never fully finishes and would prevent the timeline from advancing.`,
               line: yoyoVal.line, col: yoyoVal.col, endLine: yoyoVal.endLine, endCol: yoyoVal.endCol,
             });
           }
@@ -135,20 +159,20 @@ export function collectErrors(ast: AstNode): CompilerError[] {
           if (!durVal) {
             errors.push({
               phase: "TYPE",
-              message: "[TYPE_SEQ_PHYSICS_DUR] A 'physics' block inside a 'sequence' requires a numeric 'duration'. Add 'duration: <seconds>'.",
+              message: `[TYPE_SEQ_PHYSICS_DUR] A 'physics' block inside a '${typeName}' requires a numeric 'duration'. Add 'duration: <seconds>'.`,
               line: child.line, col: child.col, endLine: child.endLine, endCol: child.endCol,
             });
           } else if (durVal.kind === "indefinitely") {
             errors.push({
               phase: "TYPE",
-              message: "[TYPE_SEQ_PHYSICS_INDEFINITELY] 'duration: indefinitely' is not allowed inside a 'sequence' block — the simulation would never finish, so the sequence gate could never open. Use a numeric duration instead.",
+              message: `[TYPE_SEQ_PHYSICS_INDEFINITELY] 'duration: indefinitely' is not allowed inside a '${typeName}' block — the simulation would never finish, so the timeline could never advance. Use a numeric duration instead.`,
               line: durVal.line, col: durVal.col, endLine: durVal.endLine, endCol: durVal.endCol,
             });
           }
         }
       }
 
-      for (const child of seqChildren) {
+      for (const child of blockChildren) {
         checkNode(child, node as AstNode, typeName, [...ancestors, node as ObjectNode]);
       }
       return;
@@ -158,7 +182,6 @@ export function collectErrors(ast: AstNode): CompilerError[] {
       if (parentType === "scene") {
         errors.push({ phase: "TYPE", message: "A 'physics' block must be placed inside a renderable object, not at the root of the scene.", line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol });
       }
-
       const durVal = node.props["duration"];
       if (durVal?.kind === "indefinitely") {
         if (parentNode && parentNode.children.some(c => c.type === "sequence")) {
@@ -200,12 +223,11 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         if (propVal?.kind === "animProperty" && propVal.value !== "position") {
           errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_PROP] 'handOff: true' is only valid on 'property: position' animations.`, line: handOffVal.line, col: handOffVal.col, endLine: handOffVal.endLine, endCol: handOffVal.endCol });
         }
-
         const loopVal = node.props["loop"];
         if (loopVal?.kind === "boolean" && loopVal.value === true) {
           errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_LOOP] 'loop: true' and 'handOff: true' cannot coexist. A looping animation never ends.`, line: handOffVal.line, col: handOffVal.col, endLine: handOffVal.endLine, endCol: handOffVal.endCol });
         }
-
+        
         if (parentNode) {
           const physicsNode = parentNode.children.find(c => c.type === "physics");
           if (!physicsNode) {
@@ -213,29 +235,6 @@ export function collectErrors(ast: AstNode): CompilerError[] {
           } else if (physicsNode.props["velocity"] !== undefined) {
             const velNode = physicsNode.props["velocity"];
             errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_AMBIGUITY] When 'handOff: true' is used, the 'physics' block cannot define an initial 'velocity' because the animation's exit momentum will completely overwrite it. Remove 'velocity' from the physics block.`, line: velNode.line, col: velNode.col, endLine: velNode.endLine, endCol: velNode.endCol });
-          }
-        }
-      }
-
-      if (parentNode) {
-        const hasSiblingSequence = parentNode.children.some(c => c.type === "sequence");
-        const hasSiblingPhysics  = parentNode.children.some(c => c.type === "physics");
-        if (hasSiblingSequence || hasSiblingPhysics) {
-          const loopVal = node.props["loop"];
-          if (loopVal?.kind === "boolean" && loopVal.value === true) {
-            errors.push({
-              phase: "TYPE",
-              message: "[TYPE_LOOP_BLOCKED] 'loop: true' is not allowed on an 'animate' block that has a sibling 'physics' or 'sequence' block, because a looping animation never finishes and would prevent the gate from ever opening.",
-              line: loopVal.line, col: loopVal.col, endLine: loopVal.endLine, endCol: loopVal.endCol,
-            });
-          }
-          const yoyoVal = node.props["yoyo"];
-          if (yoyoVal?.kind === "boolean" && yoyoVal.value === true) {
-            errors.push({
-              phase: "TYPE",
-              message: "[TYPE_YOYO_BLOCKED] 'yoyo: true' is not allowed on an 'animate' block that has a sibling 'physics' or 'sequence' block, because a yoyo animation never finishes and would prevent the gate from ever opening.",
-              line: yoyoVal.line, col: yoyoVal.col, endLine: yoyoVal.endLine, endCol: yoyoVal.endCol,
-            });
           }
         }
       }
@@ -288,7 +287,7 @@ export function collectErrors(ast: AstNode): CompilerError[] {
       if (key === "alpha" && val.kind === "number") {
         if (val.value < 0 || val.value > 1) errors.push({ phase: "TYPE", message: `${label}: 'alpha' must be between 0.0 and 1.0 inclusive, but got ${val.value}.`, ...errPos });
       }
-      if ((key === "friction" || key === "bounce") && val.kind === "number") {
+      if ((key === "airDrag" || key === "bounce") && val.kind === "number") {
         if (val.value < 0 || val.value > 1) errors.push({ phase: "TYPE", message: `${label}: '${key}' must be between 0.0 and 1.0 inclusive, but got ${val.value}.`, ...errPos });
       }
       if (key === "radius" && val.kind === "number") {
@@ -303,11 +302,6 @@ export function collectErrors(ast: AstNode): CompilerError[] {
       if (key === "content" && val.kind === "string") {
         if (val.value.length > 500) {
           errors.push({ phase: "TYPE", message: `[TYPE_TEXT_TOO_LONG] ${label}: 'content' string is too long (${val.value.length} chars). Maximum allowed is 500 characters to prevent rendering crashes.`, ...errPos });
-        }
-      }
-      if (key === "anchor" && val.kind === "point") {
-        if (val.x < 0 || val.x > 1 || val.y < 0 || val.y > 1) {
-          errors.push({ phase: "TYPE", message: `[TYPE_ANCHOR_OUT_OF_RANGE] ${label}: 'anchor' must be in range [0.0, 1.0], but got (${val.x}, ${val.y}).`, ...errPos });
         }
       }
       if (key === "scale") {
@@ -330,7 +324,7 @@ export function collectErrors(ast: AstNode): CompilerError[] {
     }
 
     const hasVisualChildren = node.children.some(
-      c => c.type !== "animate" && c.type !== "physics" && c.type !== "sequence"
+      c => c.type !== "animate" && c.type !== "physics" && c.type !== "sequence" && c.type !== "parallel"
     );
 
     if (!isScene && typeName !== "group" && hasVisualChildren) {
@@ -338,9 +332,8 @@ export function collectErrors(ast: AstNode): CompilerError[] {
     }
 
     const childAncestors = isScene ? ancestors : [...ancestors, node as ObjectNode];
-
     for (const c of node.children) {
-      if (c.type !== "sequence") {
+      if (c.type !== "sequence" && c.type !== "parallel") {
         checkNode(c, node as AstNode, typeName, childAncestors);
       } else {
         checkNode(c, node as AstNode, typeName, childAncestors);

@@ -1,8 +1,8 @@
 import { Application, Container, Graphics, Ticker } from "pixi.js";
-import type { IRSceneNode, IRendererAdapter, IRAnimation, IRPhysics, IRSequence, IRPoint } from "../sceneIR";
+import type { IRSceneNode, IRendererAdapter, IRAnimation, IRPhysics, IRSequence, IRPoint, IRParallelStep } from "../sceneIR";
 import { buildNode } from "./builder";
 
-interface RunningAnim {
+export interface RunningAnim {
   container: Container;
   anim: IRAnimation;
   startVal: number | IRPoint;
@@ -10,23 +10,136 @@ interface RunningAnim {
   elapsed: number;
   direction: number;
   completed: boolean;
+  isPosAnim: boolean;
 }
 
-interface PhysicsRunner {
+export interface PhysicsRunner {
   container: Container;
   durationMs: number | null;
   elapsed: number;
   completed: boolean;
 }
 
-interface SequenceGate {
+type AnimOrPhysics = RunningAnim | PhysicsRunner;
+
+interface SequenceRunner {
   container: Container;
   sequence: IRSequence;
-  peers: Set<RunningAnim | PhysicsRunner>;
-  peersReady: boolean;
-  activated: boolean;
-  ownedAnims: RunningAnim[];
-  ownedPhysics: PhysicsRunner[];
+  stepIndex: number;
+  state: "WAITING" | "RUNNING" | "DONE";
+  basePeers: AnimOrPhysics[];
+  activeStepRunners: AnimOrPhysics[];
+}
+
+export interface IPhysicsEngine {
+  tickContainer(
+    pr: PhysicsRunner,
+    container: Container,
+    dt: number,
+    dtSeconds: number,
+    logicalWidth: number,
+    logicalHeight: number
+  ): boolean;
+}
+
+export class NativePhysicsEngine implements IPhysicsEngine {
+  tickContainer(
+    pr: PhysicsRunner,
+    container: Container,
+    dt: number,
+    dtSeconds: number,
+    logicalWidth: number,
+    logicalHeight: number
+  ): boolean {
+    if (pr.completed) return false;
+
+    if (pr.durationMs !== null) {
+      pr.elapsed += dt;
+      if (pr.elapsed >= pr.durationMs) {
+        pr.completed = true;
+      }
+    }
+
+    if ((container.__kinematicPosAnimCount || 0) > 0) {
+      return pr.completed; 
+    }
+
+    const p = container.__physics!;
+    const s = container.__physicsState!;
+    const layout = container.__declareLayout;
+    if (!layout) return pr.completed;
+
+    const MAX_STEP = 1 / 120;
+    let timeAccumulator = dtSeconds;
+    if (timeAccumulator > 0.1) timeAccumulator = 0.1;
+
+    while (timeAccumulator > 0) {
+      const step = Math.min(timeAccumulator, MAX_STEP);
+      timeAccumulator -= step;
+
+      s.velocity.x += p.gravity.x * step;
+      s.velocity.y += p.gravity.y * step;
+
+      const f = Math.pow(p.airDrag, step * 60);
+      s.velocity.x *= f;
+      s.velocity.y *= f;
+
+      layout.currentPos.x += s.velocity.x * step;
+      layout.currentPos.y += s.velocity.y * step;
+
+      if (p.collideBounds && container.__baseSize) {
+        const absScaleX = Math.abs(layout.currentScale.x);
+        const absScaleY = Math.abs(layout.currentScale.y);
+        
+        const baseW = container.__baseSize.w * absScaleX;
+        const baseH = container.__baseSize.h * absScaleY;
+
+        const cos = Math.abs(Math.cos(container.rotation));
+        const sin = Math.abs(Math.sin(container.rotation));
+        
+        const projW = baseW * cos + baseH * sin;
+        const projH = baseW * sin + baseH * cos;
+
+        // Thanks to the forced center anchor, the projection anchor is always half the width/height
+        const projAnchorX = projW * 0.5;
+        const projAnchorY = projH * 0.5;
+
+        const left   = layout.currentPos.x - projAnchorX;
+        const top    = layout.currentPos.y - projAnchorY;
+        const right  = left + projW;
+        const bottom = top  + projH;
+
+        if (left < 0) {
+          layout.currentPos.x += -left;
+          if (s.velocity.x < 0) s.velocity.x = -s.velocity.x * p.bounce;
+        } else if (right > logicalWidth) {
+          layout.currentPos.x -= (right - logicalWidth);
+          if (s.velocity.x > 0) s.velocity.x = -s.velocity.x * p.bounce;
+        }
+
+        if (top < 0) {
+          layout.currentPos.y += -top;
+          if (s.velocity.y < 0) s.velocity.y = -s.velocity.y * p.bounce;
+        } else if (bottom > logicalHeight) {
+          layout.currentPos.y -= (bottom - logicalHeight);
+          if (s.velocity.y > 0) {
+            if (s.velocity.y < p.gravity.y * step * 2.5) {
+              s.velocity.y = 0;
+            } else {
+              s.velocity.y = -s.velocity.y * p.bounce;
+            }
+          }
+          if (s.velocity.y === 0 && p.gravity.y > 0) {
+            s.velocity.x *= 0.95;
+            if (Math.abs(s.velocity.x) < 5) s.velocity.x = 0;
+          }
+        }
+      }
+    }
+
+    container.__updateLayout?.();
+    return pr.completed;
+  }
 }
 
 function evaluateEasing(t: number, easing: string): number {
@@ -41,14 +154,13 @@ function evaluateEasing(t: number, easing: string): number {
   }
 }
 
-// Computes the instantaneous derivative of the easing curve at t=1
 function getEasingDerivativeAtEnd(easing: string): number {
   switch (easing) {
-    case "easeIn":    return 2; // f(t) = t^2 -> f'(1) = 2
-    case "easeOut":   return 0; // f(t) = t(2-t) -> f'(1) = 0
-    case "easeInOut": return 0; // f(t) = -1 + 4t - 2t^2 -> f'(1) = 0
+    case "easeIn":    return 2.0;
+    case "easeOut":   return 0.5; 
+    case "easeInOut": return 0.5; 
     case "linear":
-    default:          return 1; // f(t) = t -> f'(1) = 1
+    default:          return 1.0;
   }
 }
 
@@ -58,8 +170,8 @@ function lerp(a: number, b: number, t: number): number {
 
 function tickAnim(ra: RunningAnim, dt: number): boolean {
   if (ra.completed) return false;
+  
   ra.elapsed += ra.direction * dt;
-
   const durMs = ra.anim.duration * 1000;
   let progress = durMs > 0 ? ra.elapsed / durMs : 1;
   let justCompleted = false;
@@ -90,38 +202,38 @@ function tickAnim(ra: RunningAnim, dt: number): boolean {
   if (ra.anim.property === "alpha") {
     ra.container.alpha = lerp(ra.startVal as number, ra.targetVal as number, e);
   } else if (ra.anim.property === "rotation") {
-    ra.container.rotation =
-      lerp(ra.startVal as number, ra.targetVal as number, e) * (Math.PI / 180);
+    ra.container.rotation = lerp(ra.startVal as number, ra.targetVal as number, e) * (Math.PI / 180);
   } else if (ra.anim.property === "position" && ra.container.__declareLayout) {
-    const layout   = ra.container.__declareLayout;
-    const startPt  = ra.startVal  as IRPoint;
+    const layout = ra.container.__declareLayout;
+    const startPt = ra.startVal as IRPoint;
     const targetPt = ra.targetVal as IRPoint;
-
+    
     layout.currentPos.x = lerp(startPt.x, targetPt.x, e);
     layout.currentPos.y = lerp(startPt.y, targetPt.y, e);
 
-    if (justCompleted && ra.container.__physicsState) {
+    if (justCompleted && ra.isPosAnim) {
+      ra.container.__kinematicPosAnimCount = Math.max(0, (ra.container.__kinematicPosAnimCount || 1) - 1);
+      
       if (ra.anim.handOff && ra.anim.duration > 0) {
-        // Calculate exact momentum transfer using the easing function's derivative
-        const deriv = getEasingDerivativeAtEnd(ra.anim.easing);
-        const durSec = Math.max(ra.anim.duration, 0.001); // Safe floor to prevent Infinity
+        if (!ra.container.__physicsState) {
+          ra.container.__physicsState = { velocity: { x: 0, y: 0 } };
+        }
         
+        const deriv = getEasingDerivativeAtEnd(ra.anim.easing);
+        const durSec = Math.max(ra.anim.duration, 0.001);
         const dx = targetPt.x - startPt.x;
         const dy = targetPt.y - startPt.y;
-
+        
         ra.container.__physicsState.velocity.x = (dx / durSec) * deriv;
         ra.container.__physicsState.velocity.y = (dy / durSec) * deriv;
       }
-      ra.container.__physicsState.active        = true;
-      ra.container.__physicsState.skipNextFrame = true;
     }
+
     ra.container.__updateLayout?.();
-
   } else if (ra.anim.property === "scale" && ra.container.__declareLayout) {
-    const layout   = ra.container.__declareLayout;
-    const startPt  = ra.startVal  as IRPoint;
+    const layout = ra.container.__declareLayout;
+    const startPt = ra.startVal as IRPoint;
     const targetPt = ra.targetVal as IRPoint;
-
     layout.currentScale.x = lerp(startPt.x, targetPt.x, e);
     layout.currentScale.y = lerp(startPt.y, targetPt.y, e);
     ra.container.__updateLayout?.();
@@ -130,189 +242,122 @@ function tickAnim(ra: RunningAnim, dt: number): boolean {
   return justCompleted;
 }
 
-function tickPhysics(
-  pr: PhysicsRunner,
-  container: Container,
-  dt: number,
-  dtSeconds: number,
-  logicalWidth: number,
-  logicalHeight: number
-): boolean {
-  if (pr.completed) return false;
-
-  if (pr.durationMs !== null) {
-    pr.elapsed += dt;
-    if (pr.elapsed >= pr.durationMs) {
-      pr.completed = true;
-    }
+function getCurrentVal(container: Container, prop: string): number | IRPoint {
+  if (prop === "position") {
+    return container.__declareLayout
+      ? { x: container.__declareLayout.currentPos.x, y: container.__declareLayout.currentPos.y }
+      : (container.__startProps ? { x: container.__startProps.position.x, y: container.__startProps.position.y } : { x: 0, y: 0 });
   }
-
-  const p = container.__physics!;
-  const s = container.__physicsState!;
-
-  if (!s.active) return pr.completed;
-  if (s.skipNextFrame) {
-    s.skipNextFrame = false;
-    return pr.completed;
+  if (prop === "scale") {
+    return container.__declareLayout
+      ? { x: container.__declareLayout.currentScale.x, y: container.__declareLayout.currentScale.y }
+      : (container.__startProps ? { x: container.__startProps.scale.x, y: container.__startProps.scale.y } : { x: 1, y: 1 });
   }
-
-  const layout = container.__declareLayout;
-  if (!layout) return pr.completed;
-
-  // --- High-Fidelity Physics Sub-Stepping ---
-  const MAX_STEP = 1 / 120; // 120Hz sub-step for collision reliability
-  let timeAccumulator = dtSeconds;
-  
-  // Prevent death spirals if the browser tab goes into background
-  if (timeAccumulator > 0.1) timeAccumulator = 0.1; 
-
-  while (timeAccumulator > 0) {
-    const step = Math.min(timeAccumulator, MAX_STEP);
-    timeAccumulator -= step;
-
-    s.velocity.x += p.gravity.x * step;
-    s.velocity.y += p.gravity.y * step;
-
-    // Apply frame-rate independent friction
-    const f = Math.pow(p.friction, step * 60);
-    s.velocity.x *= f;
-    s.velocity.y *= f;
-
-    layout.currentPos.x += s.velocity.x * step;
-    layout.currentPos.y += s.velocity.y * step;
-
-    if (p.collideBounds && container.__baseSize) {
-      const absScaleX = Math.abs(layout.currentScale.x);
-      const absScaleY = Math.abs(layout.currentScale.y);
-      const bw = container.__baseSize.w * absScaleX;
-      const bh = container.__baseSize.h * absScaleY;
-
-      const left   = layout.currentPos.x - layout.localAnchorX * absScaleX;
-      const top    = layout.currentPos.y - layout.localAnchorY * absScaleY;
-      const right  = left + bw;
-      const bottom = top  + bh;
-
-      if (left < 0) {
-        layout.currentPos.x += -left;
-        if (s.velocity.x < 0) s.velocity.x = -s.velocity.x * p.bounce;
-      } else if (right > logicalWidth) {
-        layout.currentPos.x -= (right - logicalWidth);
-        if (s.velocity.x > 0) s.velocity.x = -s.velocity.x * p.bounce;
-      }
-
-      if (top < 0) {
-        layout.currentPos.y += -top;
-        if (s.velocity.y < 0) s.velocity.y = -s.velocity.y * p.bounce;
-      } else if (bottom > logicalHeight) {
-        layout.currentPos.y -= (bottom - logicalHeight);
-        if (s.velocity.y > 0) {
-          // Rest threshold to prevent jittering on the floor
-          if (s.velocity.y < p.gravity.y * step * 2.5) {
-            s.velocity.y = 0;
-          } else {
-            s.velocity.y = -s.velocity.y * p.bounce;
-          }
-        }
-        // Apply ground friction when resting
-        if (s.velocity.y === 0 && p.gravity.y > 0) {
-          s.velocity.x *= 0.95;
-          if (Math.abs(s.velocity.x) < 5) s.velocity.x = 0;
-        }
-      }
-    }
-  }
-
-  container.__updateLayout?.();
-  return pr.completed;
+  if (prop === "rotation") return container.rotation * (180 / Math.PI);
+  if (prop === "alpha") return container.alpha;
+  return 0;
 }
 
-type AnimOrPhysics = RunningAnim | PhysicsRunner;
+function spawnAnim(container: Container, anim: IRAnimation, globalList: RunningAnim[], localList: AnimOrPhysics[]) {
+  const isPos = anim.property === "position";
+  if (isPos) {
+    container.__kinematicPosAnimCount = (container.__kinematicPosAnimCount || 0) + 1;
+  }
+
+  const sVal = getCurrentVal(container, anim.property);
+  let tVal = anim.to;
+  if ((anim.property === "position" || anim.property === "scale") && typeof tVal === "number") {
+    tVal = { x: tVal, y: tVal };
+  }
+
+  const ra: RunningAnim = {
+    container, anim,
+    startVal: sVal,
+    targetVal: tVal as number | IRPoint,
+    elapsed: 0, direction: 1, completed: false,
+    isPosAnim: isPos
+  };
+  globalList.push(ra);
+  localList.push(ra);
+}
+
+function spawnPhysics(container: Container, phIR: IRPhysics, globalList: PhysicsRunner[], localList: AnimOrPhysics[]) {
+  const exitVelX = container.__physicsState?.velocity.x ?? phIR.velocity.x;
+  const exitVelY = container.__physicsState?.velocity.y ?? phIR.velocity.y;
+  container.__physics = phIR;
+  
+  if (!container.__physicsState) {
+    container.__physicsState = { velocity: { x: exitVelX, y: exitVelY } };
+  } else {
+    container.__physicsState.velocity.x = exitVelX;
+    container.__physicsState.velocity.y = exitVelY;
+  }
+
+  const pr: PhysicsRunner = {
+    container,
+    durationMs: phIR.duration === "indefinitely" ? null : (phIR.duration as number) * 1000,
+    elapsed: 0,
+    completed: false,
+  };
+  globalList.push(pr);
+  localList.push(pr);
+}
+
+function startSequenceStep(sr: SequenceRunner, runningAnims: RunningAnim[], physicsRunners: PhysicsRunner[]) {
+  const step = sr.sequence.steps[sr.stepIndex];
+  sr.activeStepRunners = [];
+  
+  if ("type" in step && step.type === "parallel") {
+    for (const sub of (step as IRParallelStep).steps) {
+      if ("property" in sub) {
+        spawnAnim(sr.container, sub as IRAnimation, runningAnims, sr.activeStepRunners);
+      } else {
+        spawnPhysics(sr.container, sub as IRPhysics, physicsRunners, sr.activeStepRunners);
+      }
+    }
+  } else if ("property" in step) {
+    spawnAnim(sr.container, step as IRAnimation, runningAnims, sr.activeStepRunners);
+  } else {
+    spawnPhysics(sr.container, step as IRPhysics, physicsRunners, sr.activeStepRunners);
+  }
+}
 
 function collectData(
   container: Container,
   runningAnims: RunningAnim[],
   physicsRunners: PhysicsRunner[],
-  gates: SequenceGate[]
+  sequenceRunners: SequenceRunner[]
 ): void {
+  const nodeAnims: RunningAnim[] = [];
+  const nodePhysics: PhysicsRunner[] = [];
+
   if (container.__animations && container.__startProps) {
-    const anims      = container.__animations;
-    const startProps = container.__startProps;
-    const nodeAnims: RunningAnim[] = [];
-
-    for (const anim of anims) {
-      let sVal: number | IRPoint;
-      let tVal = anim.to;
-
-      if (anim.property === "position") {
-        sVal = { x: startProps.position.x, y: startProps.position.y };
-        if (typeof tVal === "number") tVal = { x: tVal, y: tVal };
-      } else if (anim.property === "scale") {
-        sVal = { x: startProps.scale.x, y: startProps.scale.y };
-        if (typeof tVal === "number") tVal = { x: tVal, y: tVal };
-      } else if (anim.property === "rotation") {
-        sVal = startProps.rotation;
-        if (typeof tVal !== "number") continue;
-      } else if (anim.property === "alpha") {
-        sVal = startProps.alpha;
-        if (typeof tVal !== "number") continue;
-      } else {
-        continue;
-      }
-
-      const ra: RunningAnim = {
-        container, anim,
-        startVal:  sVal,
-        targetVal: tVal as number | IRPoint,
-        elapsed: 0, direction: 1, completed: false,
-      };
-      runningAnims.push(ra);
-      nodeAnims.push(ra);
+    for (const anim of container.__animations) {
+      spawnAnim(container, anim, runningAnims, nodeAnims);
     }
+  }
 
-    const nodePhysics: PhysicsRunner[] = [];
-    if (container.__physicsState && container.__physics) {
-      const ph = container.__physics;
-      const pr: PhysicsRunner = {
-        container,
-        durationMs: ph.duration === "indefinitely" ? null : ph.duration * 1000,
-        elapsed: 0,
-        completed: false,
-      };
-      physicsRunners.push(pr);
-      nodePhysics.push(pr);
-    }
+  if (container.__physicsState && container.__physics) {
+    spawnPhysics(container, container.__physics, physicsRunners, nodePhysics);
+  }
 
-    const seqs = container.__sequences ?? [];
-    let isFirstGate = true;
-    for (const seq of seqs) {
-      const peers = new Set<AnimOrPhysics>();
-      const peersReady = isFirstGate;
-
-      if (isFirstGate) {
-        for (const ra of nodeAnims)   peers.add(ra);
-        for (const pr of nodePhysics) peers.add(pr);
-      }
-
-      const gate: SequenceGate = {
-        container,
-        sequence: seq,
-        peers,
-        peersReady,
-        activated: false,
-        ownedAnims: [],
-        ownedPhysics: [],
-      };
-      gates.push(gate);
-      isFirstGate = false;
-    }
+  if (container.__sequences && container.__sequences.length > 0) {
+    const seq = container.__sequences[0];
+    sequenceRunners.push({
+      container,
+      sequence: seq,
+      stepIndex: 0,
+      state: "WAITING",
+      basePeers: [...nodeAnims, ...nodePhysics],
+      activeStepRunners: []
+    });
   }
 
   for (const child of container.children) {
-    collectData(child as Container, runningAnims, physicsRunners, gates);
+    collectData(child as Container, runningAnims, physicsRunners, sequenceRunners);
   }
 }
 
-// Persistent WebGL context to prevent flickering and VRAM dumping
 let sharedApp: Application | null = null;
 let activeTickerCallback: ((ticker: Ticker) => void) | null = null;
 
@@ -338,17 +383,17 @@ export const pixiRendererAdapter: IRendererAdapter = {
       });
     }
 
-    // Ensure the canvas is mounted to the active host element
     if (sharedApp.canvas.parentElement !== hostElement) {
       hostElement.appendChild(sharedApp.canvas);
     }
 
-    // Soft reset: clear objects but keep context alive
-    sharedApp.stage.removeChildren();
     if (activeTickerCallback) {
       sharedApp.ticker.remove(activeTickerCallback);
       activeTickerCallback = null;
     }
+
+    const oldChildren = sharedApp.stage.removeChildren();
+    oldChildren.forEach(c => c.destroy({ children: true, texture: true }));
 
     const sceneRoot = new Container();
     sharedApp.stage.addChild(sceneRoot);
@@ -398,161 +443,87 @@ export const pixiRendererAdapter: IRendererAdapter = {
       sharedApp?.resize();
       updateLayout();
     });
-    
     resizeObserver.observe(hostElement);
+
     if (sharedApp) {
       sharedApp.resizeTo = hostElement;
     }
     updateLayout();
 
-    const runningAnims:   RunningAnim[]   = [];
-    const physicsRunners: PhysicsRunner[] = [];
-    const gates:          SequenceGate[]  = [];
-
-    collectData(sceneRoot, runningAnims, physicsRunners, gates);
-
-    const gatePrevIndex: number[] = gates.map((gate, gi) => {
-      for (let pi = gi - 1; pi >= 0; pi--) {
-        if (gates[pi].container === gate.container) return pi;
-      }
-      return -1;
-    });
-
-    function openGate(gi: number): void {
-      const gate = gates[gi];
-      if (gate.activated) return;
-      gate.activated = true;
-
-      const container = gate.container;
-
-      const currentPos = container.__declareLayout
-        ? { x: container.__declareLayout.currentPos.x, y: container.__declareLayout.currentPos.y }
-        : container.__startProps
-          ? { x: container.__startProps.position.x, y: container.__startProps.position.y }
-          : { x: 0, y: 0 };
-
-      const currentScale = container.__declareLayout
-        ? { x: container.__declareLayout.currentScale.x, y: container.__declareLayout.currentScale.y }
-        : container.__startProps
-          ? { x: container.__startProps.scale.x, y: container.__startProps.scale.y }
-          : { x: 1, y: 1 };
-
-      const currentRotation = container.rotation * (180 / Math.PI);
-      const currentAlpha    = container.alpha;
-
-      for (const step of gate.sequence.steps) {
-        if ("property" in step) {
-          const anim = step as IRAnimation;
-          let sVal: number | IRPoint;
-          let tVal = anim.to;
-
-          if (anim.property === "position") {
-            sVal = { x: currentPos.x, y: currentPos.y };
-            if (typeof tVal === "number") tVal = { x: tVal, y: tVal };
-          } else if (anim.property === "scale") {
-            sVal = { x: currentScale.x, y: currentScale.y };
-            if (typeof tVal === "number") tVal = { x: tVal, y: tVal };
-          } else if (anim.property === "rotation") {
-            sVal = currentRotation;
-            if (typeof tVal !== "number") continue;
-          } else if (anim.property === "alpha") {
-            sVal = currentAlpha;
-            if (typeof tVal !== "number") continue;
-          } else {
-            continue;
-          }
-
-          const ra: RunningAnim = {
-            container, anim,
-            startVal:  sVal,
-            targetVal: tVal as number | IRPoint,
-            elapsed: 0, direction: 1, completed: false,
-          };
-          runningAnims.push(ra);
-          gate.ownedAnims.push(ra);
-        } else {
-          const phIR = step as IRPhysics;
-
-          const exitVelX = container.__physicsState?.velocity.x ?? phIR.velocity.x;
-          const exitVelY = container.__physicsState?.velocity.y ?? phIR.velocity.y;
-
-          container.__physics = phIR;
-
-          if (!container.__physicsState) {
-            container.__physicsState = {
-              velocity: { x: exitVelX, y: exitVelY },
-              active: true,
-              skipNextFrame: false,
-              elapsed: phIR.duration === "indefinitely" ? undefined : 0,
-            };
-          } else {
-            container.__physicsState.velocity.x    = exitVelX;
-            container.__physicsState.velocity.y    = exitVelY;
-            container.__physicsState.active        = true;
-            container.__physicsState.skipNextFrame = false;
-            container.__physicsState.elapsed       =
-              phIR.duration === "indefinitely" ? undefined : 0;
-          }
-
-          const pr: PhysicsRunner = {
-            container,
-            durationMs: phIR.duration === "indefinitely"
-              ? null
-              : (phIR.duration as number) * 1000,
-            elapsed: 0,
-            completed: false,
-          };
-          physicsRunners.push(pr);
-          gate.ownedPhysics.push(pr);
-        }
-      }
-
-      for (let ni = gi + 1; ni < gates.length; ni++) {
-        if (gates[ni].container === container && gatePrevIndex[ni] === gi) {
-          for (const ra of gate.ownedAnims)   gates[ni].peers.add(ra);
-          for (const pr of gate.ownedPhysics) gates[ni].peers.add(pr);
-          gates[ni].peersReady = true;
-          break;
-        }
-      }
-    }
+    const runningAnims:    RunningAnim[]    = [];
+    const physicsRunners:  PhysicsRunner[]  = [];
+    const sequenceRunners: SequenceRunner[] = [];
+    
+    collectData(sceneRoot, runningAnims, physicsRunners, sequenceRunners);
+    
+    const physicsEngine = new NativePhysicsEngine();
 
     activeTickerCallback = (ticker: Ticker) => {
       const dt        = Math.min(ticker.deltaMS, 100);
       const dtSeconds = dt / 1000;
 
-      for (const ra of runningAnims) {
-        tickAnim(ra, dt);
+      for (let i = 0; i < runningAnims.length; i++) {
+        tickAnim(runningAnims[i], dt);
       }
 
       for (let i = 0; i < physicsRunners.length; i++) {
         const pr = physicsRunners[i];
-        tickPhysics(pr, pr.container, dt, dtSeconds, logicalWidth, logicalHeight);
+        physicsEngine.tickContainer(pr, pr.container, dt, dtSeconds, logicalWidth, logicalHeight);
       }
 
-      for (let gi = 0; gi < gates.length; gi++) {
-        const gate = gates[gi];
-        if (gate.activated)  continue;
-        if (!gate.peersReady) continue;
+      for (let i = 0; i < sequenceRunners.length; i++) {
+        const sr = sequenceRunners[i];
+        if (sr.state === "DONE") continue;
 
-        let allDone = true;
-        for (const peer of gate.peers) {
-          if (!peer.completed) { allDone = false; break; }
+        if (sr.state === "WAITING") {
+          let allBaseDone = true;
+          for (const bp of sr.basePeers) {
+            if (!bp.completed) { allBaseDone = false; break; }
+          }
+          if (allBaseDone) {
+            sr.state = "RUNNING";
+            startSequenceStep(sr, runningAnims, physicsRunners);
+          }
+        } else if (sr.state === "RUNNING") {
+          let allStepsDone = true;
+          for (const sp of sr.activeStepRunners) {
+            if (!sp.completed) { allStepsDone = false; break; }
+          }
+          if (allStepsDone) {
+            sr.stepIndex++;
+            if (sr.stepIndex >= sr.sequence.steps.length) {
+              sr.state = "DONE";
+            } else {
+              startSequenceStep(sr, runningAnims, physicsRunners);
+            }
+          }
         }
+      }
 
-        if (allDone) {
-          openGate(gi);
-        }
+      for (let i = runningAnims.length - 1; i >= 0; i--) {
+        if (runningAnims[i].completed) runningAnims.splice(i, 1);
+      }
+      for (let i = physicsRunners.length - 1; i >= 0; i--) {
+        if (physicsRunners[i].completed) physicsRunners.splice(i, 1);
+      }
+      for (let i = sequenceRunners.length - 1; i >= 0; i--) {
+        if (sequenceRunners[i].state === "DONE") sequenceRunners.splice(i, 1);
+      }
+
+      if (runningAnims.length === 0 && physicsRunners.length === 0 && sequenceRunners.length === 0) {
+        sharedApp?.ticker.stop();
       }
     };
 
+    sharedApp.ticker.start();
     sharedApp.ticker.add(activeTickerCallback);
 
     return () => {
       resizeObserver.disconnect();
       if (sharedApp) {
-        // Only do a soft cleanup so the next render can reuse the context
-        sharedApp.stage.removeChildren();
+        const oldChildren = sharedApp.stage.removeChildren();
+        oldChildren.forEach(c => c.destroy({ children: true, texture: true }));
+
         if (activeTickerCallback) {
           sharedApp.ticker.remove(activeTickerCallback);
           activeTickerCallback = null;

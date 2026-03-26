@@ -145,7 +145,8 @@ export type ObjectType =
   | "group"
   | "animate"
   | "physics"
-  | "sequence";
+  | "sequence"
+  | "parallel"; // ADDED: parallel block support
 
 export interface ObjectNode {
   readonly type: ObjectType;

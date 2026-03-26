@@ -1,35 +1,23 @@
 export const KEYWORD_DOCS: Record<string, string> = {
   template: `### \`template\`\nDefines a reusable component template structure.\n\n**Required Elements:** \`TemplateName | (parameters)\`\n\n**Example:**\n\`\`\`declare\ntemplate Star(color) {\n  group {\n    circle { radius: 10, color: color }\n  }\n}\n\`\`\``,
-  
   use: `### \`use\`\nInstantiates a template into the scene.\n\n**Required Elements:** \`TemplateName | (arguments) | instanceName\`\n\n**Example:**\n\`\`\`declare\nuse Star(#ef4444) myStar {\n  position: (100, 100)\n  scale: 1.5\n}\n\`\`\``,
-  
   generate: `### \`generate\`\nCreates a loop to generate multiple objects or groups. The loop variable can be used in math expressions inside the block.\n\n**Required Elements:** \`variable | from | startValue | to | endValue\`\n\n**Example:**\n\`\`\`declare\ngenerate i from 1 to 5 {\n  circle dot {\n    position: (i * 50, 100)\n    radius: 10\n  }\n}\n\`\`\``,
-  
   def: `### \`def\`\nDeclares a constant variable. Variables in Declare are strictly block-scoped and immutable.\n\n**Required Elements:** \`variableName | = | value\`\n\n**Example:**\n\`\`\`declare\ndef spacing = 50\n\`\`\``,
-
-  sequence: `### \`sequence\`\nA sequencing block that runs after all peer \`animate\` and \`physics\` blocks on the same object have completed. Multiple \`sequence\` blocks are chained in source order.\n\n**Required Elements:** \`animate\` or \`physics\` child block\n\n**Example:**\n\`\`\`declare\nsequence {\n  animate {\n    property: alpha\n    to: 0.0\n    duration: 0.4\n    easing: easeIn\n  }\n}\n\`\`\``,
-
+  sequence: `### \`sequence\`\nA timeline block that executes its child \`animate\` or \`physics\` steps in exact order.\n\n**Required Elements:** \`animate\`, \`physics\`, or \`parallel\` child blocks\n\n**Example:**\n\`\`\`declare\nsequence {\n  animate {\n    property: alpha\n    to: 0.0\n    duration: 0.4\n    easing: easeIn\n  }\n}\n\`\`\``,
+  parallel: `### \`parallel\`\nA wrapper that explicitly groups multiple \`animate\` or \`physics\` steps to execute simultaneously. It can *only* be used inside a \`sequence\` block.\n\n**Required Elements:** \`animate\` or \`physics\` child blocks\n\n**Example:**\n\`\`\`declare\nparallel {\n  animate { property: scale, to: 2.0, duration: 1.0 }\n  animate { property: alpha, to: 0.0, duration: 1.0 }\n}\n\`\`\``,
   scene: `### \`scene\`\nThe root block of a Declare program. Contains all objects and global scene properties.\n\n**Required Properties:** \`size\`\n\n**Optional Properties:** \`background | sceneFit\`\n\n**Example:**\n\`\`\`declare\nscene {\n  size: (800, 600)\n  background: #080811\n  sceneFit: contain\n}\n\`\`\``,
-
-  circle: `### \`circle\`\nA renderable circle object.\n\n**Required Properties:** \`position | radius\`\n\n**Optional Properties:** \`color | alpha | rotation | scale | anchor | z\`\n\n**Example:**\n\`\`\`declare\ncircle myCircle {\n  position: (400, 300)\n  radius: 50\n  color: #38bdf8\n  alpha: 0.8\n  rotation: 45\n  scale: (1.5, 1.5)\n  anchor: (0.5, 0.5)\n  z: 10\n}\n\`\`\``,
-
-  rectangle: `### \`rectangle\`\nA renderable rectangle object.\n\n**Required Properties:** \`position | size\`\n\n**Optional Properties:** \`color | alpha | rotation | scale | anchor | z\`\n\n**Example:**\n\`\`\`declare\nrectangle myRect {\n  position: (100, 100)\n  size: (200, 150)\n  color: #4ade80\n  alpha: 1.0\n  rotation: 0\n  scale: 1.0\n  anchor: (0.5, 0.5)\n  z: 5\n}\n\`\`\``,
-
-  polygon: `### \`polygon\`\nA renderable polygon object formed by a list of points.\n\n**Required Properties:** \`points\`\n\n**Optional Properties:** \`position | color | alpha | rotation | scale | anchor | z\`\n\n**Example:**\n\`\`\`declare\npolygon myPoly {\n  position: (0, 0)\n  points: [(50,0), (100,100), (0,100)]\n  color: #a78bfa\n  alpha: 0.9\n  rotation: 180\n  scale: 2.0\n  anchor: (0.5, 0.5)\n  z: 2\n}\n\`\`\``,
-
-  line: `### \`line\`\nA renderable line object connecting a list of points.\n\n**Required Properties:** \`position | points | thickness\`\n\n**Optional Properties:** \`color | alpha | rotation | scale | anchor | z\`\n\n**Example:**\n\`\`\`declare\nline myLine {\n  position: (0, 0)\n  points: [(10,10), (200,10), (200,200)]\n  thickness: 4\n  color: #f87171\n  alpha: 1.0\n  rotation: 0\n  scale: 1.0\n  anchor: (0, 0)\n  z: 1\n}\n\`\`\``,
-
-  text: `### \`text\`\nA renderable text object.\n\n**Required Properties:** \`position | content\`\n\n**Optional Properties:** \`fontSize | color | alpha | rotation | scale | anchor | z\`\n\n**Example:**\n\`\`\`declare\ntext myText {\n  position: (400, 300)\n  content: "Declare UI"\n  fontSize: 24\n  color: #f8fafc\n  alpha: 1.0\n  rotation: 0\n  scale: 1.0\n  anchor: (0.5, 0.5)\n  z: 10\n}\n\`\`\``,
-
+  circle: `### \`circle\`\nA renderable circle object.\n\n**Required Properties:** \`position | radius\`\n\n**Optional Properties:** \`color | alpha | rotation | scale | z\`\n\n**Example:**\n\`\`\`declare\ncircle myCircle {\n  position: (400, 300)\n  radius: 50\n  color: #38bdf8\n  alpha: 0.8\n  rotation: 45\n  scale: (1.5, 1.5)\n  z: 10\n}\n\`\`\``,
+  rectangle: `### \`rectangle\`\nA renderable rectangle object.\n\n**Required Properties:** \`position | size\`\n\n**Optional Properties:** \`color | alpha | rotation | scale | z\`\n\n**Example:**\n\`\`\`declare\nrectangle myRect {\n  position: (100, 100)\n  size: (200, 150)\n  color: #4ade80\n  alpha: 1.0\n  rotation: 0\n  scale: 1.0\n  z: 5\n}\n\`\`\``,
+  polygon: `### \`polygon\`\nA renderable polygon object formed by a list of points.\n\n**Required Properties:** \`points\`\n\n**Optional Properties:** \`position | color | alpha | rotation | scale | z\`\n\n**Example:**\n\`\`\`declare\npolygon myPoly {\n  position: (0, 0)\n  points: [(50,0), (100,100), (0,100)]\n  color: #a78bfa\n  alpha: 0.9\n  rotation: 180\n  scale: 2.0\n  z: 2\n}\n\`\`\``,
+  line: `### \`line\`\nA renderable line object connecting a list of points.\n\n**Required Properties:** \`position | points | thickness\`\n\n**Optional Properties:** \`color | alpha | rotation | scale | z\`\n\n**Example:**\n\`\`\`declare\nline myLine {\n  position: (0, 0)\n  points: [(10,10), (200,10), (200,200)]\n  thickness: 4\n  color: #f87171\n  alpha: 1.0\n  rotation: 0\n  scale: 1.0\n  z: 1\n}\n\`\`\``,
+  text: `### \`text\`\nA renderable text object.\n\n**Required Properties:** \`position | content\`\n\n**Optional Properties:** \`fontSize | color | alpha | rotation | scale | z\`\n\n**Example:**\n\`\`\`declare\ntext myText {\n  position: (400, 300)\n  content: "Declare UI"\n  fontSize: 24\n  color: #f8fafc\n  alpha: 1.0\n  rotation: 0\n  scale: 1.0\n  z: 10\n}\n\`\`\``,
   group: `### \`group\`\nA container object that groups multiple child objects together.\n\n**Optional Properties:** \`position | rotation | scale | alpha | z\`\n\n**Example:**\n\`\`\`declare\ngroup myGroup {\n  position: (100, 100)\n  rotation: 45\n  scale: (1.5, 1.5)\n  alpha: 0.8\n  z: 5\n\n  circle {\n    position: (0, 0)\n    radius: 20\n  }\n}\n\`\`\``,
-
-  physics: `### \`physics\`\nA block that applies a 2D physics simulation to its parent object.\n\n**Required Properties:** \`duration\`\n\n**Optional Properties:** \`velocity | gravity | friction | bounce | collideBounds\`\n\n**Example:**\n\`\`\`declare\nphysics {\n  duration: indefinitely\n  velocity: (200, -500)\n  gravity: (0, 980)\n  friction: 0.99\n  bounce: 0.65\n  collideBounds: true\n}\n\`\`\``,
-
+  physics: `### \`physics\`\nA block that applies a 2D physics simulation to its parent object.\n\n**Required Properties:** \`duration\`\n\n**Optional Properties:** \`velocity | gravity | airDrag | bounce | collideBounds\`\n\n**Example:**\n\`\`\`declare\nphysics {\n  duration: indefinitely\n  velocity: (200, -500)\n  gravity: (0, 980)\n  airDrag: 0.99\n  bounce: 0.65\n  collideBounds: true\n}\n\`\`\``,
   animate: `### \`animate\`\nA block that animates a specific property of its parent object over time.\n\n**Required Properties:** \`property | to | duration\`\n\n**Optional Properties:** \`easing | loop | yoyo | handOff\`\n\n**Example:**\n\`\`\`declare\nanimate {\n  property: position\n  to: (500, 300)\n  duration: 2.5\n  easing: easeInOut\n  loop: true\n  yoyo: true\n  handOff: false\n}\n\`\`\``,
 };
 
 export const PROPERTY_DOCS: Record<string, string> = {
-  position:      `### \`position\`\nSets the \`(x, y)\` coordinates of the object in the scene.\n\n**Accepts:** \`point\`\n**Example:** \`position: (100, 200)\``,
+  position:      `### \`position\`\nSets the \`(x, y)\` coordinates of the object's geometric center in the scene.\n\n**Accepts:** \`point\`\n**Example:** \`position: (100, 200)\``,
   radius:        `### \`radius\`\nSets the radius of a circle.\n\n**Accepts:** \`number\` (greater than 0)\n**Example:** \`radius: 50\``,
   size:          `### \`size\`\nSets the width and height of a rectangle or the scene.\n\n**Accepts:** \`point\` (width, height)\n**Example:** \`size: (600, 400)\``,
   points:        `### \`points\`\nDefines the vertices of a polygon or line.\n\n**Accepts:** \`pointList\`\n**Example:** \`points: [(0,0), (100,0), (50,100)]\``,
@@ -40,7 +28,6 @@ export const PROPERTY_DOCS: Record<string, string> = {
   alpha:         `### \`alpha\`\nTransparency level from \`0.0\` (invisible) to \`1.0\` (fully opaque).\n\n**Accepts:** \`number\`\n**Example:** \`alpha: 0.5\``,
   rotation:      `### \`rotation\`\nRotation angle in degrees.\n\n**Accepts:** \`number\`\n**Example:** \`rotation: 45\``,
   scale:         `### \`scale\`\nScales the object. Can be a uniform number or a point for independent X/Y scaling.\n\n**Accepts:** \`number\` or \`point\`\n**Example:** \`scale: 1.5\` or \`scale: (2, 0.5)\``,
-  anchor:        `### \`anchor\`\nThe origin point for rotation and positioning, mapped from \`0.0\` to \`1.0\`. \`(0.5, 0.5)\` is the exact geometric center.\n\n**Accepts:** \`point\`\n**Example:** \`anchor: (0.5, 0.5)\``,
   z:             `### \`z\`\nZ-index for rendering order. Objects with higher \`z\` values are drawn on top.\n\n**Accepts:** \`number\`\n**Example:** \`z: 10\``,
   background:    `### \`background\`\nThe background color of the scene.\n\n**Accepts:** \`color\`\n**Example:** \`background: #222222\``,
   sceneFit:      `### \`sceneFit\`\nHow the scene scales to the preview window.\n\n**Accepts:** \`contain\`, \`cover\`, \`fill\`, or \`none\`\n**Example:** \`sceneFit: contain\``,
@@ -53,7 +40,7 @@ export const PROPERTY_DOCS: Record<string, string> = {
   handOff:       `### \`handOff\`\nAllows an animation to seamlessly transfer its final momentum to the physics engine once completed. Requires a sibling \`physics\` block.\n\n**Accepts:** \`true\`, \`false\`\n**Example:** \`handOff: true\``,
   velocity:      `### \`velocity\`\nThe initial momentum vector of the object in pixels per second.\n\n**Accepts:** \`point\`\n**Example:** \`velocity: (200, -500)\``,
   gravity:       `### \`gravity\`\nThe continuous acceleration applied each frame. \`(0, 980)\` mimics real-world downward gravity.\n\n**Accepts:** \`point\`\n**Example:** \`gravity: (0, 980)\``,
-  friction:      `### \`friction\`\nThe frame-rate independent drag coefficient between \`0.0\` and \`1.0\`. \`1.0\` means no drag. \`0.999\` is nearly frictionless air.\n\n**Accepts:** \`number\`\n**Example:** \`friction: 0.999\``,
+  airDrag:       `### \`airDrag\`\nThe frame-rate independent drag coefficient between \`0.0\` and \`1.0\`. \`1.0\` means no air drag. \`0.999\` is nearly frictionless air.\n\n**Accepts:** \`number\`\n**Example:** \`airDrag: 0.999\``,
   bounce:        `### \`bounce\`\nThe restitution coefficient when colliding with a boundary, mapping \`0.0\` (no bounce) to \`1.0\` (perfectly elastic).\n\n**Accepts:** \`number\`\n**Example:** \`bounce: 0.65\``,
   collideBounds: `### \`collideBounds\`\nDetermines whether the object bounces against the logical edges of the scene window.\n\n**Accepts:** \`true\`, \`false\`\n**Example:** \`collideBounds: true\``,
 };

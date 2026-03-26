@@ -11,39 +11,40 @@ const RESERVED_PROPS = new Set<string>([
   "alpha", "rotation", "scale", "anchor", "z", "width", "height",
   "points", "content", "fontSize", "thickness", "property", "to",
   "duration", "easing", "loop", "yoyo", "velocity", "gravity",
-  "friction", "bounce", "collideBounds", "handOff"
+  "airDrag", "bounce", "collideBounds", "handOff" // UPDATED: friction -> airDrag
 ]);
 
-function parseSequenceBlock(state: ParserState, parentContext: string): ObjectNode {
-  const seqTok = state.consume("KEYWORD");
+// ADDED: Specialized parsing for the parallel block
+function parseParallelBlock(state: ParserState, parentContext: string): ObjectNode {
+  const parTok = state.consume("KEYWORD");
   const braceTok = state.consume("LBRACE");
-
   const prevContext = state.currentContext;
-  state.currentContext = `'sequence' block inside ${parentContext}`;
-
+  state.currentContext = `'parallel' block inside ${parentContext}`;
+  
   const children: ObjectNode[] = [];
-
+  
   while (state.peek().type !== "RBRACE" && state.peek().type !== "EOF") {
     try {
       if (state.peek().type !== "KEYWORD") {
         const bad = state.consume();
         state.throwError(
-          `In ${state.currentContext}: Expected 'animate' or 'physics' inside a 'sequence' block, but found ${describeToken(bad)}.`,
+          `In ${state.currentContext}: Expected 'animate' or 'physics' inside a 'parallel' block, but found ${describeToken(bad)}.`,
           bad
         );
       }
-
+      
       const kw = state.peek().value as string;
       if (kw !== "animate" && kw !== "physics") {
         const bad = state.peek();
         let hint = "";
-        if (kw === "sequence") hint = " Nested 'sequence' blocks are not allowed.";
+        if (kw === "parallel") hint = " Nested 'parallel' blocks are not allowed.";
+        else if (kw === "sequence") hint = " 'sequence' cannot be inside 'parallel'.";
         state.throwError(
-          `In ${state.currentContext}: Only 'animate' and 'physics' blocks are allowed inside a 'sequence' block, but found '${kw}'.${hint}`,
+          `In ${state.currentContext}: Only 'animate' and 'physics' blocks are allowed inside a 'parallel' block, but found '${kw}'.${hint}`,
           bad
         );
       }
-
+      
       const child = parseObject(state, 0);
       children.push(child);
     } catch (e) {
@@ -55,17 +56,87 @@ function parseSequenceBlock(state: ParserState, parentContext: string): ObjectNo
       }
     }
   }
+  
+  if (state.peek().type === "EOF") {
+    state.throwError(
+      `In ${state.currentContext}: The 'parallel' block was not closed before end of file. Add a closing '}'.`,
+      braceTok
+    );
+  }
+  
+  const endTok = state.consume("RBRACE");
+  state.currentContext = prevContext;
+  
+  return {
+    type: "parallel",
+    name: `parallel_${parTok.line}_${parTok.col}`,
+    props: {},
+    children,
+    line: parTok.line,
+    col: parTok.col,
+    endLine: endTok.line,
+    endCol: endTok.endCol
+  };
+}
 
+function parseSequenceBlock(state: ParserState, parentContext: string): ObjectNode {
+  const seqTok = state.consume("KEYWORD");
+  const braceTok = state.consume("LBRACE");
+  const prevContext = state.currentContext;
+  state.currentContext = `'sequence' block inside ${parentContext}`;
+  
+  const children: ObjectNode[] = [];
+  
+  while (state.peek().type !== "RBRACE" && state.peek().type !== "EOF") {
+    try {
+      if (state.peek().type !== "KEYWORD") {
+        const bad = state.consume();
+        state.throwError(
+          `In ${state.currentContext}: Expected 'animate', 'physics', or 'parallel' inside a 'sequence' block, but found ${describeToken(bad)}.`,
+          bad
+        );
+      }
+      
+      const kw = state.peek().value as string;
+      // UPDATED: allowed parallel inside sequence
+      if (kw !== "animate" && kw !== "physics" && kw !== "parallel") {
+        const bad = state.peek();
+        let hint = "";
+        if (kw === "sequence") hint = " Nested 'sequence' blocks are not allowed.";
+        state.throwError(
+          `In ${state.currentContext}: Only 'animate', 'physics', and 'parallel' blocks are allowed inside a 'sequence' block, but found '${kw}'.${hint}`,
+          bad
+        );
+      }
+      
+      let child: ObjectNode;
+      if (kw === "parallel") {
+        child = parseParallelBlock(state, state.currentContext);
+      } else {
+        child = parseObject(state, 0);
+      }
+      
+      children.push(child);
+    } catch (e) {
+      if (e instanceof ParseException) {
+        state.errors.push(e.error);
+        state.synchronize();
+      } else {
+        throw e;
+      }
+    }
+  }
+  
   if (state.peek().type === "EOF") {
     state.throwError(
       `In ${state.currentContext}: The 'sequence' block was not closed before end of file. Add a closing '}'.`,
       braceTok
     );
   }
-
+  
   const endTok = state.consume("RBRACE");
   state.currentContext = prevContext;
-
+  
   return {
     type: "sequence",
     name: `sequence_${seqTok.line}_${seqTok.col}`,
@@ -82,7 +153,6 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
   if (depth > 50) {
     state.throwError(`In ${state.currentContext}: Maximum nesting depth exceeded. Object nesting is limited to 50 levels.`, state.peek());
   }
-
   state.globalNodeCount++;
   if (state.globalNodeCount > 15000) {
     state.throwError(`In ${state.currentContext}: Global object limit exceeded. The scene contains too many objects (>15,000) and cannot be compiled.`, state.peek());
@@ -90,8 +160,8 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
 
   const typeTok = state.consume("KEYWORD");
   const objType = typeTok.value as string;
-  let objName = "";
 
+  let objName = "";
   if (objType === "animate" || objType === "physics") {
     objName = `${objType}_${Math.random().toString(36).slice(2, 8)}`;
   } else {
@@ -102,6 +172,7 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
       else if (bad.type === "NAMED_COLOR") hint = ` '${bad.value}' is a reserved color keyword.`;
       else if (bad.type === "SCENE_FIT") hint = ` '${bad.value}' is a reserved sceneFit keyword.`;
       else if (bad.type === "LBRACE") hint = ` Every object must have a name before its '{'.`;
+      
       state.throwError(`In ${state.currentContext}: Expected a valid, unique name for the '${objType}' object, but found ${describeToken(bad)}.${hint}`, bad);
     }
     const nameTok = state.consume("IDENT");
@@ -116,6 +187,7 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
   }
 
   state.consume("LBRACE");
+
   const previousContext = state.currentContext;
   state.currentContext = `'${objType}' ${objType === "animate" || objType === "physics" ? 'block' : `object '${objName}'`}`;
 
@@ -137,10 +209,15 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
           parseDef(state);
           continue;
         }
-
         if (objType === "animate" || objType === "physics") {
           const bad = state.peek();
           state.throwError(`In ${state.currentContext}: '${objType}' blocks cannot contain nested objects or blocks. Found '${bad.value as string}'.`, bad);
+        }
+        
+        // ADDED: Prevent orphaned parallel blocks
+        if (state.peek().value === "parallel") {
+          const bad = state.peek();
+          state.throwError(`In ${state.currentContext}: Unexpected 'parallel' block. 'parallel' blocks are only allowed directly inside a 'sequence' block.`, bad);
         }
 
         if (state.peek().value === "sequence") {
@@ -198,7 +275,7 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
           const bad = state.peek();
           state.throwError(`In ${state.currentContext}: Unexpected object keyword '${bad.value as string}'. '${objType}' objects cannot contain child objects (except 'animate', 'physics', and 'sequence' blocks).`, bad);
         }
-
+        
         const childNode = parseObject(state, depth + 1);
         if (seenNames.has(childNode.name)) {
           state.throwError(`In ${state.currentContext}: Duplicate object name '${childNode.name}' inside '${objName}'.`, state.peek());
@@ -220,12 +297,10 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
 
         state.consume("COLON");
         props[keyName] = parseValue(state, keyName);
-
       } else {
         const bad = state.consume();
         state.throwError(`In ${state.currentContext}: Expected a property name, but found ${describeToken(bad)}.`, bad);
       }
-
     } catch (e) {
       if (e instanceof ParseException) {
         state.errors.push(e.error);
@@ -239,12 +314,11 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
   if (state.peek().type === "EOF") {
     state.throwError(`In ${state.currentContext}: The block was not closed before end of file. Add a closing '}'.`, typeTok);
   }
-
+  
   const endTok = state.consume("RBRACE");
-
   state.env = prevEnv;
   state.currentContext = previousContext;
-
+  
   return {
     type: typeTok.value as ObjectType,
     name: objName,

@@ -24,8 +24,9 @@ export function useSplitPane({
 }: SplitPaneOptions): SplitPaneResult {
   const [ratio, setRatio] = useState(initial);
   const [isDragging, setIsDragging] = useState(false);
+  
+  const ratioRef = useRef(initial);
   const draggingRef = useRef(false);
-
   const listenersRef = useRef<{
     move: ((ev: PointerEvent) => void) | null;
     up: (() => void) | null;
@@ -37,39 +38,45 @@ export function useSplitPane({
       draggingRef.current = true;
       setIsDragging(true);
 
+      let currentRatio = ratioRef.current;
+
       const onMove = (ev: PointerEvent): void => {
         const container = containerRef.current;
         if (!container) return;
         
         const rect = container.getBoundingClientRect();
-
-        setRatio((prevRatio) => {
-          const delta = axis === "horizontal"
+        const delta = axis === "horizontal"
             ? ev.movementX / rect.width
             : ev.movementY / rect.height;
             
-          let newRatio = prevRatio + delta;
-          
-          // Enable collapsing by snapping to 0 or 1 if dragged past the min/max limits
-          const SNAP_THRESHOLD = 0.08; 
-          if (newRatio < min) {
-            newRatio = (newRatio < min - SNAP_THRESHOLD) ? 0 : min;
-          } else if (newRatio > max) {
-            newRatio = (newRatio > max + SNAP_THRESHOLD) ? 1 : max;
-          }
+        let newRatio = currentRatio + delta;
+        const SNAP_THRESHOLD = 0.08;
 
-          return newRatio;
+        if (newRatio < min) {
+          newRatio = (newRatio < min - SNAP_THRESHOLD) ? 0 : min;
+        } else if (newRatio > max) {
+          newRatio = (newRatio > max + SNAP_THRESHOLD) ? 1 : max;
+        }
+
+        currentRatio = newRatio;
+        ratioRef.current = newRatio;
+
+        // DRAG LAG FIX: Directly mutate the CSS variable on the wrapper to bypass React renders
+        requestAnimationFrame(() => {
+            if (!draggingRef.current) return;
+            const prop = axis === "horizontal" ? "--split-h" : "--split-v";
+            container.style.setProperty(prop, newRatio.toString());
         });
       };
 
       const onUp = (): void => {
         draggingRef.current = false;
         setIsDragging(false);
+        setRatio(ratioRef.current); // Finally commit the new ratio to React state
 
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onUp);
         window.removeEventListener("pointercancel", onUp);
-        
         listenersRef.current.move = null;
         listenersRef.current.up = null;
       };

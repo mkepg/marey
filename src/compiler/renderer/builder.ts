@@ -4,8 +4,6 @@ import type { IRObjectNode, IRObjectProps, IRAnimation, IRPhysics, IRSequence } 
 declare module "pixi.js" {
   interface Container {
     __declareLayout?: {
-      localAnchorX: number;
-      localAnchorY: number;
       localPivotX: number;
       localPivotY: number;
       currentPos: { x: number; y: number };
@@ -22,12 +20,10 @@ declare module "pixi.js" {
     __physics?: IRPhysics;
     __physicsState?: {
       velocity: { x: number; y: number };
-      active: boolean;
-      skipNextFrame?: boolean;
-      elapsed?: number;
     };
     __sequences?: ReadonlyArray<IRSequence>;
     __baseSize?: { w: number; h: number };
+    __kinematicPosAnimCount?: number; 
   }
 }
 
@@ -37,17 +33,13 @@ function applyAnchorAndPivot(
     position: { x: number; y: number };
     rotation: number;
     scale: { x: number; y: number };
-    anchor: { x: number; y: number };
     alpha: number;
   },
-  localAnchor: { x: number; y: number },
   localPivot: { x: number; y: number }
 ): void {
   wrapper.pivot.set(localPivot.x, localPivot.y);
-  
+
   wrapper.__declareLayout = {
-    localAnchorX: localAnchor.x,
-    localAnchorY: localAnchor.y,
     localPivotX: localPivot.x,
     localPivotY: localPivot.y,
     currentPos: { x: props.position.x, y: props.position.y },
@@ -56,13 +48,14 @@ function applyAnchorAndPivot(
 
   wrapper.__updateLayout = () => {
     const layout = wrapper.__declareLayout!;
-    const ax = (layout.localAnchorX - layout.localPivotX) * layout.currentScale.x;
-    const ay = (layout.localAnchorY - layout.localPivotY) * layout.currentScale.y;
-    wrapper.position.set(layout.currentPos.x - ax, layout.currentPos.y - ay);
+    
+    // With anchor strictly enforced at 0.5, 0.5, PIXI position IS the exact geometric center. 
+    // No translation math needed!
+    wrapper.position.set(layout.currentPos.x, layout.currentPos.y);
     wrapper.scale.set(layout.currentScale.x, layout.currentScale.y);
   };
-  wrapper.__updateLayout();
 
+  wrapper.__updateLayout();
   wrapper.rotation = props.rotation * (Math.PI / 180);
   wrapper.alpha = props.alpha;
 }
@@ -75,46 +68,31 @@ export function buildNode(node: IRObjectNode): Container {
     case "circle": {
       wrapper = new Container();
       const localPivot = { x: props.radius, y: props.radius };
-      const localAnchor = {
-        x: props.anchor.x * (props.radius * 2),
-        y: props.anchor.y * (props.radius * 2),
-      };
-
-      applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
-
+      applyAnchorAndPivot(wrapper, props, localPivot);
+      
       const gfx = new Graphics()
         .circle(props.radius, props.radius, props.radius)
         .fill(props.color);
-
       wrapper.addChild(gfx);
       wrapper.__baseSize = { w: props.radius * 2, h: props.radius * 2 };
       break;
     }
-
     case "rectangle": {
       wrapper = new Container();
       const localPivot = { x: props.width / 2, y: props.height / 2 };
-      const localAnchor = {
-        x: props.anchor.x * props.width,
-        y: props.anchor.y * props.height,
-      };
-
-      applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
-
+      applyAnchorAndPivot(wrapper, props, localPivot);
+      
       const gfx = new Graphics()
         .rect(0, 0, props.width, props.height)
         .fill(props.color);
-
       wrapper.addChild(gfx);
       wrapper.__baseSize = { w: props.width, h: props.height };
       break;
     }
-
     case "polygon": {
       wrapper = new Container();
       const len = props.points.length;
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-
       for (let i = 0; i < len; i++) {
         const p = props.points[i];
         if (p.x < minX) minX = p.x;
@@ -123,21 +101,14 @@ export function buildNode(node: IRObjectNode): Container {
         if (p.y > maxY) maxY = p.y;
       }
       if (minX === Infinity) { minX = 0; maxX = 0; minY = 0; maxY = 0; }
-
       const w = maxX - minX;
       const h = maxY - minY;
 
       const localPivot = { x: minX + w / 2, y: minY + h / 2 };
-      const localAnchor = {
-        x: minX + props.anchor.x * w,
-        y: minY + props.anchor.y * h,
-      };
-
-      applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
+      applyAnchorAndPivot(wrapper, props, localPivot);
 
       const flatPoints = new Array(len * 2);
       for (let i = 0; i < len; i++) {
-        // Render exactly at the user-defined coordinates
         flatPoints[i * 2]     = props.points[i].x;
         flatPoints[i * 2 + 1] = props.points[i].y;
       }
@@ -145,17 +116,14 @@ export function buildNode(node: IRObjectNode): Container {
       const gfx = new Graphics()
         .poly(flatPoints, true)
         .fill(props.color);
-
       wrapper.addChild(gfx);
       wrapper.__baseSize = { w, h };
       break;
     }
-
     case "line": {
       wrapper = new Container();
       const len = props.points.length;
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-
       for (let i = 0; i < len; i++) {
         const p = props.points[i];
         if (p.x < minX) minX = p.x;
@@ -164,21 +132,14 @@ export function buildNode(node: IRObjectNode): Container {
         if (p.y > maxY) maxY = p.y;
       }
       if (minX === Infinity) { minX = 0; maxX = 0; minY = 0; maxY = 0; }
-
       const w = maxX - minX;
       const h = maxY - minY;
 
       const localPivot = { x: minX + w / 2, y: minY + h / 2 };
-      const localAnchor = {
-        x: minX + props.anchor.x * w,
-        y: minY + props.anchor.y * h,
-      };
-
-      applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
+      applyAnchorAndPivot(wrapper, props, localPivot);
 
       const flatPoints = new Array(len * 2);
       for (let i = 0; i < len; i++) {
-        // Render exactly at the user-defined coordinates
         flatPoints[i * 2]     = props.points[i].x;
         flatPoints[i * 2 + 1] = props.points[i].y;
       }
@@ -186,12 +147,10 @@ export function buildNode(node: IRObjectNode): Container {
       const gfx = new Graphics()
         .poly(flatPoints, false)
         .stroke({ width: props.thickness, color: props.color });
-
       wrapper.addChild(gfx);
       wrapper.__baseSize = { w, h };
       break;
     }
-
     case "text": {
       wrapper = new Container();
       const style = new TextStyle({
@@ -202,18 +161,12 @@ export function buildNode(node: IRObjectNode): Container {
       const textObj = new Text({ text: props.content, style });
 
       const localPivot = { x: textObj.width / 2, y: textObj.height / 2 };
-      const localAnchor = {
-        x: props.anchor.x * textObj.width,
-        y: props.anchor.y * textObj.height,
-      };
-
-      applyAnchorAndPivot(wrapper, props, localAnchor, localPivot);
+      applyAnchorAndPivot(wrapper, props, localPivot);
 
       wrapper.addChild(textObj);
       wrapper.__baseSize = { w: textObj.width, h: textObj.height };
       break;
     }
-
     case "group": {
       wrapper = new Container();
       for (const child of node.children) {
@@ -221,25 +174,19 @@ export function buildNode(node: IRObjectNode): Container {
       }
 
       const localPivot = { x: 0, y: 0 };
-      const localAnchor = { x: 0, y: 0 };
-
       applyAnchorAndPivot(
         wrapper,
         {
           position: props.transform.position,
           rotation: props.transform.rotation,
           scale: props.transform.scale,
-          anchor: { x: 0, y: 0 },
           alpha: props.alpha,
         },
-        localAnchor,
         localPivot
       );
-
       wrapper.__baseSize = { w: 0, h: 0 };
       break;
     }
-
     default: {
       const _never: never = props;
       throw new Error(`[PixiAdapter] Unknown IR node kind: ${String((_never as IRObjectProps).kind)}`);
@@ -248,6 +195,7 @@ export function buildNode(node: IRObjectNode): Container {
 
   wrapper.__animations = props.animations;
   wrapper.__sequences  = props.sequences;
+  wrapper.__kinematicPosAnimCount = 0;
 
   let startPos   = { x: 0, y: 0 };
   let startScale = { x: 1, y: 1 };
@@ -274,13 +222,10 @@ export function buildNode(node: IRObjectNode): Container {
   };
 
   wrapper.__physics = props.physics;
+
   if (props.physics) {
-    const hasPosAnim = props.animations.some(a => a.property === "position");
     wrapper.__physicsState = {
-      velocity:      { x: props.physics.velocity.x, y: props.physics.velocity.y },
-      active:        !hasPosAnim,
-      skipNextFrame: false,
-      elapsed:       props.physics.duration === "indefinitely" ? undefined : 0,
+      velocity: { x: props.physics.velocity.x, y: props.physics.velocity.y }
     };
   }
 

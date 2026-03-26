@@ -62,6 +62,9 @@ export class ParserState {
   globalNodeCount = 0;
   templates: Record<string, TemplateDef> = {};
 
+  // FIX 2: Track active templates to prevent cyclical instantiation
+  activeTemplates: Set<string> = new Set();
+
   constructor(tokens: Token[]) {
     this.tokens = tokens;
   }
@@ -93,7 +96,6 @@ export class ParserState {
       endLine: token.line,
       endCol: token.endCol,
     };
-
     if (this.errors.length >= 50) {
       const maxErrorMessage = "Maximum error limit reached. Further parsing aborted.";
       throw new Error(maxErrorMessage);
@@ -103,16 +105,10 @@ export class ParserState {
 
   synchronize(): void {
     let t = this.peek();
-    
-    // If we're already at a closing boundary or EOF, stop advancing.
     if (t.type === "RBRACE" || t.type === "EOF") return;
     this.pos++;
-
     while (!this.isAtEnd()) {
       t = this.peek();
-      
-      // We explicitly include LBRACE here to prevent the synchronizer from 
-      // skipping into a new block and ruining the parser's structural depth logic.
       if (
         t.type === "RBRACE" ||
         t.type === "LBRACE" ||
@@ -120,8 +116,6 @@ export class ParserState {
       ) {
         return;
       }
-      
-      // Stop if we see a valid property declaration signature
       if (t.type === "IDENT") {
         const next = this.tokens[this.pos + 1];
         if (next && next.type === "COLON") {

@@ -16,6 +16,7 @@ import type {
   IRPhysicsDuration,
   IRSequence,
   IRSequenceStep,
+  IRParallelStep,
 } from "../sceneIR";
 import {
   resolveColor,
@@ -49,15 +50,17 @@ function buildPhysicsFromNode(physicsNode: ObjectNode): IRPhysics {
   const pp = physicsNode.props;
   const durVal = pp["duration"];
   let duration: IRPhysicsDuration;
+
   if (durVal?.kind === "indefinitely") {
     duration = "indefinitely";
   } else {
     duration = resolveNumber(pp, "duration", 0);
   }
+
   return {
     velocity:      resolvePoint(pp, "velocity", { x: 0, y: 0 }),
     gravity:       resolvePoint(pp, "gravity", { x: 0, y: 980 }),
-    friction:      resolveNumber(pp, "friction", 0.999),
+    airDrag:       resolveNumber(pp, "airDrag", 0.999),
     bounce:        resolveNumber(pp, "bounce", 0.65),
     collideBounds: resolveBoolean(pp, "collideBounds", true),
     duration,
@@ -68,13 +71,30 @@ function buildSequencesFromChildren(children: ObjectNode[]): ReadonlyArray<IRSeq
   const seqNodes = children.filter(c => c.type === "sequence");
   return seqNodes.map((seqNode): IRSequence => {
     const steps: IRSequenceStep[] = [];
+    
     for (const child of seqNode.children) {
       if (child.type === "animate") {
         steps.push(buildAnimationFromNode(child));
       } else if (child.type === "physics") {
         steps.push(buildPhysicsFromNode(child));
+      } else if (child.type === "parallel") {
+        const parallelSteps: (IRAnimation | IRPhysics)[] = [];
+        for (const pChild of child.children) {
+          if (pChild.type === "animate") {
+            parallelSteps.push(buildAnimationFromNode(pChild));
+          } else if (pChild.type === "physics") {
+            parallelSteps.push(buildPhysicsFromNode(pChild));
+          }
+        }
+        
+        const parallelStep: IRParallelStep = { 
+          type: "parallel", 
+          steps: Object.freeze(parallelSteps) 
+        };
+        steps.push(parallelStep);
       }
     }
+    
     return { steps: Object.freeze(steps) };
   });
 }
@@ -83,7 +103,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
   const registry: Record<IRObjectId, IRObjectNode> = {};
 
   function buildObjectNode(node: ObjectNode, scopePath: string): IRObjectNode {
-    if (node.type === "animate" || node.type === "physics" || node.type === "sequence") {
+    if (node.type === "animate" || node.type === "physics" || node.type === "sequence" || node.type === "parallel") {
       throw new Error(`[IR] '${node.type}' nodes should not be passed directly to buildObjectNode`);
     }
 
@@ -92,8 +112,9 @@ export function buildIR(ast: AstNode): IRSceneNode {
 
     const animNodes   = node.children.filter(c => c.type === "animate");
     const physicsNode = node.children.find(c => c.type === "physics");
+    
     const visualNodes = node.children.filter(
-      c => c.type !== "animate" && c.type !== "physics" && c.type !== "sequence"
+      c => c.type !== "animate" && c.type !== "physics" && c.type !== "sequence" && c.type !== "parallel"
     );
 
     const animations: IRAnimation[] = animNodes.map(buildAnimationFromNode);
@@ -106,6 +127,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
     const sequences = buildSequencesFromChildren(node.children);
 
     let props: IRObjectProps;
+
     switch (node.type) {
       case "circle": {
         const circleProps: IRCircleProps = {
@@ -116,7 +138,6 @@ export function buildIR(ast: AstNode): IRSceneNode {
           alpha:     resolveNumber(p, "alpha", 1.0),
           rotation:  resolveNumber(p, "rotation", 0),
           scale:     resolveScale(p, "scale", { x: 1, y: 1 }),
-          anchor:    resolvePoint(p, "anchor", { x: 0, y: 0 }),
           z:         resolveNumber(p, "z", 0),
           animations,
           physics,
@@ -136,7 +157,6 @@ export function buildIR(ast: AstNode): IRSceneNode {
           alpha:     resolveNumber(p, "alpha", 1.0),
           rotation:  resolveNumber(p, "rotation", 0),
           scale:     resolveScale(p, "scale", { x: 1, y: 1 }),
-          anchor:    resolvePoint(p, "anchor", { x: 0, y: 0 }),
           z:         resolveNumber(p, "z", 0),
           animations,
           physics,
@@ -157,6 +177,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
           defaultX = minX;
           defaultY = minY;
         }
+
         const polyProps: IRPolygonProps = {
           kind:      "polygon",
           points:    pts,
@@ -165,7 +186,6 @@ export function buildIR(ast: AstNode): IRSceneNode {
           position:  resolvePoint(p, "position", { x: defaultX, y: defaultY }),
           rotation:  resolveNumber(p, "rotation", 0),
           scale:     resolveScale(p, "scale", { x: 1, y: 1 }),
-          anchor:    resolvePoint(p, "anchor", { x: 0, y: 0 }),
           z:         resolveNumber(p, "z", 0),
           animations,
           physics,
@@ -185,7 +205,6 @@ export function buildIR(ast: AstNode): IRSceneNode {
           position:  resolvePoint(p, "position", { x: 0, y: 0 }),
           rotation:  resolveNumber(p, "rotation", 0),
           scale:     resolveScale(p, "scale", { x: 1, y: 1 }),
-          anchor:    resolvePoint(p, "anchor", { x: 0, y: 0 }),
           z:         resolveNumber(p, "z", 0),
           animations,
           physics,
@@ -204,7 +223,6 @@ export function buildIR(ast: AstNode): IRSceneNode {
           alpha:     resolveNumber(p, "alpha", 1.0),
           rotation:  resolveNumber(p, "rotation", 0),
           scale:     resolveScale(p, "scale", { x: 1, y: 1 }),
-          anchor:    resolvePoint(p, "anchor", { x: 0, y: 0 }),
           z:         resolveNumber(p, "z", 0),
           animations,
           physics,
@@ -219,6 +237,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
           rotation: resolveNumber(p, "rotation", 0),
           scale:    resolveScale(p, "scale", { x: 1, y: 1 }),
         };
+
         const groupProps: IRGroupProps = {
           kind:      "group",
           transform,
@@ -241,6 +260,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
       node: buildObjectNode(child, `${id}.${child.name}`),
       index,
     }));
+
     childrenNodes.sort((a, b) => {
       const diff = a.node.props.z - b.node.props.z;
       if (diff !== 0) return diff;
@@ -253,18 +273,22 @@ export function buildIR(ast: AstNode): IRSceneNode {
       children: Object.freeze(childrenNodes.map(x => x.node)) as ReadonlyArray<IRObjectNode>,
     });
     registry[id] = irNode;
+
     return irNode;
   }
 
   const sceneAst = ast as AstNode & { type: "scene" };
   const sizeVal  = sceneAst.props["size"] as PointValue;
+
   const visualNodes = sceneAst.children.filter(
-    c => c.type !== "animate" && c.type !== "physics" && c.type !== "sequence"
+    c => c.type !== "animate" && c.type !== "physics" && c.type !== "sequence" && c.type !== "parallel"
   );
+
   const topLevelChildrenNodes = visualNodes.map((child, index) => ({
     node: buildObjectNode(child, `scene.${child.name}`),
     index,
   }));
+
   topLevelChildrenNodes.sort((a, b) => {
     const diff = a.node.props.z - b.node.props.z;
     if (diff !== 0) return diff;

@@ -15,6 +15,7 @@ export const KEYWORDS = new Set<string>([
   "animate",
   "physics",
   "sequence",
+  "parallel", // ADDED: parallel keyword
 ]);
 
 export const NAMED_COLORS: Readonly<Record<string, string>> = {
@@ -37,12 +38,7 @@ export const SCENE_FIT_VALUES = new Set<string>([
 ]);
 
 export const BOOLEAN_VALUES = new Set<string>(["true", "false"]);
-
 export const EASING_VALUES = new Set<string>(["linear", "easeIn", "easeOut", "easeInOut"]);
-
-// "indefinitely" is a special duration keyword for physics blocks.
-// It is recognized as a DURATION_INDEFINITELY token type so the parser
-// can distinguish it cleanly from numeric durations.
 export const DURATION_INDEFINITELY_VALUES = new Set<string>(["indefinitely"]);
 
 export const SINGLE_CHAR_MAP: Readonly<Record<string, TokenType>> = {

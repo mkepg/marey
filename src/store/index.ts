@@ -28,6 +28,7 @@ export interface AppState {
   isTooLargeToShare: boolean;
   autoRun: boolean;
   isCompiling: boolean;
+  fileId: number;
   setCode: (code: string) => void;
   toggleTheme: () => void;
   setLogs: (logs: LogEntry[]) => void;
@@ -47,7 +48,6 @@ template Star(starColor) {
     radius: 2
     color: starColor
     alpha: 0.1
-    anchor: (0.5, 0.5)
     animate {
       property: alpha
       to: 0.8
@@ -78,11 +78,10 @@ scene {
       size: (12, 12)
       color: #38bdf8
       alpha: 0.4
-      anchor: (0.5, 0.5)
       physics {
         velocity: (j * 50 - 150, 0)
         gravity: (0, 700)
-        friction: 0.99
+        airDrag: 0.99
         bounce: 0.7 + j * 0.05
         collideBounds: true
         duration: indefinitely
@@ -102,7 +101,6 @@ scene {
     radius: 180
     color: #4c1d95
     alpha: 0.15
-    anchor: (0.5, 0.5)
     animate {
       property: scale
       to: (1.1, 1.1)
@@ -122,13 +120,10 @@ function getInitialTheme(): Theme {
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
     if (stored === "dark" || stored === "light") return stored;
   } catch {
-    // ignore
   }
-  
   if (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {
     return "light";
   }
-  
   return "dark";
 }
 
@@ -150,6 +145,7 @@ export const useAppStore = create<AppState>((set) => ({
   isTooLargeToShare: computeIsTooLarge(initialCode),
   autoRun: true,
   isCompiling: false,
+  fileId: 0,
   setCode: (code) =>
     set({ code, isTooLargeToShare: computeIsTooLarge(code) }),
   toggleTheme: () =>
@@ -158,7 +154,6 @@ export const useAppStore = create<AppState>((set) => ({
       try {
         window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
       } catch {
-        // ignore
       }
       return { theme: nextTheme };
     }),
@@ -175,13 +170,14 @@ export const useAppStore = create<AppState>((set) => ({
     })),
   newFile: () => {
     saveToStorage("");
-    set({
+    set((s) => ({
       code: "",
       logs: [],
       errors: [],
       compileStatus: "idle",
       isTooLargeToShare: false,
-    });
+      fileId: s.fileId + 1,
+    }));
   },
   setAutoRun:     (val) => set({ autoRun: val }),
   setIsCompiling: (val) => set({ isCompiling: val }),

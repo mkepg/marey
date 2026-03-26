@@ -15,23 +15,20 @@ export function analyzeContext(textUntilCursor: string): ScopeNode[] {
   let expectingGenName = false;
 
   // All block types that open a new scope when followed by `{`.
-  // "sequence" is included so the scanner tracks we're inside a sequence block,
-  // enabling context-aware completions (animate/physics only).
+  // "sequence" and "parallel" are included so the scanner tracks we're inside them
   const validBlocks = new Set([
     "scene", "circle", "rectangle", "polygon", "line", "text",
-    "group", "generate", "template", "use", "animate", "physics", "sequence",
+    "group", "generate", "template", "use", "animate", "physics", "sequence", "parallel"
   ]);
 
   while (i < textUntilCursor.length) {
     const char = textUntilCursor[i];
 
-    // ── skip line comments ───────────────────────────────────────────
     if (char === "/" && textUntilCursor[i + 1] === "/") {
       while (i < textUntilCursor.length && textUntilCursor[i] !== "\n") i++;
       continue;
     }
 
-    // ── skip string literals ─────────────────────────────────────────
     if (char === '"') {
       i++;
       while (i < textUntilCursor.length) {
@@ -82,13 +79,13 @@ export function analyzeContext(textUntilCursor: string): ScopeNode[] {
         expectingGenName = true;
         lastKeyword      = word;
       } else if (expectingGenName && word !== "from" && word !== "to") {
-        // The loop variable becomes a number in scope
         scopes[scopes.length - 1].vars[word] = "number";
         expectingGenName = false;
       } else {
         if (validBlocks.has(word)) {
           lastKeyword = word;
         }
+
         if (expectingDefVal && currentDefName) {
           if (["contain", "cover", "fill", "none"].includes(word)) {
             scopes[scopes.length - 1].vars[currentDefName] = "sceneFit";
@@ -99,10 +96,8 @@ export function analyzeContext(textUntilCursor: string): ScopeNode[] {
           } else if (["linear", "easeIn", "easeOut", "easeInOut"].includes(word)) {
             scopes[scopes.length - 1].vars[currentDefName] = "easing";
           } else if (word === "indefinitely") {
-            // "indefinitely" used as a def value is treated as a number sentinel
             scopes[scopes.length - 1].vars[currentDefName] = "number";
           } else {
-            // Inherit type from outer scope if variable is referenced
             let inheritedType = "number";
             for (let s = scopes.length - 1; s >= 0; s--) {
               if (scopes[s].vars[word]) {
@@ -128,10 +123,10 @@ export function analyzeContext(textUntilCursor: string): ScopeNode[] {
       else if (char === "[") scopes[scopes.length - 1].vars[currentDefName] = "pointList";
       else if (char === "(") scopes[scopes.length - 1].vars[currentDefName] = "point";
       else if (/[0-9\-]/.test(char)) scopes[scopes.length - 1].vars[currentDefName] = "number";
+
       expectingDefVal = false;
       currentDefName  = "";
     }
-
     i++;
   }
 

@@ -38,16 +38,18 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef    = useRef<MonacoEditorNS.IStandaloneCodeEditor | null>(null);
   const decorationsRef = useRef<MonacoEditorNS.IEditorDecorationsCollection | null>(null);
-  
   const [isReady, setIsReady] = useState(false);
-  
+
   const monaco  = useMonaco();
   const code    = useAppStore((s) => s.code);
   const theme   = useAppStore((s) => s.theme);
+  const fileId  = useAppStore((s) => s.fileId); // FIX 3: Pull down tracked fileId
   const setCode = useAppStore((s) => s.setCode);
 
   const codeRef  = useRef(code);
   const themeRef = useRef(theme);
+  const prevFileId = useRef(fileId);
+
   codeRef.current  = code;
   themeRef.current = theme;
 
@@ -55,13 +57,10 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
     if (!monaco || !containerRef.current || editorRef.current) return;
 
     let isCancelled = false;
-
     const initEditor = async () => {
-      // Explicitly wait for the font to load so Monaco measures characters correctly
       try {
         await document.fonts.load("13px 'JetBrains Mono'");
       } catch {
-        // Proceed with fallback font if it fails
       }
 
       if (isCancelled || !containerRef.current) return;
@@ -105,9 +104,22 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
     }
   }, [code]);
 
+  // FIX 3: Flushes undo/redo stack explicitly if the file ID changes (clicking "New File")
+  useEffect(() => {
+    if (!editorRef.current || !monaco) return;
+    if (prevFileId.current !== fileId) {
+      prevFileId.current = fileId;
+      const oldModel = editorRef.current.getModel();
+      const newModel = monaco.editor.createModel(codeRef.current, "Declare");
+      editorRef.current.setModel(newModel);
+      if (oldModel) {
+        oldModel.dispose();
+      }
+    }
+  }, [fileId, monaco]);
+
   useEffect(() => {
     if (!monaco || !editorRef.current || !isReady) return;
-
     const model = editorRef.current.getModel();
     if (!model) return;
 
