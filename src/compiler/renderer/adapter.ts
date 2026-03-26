@@ -80,7 +80,8 @@ export class NativePhysicsEngine implements IPhysicsEngine {
       s.velocity.x += p.gravity.x * step;
       s.velocity.y += p.gravity.y * step;
 
-      const f = Math.pow(p.airDrag, step * 60);
+      // INVERTED DRAG FIX: 0 = vacuum, 1 = maximum resistance
+      const f = Math.pow(1.0 - p.airDrag, step * 60);
       s.velocity.x *= f;
       s.velocity.y *= f;
 
@@ -100,7 +101,6 @@ export class NativePhysicsEngine implements IPhysicsEngine {
         const projW = baseW * cos + baseH * sin;
         const projH = baseW * sin + baseH * cos;
 
-        // Thanks to the forced center anchor, the projection anchor is always half the width/height
         const projAnchorX = projW * 0.5;
         const projAnchorY = projH * 0.5;
 

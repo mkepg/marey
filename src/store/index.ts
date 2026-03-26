@@ -81,7 +81,7 @@ scene {
       physics {
         velocity: (j * 50 - 150, 0)
         gravity: (0, 700)
-        airDrag: 0.99
+        airDrag: 0.01 // INVERTED DRAG FIX: 0.01 = very light air resistance
         bounce: 0.7 + j * 0.05
         collideBounds: true
         duration: indefinitely

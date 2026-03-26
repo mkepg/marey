@@ -60,7 +60,7 @@ function buildPhysicsFromNode(physicsNode: ObjectNode): IRPhysics {
   return {
     velocity:      resolvePoint(pp, "velocity", { x: 0, y: 0 }),
     gravity:       resolvePoint(pp, "gravity", { x: 0, y: 980 }),
-    airDrag:       resolveNumber(pp, "airDrag", 0.999),
+    airDrag:       resolveNumber(pp, "airDrag", 0.0), // INVERTED DRAG FIX: Default is 0.0 (vacuum)
     bounce:        resolveNumber(pp, "bounce", 0.65),
     collideBounds: resolveBoolean(pp, "collideBounds", true),
     duration,
