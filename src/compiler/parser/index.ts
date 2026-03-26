@@ -20,7 +20,6 @@ export function parse(tokens: Token[]): ParseResult {
     }
 
     const firstTok = state.peek();
-
     if (firstTok.type === "EOF") {
       state.throwError("The file is empty. A Declare program must contain a scene block.", firstTok);
     }
@@ -30,6 +29,7 @@ export function parse(tokens: Token[]): ParseResult {
         ? ` '${firstTok.value as string}' is an object keyword — objects must be placed inside a scene block.`
         : firstTok.type === "IDENT"
         ? ` Did you forget to open with 'scene {'?` : "";
+      
       state.throwError(`A Declare program must begin with the 'scene' keyword, but found ${describeToken(firstTok)}.${hint}`, firstTok);
     }
 
@@ -54,11 +54,9 @@ export function parse(tokens: Token[]): ParseResult {
             parseDef(state);
             continue;
           }
-
           if (state.peek().value === "animate") {
             state.throwError(`In ${state.currentContext}: Unexpected 'animate' block. Animations must be placed inside a renderable object (e.g., circle, group), not at the root scene level.`, state.peek());
           }
-
           if (state.peek().value === "generate") {
             const generatedNodes = parseGenerate(state, 1);
             for (const child of generatedNodes) {
@@ -70,7 +68,6 @@ export function parse(tokens: Token[]): ParseResult {
             }
             continue;
           }
-
           if (state.peek().value === "use") {
             const usedNode = parseUse(state, 1);
             if (seenSceneNames.has(usedNode.name)) {
@@ -103,11 +100,14 @@ export function parse(tokens: Token[]): ParseResult {
             state.consume("COLON");
             sceneProps[keyName] = parseValue(state, keyName);
 
+            // NEW: Graciously consume optional inline commas
+            while (state.peek().type === "COMMA") {
+              state.consume("COMMA");
+            }
         } else {
             const bad = state.consume();
             state.throwError(`In ${state.currentContext}: Expected a property name, but found ${describeToken(bad)}.`, bad);
         }
-
       } catch (e) {
         if (e instanceof ParseException) {
           state.errors.push(e.error);
@@ -121,7 +121,7 @@ export function parse(tokens: Token[]): ParseResult {
     if (state.peek().type === "EOF") {
       state.throwError(`In ${state.currentContext}: The 'scene' block was not closed before end of file. Add a closing '}'.`, firstTok);
     }
-
+    
     const endTok = state.consume("RBRACE");
     state.env = prevEnv;
 

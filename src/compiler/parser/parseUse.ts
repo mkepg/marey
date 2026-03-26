@@ -29,7 +29,6 @@ export function parseUse(state: ParserState, depth: number): ObjectNode {
     state.throwError(`In ${state.currentContext}: Undefined template '${templateName}'. Ensure it is defined at the top of the file before the scene block.`, templateNameTok);
   }
 
-  // FIX 2: Cyclic redundancy check
   if (state.activeTemplates.has(templateName)) {
     state.throwError(`[TYPE_RECURSION] Cyclic template dependency detected. Template '${templateName}' is already being expanded.`, templateNameTok);
   }
@@ -80,6 +79,11 @@ export function parseUse(state: ParserState, depth: number): ObjectNode {
 
           state.consume("COLON");
           props[keyName] = parseValue(state, keyName);
+
+          // NEW: Graciously consume optional inline commas
+          while (state.peek().type === "COMMA") {
+            state.consume("COMMA");
+          }
       } else {
           const bad = state.consume();
           state.throwError(`In ${state.currentContext}: Expected a property name, but found ${describeToken(bad)}.`, bad);
@@ -101,7 +105,6 @@ export function parseUse(state: ParserState, depth: number): ObjectNode {
   const children: ObjectNode[] = [];
   const seenNames = new Set<string>();
 
-  // FIX 2: Safely lock the active template status to guard against cycle crashes
   state.activeTemplates.add(templateName);
   try {
     while (state.pos < template.endPos) {

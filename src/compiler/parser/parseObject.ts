@@ -11,10 +11,9 @@ const RESERVED_PROPS = new Set<string>([
   "alpha", "rotation", "scale", "anchor", "z", "width", "height",
   "points", "content", "fontSize", "thickness", "property", "to",
   "duration", "easing", "loop", "yoyo", "velocity", "gravity",
-  "airDrag", "bounce", "collideBounds", "handOff" // UPDATED: friction -> airDrag
+  "airDrag", "bounce", "collideBounds", "handOff"
 ]);
 
-// ADDED: Specialized parsing for the parallel block
 function parseParallelBlock(state: ParserState, parentContext: string): ObjectNode {
   const parTok = state.consume("KEYWORD");
   const braceTok = state.consume("LBRACE");
@@ -98,7 +97,6 @@ function parseSequenceBlock(state: ParserState, parentContext: string): ObjectNo
       }
       
       const kw = state.peek().value as string;
-      // UPDATED: allowed parallel inside sequence
       if (kw !== "animate" && kw !== "physics" && kw !== "parallel") {
         const bad = state.peek();
         let hint = "";
@@ -214,7 +212,6 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
           state.throwError(`In ${state.currentContext}: '${objType}' blocks cannot contain nested objects or blocks. Found '${bad.value as string}'.`, bad);
         }
         
-        // ADDED: Prevent orphaned parallel blocks
         if (state.peek().value === "parallel") {
           const bad = state.peek();
           state.throwError(`In ${state.currentContext}: Unexpected 'parallel' block. 'parallel' blocks are only allowed directly inside a 'sequence' block.`, bad);
@@ -297,6 +294,11 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
 
         state.consume("COLON");
         props[keyName] = parseValue(state, keyName);
+
+        // NEW: Graciously consume optional inline commas
+        while (state.peek().type === "COMMA") {
+          state.consume("COMMA");
+        }
       } else {
         const bad = state.consume();
         state.throwError(`In ${state.currentContext}: Expected a property name, but found ${describeToken(bad)}.`, bad);
