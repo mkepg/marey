@@ -38,13 +38,27 @@ def amber  = #fbbf24
 def travel = 250   // shared distance for the easing race
 def beat   = 2.0   // shared duration for the easing race
 
-// A tick mark on the left rail, one per easing row.
-template Marker(tint) {
-  rectangle bar {
-    position: (0, 0)
+// One row of the easing race. The curve itself is a template
+// argument, so all four rows share a single definition.
+template Racer(curve) {
+  rectangle mark {
+    position: (-20, 0)
     size: (3, 14)
-    color: tint
+    color: dim
     alpha: 0.6
+  }
+  circle dot {
+    position: (0, 0)
+    radius: 7
+    color: sky
+    animate {
+      property: position
+      to: (travel, 0)
+      duration: beat
+      easing: curve
+      loop: true
+      yoyo: true
+    }
   }
 }
 
@@ -73,72 +87,15 @@ scene {
   // ── 1 · EASING ──────────────────────────────────────────────
   // Same distance, same duration, four curves. They must depart
   // and arrive in lockstep no matter the display refresh rate.
-  generate m from 0 to 3 {
-    use Marker(dim) rail {
-      position: (100, 116 + m * 22)
-    }
-  }
+  use Racer(linear)    rowLinear { position: (120, 116) }
+  use Racer(easeIn)    rowIn     { position: (120, 138) }
+  use Racer(easeOut)   rowOut    { position: (120, 160) }
+  use Racer(easeInOut) rowInOut  { position: (120, 182) }
 
   text lblLinear { position: (58, 116), content: "linear",    fontSize: 10, color: dim }
   text lblIn     { position: (58, 138), content: "easeIn",    fontSize: 10, color: dim }
   text lblOut    { position: (58, 160), content: "easeOut",   fontSize: 10, color: dim }
   text lblInOut  { position: (58, 182), content: "easeInOut", fontSize: 10, color: dim }
-
-  circle dotLinear {
-    position: (120, 116)
-    radius: 7
-    color: sky
-    animate {
-      property: position
-      to: (120 + travel, 116)
-      duration: beat
-      easing: linear
-      loop: true
-      yoyo: true
-    }
-  }
-
-  circle dotIn {
-    position: (120, 138)
-    radius: 7
-    color: sky
-    animate {
-      property: position
-      to: (120 + travel, 138)
-      duration: beat
-      easing: easeIn
-      loop: true
-      yoyo: true
-    }
-  }
-
-  circle dotOut {
-    position: (120, 160)
-    radius: 7
-    color: sky
-    animate {
-      property: position
-      to: (120 + travel, 160)
-      duration: beat
-      easing: easeOut
-      loop: true
-      yoyo: true
-    }
-  }
-
-  circle dotInOut {
-    position: (120, 182)
-    radius: 7
-    color: sky
-    animate {
-      property: position
-      to: (120 + travel, 182)
-      duration: beat
-      easing: easeInOut
-      loop: true
-      yoyo: true
-    }
-  }
 
   // ── 2 · HANDOFF ─────────────────────────────────────────────
   // The animation's exit velocity is carried into the simulation,

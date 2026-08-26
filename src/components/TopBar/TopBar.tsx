@@ -49,6 +49,13 @@ const NewFileIcon: FunctionComponent = () => (
   </svg>
 );
 
+const ExampleIcon: FunctionComponent = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+  </svg>
+);
+
 interface TopBarProps {
   onRun: () => void;
 }
@@ -60,10 +67,17 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
   const isTooLarge  = useAppStore((s) => s.isTooLargeToShare);
   const toggleTheme = useAppStore((s) => s.toggleTheme);
   const newFile     = useAppStore((s) => s.newFile);
+  const loadExample = useAppStore((s) => s.loadExample);
   const setAutoRun  = useAppStore((s) => s.setAutoRun);
   const handleShare = useShare();
+  const code        = useAppStore((s) => s.code);
 
   const [confirmingNew, setConfirmingNew] = useState(false);
+  const [confirmingExample, setConfirmingExample] = useState(false);
+
+  // An empty editor has nothing to lose, so skip the confirmation there —
+  // that is the case a first-timer who cleared the editor is most likely in.
+  const exampleNeedsConfirm = code.trim().length > 0;
 
   const dotMod     = status === "ok" ? styles.ok : status === "error" ? styles.error : "";
   const statusText = status === "ok" ? "compiled" : status === "error" ? "error" : "ready";
@@ -80,6 +94,20 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
 
   const handleNewBlur = (): void => {
     setTimeout(() => setConfirmingNew(false), 150);
+  };
+
+  const handleExampleClick = (): void => {
+    if (exampleNeedsConfirm && !confirmingExample) {
+      setConfirmingExample(true);
+      setTimeout(() => setConfirmingExample(false), 3_000);
+      return;
+    }
+    setConfirmingExample(false);
+    loadExample();
+  };
+
+  const handleExampleBlur = (): void => {
+    setTimeout(() => setConfirmingExample(false), 150);
   };
 
   return (
@@ -118,6 +146,25 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
         >
           <NewFileIcon />
           {confirmingNew ? "confirm?" : "new"}
+        </button>
+
+        <button
+          className={`${styles.btnIcon}${confirmingExample ? ` ${styles.btnConfirm}` : ""}`}
+          onClick={handleExampleClick}
+          onBlur={handleExampleBlur}
+          aria-label={
+            confirmingExample
+              ? "Click again to confirm loading the example"
+              : "Load the example scene"
+          }
+          title={
+            confirmingExample
+              ? "Click again to confirm — replaces your code"
+              : "Load the example scene"
+          }
+        >
+          <ExampleIcon />
+          {confirmingExample ? "replace?" : "example"}
         </button>
 
         <div className={styles.tooltipWrap}>

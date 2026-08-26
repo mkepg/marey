@@ -40,6 +40,7 @@ export interface AppState {
   showToast: (message: string, kind: ToastState["kind"]) => void;
   dismissToast: (id: number) => void;
   newFile: () => void;
+  loadExample: () => void;
   setAutoRun: (val: boolean) => void;
   setIsCompiling: (val: boolean) => void;
 }
@@ -107,6 +108,19 @@ export const useAppStore = create<AppState>((set) => ({
       errors: [],
       compileStatus: "idle",
       isTooLargeToShare: false,
+      fileId: s.fileId + 1,
+    }));
+  },
+  // Restores the bundled example. Without this the default scene is
+  // unrecoverable once it has been edited, since autosave overwrites it.
+  loadExample: () => {
+    saveToStorage(DEFAULT_CODE);
+    set((s) => ({
+      code: DEFAULT_CODE,
+      logs: [],
+      errors: [],
+      compileStatus: "idle",
+      isTooLargeToShare: computeIsTooLarge(DEFAULT_CODE),
       fileId: s.fileId + 1,
     }));
   },
