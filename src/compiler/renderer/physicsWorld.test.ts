@@ -428,3 +428,20 @@ describe("MatterWorld scale", () => {
     w.destroy();
   });
 });
+
+describe("MatterWorld culling", () => {
+  it("reports only bodies past the margin", () => {
+    const w = new MatterWorld(800, 600);
+    w.addBody("inside", { kind: "circle", radius: 10 }, 400, 300, 0, VACUUM);
+    w.addBody("nearby", { kind: "circle", radius: 10 }, -400, 300, 0, VACUUM);
+    w.addBody("gone", { kind: "circle", radius: 10 }, 400, 2400, 0, VACUUM);
+    expect(w.idsOutsideBounds(800).sort()).toEqual(["gone"]);
+    w.destroy();
+  });
+
+  it("reports nothing when the world is empty", () => {
+    const w = new MatterWorld(800, 600);
+    expect(w.idsOutsideBounds(800)).toEqual([]);
+    w.destroy();
+  });
+});

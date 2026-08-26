@@ -429,7 +429,16 @@ export class MatterWorld implements IPhysicsWorld {
     Matter.Sleeping.afterCollisions(this.engine.pairs.list);
   }
 
-  idsOutsideBounds(_margin: number): string[] { return []; }
+  idsOutsideBounds(margin: number): string[] {
+    const out: string[] = [];
+    for (const [id, rec] of this.records) {
+      const { x, y } = rec.body.position;
+      if (x < -margin || y < -margin || x > this.width + margin || y > this.height + margin) {
+        out.push(id);
+      }
+    }
+    return out;
+  }
 
   isIdle(): boolean {
     for (const rec of this.records.values()) {
