@@ -5,6 +5,9 @@ import {
   saveToStorage,
   encodeCode,
 } from "../lib/share";
+import { DEFAULT_CODE } from "./defaultScene";
+
+export { DEFAULT_CODE };
 
 export type Theme = "dark" | "light";
 export type CompileStatus = "idle" | "ok" | "error";
@@ -40,78 +43,6 @@ export interface AppState {
   setAutoRun: (val: boolean) => void;
   setIsCompiling: (val: boolean) => void;
 }
-
-export const DEFAULT_CODE = `// ── Reusable Ambient Star Template ────────────────────────────
-template Star(starColor) {
-  circle s {
-    position: (0, 0)
-    radius: 2
-    color: starColor
-    alpha: 0.1
-    animate {
-      property: alpha
-      to: 0.8
-      duration: 1.5
-      easing: easeInOut
-      loop: true
-      yoyo: true
-    }
-  }
-}
-
-scene {
-  size: (800, 600)
-  background: #080811
-
-  // ── 1. Background Ambient Starfield ─────────────────────────
-  generate i from 1 to 20 {
-    use Star(#a78bfa) bgStar {
-      position: (i * 38, i * 25 - (i * i) / 2 + 100)
-      scale: (i / 10 + 0.5, i / 10 + 0.5)
-    }
-  }
-
-  // ── 2. Physics-Enabled Neon Cubes ───────────────────────────
-  generate j from 1 to 5 {
-    rectangle cube {
-      position: (j * 130 + 50, 20)
-      size: (12, 12)
-      color: #38bdf8
-      alpha: 0.4
-      physics {
-        velocity: (j * 50 - 150, 0)
-        gravity: (0, 700)
-        airDrag: 0.01 // INVERTED DRAG FIX: 0.01 = very light air resistance
-        bounce: 0.7 + j * 0.05
-        collideBounds: true
-        duration: indefinitely
-      }
-      animate {
-        property: rotation
-        to: 1440
-        duration: 4.0 + j
-        easing: easeOut
-      }
-    }
-  }
-
-  // ── 3. Central Pulsing Aura ─────────────────────────────────
-  circle ringOuter {
-    position: (400, 300)
-    radius: 180
-    color: #4c1d95
-    alpha: 0.15
-    animate {
-      property: scale
-      to: (1.1, 1.1)
-      duration: 4.0
-      easing: easeInOut
-      loop: true
-      yoyo: true
-    }
-  }
-}
-`;
 
 const THEME_STORAGE_KEY = "declare_theme";
 
