@@ -7,10 +7,7 @@ export const TICK_HZ = 120;
 export const TICK_MS = 1000 / TICK_HZ;
 export const TICK_SECONDS = 1 / TICK_HZ;
 
-/** Longest single frame we will honour; anything worse is treated as a hitch. */
-export const MAX_FRAME_MS = 100;
-
-/** Most ticks we will simulate in one rendered frame, to avoid a death spiral. */
+/** Most ticks we will simulate in one rendered frame, to avoid a death spiral. This is the sole bound on work per frame. */
 export const MAX_CATCHUP_TICKS = 8;
 
 /** Convert a duration in seconds to whole simulation ticks. */
@@ -33,7 +30,10 @@ export class LiveDriver {
 
   /** Returns how many fixed ticks to advance for this frame. */
   pump(deltaMs: number): number {
-    this.accumulator += Math.min(deltaMs, MAX_FRAME_MS);
+    // A negative or non-finite delta would corrupt the accumulator permanently,
+    // so treat anything nonsensical as no time passing.
+    const delta = Number.isFinite(deltaMs) && deltaMs > 0 ? deltaMs : 0;
+    this.accumulator += delta;
 
     let ticks = 0;
     while (this.accumulator >= TICK_MS && ticks < MAX_CATCHUP_TICKS) {

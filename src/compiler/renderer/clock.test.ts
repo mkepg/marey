@@ -93,4 +93,31 @@ describe("LiveDriver", () => {
     expect(evenTicks).toBeGreaterThanOrEqual(719);
     expect(evenTicks).toBeLessThanOrEqual(720);
   });
+
+  it("clears accumulated time and alpha on reset", () => {
+    const d = new LiveDriver();
+    d.pump(5);
+    expect(d.alpha).toBeGreaterThan(0);
+
+    d.reset();
+    expect(d.alpha).toBe(0);
+    // The 5ms carried before reset must not contribute to the next tick.
+    expect(d.pump(5)).toBe(0);
+  });
+
+  it("ignores a non-finite delta rather than corrupting the accumulator", () => {
+    const d = new LiveDriver();
+    d.pump(Number.NaN);
+    expect(d.alpha).toBe(0);
+    // The driver must still work normally afterward.
+    expect(d.pump(1000 / 60)).toBe(2);
+  });
+
+  it("ignores a negative delta", () => {
+    const d = new LiveDriver();
+    d.pump(5);
+    d.pump(-1000);
+    // The -1000 must not have rolled the accumulator backwards.
+    expect(d.pump(5)).toBe(1);
+  });
 });
