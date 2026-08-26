@@ -1,0 +1,253 @@
+/**
+ * The scene loaded when there is no saved or shared document.
+ *
+ * It doubles as a visual regression test for the renderer: each zone
+ * exercises a different path through the timeline, and the header comment
+ * tells the reader what correct behaviour looks like. `defaultScene.test.ts`
+ * asserts that it compiles, so a broken default can never ship.
+ *
+ * Kept in its own module so it can be imported without pulling in the store,
+ * which touches `window.localStorage` at module load.
+ */
+export const DEFAULT_CODE = `// ══ DECLARE · MOTION TEST CARD ═══════════════════════════════
+//
+// What you should see:
+//
+//   1. EASING     four dots leave together and arrive together,
+//                 fanning apart in between. If they drift out of
+//                 sync over time, the clock is wrong.
+//   2. HANDOFF    the amber ball slides up-right, then keeps its
+//                 momentum into a falling arc — it must not stop
+//                 dead and drop straight down.
+//   3. SEQUENCE   the rose square spins, then grows while sliding,
+//                 then falls. One step at a time, in that order.
+//   4. LOOP       the rings breathe forever, at different rates.
+//   5. STAGGER    the bar wave ripples; each bar is slightly slower
+//                 than its neighbour.
+//
+// Note: falling objects pass through each other and land in a heap.
+// That is expected — objects do not yet collide with one another.
+
+def ink    = #e2e8f0
+def dim    = #64748b
+def sky    = #38bdf8
+def violet = #a78bfa
+def rose   = #fb7185
+def amber  = #fbbf24
+
+def travel = 250   // shared distance for the easing race
+def beat   = 2.0   // shared duration for the easing race
+
+// One row of the easing race. The curve itself is a template
+// argument, so all four rows share a single definition.
+template Racer(curve) {
+  rectangle mark {
+    position: (-20, 0)
+    size: (3, 14)
+    color: dim
+    alpha: 0.6
+  }
+  circle dot {
+    position: (0, 0)
+    radius: 7
+    color: sky
+    animate {
+      property: position
+      to: (travel, 0)
+      duration: beat
+      easing: curve
+      loop: true
+      yoyo: true
+    }
+  }
+}
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  sceneFit: contain
+
+  // ── Title ───────────────────────────────────────────────────
+  text title {
+    position: (400, 40)
+    content: "DECLARE"
+    fontSize: 26
+    color: ink
+    z: 2
+  }
+
+  text subtitle {
+    position: (400, 64)
+    content: "motion test card"
+    fontSize: 11
+    color: dim
+    z: 2
+  }
+
+  // ── 1 · EASING ──────────────────────────────────────────────
+  // Same distance, same duration, four curves. They must depart
+  // and arrive in lockstep no matter the display refresh rate.
+  use Racer(linear)    rowLinear { position: (120, 116) }
+  use Racer(easeIn)    rowIn     { position: (120, 138) }
+  use Racer(easeOut)   rowOut    { position: (120, 160) }
+  use Racer(easeInOut) rowInOut  { position: (120, 182) }
+
+  text lblLinear { position: (58, 116), content: "linear",    fontSize: 10, color: dim }
+  text lblIn     { position: (58, 138), content: "easeIn",    fontSize: 10, color: dim }
+  text lblOut    { position: (58, 160), content: "easeOut",   fontSize: 10, color: dim }
+  text lblInOut  { position: (58, 182), content: "easeInOut", fontSize: 10, color: dim }
+
+  // ── 2 · HANDOFF ─────────────────────────────────────────────
+  // The animation's exit velocity is carried into the simulation,
+  // so the ball arcs. Without handoff it would halt, then drop.
+  text lblHandoff {
+    position: (74, 236)
+    content: "handOff"
+    fontSize: 10
+    color: dim
+  }
+
+  circle launcher {
+    position: (130, 258)
+    radius: 11
+    color: amber
+    animate {
+      property: position
+      to: (350, 220)
+      duration: 1.1
+      easing: easeOut
+      handOff: true
+    }
+    physics {
+      gravity: (0, 900)
+      airDrag: 0.006
+      bounce: 0.55
+      collideBounds: true
+      duration: indefinitely
+    }
+  }
+
+  // ── 3 · SEQUENCE + PARALLEL ─────────────────────────────────
+  // Three steps, strictly in order. The middle step runs two
+  // animations at once and only advances when both finish.
+  text lblSeq {
+    position: (74, 310)
+    content: "sequence"
+    fontSize: 10
+    color: dim
+  }
+
+  rectangle stepper {
+    position: (130, 332)
+    size: (34, 34)
+    color: rose
+    sequence {
+      animate {
+        property: rotation
+        to: 180
+        duration: 0.9
+        easing: easeInOut
+      }
+      parallel {
+        animate { property: position, to: (350, 332), duration: 1.2, easing: easeInOut }
+        animate { property: scale,    to: (1.6, 1.6), duration: 1.2, easing: easeOut }
+      }
+      physics {
+        gravity: (0, 700)
+        bounce: 0.45
+        collideBounds: true
+        duration: 4
+      }
+    }
+  }
+
+  // ── 4 · LOOP ────────────────────────────────────────────────
+  // Two rings breathing on different periods, drawn behind
+  // everything else via a negative z.
+  circle auraOuter {
+    position: (610, 250)
+    radius: 96
+    color: violet
+    alpha: 0.10
+    z: -1
+    animate {
+      property: scale
+      to: (1.18, 1.18)
+      duration: 3.4
+      easing: easeInOut
+      loop: true
+      yoyo: true
+    }
+  }
+
+  circle auraInner {
+    position: (610, 250)
+    radius: 52
+    color: sky
+    alpha: 0.16
+    z: -1
+    animate {
+      property: scale
+      to: (0.78, 0.78)
+      duration: 2.2
+      easing: easeInOut
+      loop: true
+      yoyo: true
+    }
+  }
+
+  // A group rotates as one unit; its children keep their offsets.
+  group badge {
+    position: (610, 250)
+    animate {
+      property: rotation
+      to: 360
+      duration: 9.0
+      easing: linear
+      loop: true
+    }
+    polygon blade {
+      position: (0, 0)
+      points: [(0, -30), (26, 15), (-26, 15)]
+      color: amber
+      alpha: 0.85
+    }
+    line spoke {
+      position: (0, 0)
+      points: [(-44, 0), (44, 0)]
+      thickness: 2
+      color: rose
+      alpha: 0.55
+    }
+  }
+
+  // ── 5 · STAGGER ─────────────────────────────────────────────
+  // Ten bars, each a little slower than the last, so the row
+  // ripples instead of pulsing in unison.
+  generate k from 0 to 9 {
+    rectangle tick {
+      position: (76 + k * 32, 470)
+      size: (7, 30)
+      color: sky
+      alpha: 0.30
+      animate {
+        property: scale
+        to: (1, 2.6)
+        duration: 0.9 + k / 12
+        easing: easeInOut
+        loop: true
+        yoyo: true
+      }
+    }
+  }
+
+  // ── Ground rule ─────────────────────────────────────────────
+  line ground {
+    position: (400, 596)
+    points: [(-400, 0), (400, 0)]
+    thickness: 1
+    color: dim
+    alpha: 0.35
+  }
+}
+`;

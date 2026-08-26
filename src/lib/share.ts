@@ -3,7 +3,18 @@ import LZString from "lz-string";
 const HASH_PREFIX = "code=";
 const STORAGE_KEY = "declare_last_session";
 
-export const MAX_SHARE_LENGTH = 2_000;
+/**
+ * Ceiling on the compressed payload we will put in a share link.
+ *
+ * The code travels in the URL's hash fragment, which is never sent to a
+ * server — so this is bounded only by what browsers handle in a URL, not by
+ * request-header limits. Chrome, Firefox and Safari all cope with far more
+ * than this; the previous 2,000 was sized against IE11's 2,083-char ceiling.
+ *
+ * Kept well below what browsers allow because very long URLs get truncated or
+ * mangled by some chat clients, and a truncated link looks valid but fails.
+ */
+export const MAX_SHARE_LENGTH = 8_000;
 
 export function encodeCode(code: string): string | null {
   const compressed = LZString.compressToEncodedURIComponent(code);
