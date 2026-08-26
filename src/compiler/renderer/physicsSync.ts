@@ -153,6 +153,33 @@ export function syncWorldToContainers(
 }
 
 /**
+ * Write a body's exact tick-aligned transform onto its container, ignoring
+ * sub-tick interpolation.
+ *
+ * Call this the moment a body becomes pinned for good — freezing on `duration`
+ * expiry. `syncWorldToContainers` skips pinned bodies, so without this the
+ * container keeps whatever position it was last *painted* at, and that paint
+ * used the driver's wall-clock `alpha`. The frozen object then lands up to one
+ * tick of motion away from where the simulation actually stopped it, and the
+ * amount varies between runs — which is exactly the determinism the fixed
+ * clock exists to provide, and which frame-accurate export depends on.
+ *
+ * Reading at alpha 1 is what makes it tick-aligned: it returns the current
+ * state rather than a blend with the previous one.
+ */
+export function snapContainerToBody(container: Container, world: IPhysicsWorld): void {
+  const id = container.__body;
+  if (!id) return;
+  const state = world.readState(id, 1);
+  const layout = container.__declareLayout;
+  if (!state || !layout) return;
+  layout.currentPos.x = state.x;
+  layout.currentPos.y = state.y;
+  container.rotation = state.angle;
+  container.__updateLayout?.();
+}
+
+/**
  * Remove bodies that have drifted far outside the scene, and hide the
  * containers that went with them.
  *

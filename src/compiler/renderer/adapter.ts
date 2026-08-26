@@ -15,6 +15,7 @@ import {
   cullEscapedBodies,
   pinBody,
   physicsParamsFromIR,
+  snapContainerToBody,
   syncWorldToContainers,
   unpinBody,
   CULL_MARGIN,
@@ -442,6 +443,11 @@ export const pixiRendererAdapter: IRendererAdapter = {
         const pr = physicsRunners[i];
         if (advancePhysicsTime(pr.time)) {
           pinBody(pr.container, world, "FROZEN");
+          // Snap to the exact tick the freeze happened on. Pinned bodies are
+          // skipped by the paint-phase sync, so without this the object keeps
+          // the alpha-interpolated position of the last frame painted before
+          // it froze — which is wall-clock dependent and differs between runs.
+          snapContainerToBody(pr.container, world);
         }
       }
 

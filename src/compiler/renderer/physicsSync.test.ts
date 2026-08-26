@@ -9,6 +9,7 @@ import {
   hasPhysicsAnywhere,
   physicsParamsFromIR,
   pinBody,
+  snapContainerToBody,
   syncWorldToContainers,
   unpinBody,
   type PhysicsBinding,
@@ -95,7 +96,11 @@ class FakeWorld implements IPhysicsWorld {
     // Not exercised by physicsSync.
   }
 
-  readState(id: string, _alpha: number): BodyState | null {
+  /** Test helper: the alpha of the most recent readState call. */
+  lastReadAlpha: number | null = null;
+
+  readState(id: string, alpha: number): BodyState | null {
+    this.lastReadAlpha = alpha;
     return this.states.has(id) ? (this.states.get(id) ?? null) : null;
   }
 
@@ -513,5 +518,38 @@ describe("physicsParamsFromIR", () => {
       bounce: 0.75,
       collideBounds: false,
     });
+  });
+});
+
+describe("snapContainerToBody", () => {
+  it("writes the tick-aligned state, ignoring sub-tick interpolation", () => {
+    // The bug this exists to prevent: a frozen body keeps the position it was
+    // last *painted* at, and that paint used the driver's wall-clock alpha, so
+    // the object settles a slightly different place on every run.
+    const world = new FakeWorld();
+    const c = makeContainer({ __declareLayout: layoutAt(0, 0), __body: "b0" });
+    world.setState("b0", { x: 100, y: 200, angle: 0.5 });
+
+    snapContainerToBody(asContainer(c), world);
+
+    // A read at alpha 1 is the current tick's state, not a blend with the last.
+    expect(world.lastReadAlpha).toBe(1);
+    expect(c.__declareLayout!.currentPos).toEqual({ x: 100, y: 200 });
+    expect(c.rotation).toBe(0.5);
+    expect(c.updateLayoutCalls).toBe(1);
+  });
+
+  it("does nothing for a container with no body", () => {
+    const world = new FakeWorld();
+    const c = makeContainer({ __declareLayout: layoutAt(0, 0) });
+    expect(() => snapContainerToBody(asContainer(c), world)).not.toThrow();
+    expect(c.updateLayoutCalls).toBe(0);
+  });
+
+  it("does nothing when the body has already been culled", () => {
+    const world = new FakeWorld();
+    const c = makeContainer({ __declareLayout: layoutAt(0, 0), __body: "gone" });
+    expect(() => snapContainerToBody(asContainer(c), world)).not.toThrow();
+    expect(c.updateLayoutCalls).toBe(0);
   });
 });
