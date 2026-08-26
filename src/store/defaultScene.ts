@@ -24,9 +24,12 @@ export const DEFAULT_CODE = `// ══ DECLARE · MOTION TEST CARD ════�
 //   4. LOOP       the rings breathe forever, at different rates.
 //   5. STAGGER    the bar wave ripples; each bar is slightly slower
 //                 than its neighbour.
+//   6. COLLISION  the amber ball and the rose square share one physics
+//                 world. They collide with each other and with the
+//                 scene edges, and tumble on impact.
 //
-// Note: falling objects pass through each other and land in a heap.
-// That is expected — objects do not yet collide with one another.
+// Note: only objects with a physics block are solid. The labels, rings
+// and bars have none, so falling objects pass straight through them.
 
 def ink    = #e2e8f0
 def dim    = #64748b
