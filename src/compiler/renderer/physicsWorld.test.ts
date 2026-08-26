@@ -147,7 +147,7 @@ describe("MatterWorld body lifecycle", () => {
     w.destroy();
   });
 
-  it.skip("rotates the polygon offset with the body", () => {
+  it("rotates the polygon offset with the body", () => {
     const w = new MatterWorld(800, 600);
     w.addBody("t", { kind: "polygon", points: TRIANGLE }, 400, 300, 0, VACUUM);
     w.overrideAngle("t", Math.PI / 2);
@@ -173,7 +173,7 @@ describe("MatterWorld body lifecycle", () => {
 });
 
 describe("MatterWorld walls", () => {
-  it.skip("stops a falling body with collideBounds", () => {
+  it("stops a falling body with collideBounds", () => {
     const w = new MatterWorld(800, 600);
     w.addBody("a", { kind: "circle", radius: 20 }, 400, 100,
       0, { ...VACUUM, gravityY: 2000 });
@@ -184,7 +184,7 @@ describe("MatterWorld walls", () => {
     w.destroy();
   });
 
-  it.skip("lets a body fall straight through without collideBounds", () => {
+  it("lets a body fall straight through without collideBounds", () => {
     const w = new MatterWorld(800, 600);
     w.addBody("a", { kind: "circle", radius: 20 }, 400, 100,
       0, { ...VACUUM, gravityY: 2000, collideBounds: false });
@@ -204,5 +204,130 @@ describe("MatterWorld walls", () => {
     for (let i = 0; i < 240; i++) w.step();
     expect(w.readState("upper", 1)!.y).toBeLessThan(300);
     w.destroy();
+  });
+});
+
+/**
+ * Declare-unit velocity of a body, measured from one tick to the next.
+ *
+ * Note this advances the world by one tick. To measure the velocity at tick N,
+ * step N-1 times first.
+ */
+function measureVelocityPxPerSec(w: MatterWorld, id: string): { x: number; y: number } {
+  const before = w.readState(id, 1)!;
+  w.step();
+  const after = w.readState(id, 1)!;
+  return {
+    x: (after.x - before.x) * TICK_HZ,
+    y: (after.y - before.y) * TICK_HZ,
+  };
+}
+
+describe("MatterWorld step", () => {
+  it("accelerates a body at the stated px/s^2", () => {
+    const w = new MatterWorld(800, 6000);
+    w.addBody("a", { kind: "circle", radius: 5 }, 400, 100,
+      0, { ...VACUUM, gravityY: 980, collideBounds: false });
+    // One tick short: the helper's own step is the 120th.
+    for (let i = 0; i < TICK_HZ - 1; i++) w.step();
+    expect(measureVelocityPxPerSec(w, "a").y).toBeCloseTo(980, 0);
+    w.destroy();
+  });
+
+  it("keeps a launched body at its launch speed in a vacuum", () => {
+    const w = new MatterWorld(8000, 600);
+    w.addBody("a", { kind: "circle", radius: 5 }, 100, 300,
+      0, { ...VACUUM, collideBounds: false });
+    w.setVelocity("a", 600, 0);
+    for (let i = 0; i < TICK_HZ; i++) w.step();
+    // 600 px/s for one second, with no gravity and no drag.
+    expect(w.readState("a", 1)!.x).toBeCloseTo(700, 0);
+    w.destroy();
+  });
+
+  it("damps a launched body by airDrag over one second", () => {
+    const w = new MatterWorld(8000, 600);
+    w.addBody("a", { kind: "circle", radius: 5 }, 100, 300,
+      0, { ...VACUUM, airDrag: 0.05, collideBounds: false });
+    w.setVelocity("a", 600, 0);
+    // One tick short: the helper's own step is the 120th.
+    for (let i = 0; i < TICK_HZ - 1; i++) w.step();
+    // The old engine's oracle: 600 * (1 - airDrag)^60.
+    const expected = 600 * Math.pow(1 - 0.05, 60);
+    expect(measureVelocityPxPerSec(w, "a").x).toBeCloseTo(expected, 0);
+    w.destroy();
+  });
+
+  it("holds an overridden angle and releases it back to the solver", () => {
+    const w = new MatterWorld(800, 600);
+    w.addBody("a", { kind: "rectangle", width: 40, height: 20 }, 400, 300,
+      0, { ...VACUUM, collideBounds: false });
+    w.overrideAngle("a", 1.25);
+    for (let i = 0; i < 10; i++) w.step();
+    expect(w.readState("a", 1)!.angle).toBeCloseTo(1.25, 9);
+    w.overrideAngle("a", null);
+    w.step();
+    expect(w.readState("a", 1)!.angle).toBeCloseTo(1.25, 9);
+    w.destroy();
+  });
+
+  it("lets a settled body fall asleep", () => {
+    // The whole point of spec 6.4. If gravity is applied as a force this
+    // never becomes true, because Sleeping.update force-wakes it every tick.
+    const w = new MatterWorld(800, 600);
+    w.addBody("a", { kind: "circle", radius: 20 }, 400, 100,
+      0, { ...VACUUM, gravityY: 980 });
+    for (let i = 0; i < TICK_HZ * 6; i++) w.step();
+    expect(w.isIdle()).toBe(true);
+    w.destroy();
+  });
+
+  it("wakes a sleeping body when another lands on it", () => {
+    const w = new MatterWorld(800, 600);
+    const falling = { ...VACUUM, gravityY: 980 };
+    w.addBody("bottom", { kind: "circle", radius: 20 }, 400, 100, 0, falling);
+    for (let i = 0; i < TICK_HZ * 6; i++) w.step();
+    expect(w.isAsleep("bottom")).toBe(true);
+
+    const restingY = w.readState("bottom", 1)!.y;
+    w.addBody("top", { kind: "circle", radius: 20 }, 400, 100, 0, falling);
+
+    // Sample across the whole window rather than at one instant: the pile
+    // settles and both bodies re-sleep well inside it.
+    let bottomWoke = false;
+    for (let i = 0; i < TICK_HZ * 4; i++) {
+      w.step();
+      if (!w.isAsleep("bottom")) bottomWoke = true;
+    }
+    expect(bottomWoke).toBe(true);
+
+    // Having been disturbed, it must settle again.
+    expect(w.isIdle()).toBe(true);
+
+    // And the stack must not interpenetrate: two r=20 circles rest 40px apart.
+    const gap = restingY - w.readState("top", 1)!.y;
+    expect(gap).toBeGreaterThan(30);
+    w.destroy();
+  });
+
+  it("produces an identical state sequence on a second run", () => {
+    const run = () => {
+      const w = new MatterWorld(800, 600);
+      const p = { ...VACUUM, gravityY: 980, bounce: 0.5 };
+      w.addBody("a", { kind: "circle", radius: 18 }, 380, 80, 0, p);
+      w.addBody("b", { kind: "rectangle", width: 40, height: 40 }, 410, 20, 0.3, p);
+      w.addBody("c", { kind: "polygon", points: TRIANGLE }, 395, 160, 0, p);
+      const trace: number[] = [];
+      for (let i = 0; i < 300; i++) {
+        w.step();
+        for (const id of ["a", "b", "c"]) {
+          const s = w.readState(id, 1)!;
+          trace.push(s.x, s.y, s.angle);
+        }
+      }
+      w.destroy();
+      return trace;
+    };
+    expect(run()).toEqual(run());
   });
 });

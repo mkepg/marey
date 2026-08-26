@@ -5,7 +5,8 @@ import Matter from "matter-js";
  * `@types/matter-js` omits several members this phase relies on that exist at
  * runtime (verified against `../matter-js-master/src`):
  *  - `Common._seed`: the module-global seed for Matter's internal PRNG.
- *  - `Sleeping.update`: we drive the sleeping pass ourselves (spec 6.4).
+ *  - `Sleeping.update` / `Sleeping.afterCollisions`: we drive the sleeping
+ *    pass ourselves (spec 6.4).
  *  - `Body.deltaTime`: the per-body delta Matter normalises velocity against;
  *    set once so the first tick after `Body.create` (which defaults it to
  *    1000/60) doesn't apply a spurious time-correction factor at 120Hz.
@@ -18,6 +19,7 @@ declare module "matter-js" {
   }
   namespace Sleeping {
     function update(bodies: Matter.Body[], delta: number): void;
+    function afterCollisions(pairs: Matter.Pair[]): void;
   }
   interface Body {
     deltaTime: number;
@@ -77,8 +79,13 @@ export function gravityToTickDelta(pxPerSecSq: number): number {
 export type PinReason = "NO_RUNNER" | "POS_ANIM" | "FROZEN";
 
 /**
- * Plain geometry, in the container's own local space with the origin at its
- * bounding-box centre. Deliberately free of any PixiJS type (spec D9).
+ * Plain geometry, in the container's own local space. Deliberately free of
+ * any PixiJS type (spec D9).
+ *
+ * `addBody` places the geometry's bounding-box centre — not necessarily its
+ * centre of mass, and not necessarily the local origin — at the (x, y) it is
+ * given (spec D15). That is what keeps the drawn shape aligned with its
+ * collision shape as a body rotates.
  */
 export type BodyGeometry =
   | { readonly kind: "circle"; readonly radius: number }
@@ -130,6 +137,8 @@ export interface IPhysicsWorld {
   readState(id: string, alpha: number): BodyState | null;
   idsOutsideBounds(margin: number): string[];
   isIdle(): boolean;
+  /** Whether a body is currently dormant. A sleeping body still collides. */
+  isAsleep(id: string): boolean;
   destroy(): void;
 }
 
@@ -224,11 +233,20 @@ export class MatterWorld implements IPhysicsWorld {
         geometry.points.map((p) => ({ x: p.x, y: p.y })) as Matter.Vertex[]
       );
       const centroid = Matter.Vertices.centre(hull);
-      // fromVertices puts the centre of MASS at the point given, so place the
-      // centroid where it belongs relative to the bbox centre we were handed.
-      body = Matter.Bodies.fromVertices(x + centroid.x, y + centroid.y, [hull]);
-      offsetX = -centroid.x;
-      offsetY = -centroid.y;
+      // The caller's (x, y) designates the shape's bounding-box centre, not
+      // its centre of mass — those coincide only when the raw points happen
+      // to straddle their own bbox centre at the local origin. Compute the
+      // actual bbox centre (min/max) rather than assuming that, so a polygon
+      // whose local origin isn't its bbox centre (as this triangle deliberately
+      // isn't) still reports readState at the bbox centre the caller asked for.
+      const bounds = Matter.Bounds.create(hull);
+      const bboxCentreX = (bounds.min.x + bounds.max.x) / 2;
+      const bboxCentreY = (bounds.min.y + bounds.max.y) / 2;
+      offsetX = bboxCentreX - centroid.x;
+      offsetY = bboxCentreY - centroid.y;
+      // fromVertices puts the centre of MASS at the point given, so place it
+      // where it belongs relative to the bbox centre we were handed.
+      body = Matter.Bodies.fromVertices(x - offsetX, y - offsetY, [hull]);
     }
 
     // Body.create defaults deltaTime to 1000/60. Left alone, the first tick
@@ -314,12 +332,88 @@ export class MatterWorld implements IPhysicsWorld {
   pin(_id: string, _reason: PinReason): void {}
   unpin(_id: string, _reason: PinReason): void {}
   isPinned(_id: string): boolean { return false; }
-  setVelocity(_id: string, _vx: number, _vy: number): void {}
+
+  setVelocity(id: string, vx: number, vy: number): void {
+    const rec = this.records.get(id);
+    if (!rec) return;
+    Matter.Body.setVelocity(rec.body, {
+      x: pxPerSecToMatter(vx),
+      y: pxPerSecToMatter(vy),
+    });
+  }
+
   setScale(_id: string, _sx: number, _sy: number): void {}
-  overrideAngle(_id: string, _radians: number | null): void {}
-  step(): void {}
+
+  overrideAngle(id: string, radians: number | null): void {
+    const rec = this.records.get(id);
+    if (!rec) return;
+    rec.angleOverride = radians;
+    if (radians !== null) {
+      Matter.Body.setAngle(rec.body, radians);
+      Matter.Body.setAngularVelocity(rec.body, 0);
+    }
+  }
+
+  /**
+   * Advance exactly one fixed tick.
+   *
+   * The phase order matters and mirrors Engine.update's own. Matter applies
+   * world gravity AFTER its sleeping pass and clears forces before the next
+   * one, so at the moment Sleeping.update runs every force buffer is zero.
+   * A force we set ourselves would still be there, and Sleeping.update
+   * force-wakes anything carrying one — so nothing would ever sleep.
+   *
+   * We therefore drive the sleeping pass ourselves (enableSleeping is false)
+   * and inject gravity as a velocity delta, which the sleeping pass cannot see.
+   */
+  step(): void {
+    const allBodies = Matter.Composite.allBodies(this.engine.world);
+
+    for (const rec of this.records.values()) {
+      rec.prevX = rec.body.position.x;
+      rec.prevY = rec.body.position.y;
+      rec.prevAngle = rec.body.angle;
+    }
+
+    Matter.Sleeping.update(allBodies, MATTER_DELTA_MS);
+
+    for (const rec of this.records.values()) {
+      if (rec.body.isStatic || rec.body.isSleeping) continue;
+      if (rec.gravityX === 0 && rec.gravityY === 0) continue;
+      const v = Matter.Body.getVelocity(rec.body);
+      Matter.Body.setVelocity(rec.body, {
+        x: v.x + gravityToTickDelta(rec.gravityX),
+        y: v.y + gravityToTickDelta(rec.gravityY),
+      });
+    }
+
+    Matter.Engine.update(this.engine, MATTER_DELTA_MS);
+
+    // D8: a rotation animation owns the angle while position stays dynamic.
+    // Matter has no such mode, so force it back after the solver has run.
+    for (const rec of this.records.values()) {
+      if (rec.angleOverride === null) continue;
+      Matter.Body.setAngle(rec.body, rec.angleOverride);
+      Matter.Body.setAngularVelocity(rec.body, 0);
+    }
+
+    Matter.Sleeping.afterCollisions(this.engine.pairs.list);
+  }
+
   idsOutsideBounds(_margin: number): string[] { return []; }
-  isIdle(): boolean { return true; }
+
+  isIdle(): boolean {
+    for (const rec of this.records.values()) {
+      if (!rec.body.isSleeping && !rec.body.isStatic) return false;
+    }
+    return true;
+  }
+
+  /** Whether a body is currently dormant. A sleeping body still collides. */
+  isAsleep(id: string): boolean {
+    const rec = this.records.get(id);
+    return rec ? rec.body.isSleeping : false;
+  }
 
   destroy(): void {
     Matter.Composite.clear(this.engine.world, false, true);
