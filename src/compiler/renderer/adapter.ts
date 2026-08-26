@@ -17,7 +17,6 @@ export interface RunningAnim {
   targetVal: number | IRPoint;
   time: AnimTime;
   isPosAnim: boolean;
-  justCompletedThisTick?: boolean;
 }
 
 export interface PhysicsRunner {
@@ -158,10 +157,35 @@ function lerp(a: number, b: number, t: number): number {
 }
 
 function tickAnim(ra: RunningAnim): boolean {
-  return advanceAnimTime(ra.time);
+  const justCompleted = advanceAnimTime(ra.time);
+
+  // Completion side effects are state, not paint, so they must happen on the
+  // tick they occur — not once per rendered frame. Deferring them would let
+  // physics skip ticks while a stale kinematic count is still set.
+  if (justCompleted && ra.isPosAnim && ra.container.__declareLayout) {
+    ra.container.__kinematicPosAnimCount = Math.max(0, (ra.container.__kinematicPosAnimCount || 1) - 1);
+
+    if (ra.anim.handOff && ra.anim.duration > 0) {
+      if (!ra.container.__physicsState) {
+        ra.container.__physicsState = { velocity: { x: 0, y: 0 } };
+      }
+
+      const startPt = ra.startVal as IRPoint;
+      const targetPt = ra.targetVal as IRPoint;
+      const deriv = getEasingDerivativeAtEnd(ra.anim.easing);
+      const durSec = Math.max(ra.anim.duration, 0.001);
+      const dx = targetPt.x - startPt.x;
+      const dy = targetPt.y - startPt.y;
+
+      ra.container.__physicsState.velocity.x = (dx / durSec) * deriv;
+      ra.container.__physicsState.velocity.y = (dy / durSec) * deriv;
+    }
+  }
+
+  return justCompleted;
 }
 
-function applyAnim(ra: RunningAnim, alpha: number, justCompleted: boolean): void {
+function applyAnim(ra: RunningAnim, alpha: number): void {
   const e = evaluateEasing(animProgress(ra.time, alpha), ra.anim.easing);
 
   if (ra.anim.property === "alpha") {
@@ -175,24 +199,6 @@ function applyAnim(ra: RunningAnim, alpha: number, justCompleted: boolean): void
 
     layout.currentPos.x = lerp(startPt.x, targetPt.x, e);
     layout.currentPos.y = lerp(startPt.y, targetPt.y, e);
-
-    if (justCompleted && ra.isPosAnim) {
-      ra.container.__kinematicPosAnimCount = Math.max(0, (ra.container.__kinematicPosAnimCount || 1) - 1);
-
-      if (ra.anim.handOff && ra.anim.duration > 0) {
-        if (!ra.container.__physicsState) {
-          ra.container.__physicsState = { velocity: { x: 0, y: 0 } };
-        }
-
-        const deriv = getEasingDerivativeAtEnd(ra.anim.easing);
-        const durSec = Math.max(ra.anim.duration, 0.001);
-        const dx = targetPt.x - startPt.x;
-        const dy = targetPt.y - startPt.y;
-
-        ra.container.__physicsState.velocity.x = (dx / durSec) * deriv;
-        ra.container.__physicsState.velocity.y = (dy / durSec) * deriv;
-      }
-    }
 
     ra.container.__updateLayout?.();
   } else if (ra.anim.property === "scale" && ra.container.__declareLayout) {
@@ -438,10 +444,7 @@ export const pixiRendererAdapter: IRendererAdapter = {
     // can call it in a bare loop with no wall clock involved.
     function advanceOneTick(): void {
       for (let i = 0; i < runningAnims.length; i++) {
-        const ra = runningAnims[i];
-        if (tickAnim(ra)) {
-          ra.justCompletedThisTick = true;
-        }
+        tickAnim(runningAnims[i]);
       }
 
       for (let i = 0; i < physicsRunners.length; i++) {
@@ -488,9 +491,7 @@ export const pixiRendererAdapter: IRendererAdapter = {
 
       // Paint once, at the fractional position between the last two ticks.
       for (let i = 0; i < runningAnims.length; i++) {
-        const ra = runningAnims[i];
-        applyAnim(ra, driver.alpha, ra.justCompletedThisTick === true);
-        ra.justCompletedThisTick = false;
+        applyAnim(runningAnims[i], driver.alpha);
       }
 
       for (let i = runningAnims.length - 1; i >= 0; i--) {
