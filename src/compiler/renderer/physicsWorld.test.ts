@@ -193,7 +193,7 @@ describe("MatterWorld walls", () => {
     w.destroy();
   });
 
-  it.skip("still collides two bodies with each other when neither uses collideBounds", () => {
+  it("still collides two bodies with each other when neither uses collideBounds", () => {
     // collideBounds toggles only the wall category. Objects always see objects.
     const w = new MatterWorld(800, 600);
     const params = { ...VACUUM, collideBounds: false };
@@ -329,5 +329,102 @@ describe("MatterWorld step", () => {
       return trace;
     };
     expect(run()).toEqual(run());
+  });
+});
+
+describe("MatterWorld pinning", () => {
+  it("holds a pinned body still under gravity", () => {
+    const w = new MatterWorld(800, 600);
+    w.addBody("a", { kind: "circle", radius: 10 }, 400, 100,
+      0, { ...VACUUM, gravityY: 980 });
+    w.pin("a", "FROZEN");
+    for (let i = 0; i < TICK_HZ; i++) w.step();
+    expect(w.readState("a", 1)!.y).toBeCloseTo(100, 6);
+    w.destroy();
+  });
+
+  it("needs every reason released before it moves again", () => {
+    const w = new MatterWorld(800, 600);
+    w.addBody("a", { kind: "circle", radius: 10 }, 400, 100,
+      0, { ...VACUUM, gravityY: 980 });
+    w.pin("a", "NO_RUNNER");
+    w.pin("a", "POS_ANIM");
+
+    w.unpin("a", "NO_RUNNER");
+    expect(w.isPinned("a")).toBe(true);
+    for (let i = 0; i < 30; i++) w.step();
+    expect(w.readState("a", 1)!.y).toBeCloseTo(100, 6);
+
+    w.unpin("a", "POS_ANIM");
+    expect(w.isPinned("a")).toBe(false);
+    for (let i = 0; i < 30; i++) w.step();
+    expect(w.readState("a", 1)!.y).toBeGreaterThan(100);
+    w.destroy();
+  });
+
+  it("ignores an unpin for a reason that was never applied", () => {
+    const w = new MatterWorld(800, 600);
+    w.addBody("a", { kind: "circle", radius: 10 }, 400, 100,
+      0, { ...VACUUM, gravityY: 980 });
+    w.pin("a", "FROZEN");
+    w.unpin("a", "POS_ANIM");
+    expect(w.isPinned("a")).toBe(true);
+    w.destroy();
+  });
+
+  it("starts from rest when unpinned, not from accumulated velocity", () => {
+    const w = new MatterWorld(800, 6000);
+    w.addBody("a", { kind: "circle", radius: 10 }, 400, 100,
+      0, { ...VACUUM, gravityY: 980, collideBounds: false });
+    w.pin("a", "NO_RUNNER");
+    for (let i = 0; i < TICK_HZ * 2; i++) w.step();
+    w.unpin("a", "NO_RUNNER");
+    expect(measureVelocityPxPerSec(w, "a").y).toBeLessThan(20);
+    w.destroy();
+  });
+
+  it("still bounces off a wall after being pinned and unpinned", () => {
+    // Body.setStatic zeroes restitution and restores it from _original on
+    // release. If that restore is missed, bounce silently stops working.
+    const w = new MatterWorld(800, 600);
+    w.addBody("a", { kind: "circle", radius: 10 }, 400, 100,
+      0, { ...VACUUM, gravityY: 980, bounce: 0.8 });
+    w.pin("a", "FROZEN");
+    w.unpin("a", "FROZEN");
+    for (let i = 0; i < TICK_HZ * 3; i++) w.step();
+    expect(w.readState("a", 1)!.y).toBeLessThan(560);
+    w.destroy();
+  });
+});
+
+describe("MatterWorld scale", () => {
+  it("grows the collision shape so a scaled body rests higher", () => {
+    const small = new MatterWorld(800, 600);
+    small.addBody("a", { kind: "rectangle", width: 40, height: 40 }, 400, 100,
+      0, { ...VACUUM, gravityY: 980 });
+    for (let i = 0; i < TICK_HZ * 4; i++) small.step();
+    const restSmall = small.readState("a", 1)!.y;
+    small.destroy();
+
+    const big = new MatterWorld(800, 600);
+    big.addBody("a", { kind: "rectangle", width: 40, height: 40 }, 400, 100,
+      0, { ...VACUUM, gravityY: 980 });
+    big.setScale("a", 2, 2);
+    for (let i = 0; i < TICK_HZ * 4; i++) big.step();
+    const restBig = big.readState("a", 1)!.y;
+    big.destroy();
+
+    expect(restBig).toBeLessThan(restSmall - 15);
+  });
+
+  it("is idempotent when the scale does not change", () => {
+    const w = new MatterWorld(800, 600);
+    w.addBody("a", { kind: "rectangle", width: 40, height: 40 }, 400, 300,
+      0, { ...VACUUM, collideBounds: false });
+    w.setScale("a", 1.5, 1.5);
+    const area = w.readState("a", 1)!;
+    for (let i = 0; i < 20; i++) w.setScale("a", 1.5, 1.5);
+    expect(w.readState("a", 1)).toEqual(area);
+    w.destroy();
   });
 });

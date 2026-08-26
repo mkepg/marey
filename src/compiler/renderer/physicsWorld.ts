@@ -329,9 +329,29 @@ export class MatterWorld implements IPhysicsWorld {
     Matter.Body.setPosition(rec.body, { x: x - off.x, y: y - off.y });
   }
 
-  pin(_id: string, _reason: PinReason): void {}
-  unpin(_id: string, _reason: PinReason): void {}
-  isPinned(_id: string): boolean { return false; }
+  pin(id: string, reason: PinReason): void {
+    const rec = this.records.get(id);
+    if (!rec) return;
+    const wasPinned = rec.pinReasons.size > 0;
+    rec.pinReasons.add(reason);
+    if (!wasPinned) Matter.Body.setStatic(rec.body, true);
+  }
+
+  unpin(id: string, reason: PinReason): void {
+    const rec = this.records.get(id);
+    if (!rec) return;
+    if (!rec.pinReasons.delete(reason)) return;
+    if (rec.pinReasons.size > 0) return;
+    // setStatic collapses positionPrev onto position, so the body resumes from
+    // rest. Callers that want momentum carried across call setVelocity after.
+    Matter.Body.setStatic(rec.body, false);
+    Matter.Sleeping.set(rec.body, false);
+  }
+
+  isPinned(id: string): boolean {
+    const rec = this.records.get(id);
+    return rec ? rec.pinReasons.size > 0 : false;
+  }
 
   setVelocity(id: string, vx: number, vy: number): void {
     const rec = this.records.get(id);
@@ -342,7 +362,16 @@ export class MatterWorld implements IPhysicsWorld {
     });
   }
 
-  setScale(_id: string, _sx: number, _sy: number): void {}
+  setScale(id: string, sx: number, sy: number): void {
+    const rec = this.records.get(id);
+    if (!rec) return;
+    const safeX = Math.abs(sx) < 1e-4 ? 1e-4 : Math.abs(sx);
+    const safeY = Math.abs(sy) < 1e-4 ? 1e-4 : Math.abs(sy);
+    if (safeX === rec.scaleX && safeY === rec.scaleY) return;
+    Matter.Body.scale(rec.body, safeX / rec.scaleX, safeY / rec.scaleY);
+    rec.scaleX = safeX;
+    rec.scaleY = safeY;
+  }
 
   overrideAngle(id: string, radians: number | null): void {
     const rec = this.records.get(id);
