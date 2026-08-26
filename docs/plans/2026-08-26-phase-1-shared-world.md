@@ -2224,5 +2224,87 @@ git commit --allow-empty -m "chore: phase 1 verified — shared Matter world com
 
 ## Execution notes
 
-*(Filled in during execution. Record defects found in this plan and anything deliberately
-deferred to Phase 2, as the Phase 0 plan does.)*
+Eight things changed during execution. Three were defects in this plan, three were bugs in
+the implementation found by review, and two are gaps left open deliberately.
+
+### Defects in this plan
+
+**The `Sleeping.update` type augmentation was missing (Task 1).** The augmentation block
+listed `Common._baseDelta`, `Common._seed`, `Body.deltaTime` and `Engine.pairs`, but
+`@types/matter-js` also omits `Sleeping.update` and `Sleeping.afterCollisions`, both of
+which §6.4 calls directly. `Common._seed` also has to be declared `let`, not `const`,
+because the constructor assigns it.
+
+**`Vertices.hull` does not accept plain points (Task 3).** It is typed
+`(vertices: Vertex[]) => Vertex[]`, and `Vertex` requires `index`, `body` and `isInternal`.
+Reading `../matter-js-master/src/geometry/Vertices.js` shows it only ever touches `.x` and
+`.y`, so the signature is an inaccuracy in the types rather than a real requirement. Landed
+as a documented `as Matter.Vertex[]` assertion at the one call site.
+
+**Two of Task 4's tests were wrong, and the centroid offset was subtly wrong (Task 4).**
+`measureVelocityPxPerSec` steps the world itself, so looping `TICK_HZ` times before calling
+it measured tick 121, not 120 — the gravity assertion was off by exactly one tick of
+acceleration (`988.17 = 980 + 980/120`) and the drag assertion by exactly one tick of
+damping. At tick 120 both matched their oracles to ten significant digits, which is the
+strongest evidence available that the corrected §6.3 conversions are right. Separately, the
+plan's `addBody` computed `offset = -centroid`, assuming the incoming geometry's local
+origin already *is* the bbox centre; it now derives the bbox centre from the hull, which is
+what §6.9 actually specifies and what makes the offset non-zero for a real triangle.
+
+The "wakes a sleeping body" test also sampled `isIdle()` at one arbitrary instant, by which
+point the pile had already re-slept. It now samples a new `isAsleep(id)` accessor across the
+whole window, which asserts the D14 property directly instead of inferring it.
+
+### Bugs found by review, after the implementation was green
+
+All three lived in `adapter.ts` — the one file with no test coverage. That is not a
+coincidence; see the gaps below.
+
+**A parked handoff velocity could be orphaned.** `flushPendingVelocity` was called after
+unpinning in `tickAnim` and `spawnPhysics` but not in `spawnAnim`, which also unpins
+`FROZEN`. A velocity parked while a body held two pin reasons was silently dropped if
+`spawnAnim` happened to release the last one. Fixed by moving the flush inside
+`unpinBody`, so no call site can forget it, and routing `spawnPhysics` through `unpinBody`
+rather than unpinning the world directly.
+
+**`overrideAngle` destroyed its own interpolation buffer.** It applied `Body.setAngle`
+immediately, and `pushAnimToWorld` calls it from `advanceOneTick` *before* `world.step()` —
+so by the time `step()` captured `prevAngle` from `body.angle`, that field already held the
+current tick's target. `prevAngle === body.angle` every tick, and `readState`'s lerp
+returned a constant. Animated rotation on a physics body snapped once per tick, defeating
+the previous-state buffer §6.9 added specifically to close the judder deferred out of
+Phase 0. `overrideAngle` now only records; `step()`'s existing post-solver loop applies it,
+after the buffer is captured. Every existing test in `physicsWorld.test.ts` read at alpha 0
+or 1, which is exactly why this was invisible — there is now one that reads at 0.5.
+
+**The rotation-override release ran in the paint phase.** `overrideAngle(id, null)` sat in
+the ticker's splice loop rather than in `tickAnim`. Since `advanceOneTick` runs up to 12
+times per rendered frame and `step()` re-applies the override on each, a body stayed
+angle-locked for up to ~9 ticks past the end of its animation under a catch-up burst. This
+is the same tick/paint-split mistake the Phase 0 plan made and its notes warn about.
+
+### Gaps left open deliberately
+
+**Task 11's browser verification was not done — no browser driver was available.** The dev
+server was confirmed to boot and serve (HTTP 200), and the sync layer turned out to be
+headlessly testable after all — every import in `physicsSync.ts` is `import type`, so it has
+no runtime dependency on PixiJS and now has 26 tests against a fake world. What remains
+genuinely unverified is anything that needs a real canvas: that the amber ball's handoff arc
+looks right, that the rose square visibly tumbles, that the pile settles and CPU actually
+drops when the ticker stops, that a mid-air freeze looks correct, and that a scene replays
+identically across a real page reload rather than only within one process.
+
+**`adapter.ts` still has no tests**, and all three review findings were there. Testing it
+needs a DOM and a PixiJS `Application`, which is out of scope here. The orchestration worth
+covering is `pushAnimToWorld`, `flushPendingVelocity` (now covered, having moved into
+`physicsSync.ts`), the pin lifecycle across `spawnAnim`/`spawnPhysics`/`tickAnim`, and the
+`FROZEN` pin firing off `advancePhysicsTime`. Phase 3 builds a test harness; this belongs
+with it.
+
+**One unconfirmed risk, inherited rather than introduced.** `sharedApp` and the new
+`activeWorld` are module-level singletons, and `render()` has `await` points before it
+assigns `activeWorld`. Two renders dispatched in quick succession could in principle
+interleave, leaving the module-level spawn helpers writing to a different world than the one
+their closure steps. The unconditional stage teardown that makes this possible predates this
+branch, and `activeWorld` follows the existing pattern rather than adding a new one. Not
+reproduced; recorded so it is not rediscovered.
