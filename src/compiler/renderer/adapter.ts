@@ -1,23 +1,28 @@
 import { Application, Container, Graphics, Ticker } from "pixi.js";
 import type { IRSceneNode, IRendererAdapter, IRAnimation, IRPhysics, IRSequence, IRPoint, IRParallelStep } from "../sceneIR";
 import { buildNode } from "./builder";
+import { LiveDriver, secondsToTicks, TICK_SECONDS } from "./clock";
+import {
+  advanceAnimTime,
+  animProgress,
+  advancePhysicsTime,
+  type AnimTime,
+  type PhysicsTime,
+} from "./timeline";
 
 export interface RunningAnim {
   container: Container;
   anim: IRAnimation;
   startVal: number | IRPoint;
   targetVal: number | IRPoint;
-  elapsed: number;
-  direction: number;
-  completed: boolean;
+  time: AnimTime;
   isPosAnim: boolean;
+  justCompletedThisTick?: boolean;
 }
 
 export interface PhysicsRunner {
   container: Container;
-  durationMs: number | null;
-  elapsed: number;
-  completed: boolean;
+  time: PhysicsTime;
 }
 
 type AnimOrPhysics = RunningAnim | PhysicsRunner;
@@ -35,8 +40,6 @@ export interface IPhysicsEngine {
   tickContainer(
     pr: PhysicsRunner,
     container: Container,
-    dt: number,
-    dtSeconds: number,
     logicalWidth: number,
     logicalHeight: number
   ): boolean;
@@ -46,99 +49,85 @@ export class NativePhysicsEngine implements IPhysicsEngine {
   tickContainer(
     pr: PhysicsRunner,
     container: Container,
-    dt: number,
-    dtSeconds: number,
     logicalWidth: number,
     logicalHeight: number
   ): boolean {
-    if (pr.completed) return false;
-
-    if (pr.durationMs !== null) {
-      pr.elapsed += dt;
-      if (pr.elapsed >= pr.durationMs) {
-        pr.completed = true;
-      }
-    }
+    const justCompleted = advancePhysicsTime(pr.time);
 
     if ((container.__kinematicPosAnimCount || 0) > 0) {
-      return pr.completed; 
+      return justCompleted;
     }
 
     const p = container.__physics!;
     const s = container.__physicsState!;
     const layout = container.__declareLayout;
-    if (!layout) return pr.completed;
+    if (!layout) return justCompleted;
 
-    const MAX_STEP = 1 / 120;
-    let timeAccumulator = dtSeconds;
-    if (timeAccumulator > 0.1) timeAccumulator = 0.1;
+    // One fixed tick of integration. Previously this was an accumulator loop
+    // over a variable delta; the clock now guarantees a constant step.
+    const step = TICK_SECONDS;
 
-    while (timeAccumulator > 0) {
-      const step = Math.min(timeAccumulator, MAX_STEP);
-      timeAccumulator -= step;
+    s.velocity.x += p.gravity.x * step;
+    s.velocity.y += p.gravity.y * step;
 
-      s.velocity.x += p.gravity.x * step;
-      s.velocity.y += p.gravity.y * step;
+    // INVERTED DRAG FIX: 0 = vacuum, 1 = maximum resistance
+    const f = Math.pow(1.0 - p.airDrag, step * 60);
+    s.velocity.x *= f;
+    s.velocity.y *= f;
 
-      // INVERTED DRAG FIX: 0 = vacuum, 1 = maximum resistance
-      const f = Math.pow(1.0 - p.airDrag, step * 60);
-      s.velocity.x *= f;
-      s.velocity.y *= f;
+    layout.currentPos.x += s.velocity.x * step;
+    layout.currentPos.y += s.velocity.y * step;
 
-      layout.currentPos.x += s.velocity.x * step;
-      layout.currentPos.y += s.velocity.y * step;
+    if (p.collideBounds && container.__baseSize) {
+      const absScaleX = Math.abs(layout.currentScale.x);
+      const absScaleY = Math.abs(layout.currentScale.y);
 
-      if (p.collideBounds && container.__baseSize) {
-        const absScaleX = Math.abs(layout.currentScale.x);
-        const absScaleY = Math.abs(layout.currentScale.y);
-        
-        const baseW = container.__baseSize.w * absScaleX;
-        const baseH = container.__baseSize.h * absScaleY;
+      const baseW = container.__baseSize.w * absScaleX;
+      const baseH = container.__baseSize.h * absScaleY;
 
-        const cos = Math.abs(Math.cos(container.rotation));
-        const sin = Math.abs(Math.sin(container.rotation));
-        
-        const projW = baseW * cos + baseH * sin;
-        const projH = baseW * sin + baseH * cos;
+      const cos = Math.abs(Math.cos(container.rotation));
+      const sin = Math.abs(Math.sin(container.rotation));
 
-        const projAnchorX = projW * 0.5;
-        const projAnchorY = projH * 0.5;
+      const projW = baseW * cos + baseH * sin;
+      const projH = baseW * sin + baseH * cos;
 
-        const left   = layout.currentPos.x - projAnchorX;
-        const top    = layout.currentPos.y - projAnchorY;
-        const right  = left + projW;
-        const bottom = top  + projH;
+      const projAnchorX = projW * 0.5;
+      const projAnchorY = projH * 0.5;
 
-        if (left < 0) {
-          layout.currentPos.x += -left;
-          if (s.velocity.x < 0) s.velocity.x = -s.velocity.x * p.bounce;
-        } else if (right > logicalWidth) {
-          layout.currentPos.x -= (right - logicalWidth);
-          if (s.velocity.x > 0) s.velocity.x = -s.velocity.x * p.bounce;
+      const left   = layout.currentPos.x - projAnchorX;
+      const top    = layout.currentPos.y - projAnchorY;
+      const right  = left + projW;
+      const bottom = top  + projH;
+
+      if (left < 0) {
+        layout.currentPos.x += -left;
+        if (s.velocity.x < 0) s.velocity.x = -s.velocity.x * p.bounce;
+      } else if (right > logicalWidth) {
+        layout.currentPos.x -= (right - logicalWidth);
+        if (s.velocity.x > 0) s.velocity.x = -s.velocity.x * p.bounce;
+      }
+
+      if (top < 0) {
+        layout.currentPos.y += -top;
+        if (s.velocity.y < 0) s.velocity.y = -s.velocity.y * p.bounce;
+      } else if (bottom > logicalHeight) {
+        layout.currentPos.y -= (bottom - logicalHeight);
+        if (s.velocity.y > 0) {
+          if (s.velocity.y < p.gravity.y * step * 2.5) {
+            s.velocity.y = 0;
+          } else {
+            s.velocity.y = -s.velocity.y * p.bounce;
+          }
         }
-
-        if (top < 0) {
-          layout.currentPos.y += -top;
-          if (s.velocity.y < 0) s.velocity.y = -s.velocity.y * p.bounce;
-        } else if (bottom > logicalHeight) {
-          layout.currentPos.y -= (bottom - logicalHeight);
-          if (s.velocity.y > 0) {
-            if (s.velocity.y < p.gravity.y * step * 2.5) {
-              s.velocity.y = 0;
-            } else {
-              s.velocity.y = -s.velocity.y * p.bounce;
-            }
-          }
-          if (s.velocity.y === 0 && p.gravity.y > 0) {
-            s.velocity.x *= 0.95;
-            if (Math.abs(s.velocity.x) < 5) s.velocity.x = 0;
-          }
+        if (s.velocity.y === 0 && p.gravity.y > 0) {
+          s.velocity.x *= 0.95;
+          if (Math.abs(s.velocity.x) < 5) s.velocity.x = 0;
         }
       }
     }
 
     container.__updateLayout?.();
-    return pr.completed;
+    return justCompleted;
   }
 }
 
@@ -168,36 +157,12 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
-function tickAnim(ra: RunningAnim, dt: number): boolean {
-  if (ra.completed) return false;
-  
-  ra.elapsed += ra.direction * dt;
-  const durMs = ra.anim.duration * 1000;
-  let progress = durMs > 0 ? ra.elapsed / durMs : 1;
-  let justCompleted = false;
+function tickAnim(ra: RunningAnim): boolean {
+  return advanceAnimTime(ra.time);
+}
 
-  if (progress >= 1.0) {
-    if (ra.anim.yoyo) {
-      progress = 1.0;
-      ra.direction = -1;
-    } else if (ra.anim.loop) {
-      progress = 0.0;
-      ra.elapsed = 0;
-    } else {
-      progress = 1.0;
-      ra.completed = true;
-      justCompleted = true;
-    }
-  } else if (progress <= 0.0 && ra.direction === -1) {
-    if (ra.anim.loop) {
-      progress = 0.0;
-      ra.direction = 1;
-    } else {
-      progress = 0.0;
-    }
-  }
-
-  const e = evaluateEasing(progress, ra.anim.easing);
+function applyAnim(ra: RunningAnim, alpha: number, justCompleted: boolean): void {
+  const e = evaluateEasing(animProgress(ra.time, alpha), ra.anim.easing);
 
   if (ra.anim.property === "alpha") {
     ra.container.alpha = lerp(ra.startVal as number, ra.targetVal as number, e);
@@ -207,23 +172,23 @@ function tickAnim(ra: RunningAnim, dt: number): boolean {
     const layout = ra.container.__declareLayout;
     const startPt = ra.startVal as IRPoint;
     const targetPt = ra.targetVal as IRPoint;
-    
+
     layout.currentPos.x = lerp(startPt.x, targetPt.x, e);
     layout.currentPos.y = lerp(startPt.y, targetPt.y, e);
 
     if (justCompleted && ra.isPosAnim) {
       ra.container.__kinematicPosAnimCount = Math.max(0, (ra.container.__kinematicPosAnimCount || 1) - 1);
-      
+
       if (ra.anim.handOff && ra.anim.duration > 0) {
         if (!ra.container.__physicsState) {
           ra.container.__physicsState = { velocity: { x: 0, y: 0 } };
         }
-        
+
         const deriv = getEasingDerivativeAtEnd(ra.anim.easing);
         const durSec = Math.max(ra.anim.duration, 0.001);
         const dx = targetPt.x - startPt.x;
         const dy = targetPt.y - startPt.y;
-        
+
         ra.container.__physicsState.velocity.x = (dx / durSec) * deriv;
         ra.container.__physicsState.velocity.y = (dy / durSec) * deriv;
       }
@@ -238,8 +203,6 @@ function tickAnim(ra: RunningAnim, dt: number): boolean {
     layout.currentScale.y = lerp(startPt.y, targetPt.y, e);
     ra.container.__updateLayout?.();
   }
-
-  return justCompleted;
 }
 
 function getCurrentVal(container: Container, prop: string): number | IRPoint {
@@ -274,7 +237,14 @@ function spawnAnim(container: Container, anim: IRAnimation, globalList: RunningA
     container, anim,
     startVal: sVal,
     targetVal: tVal as number | IRPoint,
-    elapsed: 0, direction: 1, completed: false,
+    time: {
+      elapsedTicks: 0,
+      durationTicks: secondsToTicks(anim.duration),
+      direction: 1,
+      completed: false,
+      loop: anim.loop,
+      yoyo: anim.yoyo,
+    },
     isPosAnim: isPos
   };
   globalList.push(ra);
@@ -295,9 +265,13 @@ function spawnPhysics(container: Container, phIR: IRPhysics, globalList: Physics
 
   const pr: PhysicsRunner = {
     container,
-    durationMs: phIR.duration === "indefinitely" ? null : (phIR.duration as number) * 1000,
-    elapsed: 0,
-    completed: false,
+    time: {
+      elapsedTicks: 0,
+      durationTicks: phIR.duration === "indefinitely"
+        ? null
+        : secondsToTicks(phIR.duration as number),
+      completed: false,
+    },
   };
   globalList.push(pr);
   localList.push(pr);
@@ -453,22 +427,26 @@ export const pixiRendererAdapter: IRendererAdapter = {
     const runningAnims:    RunningAnim[]    = [];
     const physicsRunners:  PhysicsRunner[]  = [];
     const sequenceRunners: SequenceRunner[] = [];
-    
+
     collectData(sceneRoot, runningAnims, physicsRunners, sequenceRunners);
-    
+
     const physicsEngine = new NativePhysicsEngine();
+    const driver = new LiveDriver();
 
-    activeTickerCallback = (ticker: Ticker) => {
-      const dt        = Math.min(ticker.deltaMS, 100);
-      const dtSeconds = dt / 1000;
-
+    // Advance the whole scene exactly one fixed tick. Everything that changes
+    // scene state lives here and takes no time argument, so an export driver
+    // can call it in a bare loop with no wall clock involved.
+    function advanceOneTick(): void {
       for (let i = 0; i < runningAnims.length; i++) {
-        tickAnim(runningAnims[i], dt);
+        const ra = runningAnims[i];
+        if (tickAnim(ra)) {
+          ra.justCompletedThisTick = true;
+        }
       }
 
       for (let i = 0; i < physicsRunners.length; i++) {
         const pr = physicsRunners[i];
-        physicsEngine.tickContainer(pr, pr.container, dt, dtSeconds, logicalWidth, logicalHeight);
+        physicsEngine.tickContainer(pr, pr.container, logicalWidth, logicalHeight);
       }
 
       for (let i = 0; i < sequenceRunners.length; i++) {
@@ -478,7 +456,7 @@ export const pixiRendererAdapter: IRendererAdapter = {
         if (sr.state === "WAITING") {
           let allBaseDone = true;
           for (const bp of sr.basePeers) {
-            if (!bp.completed) { allBaseDone = false; break; }
+            if (!bp.time.completed) { allBaseDone = false; break; }
           }
           if (allBaseDone) {
             sr.state = "RUNNING";
@@ -487,7 +465,7 @@ export const pixiRendererAdapter: IRendererAdapter = {
         } else if (sr.state === "RUNNING") {
           let allStepsDone = true;
           for (const sp of sr.activeStepRunners) {
-            if (!sp.completed) { allStepsDone = false; break; }
+            if (!sp.time.completed) { allStepsDone = false; break; }
           }
           if (allStepsDone) {
             sr.stepIndex++;
@@ -499,12 +477,27 @@ export const pixiRendererAdapter: IRendererAdapter = {
           }
         }
       }
+    }
+
+    activeTickerCallback = (ticker: Ticker) => {
+      const ticks = driver.pump(ticker.deltaMS);
+
+      for (let t = 0; t < ticks; t++) {
+        advanceOneTick();
+      }
+
+      // Paint once, at the fractional position between the last two ticks.
+      for (let i = 0; i < runningAnims.length; i++) {
+        const ra = runningAnims[i];
+        applyAnim(ra, driver.alpha, ra.justCompletedThisTick === true);
+        ra.justCompletedThisTick = false;
+      }
 
       for (let i = runningAnims.length - 1; i >= 0; i--) {
-        if (runningAnims[i].completed) runningAnims.splice(i, 1);
+        if (runningAnims[i].time.completed) runningAnims.splice(i, 1);
       }
       for (let i = physicsRunners.length - 1; i >= 0; i--) {
-        if (physicsRunners[i].completed) physicsRunners.splice(i, 1);
+        if (physicsRunners[i].time.completed) physicsRunners.splice(i, 1);
       }
       for (let i = sequenceRunners.length - 1; i >= 0; i--) {
         if (sequenceRunners[i].state === "DONE") sequenceRunners.splice(i, 1);
