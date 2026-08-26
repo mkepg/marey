@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { lex } from "../compiler/lexer";
 import { parse } from "../compiler/parser";
 import { typeCheck } from "../compiler/typeChecker";
+import { encodeCode, MAX_SHARE_LENGTH } from "../lib/share";
 import { DEFAULT_CODE } from "./defaultScene";
 
 /**
@@ -65,6 +66,16 @@ describe("DEFAULT_CODE", () => {
     );
     expect(physics.some((p) => p!.duration === "indefinitely")).toBe(true);
     expect(seqPhysics.some((p) => typeof (p as { duration: unknown }).duration === "number")).toBe(true);
+  });
+
+  it("is small enough to share", () => {
+    // A first-timer sees the share button disabled if the default scene does
+    // not fit, which reads as the app being broken. This has regressed once
+    // already, when the scene grew past the old limit.
+    const encoded = encodeCode(DEFAULT_CODE);
+
+    expect(encoded).not.toBeNull();
+    expect(encoded!.length).toBeLessThanOrEqual(MAX_SHARE_LENGTH);
   });
 
   it("covers every visual primitive", () => {
