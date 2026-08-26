@@ -7,8 +7,16 @@ export const TICK_HZ = 120;
 export const TICK_MS = 1000 / TICK_HZ;
 export const TICK_SECONDS = 1 / TICK_HZ;
 
-/** Most ticks we will simulate in one rendered frame, to avoid a death spiral. This is the sole bound on work per frame. */
-export const MAX_CATCHUP_TICKS = 8;
+/**
+ * Most ticks we will simulate in one rendered frame, to avoid a death spiral.
+ *
+ * 12 ticks is exactly 100ms, which matches PixiJS's own `Ticker._maxElapsedMS`
+ * clamp on `deltaMS`. Keeping these equal means we consume every millisecond
+ * the ticker is willing to report, so a sustained low frame rate slows
+ * rendering without also slowing the simulation. A lower value here would put
+ * the scene into permanent slow motion whenever frames take longer than this.
+ */
+export const MAX_CATCHUP_TICKS = 12;
 
 /** Convert a duration in seconds to whole simulation ticks. */
 export function secondsToTicks(seconds: number): number {

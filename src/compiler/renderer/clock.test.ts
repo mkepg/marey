@@ -120,4 +120,16 @@ describe("LiveDriver", () => {
     // The -1000 must not have rolled the accumulator backwards.
     expect(d.pump(5)).toBe(1);
   });
+
+  it("absorbs a full PixiJS ticker frame without dropping simulation time", () => {
+    // PixiJS clamps its own deltaMS to 100ms (Ticker._maxElapsedMS). If our
+    // catch-up ceiling were lower than that, a sustained low frame rate would
+    // silently drop time every frame and run the scene in slow motion.
+    const PIXI_MAX_ELAPSED_MS = 100;
+    const d = new LiveDriver();
+
+    expect(d.pump(PIXI_MAX_ELAPSED_MS)).toBe(Math.round(PIXI_MAX_ELAPSED_MS / TICK_MS));
+    // Nothing left over means no time was discarded.
+    expect(d.alpha).toBeCloseTo(0, 5);
+  });
 });
