@@ -63,3 +63,29 @@ export function animProgress(t: AnimTime, alpha: number): number {
   if (p > 1) return 1;
   return p;
 }
+
+/** Frame-indexed time state for a running physics simulation. */
+export interface PhysicsTime {
+  elapsedTicks: number;
+  /** null means `duration: indefinitely` — this runner never completes. */
+  durationTicks: number | null;
+  completed: boolean;
+}
+
+/**
+ * Advance exactly one tick.
+ * Returns true only on the tick where a finite simulation finishes.
+ */
+export function advancePhysicsTime(t: PhysicsTime): boolean {
+  if (t.completed) return false;
+  if (t.durationTicks === null) return false;
+
+  t.elapsedTicks += 1;
+
+  if (t.elapsedTicks >= t.durationTicks) {
+    t.completed = true;
+    return true;
+  }
+
+  return false;
+}

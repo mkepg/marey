@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { advanceAnimTime, animProgress, type AnimTime } from "./timeline";
+import {
+  advanceAnimTime,
+  animProgress,
+  advancePhysicsTime,
+  type AnimTime,
+  type PhysicsTime,
+} from "./timeline";
 
 function makeAnim(over: Partial<AnimTime> = {}): AnimTime {
   return {
@@ -100,5 +106,31 @@ describe("animProgress", () => {
 
     const high = makeAnim({ durationTicks: 10, elapsedTicks: 10 });
     expect(animProgress(high, 0.9)).toBe(1);
+  });
+});
+
+function makePhysics(over: Partial<PhysicsTime> = {}): PhysicsTime {
+  return { elapsedTicks: 0, durationTicks: 10, completed: false, ...over };
+}
+
+describe("advancePhysicsTime", () => {
+  it("advances one tick per call", () => {
+    const t = makePhysics();
+    advancePhysicsTime(t);
+    expect(t.elapsedTicks).toBe(1);
+  });
+
+  it("completes exactly once, on the tick it reaches its duration", () => {
+    const t = makePhysics({ durationTicks: 2 });
+    expect(advancePhysicsTime(t)).toBe(false);
+    expect(advancePhysicsTime(t)).toBe(true);
+    expect(t.completed).toBe(true);
+    expect(advancePhysicsTime(t)).toBe(false);
+  });
+
+  it("never completes when the duration is indefinite", () => {
+    const t = makePhysics({ durationTicks: null });
+    for (let i = 0; i < 1000; i++) advancePhysicsTime(t);
+    expect(t.completed).toBe(false);
   });
 });
