@@ -1196,6 +1196,53 @@ git commit --allow-empty -m "chore: phase 0 verified — deterministic clock com
 
 ---
 
+## Execution notes
+
+Five things changed during execution. All were defects in this plan, found by review.
+
+**Tasks 5, 6 and 7 were merged into one commit.** As written, Task 5 and Task 6 each ended
+with `tsc` deliberately failing, so two commits on the branch would not have compiled,
+breaking `npm run build` and `git bisect`. All three landed together as `cdb94d6`.
+
+**`MAX_FRAME_MS` was removed (`aa35ea9`).** The plan defined both `MAX_FRAME_MS` (100ms) and
+`MAX_CATCHUP_TICKS` (8) as if they were independent safety limits. They were not — 8 ticks
+is ~66.7ms, so the tick ceiling always bound first and the millisecond clamp could never
+have an observable effect. It was dead code that read like a second guard.
+
+**A guard for non-finite and negative deltas replaced it (`aa35ea9`).** `pump()` is fed
+PixiJS's `ticker.deltaMS`; a negative or `NaN` value would corrupt the accumulator
+permanently with no recovery.
+
+**`MAX_CATCHUP_TICKS` was corrected from 8 to 12 (`afdb162`).** This was the most serious
+defect. PixiJS's `Ticker` clamps its own `deltaMS` to 100ms (`_maxElapsedMS`), and the code
+being replaced consumed all of it — 100ms at a 1/120s step is exactly 12 substeps. A
+ceiling of 8 silently discarded ~33ms of every frame once frame time exceeded 66.7ms,
+putting the scene into *permanent* slow motion under sustained low frame rates rather than
+losing time only during a one-off hitch. The ceiling must equal the upstream clamp.
+
+**Animation completion effects moved from `applyAnim` back into `tickAnim` (`9437273`).**
+The plan put the `__kinematicPosAnimCount` decrement and the `handOff` velocity write in
+`applyAnim`. Those are state mutations, not painting, and `applyAnim` runs once per
+rendered *frame* while `advanceOneTick` runs up to 12 times per frame. An animation
+completing on tick 1 of a 3-tick frame left a stale kinematic count, so physics skipped
+integration for the remaining ticks and the handoff velocity was written late. Moving both
+into `tickAnim` fixed it and removed the need for the `justCompletedThisTick` flag
+entirely.
+
+Known issues accepted and deferred, with no fix in this phase:
+
+- `vitest.config.ts` sits outside every tsconfig `include`, so it is never typechecked.
+- The timeline test "takes the same number of ticks regardless of how they are batched" is
+  vacuous — `advanceAnimTime` takes no delta, so both arms of the test are identical.
+- **Physics has no sub-tick interpolation at paint time**, while animations do. On displays
+  whose refresh does not divide evenly into 120Hz (144Hz, for instance), `pump()` returns 0
+  ticks on some frames and physics-driven objects are painted at an unchanged position,
+  producing judder the previous variable-timestep engine did not have. This is already
+  scheduled in spec §6.7, which places the previous-state buffer and alpha interpolation in
+  Phase 1 alongside the sync-layer redesign. Not observable at 60Hz or 120Hz.
+
+---
+
 ## Deviations from the spec
 
 Two items in spec §5.3 and §5.5 are deliberately scoped down. Both are recorded here so
