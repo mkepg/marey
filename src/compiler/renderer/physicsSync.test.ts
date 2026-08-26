@@ -5,9 +5,12 @@ import type { BodyGeometry, BodyState, IPhysicsWorld, PhysicsParams, PinReason }
 import {
   bindPhysicsBodies,
   cullEscapedBodies,
+  flushPendingVelocity,
   hasPhysicsAnywhere,
   physicsParamsFromIR,
+  pinBody,
   syncWorldToContainers,
+  unpinBody,
   type PhysicsBinding,
 } from "./physicsSync";
 
@@ -27,6 +30,7 @@ class FakeWorld implements IPhysicsWorld {
   readonly removeCalls: string[] = [];
   readonly scaleCalls: Array<{ id: string; sx: number; sy: number }> = [];
   readonly pinCalls: Array<{ id: string; reason: PinReason }> = [];
+  readonly velocityCalls: Array<{ id: string; vx: number; vy: number }> = [];
 
   private readonly bodies = new Map<string, { pinned: Set<PinReason> }>();
   private readonly states = new Map<string, BodyState | null>();
@@ -75,8 +79,8 @@ class FakeWorld implements IPhysicsWorld {
     // Not exercised by physicsSync.
   }
 
-  setVelocity(_id: string, _vx: number, _vy: number): void {
-    // Not exercised by physicsSync.
+  setVelocity(id: string, vx: number, vy: number): void {
+    this.velocityCalls.push({ id, vx, vy });
   }
 
   setScale(id: string, sx: number, sy: number): void {
@@ -139,6 +143,7 @@ interface MockContainer {
     currentScale: { x: number; y: number };
   };
   __body?: string;
+  __pendingVelocity?: { x: number; y: number };
   __updateLayout?: () => void;
   rotation: number;
   visible: boolean;
@@ -430,6 +435,64 @@ describe("cullEscapedBodies", () => {
     expect(world.removeCalls).toEqual([]);
     expect(c.__body).toBe("b1");
     expect(c.visible).toBe(true);
+  });
+});
+
+describe("unpinBody / flushPendingVelocity", () => {
+  it("applies a velocity parked while two reasons hold the pin on the second unpin, not the first, and exactly once", () => {
+    const c = makeContainer({ __body: "b0", __pendingVelocity: { x: 12, y: -34 } });
+    const world = new FakeWorld();
+    world.addBody("b0", SHAPE, 0, 0, 0, physicsParamsFromIR(PHYSICS));
+    world.pin("b0", "POS_ANIM");
+    world.pin("b0", "FROZEN");
+
+    unpinBody(asContainer(c), world, "FROZEN");
+    expect(world.velocityCalls).toEqual([]); // still pinned by POS_ANIM
+    expect(c.__pendingVelocity).toEqual({ x: 12, y: -34 }); // still parked
+
+    unpinBody(asContainer(c), world, "POS_ANIM");
+    expect(world.velocityCalls).toEqual([{ id: "b0", vx: 12, vy: -34 }]);
+  });
+
+  it("clears __pendingVelocity after a successful flush", () => {
+    const c = makeContainer({ __body: "b0", __pendingVelocity: { x: 5, y: 5 } });
+    const world = new FakeWorld();
+    world.addBody("b0", SHAPE, 0, 0, 0, physicsParamsFromIR(PHYSICS));
+    world.pin("b0", "NO_RUNNER");
+
+    unpinBody(asContainer(c), world, "NO_RUNNER");
+
+    expect(c.__pendingVelocity).toBeUndefined();
+  });
+
+  it("does not call setVelocity when unpinning a body with no parked velocity", () => {
+    const c = makeContainer({ __body: "b0" });
+    const world = new FakeWorld();
+    world.addBody("b0", SHAPE, 0, 0, 0, physicsParamsFromIR(PHYSICS));
+    world.pin("b0", "NO_RUNNER");
+
+    unpinBody(asContainer(c), world, "NO_RUNNER");
+
+    expect(world.velocityCalls).toEqual([]);
+  });
+
+  it("flushPendingVelocity itself is a no-op while the body is still pinned", () => {
+    const c = makeContainer({ __body: "b0", __pendingVelocity: { x: 1, y: 1 } });
+    const world = new FakeWorld();
+    world.addBody("b0", SHAPE, 0, 0, 0, physicsParamsFromIR(PHYSICS));
+    world.pin("b0", "FROZEN");
+
+    flushPendingVelocity(asContainer(c), world);
+
+    expect(world.velocityCalls).toEqual([]);
+    expect(c.__pendingVelocity).toEqual({ x: 1, y: 1 });
+  });
+
+  it("pinBody / unpinBody are no-ops on a container with no body", () => {
+    const c = makeContainer();
+    const world = new FakeWorld();
+    expect(() => pinBody(asContainer(c), world, "FROZEN")).not.toThrow();
+    expect(() => unpinBody(asContainer(c), world, "FROZEN")).not.toThrow();
   });
 });
 

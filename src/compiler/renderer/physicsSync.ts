@@ -103,8 +103,28 @@ export function pinBody(container: Container, world: IPhysicsWorld, reason: PinR
   if (container.__body) world.pin(container.__body, reason);
 }
 
+/**
+ * Push a parked velocity into the world, if the body is free to take one.
+ *
+ * A Matter body owns its velocity and unpinning collapses it back to rest, so
+ * the value can only be applied once the last pin has lifted. Until then it
+ * waits on the container.
+ */
+export function flushPendingVelocity(container: Container, world: IPhysicsWorld): void {
+  const id = container.__body;
+  const pending = container.__pendingVelocity;
+  if (!id || !pending || world.isPinned(id)) return;
+  world.setVelocity(id, pending.x, pending.y);
+  container.__pendingVelocity = undefined;
+}
+
 export function unpinBody(container: Container, world: IPhysicsWorld, reason: PinReason): void {
-  if (container.__body) world.unpin(container.__body, reason);
+  if (!container.__body) return;
+  world.unpin(container.__body, reason);
+  // Flush here rather than at each call site: a velocity parked while two
+  // reasons held the pin must be applied by whichever release is the last one,
+  // and callers were already forgetting one of those paths.
+  flushPendingVelocity(container, world);
 }
 
 /**

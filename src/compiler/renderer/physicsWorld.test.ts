@@ -271,6 +271,27 @@ describe("MatterWorld step", () => {
     w.destroy();
   });
 
+  it("interpolates a held-but-changing angle between ticks instead of snapping", () => {
+    // Every other test in this file reads at alpha 0 or 1, which is exactly
+    // why applying the override immediately (rather than recording it for
+    // step() to apply after capturing prevAngle) was invisible: prevAngle and
+    // the current angle only ever differ when you sample a fractional alpha.
+    const w = new MatterWorld(800, 600);
+    w.addBody("a", { kind: "rectangle", width: 40, height: 20 }, 400, 300,
+      0, { ...VACUUM, collideBounds: false });
+
+    w.overrideAngle("a", 0);
+    w.step();
+    w.overrideAngle("a", 1.0);
+    w.step();
+
+    const mid = w.readState("a", 0.5)!.angle;
+    expect(mid).toBeCloseTo(0.5, 6);
+    expect(mid).not.toBeCloseTo(0, 3);
+    expect(mid).not.toBeCloseTo(1.0, 3);
+    w.destroy();
+  });
+
   it("lets a settled body fall asleep", () => {
     // The whole point of spec 6.4. If gravity is applied as a force this
     // never becomes true, because Sleeping.update force-wakes it every tick.

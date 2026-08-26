@@ -100,28 +100,19 @@ function tickAnim(ra: RunningAnim): boolean {
       };
     }
 
-    if (activeWorld) {
-      unpinBody(ra.container, activeWorld, "POS_ANIM");
-      flushPendingVelocity(ra.container, activeWorld);
-    }
+    if (activeWorld) unpinBody(ra.container, activeWorld, "POS_ANIM");
+  }
+
+  // The rotation-override release is state, not paint, for the same reason:
+  // it must happen on the tick the animation completes, not once per rendered
+  // frame. Leaving it in the paint-phase splice loop let a catch-up burst of
+  // several ticks per frame keep re-applying the override for ticks after the
+  // animation had already finished.
+  if (justCompleted && ra.anim.property === "rotation" && ra.container.__body && activeWorld) {
+    activeWorld.overrideAngle(ra.container.__body, null);
   }
 
   return justCompleted;
-}
-
-/**
- * Push a parked velocity into the world, if the body is free to take one.
- *
- * A Matter body owns its velocity, and unpinning collapses it back to rest, so
- * the value can only be applied once the last pin has lifted. Until then it
- * waits on the container and whichever call releases the final pin flushes it.
- */
-function flushPendingVelocity(container: Container, world: IPhysicsWorld): void {
-  const id = container.__body;
-  const pending = container.__pendingVelocity;
-  if (!id || !pending || world.isPinned(id)) return;
-  world.setVelocity(id, pending.x, pending.y);
-  container.__pendingVelocity = undefined;
 }
 
 /**
@@ -245,12 +236,12 @@ function spawnPhysics(container: Container, phIR: IRPhysics, globalList: Physics
     };
 
     // Unpin before flushing: setStatic(false) collapses the body back to rest,
-    // so a velocity written first would be discarded. If another reason still
-    // holds the pin — a position animation running alongside this physics
-    // block — the velocity stays parked and tickAnim flushes it later.
-    activeWorld.unpin(id, "FROZEN");
-    activeWorld.unpin(id, "NO_RUNNER");
-    flushPendingVelocity(container, activeWorld);
+    // so a velocity written first would be discarded. unpinBody flushes after
+    // each unpin, so if another reason still holds the pin — a position
+    // animation running alongside this physics block — the velocity stays
+    // parked and whichever unpin releases the last reason flushes it then.
+    unpinBody(container, activeWorld, "FROZEN");
+    unpinBody(container, activeWorld, "NO_RUNNER");
   }
 
   const pr: PhysicsRunner = {
@@ -504,13 +495,9 @@ export const pixiRendererAdapter: IRendererAdapter = {
       syncWorldToContainers(bindings, world, driver.alpha);
 
       for (let i = runningAnims.length - 1; i >= 0; i--) {
-        const ra = runningAnims[i];
-        if (!ra.time.completed) continue;
-        // A completed rotation animation hands the angle back to the solver.
-        if (ra.anim.property === "rotation" && ra.container.__body) {
-          world.overrideAngle(ra.container.__body, null);
-        }
-        runningAnims.splice(i, 1);
+        // The rotation-override release lives in tickAnim (the tick phase),
+        // not here — see the comment there. This loop only splices.
+        if (runningAnims[i].time.completed) runningAnims.splice(i, 1);
       }
       for (let i = physicsRunners.length - 1; i >= 0; i--) {
         if (physicsRunners[i].time.completed) physicsRunners.splice(i, 1);

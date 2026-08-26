@@ -373,14 +373,17 @@ export class MatterWorld implements IPhysicsWorld {
     rec.scaleY = safeY;
   }
 
+  /**
+   * Hold this body's angle, or pass null to hand it back to the solver.
+   *
+   * Recording only: the value is applied inside `step()`, after the previous-
+   * state buffer has been captured. Applying it here instead would overwrite
+   * `body.angle` before `step()` reads it, making `prevAngle` equal the current
+   * angle and collapsing `readState`'s interpolation to a per-tick snap.
+   */
   overrideAngle(id: string, radians: number | null): void {
     const rec = this.records.get(id);
-    if (!rec) return;
-    rec.angleOverride = radians;
-    if (radians !== null) {
-      Matter.Body.setAngle(rec.body, radians);
-      Matter.Body.setAngularVelocity(rec.body, 0);
-    }
+    if (rec) rec.angleOverride = radians;
   }
 
   /**
