@@ -1,5 +1,6 @@
 import { Container, Graphics, Text, TextStyle } from "pixi.js";
 import type { IRObjectNode, IRObjectProps, IRAnimation, IRPhysics, IRSequence } from "../sceneIR";
+import type { BodyGeometry } from "./physicsWorld";
 
 declare module "pixi.js" {
   interface Container {
@@ -18,12 +19,15 @@ declare module "pixi.js" {
       alpha: number;
     };
     __physics?: IRPhysics;
-    __physicsState?: {
-      velocity: { x: number; y: number };
-    };
+    /** Id of this container's body in the shared world, if it has one. */
+    __body?: string;
+    /** Exit velocity written by a `handOff` animation, in px/s. */
+    __pendingVelocity?: { x: number; y: number };
+    /** Collision shape, in local space with the origin at the bbox centre. */
+    __bodyShape?: BodyGeometry;
     __sequences?: ReadonlyArray<IRSequence>;
     __baseSize?: { w: number; h: number };
-    __kinematicPosAnimCount?: number; 
+    __kinematicPosAnimCount?: number;
   }
 }
 
@@ -75,6 +79,7 @@ export function buildNode(node: IRObjectNode): Container {
         .fill(props.color);
       wrapper.addChild(gfx);
       wrapper.__baseSize = { w: props.radius * 2, h: props.radius * 2 };
+      wrapper.__bodyShape = { kind: "circle", radius: props.radius };
       break;
     }
     case "rectangle": {
@@ -87,6 +92,7 @@ export function buildNode(node: IRObjectNode): Container {
         .fill(props.color);
       wrapper.addChild(gfx);
       wrapper.__baseSize = { w: props.width, h: props.height };
+      wrapper.__bodyShape = { kind: "rectangle", width: props.width, height: props.height };
       break;
     }
     case "polygon": {
@@ -118,6 +124,13 @@ export function buildNode(node: IRObjectNode): Container {
         .fill(props.color);
       wrapper.addChild(gfx);
       wrapper.__baseSize = { w, h };
+      wrapper.__bodyShape = {
+        kind: "polygon",
+        points: props.points.map((p) => ({
+          x: p.x - localPivot.x,
+          y: p.y - localPivot.y,
+        })),
+      };
       break;
     }
     case "line": {
@@ -149,6 +162,11 @@ export function buildNode(node: IRObjectNode): Container {
         .stroke({ width: props.thickness, color: props.color });
       wrapper.addChild(gfx);
       wrapper.__baseSize = { w, h };
+      wrapper.__bodyShape = {
+        kind: "rectangle",
+        width: Math.max(w, props.thickness),
+        height: Math.max(h, props.thickness),
+      };
       break;
     }
     case "text": {
@@ -165,6 +183,11 @@ export function buildNode(node: IRObjectNode): Container {
 
       wrapper.addChild(textObj);
       wrapper.__baseSize = { w: textObj.width, h: textObj.height };
+      wrapper.__bodyShape = {
+        kind: "rectangle",
+        width: textObj.width,
+        height: textObj.height,
+      };
       break;
     }
     case "group": {
@@ -184,7 +207,13 @@ export function buildNode(node: IRObjectNode): Container {
         },
         localPivot
       );
-      wrapper.__baseSize = { w: 0, h: 0 };
+      const groupBounds = wrapper.getLocalBounds();
+      wrapper.__baseSize = { w: groupBounds.width, h: groupBounds.height };
+      wrapper.__bodyShape = {
+        kind: "rectangle",
+        width: Math.max(groupBounds.width, 1),
+        height: Math.max(groupBounds.height, 1),
+      };
       break;
     }
     default: {
@@ -222,12 +251,6 @@ export function buildNode(node: IRObjectNode): Container {
   };
 
   wrapper.__physics = props.physics;
-
-  if (props.physics) {
-    wrapper.__physicsState = {
-      velocity: { x: props.physics.velocity.x, y: props.physics.velocity.y }
-    };
-  }
 
   return wrapper;
 }
