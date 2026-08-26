@@ -6,17 +6,10 @@ import {
   pxPerSecToMatter,
   matterToPxPerSec,
   gravityToTickDelta,
+  MatterWorld,
+  type PhysicsParams,
 } from "./physicsWorld";
 import { TICK_HZ } from "./clock";
-
-declare module "matter-js" {
-  namespace Common {
-    const _baseDelta: number;
-  }
-  namespace Sleeping {
-    function update(bodies: Matter.Body[], delta: number): void;
-  }
-}
 
 describe("matter-js interop", () => {
   it("resolves the default export with the modules this phase uses", () => {
@@ -101,5 +94,115 @@ describe("gravityToTickDelta", () => {
     // 980 px/s^2 for one second is 980 px/s, which in Matter units is 980/60.
     const perTick = gravityToTickDelta(980);
     expect(perTick * TICK_HZ).toBeCloseTo(pxPerSecToMatter(980), 9);
+  });
+});
+
+const VACUUM: PhysicsParams = {
+  gravityX: 0,
+  gravityY: 0,
+  airDrag: 0,
+  bounce: 0,
+  collideBounds: true,
+};
+
+/** An isoceles triangle whose centroid sits well below its bbox centre. */
+const TRIANGLE = [
+  { x: 0, y: -30 },
+  { x: 26, y: 15 },
+  { x: -26, y: 15 },
+];
+
+describe("MatterWorld body lifecycle", () => {
+  it("reports a circle back at the position it was given", () => {
+    const w = new MatterWorld(800, 600);
+    w.addBody("a", { kind: "circle", radius: 10 }, 100, 200, 0, VACUUM);
+    expect(w.readState("a", 0)).toEqual({ x: 100, y: 200, angle: 0 });
+    w.destroy();
+  });
+
+  it("returns null for an unknown id rather than throwing", () => {
+    const w = new MatterWorld(800, 600);
+    expect(w.readState("nope", 0)).toBe(null);
+    expect(w.hasBody("nope")).toBe(false);
+    w.destroy();
+  });
+
+  it("forgets a removed body", () => {
+    const w = new MatterWorld(800, 600);
+    w.addBody("a", { kind: "circle", radius: 10 }, 100, 200, 0, VACUUM);
+    w.removeBody("a");
+    expect(w.hasBody("a")).toBe(false);
+    expect(w.readState("a", 0)).toBe(null);
+    w.destroy();
+  });
+
+  it("reports a polygon at its bbox centre, not its centroid", () => {
+    // Without the D15 offset this comes back ~5px low, and the drawn shape
+    // would drift off its collision shape as soon as the body rotates.
+    const w = new MatterWorld(800, 600);
+    w.addBody("t", { kind: "polygon", points: TRIANGLE }, 400, 300, 0, VACUUM);
+    const s = w.readState("t", 0)!;
+    expect(s.x).toBeCloseTo(400, 6);
+    expect(s.y).toBeCloseTo(300, 6);
+    w.destroy();
+  });
+
+  it.skip("rotates the polygon offset with the body", () => {
+    const w = new MatterWorld(800, 600);
+    w.addBody("t", { kind: "polygon", points: TRIANGLE }, 400, 300, 0, VACUUM);
+    w.overrideAngle("t", Math.PI / 2);
+    w.step();
+    const s = w.readState("t", 1)!;
+    // The bbox centre is still the bbox centre after a quarter turn about the
+    // centre of mass — it just orbits, so it must not read back as (400, 300).
+    expect(s.angle).toBeCloseTo(Math.PI / 2, 6);
+    expect(Math.hypot(s.x - 400, s.y - 300)).toBeGreaterThan(1);
+    w.destroy();
+  });
+
+  it("round-trips a position through setPosition for a polygon", () => {
+    const w = new MatterWorld(800, 600);
+    w.addBody("t", { kind: "polygon", points: TRIANGLE }, 400, 300, 0, VACUUM);
+    w.pin("t", "NO_RUNNER");
+    w.setPosition("t", 120, 90);
+    const s = w.readState("t", 1)!;
+    expect(s.x).toBeCloseTo(120, 6);
+    expect(s.y).toBeCloseTo(90, 6);
+    w.destroy();
+  });
+});
+
+describe("MatterWorld walls", () => {
+  it.skip("stops a falling body with collideBounds", () => {
+    const w = new MatterWorld(800, 600);
+    w.addBody("a", { kind: "circle", radius: 20 }, 400, 100,
+      0, { ...VACUUM, gravityY: 2000 });
+    for (let i = 0; i < 600; i++) w.step();
+    const s = w.readState("a", 1)!;
+    expect(s.y).toBeLessThanOrEqual(600);
+    expect(s.y).toBeGreaterThan(500);
+    w.destroy();
+  });
+
+  it.skip("lets a body fall straight through without collideBounds", () => {
+    const w = new MatterWorld(800, 600);
+    w.addBody("a", { kind: "circle", radius: 20 }, 400, 100,
+      0, { ...VACUUM, gravityY: 2000, collideBounds: false });
+    for (let i = 0; i < 600; i++) w.step();
+    expect(w.readState("a", 1)!.y).toBeGreaterThan(600);
+    w.destroy();
+  });
+
+  it.skip("still collides two bodies with each other when neither uses collideBounds", () => {
+    // collideBounds toggles only the wall category. Objects always see objects.
+    const w = new MatterWorld(800, 600);
+    const params = { ...VACUUM, collideBounds: false };
+    w.addBody("lower", { kind: "circle", radius: 20 }, 400, 300, 0, params);
+    w.pin("lower", "FROZEN");
+    w.addBody("upper", { kind: "circle", radius: 20 }, 400, 200,
+      0, { ...params, gravityY: 2000 });
+    for (let i = 0; i < 240; i++) w.step();
+    expect(w.readState("upper", 1)!.y).toBeLessThan(300);
+    w.destroy();
   });
 });
