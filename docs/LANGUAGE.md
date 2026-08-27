@@ -472,3 +472,157 @@ scene {
   }
 }
 ```
+
+## Reuse
+
+`def`, `generate`, `template` and `use` are the language's metaprogramming
+layer. All four are resolved by the parser, before type checking runs — by
+the time an error is reported, `def` names have been substituted and
+`generate`/`use` have been expanded into plain objects.
+
+### `def`
+
+`def name = value` binds `name` to a single value in the current scope. The
+right-hand side accepts any value kind the parser produces: number, color,
+string, point, point list, boolean, easing, or `sceneFit`.
+
+A binding is immutable: redefining the same name in the same scope is a
+compile error ("already defined in this immediate scope"). Shadowing an
+outer binding from an inner scope is allowed — `generate` bodies, object and
+group bodies, and template expansions each open a new scope. A name is
+visible only in the scope that defined it and scopes nested inside it; a
+name defined inside a `generate` block does not exist outside it.
+
+`def` may appear before the `scene` block, inside the `scene` body, and
+inside any object, group, `generate`, `animate`, `physics`, or template
+body. It may not appear directly inside a `sequence` block, which accepts
+only `animate`, `physics`, and `parallel`.
+
+Names follow the same rule as object names: they must start with a letter
+and contain only letters, digits, and underscores.
+
+**A named colour cannot be a `def` name.** `red`, `green`, `blue`, `white`,
+`black`, `yellow`, `cyan`, `magenta`, and `orange` lex as their own token
+type, not as identifiers, so `def cyan = #00ffff` is a parse error before it
+ever reaches scope checking — the parser is looking for a variable name and
+finds a colour literal instead.
+
+### Arithmetic
+
+Numeric value positions accept `+`, `-`, `*`, and `/`, with conventional
+precedence: `*` and `/` bind tighter than `+` and `-`. Unary `-` is
+supported. Parentheses group and may nest. Division by zero is a compile
+error, not `Infinity`. There is no modulo operator, no exponent, and no
+comparison operator. An operand may be a number literal or a `def`-bound
+name; a name bound to a non-number value used in a math expression is a
+compile error.
+
+### `generate`
+
+`generate i from A to B { ... }` repeats its body once for each integer `i`
+from `A` to `B`, **inclusive of both ends** — `from 0 to 4` runs five times,
+for `i` = 0, 1, 2, 3, 4. `A` and `B` must be integer literals or
+integer-valued `def` names; a non-integer bound is a compile error. A single
+`generate` is capped at 10,000 iterations, and a file at 15,000 generated
+objects in total, to bound compile time.
+
+Every object created inside the loop has its declared name suffixed with
+the loop index: a `rectangle tick` inside `generate k from 0 to 9` produces
+`tick_0` through `tick_9`. `generate` blocks may nest. Each level of nesting
+appends its own suffix, innermost first — an object named `dot` inside an
+inner loop bound to `j` nested in an outer loop bound to `i` is named
+`dot_<j>_<i>`.
+
+`generate` is allowed at the top level of the scene, inside a `group`, and
+inside a `template` body. It is not allowed inside a shape (`circle`,
+`rectangle`, `polygon`, `line`, `text`) — those cannot contain child objects
+or blocks of any kind.
+
+### `template` and `use`
+
+`template Name(params) { ... }` declares a parametric macro. Templates are
+declared only before the `scene` block; the keyword is rejected anywhere
+else, including inside the scene body.
+
+`use Name(args) instanceName { ... }` expands the template's body with each
+parameter bound to the corresponding argument, positionally, by name. An
+argument may be **any** value kind the parser produces, including a keyword
+— an easing curve can be passed as a template argument, as in
+`use Racer(easeInOut) rowInOut { ... }` in the default scene. The number of
+arguments must match the number of declared parameters exactly.
+
+The instance name must be unique among its siblings and follows the same
+naming rule as `def`. The expansion is wrapped as a `group` node named after
+the instance; the `{ ... }` block after the instance name sets group-level
+properties on that wrapper — `position`, `rotation`, `scale`, `alpha`, `z` —
+exactly as it would on any other `group`.
+
+Recursive templates are rejected: expanding a template that is already being
+expanded, either directly or through a cycle of other templates, is a
+compile error.
+
+```declare
+def ink    = #e2e8f0
+def gap    = 120
+def beat   = 1.5
+
+template Badge(tone) {
+  circle disc {
+    position: (0, 0)
+    radius: 18
+    color: tone
+  }
+  rectangle pip {
+    position: (0, -18)
+    size: (10, 10)
+    color: ink
+  }
+}
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate i from 0 to 4 {
+    use Badge(cyan) badge { position: (100 + i * gap, 200) }
+  }
+
+  circle mover {
+    position: (100, 400)
+    radius: 14
+    color: magenta
+    animate {
+      property: position
+      to: (700, 400)
+      duration: beat
+      easing: easeInOut
+    }
+  }
+}
+```
+
+### Current limits (as of v0.3.x)
+
+These are known gaps in the reuse layer, not deliberate design positions.
+This section is expected to shrink as later phases close them.
+
+**No arrays or indexing.** There is no way to write a list of values and
+loop over it. A point list such as `[(0, -30), (26, 15), (-26, 15)]` exists,
+but only as a literal property value for `polygon` and `line`. It can be
+bound to a name with `def` and passed around as a whole — but its elements
+cannot be read individually, indexed, or iterated. It is not a
+general-purpose array. A chart driven by seven data values must still be
+written as seven separate `rectangle` blocks.
+
+**No trigonometry.** The arithmetic above has no `sin` or `cos`. A radial or
+circular layout — dots evenly spaced around a circle — cannot be produced by
+`generate`; every coordinate has to be computed by hand and written as a
+literal.
+
+**No modulo and no conditionals.** "Every fifth tick is taller" cannot be
+expressed inside a single `generate` loop, because there is no way to branch
+on the loop variable. The workaround is two overlapping `generate` loops:
+one draws the common case, and a second, at the wider stride, draws over it.
+
+`generate` handles "N of the same thing, spaced by arithmetic on the loop
+variable." It does not handle data.
