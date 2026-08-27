@@ -352,9 +352,9 @@ through it.
 **A collision body is created when the scene starts, not when the object's
 physics step begins.** For an object whose `sequence` opens with `animate`
 and reaches `physics` later, the body already exists during that opening
-`animate` step, held immobile at the object's current position. So an object
-sliding into place shoves anything already in its path before its own physics
-step ever starts.
+`animate` step, pinned — driven by the animation rather than by physics
+forces, and unaffected by impacts. So an object sliding into place shoves
+anything already in its path before its own physics step ever starts.
 
 ### Properties
 
