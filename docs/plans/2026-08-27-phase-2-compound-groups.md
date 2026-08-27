@@ -1257,13 +1257,186 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-## Task 4: `transform.ts` — pure 2D transform algebra
+## Task 4: Stop animations starting from paint-phase state
+
+**The third defect in the same family, and the largest. Found by mutation-testing Task 3, not by scoping.**
+
+`spawnAnim` seeds a new animation's `startVal` from `getCurrentVal(container, prop)`, which reads `__declareLayout.currentPos`, `container.rotation` and `container.alpha`. Every one of those was last written **in the paint phase, at the driver's wall-clock alpha** — by `applyAnim`, or by `syncWorldToContainers`. That `startVal` then flows straight into `pushAnimToWorld` → `world.setPosition`.
+
+So the value the physics world receives depends on when the last frame happened to land. This is invariant 3 again, reached by a third route — and again with no `driver.alpha` anywhere in the call chain, which is why the invariant's own wording did not catch it.
+
+**Measured.** A `sequence { animate position to 120; animate position to 240; physics }`, run twice for an identical **40 ticks**, painting at alpha 0.5, differing only in how many ticks each frame absorbed:
+
+| frame size | `setPosition` values after the first animation ends |
+|---|---|
+| 1 tick | `120.0000`, `114.3333`, `118.6667`, `123.0000` |
+| 7 ticks | `120.0000`, **`8.0000`**, `16.0000`, `24.0000` |
+
+At 7-tick pacing the second animation starts from a `currentPos` that no paint has updated since tick 0, so it animates from ~0 instead of ~110 — the body is dragged roughly **110px backwards**, and how far depends purely on frame rate. The equivalent divergence in Task 3's Defect B was a stale endpoint repeat; this one is a visible jump and it breaks scene replay, which is what Phase 0 exists to guarantee and what baked-keyframe export depends on.
+
+**Why it survived this long.** The physics→animate handoff *is* protected: `snapContainerToBody` runs on freeze and reads at alpha 1, which is tick-aligned. Only the animate→animate handoff is unprotected, because nothing snaps there.
+
+**The fix has direct precedent.** Mirror `snapContainerToBody`: on the tick an animation completes, write its exact final value to the container in the **tick** phase, before anything can read it as a start value.
+
+This looks like it brushes invariant 2, which says painting belongs in the paint phase. It does not. Invariant 2 forbids moving *side effects* into paint; it does not forbid a tick-phase state snap. `snapContainerToBody` already does exactly this for the freeze transition and documents why.
+
+**Files:**
+- Modify: `src/compiler/renderer/sceneRuntime.ts` (`tickAnim`)
+- Modify: `src/compiler/renderer/sceneRuntime.test.ts`
+
+- [ ] **Step 1: Write the failing test**
+
+This is a *harness*, not a single assertion — the same shape would have caught Task 3's Defect B, and this is the third instance of the family, so it is worth building properly. Append a new describe block to `src/compiler/renderer/sceneRuntime.test.ts`:
+
+```ts
+/**
+ * Frame pacing must not change what the physics world is told.
+ *
+ * Three separate defects in this phase have been "a wall-clock-derived value
+ * reached the world", and none of them involved `driver.alpha` directly, which
+ * is why reading invariant 3 literally did not prevent any of them. This runs a
+ * scene at two very different frame pacings for an identical number of ticks
+ * and requires the world to see the identical call sequence.
+ */
+function runAtPacing(ticksPerFrame: number, totalTicks: number): string[] {
+  const c = makeContainer({ sequence: TWO_STEP_SEQUENCE });
+  const world = new RecordingWorld();
+  const rt = new SceneRuntime(world, makeRoot(c));
+  let done = 0;
+  while (done < totalTicks) {
+    const n = Math.min(ticksPerFrame, totalTicks - done);
+    for (let i = 0; i < n; i++) rt.advanceOneTick();
+    // A deliberately awkward alpha: 0 and 1 are the two values that hide this.
+    rt.paint(0.5);
+    done += n;
+  }
+  return world.calls;
+}
+
+describe("SceneRuntime · frame pacing must not reach the world", () => {
+  it("sends the world the same calls at 1 tick per frame as at 7", () => {
+    expect(runAtPacing(7, 40)).toEqual(runAtPacing(1, 40));
+  });
+
+  it("sends the same calls at 12 ticks per frame — LiveDriver's catch-up ceiling", () => {
+    expect(runAtPacing(12, 60)).toEqual(runAtPacing(1, 60));
+  });
+
+  it("starts a sequence's second animation from the first one's exact target", () => {
+    // The specific mechanism: the second animation's startVal is read from
+    // container state that the paint phase last wrote at the driver's alpha.
+    const calls = runAtPacing(7, 40);
+    const positions = calls.filter((s) => s.startsWith("setPosition:"));
+    const firstTargetIndex = positions.indexOf("setPosition:b0:120.0000,0.0000");
+    expect(firstTargetIndex).toBeGreaterThan(-1);
+    // Whatever comes next must continue from 120, not jump back toward 0.
+    const next = positions[firstTargetIndex + 1];
+    const x = Number(next.split(":")[2].split(",")[0]);
+    expect(x).toBeGreaterThanOrEqual(120);
+  });
+});
+```
+
+You need one fixture. `makeContainer` currently takes `animations`/`physics`/`position`; add a `sequence` option that sets `__sequences`, and define the sequence beside the other constants:
+
+```ts
+/** animate to 120 over 6 ticks, then to 240 over 30, then simulate. */
+const TWO_STEP_SEQUENCE: IRSequence = {
+  steps: [
+    { ...anim({ to: { x: 120, y: 0 }, duration: 6 / TICK_HZ }) },
+    { ...anim({ to: { x: 240, y: 0 }, duration: 30 / TICK_HZ }) },
+    { ...PHYSICS, duration: "indefinitely" },
+  ],
+};
+```
+
+Import `IRSequence` as a type from `../sceneIR`.
+
+- [ ] **Step 2: Run to confirm all three fail**
+
+Run: `npx vitest run src/compiler/renderer/sceneRuntime.test.ts -t "frame pacing"`
+
+Expected: all three FAIL. The first two on a long array diff whose first divergence is the second animation's start; the third with a received `x` around `8`, not `≥ 120`.
+
+If any of the three passes before the fix, it is not testing the bug — say so and stop rather than proceeding.
+
+- [ ] **Step 3: Implement**
+
+In `src/compiler/renderer/sceneRuntime.ts`, in `tickAnim`, immediately after `const justCompleted = advanceAnimTime(ra.time);`:
+
+```ts
+    // Snap the animated property to its exact final value, in the TICK phase.
+    //
+    // Whatever runs next reads this container's state as its own starting
+    // point — `spawnAnim` calls `getCurrentVal`, which reads `currentPos`,
+    // `rotation` and `alpha`. Those are all last written by the PAINT phase at
+    // the driver's wall-clock alpha, so without this snap a sequence's second
+    // animation starts from a frame-rate-dependent value and pushes it straight
+    // into the physics world. Measured at ~110px of divergence between 1-tick
+    // and 7-tick frames over the same 40 ticks.
+    //
+    // This is a state snap in the tick phase, not a side effect moved into
+    // paint, so it does not conflict with invariant 2 — it is the same move
+    // `snapContainerToBody` already makes for the freeze transition, and for
+    // the same reason. `animProgress` returns 1 for a completed runner, so
+    // evaluating at alpha 0 gives exactly the final value.
+    if (justCompleted) applyAnim(ra, 0);
+```
+
+`applyAnim` is a module-level function in this file, so it is directly callable.
+
+- [ ] **Step 4: Run the tests**
+
+Run: `npx vitest run src/compiler/renderer/sceneRuntime.test.ts`
+
+Expected: PASS, 15 tests.
+
+- [ ] **Step 5: Full suite and typecheck**
+
+Run: `npx tsc -b --noEmit && npm test`
+
+Expected: clean, 136 passed.
+
+If an existing test now fails, do not adjust it before understanding why: this changes when a container reaches its final animated value, and a test that depended on the old one-tick lag is either encoding the bug or catching a real regression. Report which.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/compiler/renderer/sceneRuntime.ts src/compiler/renderer/sceneRuntime.test.ts
+git commit -m "fix(renderer): stop animations starting from paint-phase state
+
+spawnAnim seeds startVal from getCurrentVal, which reads currentPos,
+rotation and alpha — all last written by the paint phase at the driver's
+wall-clock alpha. That value then goes straight into world.setPosition, so
+what the physics world is told depended on when the last frame landed.
+
+Measured on a two-step position sequence over an identical 40 ticks: at
+1-tick frames the second animation continues from 120, at 7-tick frames it
+restarts from 8, dragging the body about 110px backwards. That breaks scene
+replay, which is what the fixed clock exists to provide.
+
+Third defect in this phase of the form 'a wall-clock-derived value reached
+the world', and the third with no driver.alpha anywhere in the call chain.
+Adds a frame-pacing harness that requires the world to see identical calls
+at 1, 7 and 12 ticks per frame — the shape of test that would have caught
+the other two.
+
+Fixed by snapping the animated property to its final value in the tick
+phase on completion, mirroring what snapContainerToBody already does for
+the freeze transition.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 5: `transform.ts` — pure 2D transform algebra
 
 **Files:**
 - Create: `src/compiler/renderer/transform.ts`
 - Create: `src/compiler/renderer/transform.test.ts`
 
-Both the builder's group flattening (Task 6) and `physicsSync`'s ancestor composition (Task 7) need to compose a parent transform with a child's local one. This module is the single copy.
+Both the builder's group flattening (Task 7) and `physicsSync`'s ancestor composition (Task 8) need to compose a parent transform with a child's local one. This module is the single copy.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1466,7 +1639,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-## Task 5: Compound bodies in `physicsWorld.ts`
+## Task 6: Compound bodies in `physicsWorld.ts`
 
 **Files:**
 - Modify: `src/compiler/renderer/physicsWorld.ts:90-96` (`BodyGeometry`), `206-274` (`addBody`)
@@ -1821,6 +1994,69 @@ Replace the body of `addBody` (currently lines 206–274) with:
   }
 ```
 
+**Also fix pin reason-counting while this file is open.** `pinReasons` is a `Set<PinReason>`, so two `pin(id, "POS_ANIM")` calls collapse to one entry and a single `unpin` releases both. An object with two `animate position` blocks therefore goes dynamic the moment the *first* one finishes, while the second is still calling `setPosition` on it. Confirmed: at tick 6 of a 6-tick and a 30-tick animation on one body, the pin set is empty.
+
+Change the field to a count per reason:
+
+```ts
+  /** Why this body is pinned, and how many holds each reason has. */
+  readonly pinReasons: Map<PinReason, number>;
+```
+
+```ts
+  pin(id: string, reason: PinReason): void {
+    const rec = this.records.get(id);
+    if (!rec) return;
+    const wasPinned = rec.pinReasons.size > 0;
+    // Counted, not a set: two position animations on one object take two holds
+    // and must take two releases. A Set silently collapsed them, so the first
+    // animation to finish handed the body back to the solver while the second
+    // was still driving it.
+    rec.pinReasons.set(reason, (rec.pinReasons.get(reason) ?? 0) + 1);
+    if (!wasPinned) Matter.Body.setStatic(rec.body, true);
+  }
+
+  unpin(id: string, reason: PinReason): void {
+    const rec = this.records.get(id);
+    if (!rec) return;
+    const held = rec.pinReasons.get(reason);
+    if (held === undefined) return;
+    if (held > 1) {
+      rec.pinReasons.set(reason, held - 1);
+      return;
+    }
+    rec.pinReasons.delete(reason);
+    if (rec.pinReasons.size > 0) return;
+    // setStatic collapses positionPrev onto position, so the body resumes from
+    // rest. Callers that want momentum carried across call setVelocity after.
+    Matter.Body.setStatic(rec.body, false);
+    Matter.Sleeping.set(rec.body, false);
+  }
+```
+
+Update `addBody`'s record literal from `pinReasons: new Set()` to `pinReasons: new Map()`.
+
+Then delete the dead counter this was originally built to be. `__kinematicPosAnimCount` is incremented in `sceneRuntime.ts`'s `spawnAnim`, decremented in `tickAnim`, declared in `builder.ts`'s `declare module` block and initialised there — and **read nowhere in `src/`**. It is leftover state from before Phase 1 replaced counting with reason-tagging, and it looks live. Remove all four sites.
+
+Add a test for the counting:
+
+```ts
+  it("takes two releases when two reasons of the same kind hold the pin", () => {
+    // Two `animate position` blocks on one object take two holds. A Set
+    // collapsed them, so the first to finish handed the body back to the
+    // solver while the second was still driving it.
+    const w = new MatterWorld(800, 600);
+    w.addBody("a", { kind: "circle", radius: 10 }, 100, 100, 0, VACUUM);
+    w.pin("a", "POS_ANIM");
+    w.pin("a", "POS_ANIM");
+    w.unpin("a", "POS_ANIM");
+    expect(w.isPinned("a")).toBe(true);
+    w.unpin("a", "POS_ANIM");
+    expect(w.isPinned("a")).toBe(false);
+    w.destroy();
+  });
+```
+
 Add this accessor next to `isAsleep`, for the rotated-part test:
 
 ```ts
@@ -1878,7 +2114,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-## Task 6: `builder.ts` flattens a group into a compound
+## Task 7: `builder.ts` flattens a group into a compound
 
 **Files:**
 - Modify: `src/compiler/renderer/builder.ts:193-218` (the `group` case), plus the `declare module` block
@@ -2216,7 +2452,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-## Task 7: Ancestor-transform composition in `physicsSync.ts`
+## Task 8: Ancestor-transform composition in `physicsSync.ts`
 
 **Files:**
 - Modify: `src/compiler/renderer/physicsSync.ts` (`bindPhysicsBodies`, `syncWorldToContainers`, `snapContainerToBody`, `flushPendingVelocity`)
@@ -2224,7 +2460,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Modify: `src/compiler/renderer/sceneRuntime.ts` (`pushAnimToWorld`)
 - Modify: `src/compiler/renderer/physicsSync.test.ts`
 
-This is D17: `physics` inside a group places correctly, provided every ancestor group is static. Task 8's validator rules enforce that precondition.
+This is D17: `physics` inside a group places correctly, provided every ancestor group is static. Task 9's validator rules enforce that precondition.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2350,7 +2586,7 @@ Three additions to the existing fixtures at the top of the file:
 
 and add `import type { LocalTransform } from "./transform";` to the imports.
 
-**2. `FakeWorld` gains `boundsOf`**, because Task 5 added it to `IPhysicsWorld` and this class implements the interface in full deliberately, so the compiler catches drift:
+**2. `FakeWorld` gains `boundsOf`**, because Task 6 added it to `IPhysicsWorld` and this class implements the interface in full deliberately, so the compiler catches drift:
 
 ```ts
   boundsOf(_id: string): null {
@@ -2428,7 +2664,7 @@ In `src/compiler/renderer/builder.ts`, inside the `declare module "pixi.js"` blo
     __bodyTransform?: LocalTransform;
 ```
 
-`LocalTransform` is already imported by Task 6's changes to this file.
+`LocalTransform` is already imported by Task 7's changes to this file.
 
 - [ ] **Step 4: Implement in `physicsSync.ts`**
 
@@ -2670,14 +2906,22 @@ And the `scale` branch must compose too:
     }
 ```
 
-And the `rotation` branch:
+And the `rotation` branch. **Keep the `completedThisTick` guard and its comment** — they are Task 3's fix for a defect that permanently locked a body's angle, and dropping them silently reverts it. The only change is adding the ancestor rotation:
 
 ```ts
     } else if (ra.anim.property === "rotation") {
+      // Unlike position and scale, the angle override is a LATCH: step()
+      // re-applies it every tick until something clears it. `tickAnim` cleared
+      // it on the completion tick, and re-arming it even once would re-lock the
+      // body's angle for the rest of the scene, because this runner is spliced
+      // in the paint phase and nothing would ever clear it again.
+      if (completedThisTick) return;
       const deg = lerp(ra.startVal as number, ra.targetVal as number, e);
       this.world.overrideAngle(id, bodyTransformOf(ra.container).rot + deg * (Math.PI / 180));
     }
 ```
+
+If `leaves the angle released after a rotation animation finishes` goes red while you work on this task, you dropped the guard. Restore it — do not edit the test.
 
 - [ ] **Step 6: Run the tests**
 
@@ -2711,7 +2955,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-## Task 8: Validator rules
+## Task 9: Validator rules
 
 **Files:**
 - Modify: `src/compiler/typeChecker/validator.ts:181-195` (the `physics` block)
@@ -2965,7 +3209,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-## Task 9: `docs/LANGUAGE.md` and its behavioural assertions
+## Task 10: `docs/LANGUAGE.md` and its behavioural assertions
 
 **Files:**
 - Modify: `docs/LANGUAGE.md` (the collision-shape paragraph in "Physics"; a new subsection)
@@ -3279,7 +3523,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-## Task 10: Browser verification and the eval re-run
+## Task 11: Browser verification and the eval re-run
 
 **Files:**
 - Create: `tools/visual-check/scenes/logo.declare`
@@ -3420,7 +3664,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-## Task 11: Execution notes and roadmap update
+## Task 12: Execution notes and roadmap update
 
 **Files:**
 - Modify: `docs/plans/2026-08-27-phase-2-compound-groups.md` (this file — add "Execution notes")
@@ -3512,4 +3756,4 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ## Execution notes
 
-*(To be filled in during Task 11.)*
+*(To be filled in during Task 12.)*
