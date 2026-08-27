@@ -229,6 +229,54 @@ describe("SceneRuntime · tick phase", () => {
     for (let i = 0; i < TICK_HZ; i++) rt.advanceOneTick();
     expect(world.pins.get(id)!.has("FROZEN")).toBe(true);
   });
+
+  it("leaves the angle released after a rotation animation finishes", () => {
+    // The release must STICK. tickAnim nulls the override on the completion
+    // tick, but pushAnimToWorld runs straight after over the same not-yet-
+    // spliced list, so a naive ordering re-arms it — and since the runner is
+    // spliced in the paint phase, nothing would ever clear it again. The body
+    // would hold the animation's final angle for the rest of the scene.
+    const c = makeContainer({
+      animations: [anim({ property: "rotation", to: 180 })],
+      physics: { ...PHYSICS, duration: "indefinitely" },
+    });
+    const world = new RecordingWorld();
+    const rt = new SceneRuntime(world, makeRoot(c));
+    const id = c.__body!;
+
+    for (let i = 0; i < TICK_HZ; i++) rt.advanceOneTick();
+    rt.paint(1);
+    expect(world.angleOverrides.get(id)).toBeNull();
+
+    // And it stays released on later ticks, with the runner spliced away.
+    for (let i = 0; i < 10; i++) rt.advanceOneTick();
+    rt.paint(1);
+    expect(world.angleOverrides.get(id)).toBeNull();
+  });
+
+  it("stops pushing a completed position animation for the rest of a burst", () => {
+    // Defect B. LiveDriver advances up to 12 ticks in one frame, so an
+    // animation that finishes early in a burst keeps re-teleporting its body
+    // to the endpoint for every remaining tick — and how many that is depends
+    // on the wall clock, which makes the simulation frame-rate dependent.
+    //
+    // The completion tick's own push is kept deliberately: it is what leaves
+    // the body exactly at the target rather than one tick short.
+    const c = makeContainer({
+      animations: [anim({ duration: 6 / TICK_HZ, to: { x: 200, y: 0 } })],
+      physics: { ...PHYSICS, duration: "indefinitely" },
+    });
+    const world = new RecordingWorld();
+    const rt = new SceneRuntime(world, makeRoot(c));
+
+    for (let i = 0; i < 12; i++) rt.advanceOneTick();
+    rt.paint(1);
+
+    const pushes = world.calls.filter((s) => s.startsWith("setPosition:"));
+    expect(pushes).toHaveLength(6);
+    // The last one is the completion tick, and it lands exactly on target.
+    expect(pushes[5]).toBe("setPosition:b0:200.0000,0.0000");
+  });
 });
 
 describe("SceneRuntime · paint phase", () => {

@@ -193,8 +193,13 @@ export class SceneRuntime {
    * function of frame rate — which is exactly the determinism Phase 0 bought.
    * The cost is that during a position animation the drawn position leads the
    * collision shape by up to one tick.
+   *
+   * Only called for runners that are still running or completed on this very
+   * tick; `advanceOneTick` skips anything that completed on an earlier tick,
+   * because a completed runner is not spliced until the paint phase and would
+   * otherwise keep pushing for the rest of a catch-up burst.
    */
-  private pushAnimToWorld(ra: RunningAnim): void {
+  private pushAnimToWorld(ra: RunningAnim, completedThisTick: boolean): void {
     const id = ra.container.__body;
     if (!id) return;
 
@@ -205,6 +210,12 @@ export class SceneRuntime {
       const targetPt = ra.targetVal as IRPoint;
       this.world.setPosition(id, lerp(startPt.x, targetPt.x, e), lerp(startPt.y, targetPt.y, e));
     } else if (ra.anim.property === "rotation") {
+      // Unlike position and scale, the angle override is a LATCH: step()
+      // re-applies it every tick until something clears it. `tickAnim` cleared
+      // it on the completion tick, and re-arming it even once would re-lock the
+      // body's angle for the rest of the scene, because this runner is spliced
+      // in the paint phase and nothing would ever clear it again.
+      if (completedThisTick) return;
       const deg = lerp(ra.startVal as number, ra.targetVal as number, e);
       this.world.overrideAngle(id, deg * (Math.PI / 180));
     } else if (ra.anim.property === "scale") {
@@ -343,14 +354,23 @@ export class SceneRuntime {
    * and AGENTS.md's renderer invariants.
    */
   advanceOneTick(): void {
+    // A runner that completed is not spliced until the paint phase, so without
+    // this set it would keep pushing for every remaining tick of a catch-up
+    // burst — making the simulation a function of how many ticks the frame
+    // happened to absorb. `justCompleted` is kept because position and scale
+    // still owe the world one final push at their target value.
+    const justCompleted = new Set<RunningAnim>();
     for (let i = 0; i < this.runningAnims.length; i++) {
-      this.tickAnim(this.runningAnims[i]);
+      const ra = this.runningAnims[i];
+      if (this.tickAnim(ra)) justCompleted.add(ra);
     }
 
     // Animations own their properties; push the tick-aligned values into the
     // world before it steps, so physics never sees a wall-clock-derived value.
     for (let i = 0; i < this.runningAnims.length; i++) {
-      this.pushAnimToWorld(this.runningAnims[i]);
+      const ra = this.runningAnims[i];
+      if (ra.time.completed && !justCompleted.has(ra)) continue;
+      this.pushAnimToWorld(ra, justCompleted.has(ra));
     }
 
     // Before freeze, so an escaped body is removed rather than frozen into
