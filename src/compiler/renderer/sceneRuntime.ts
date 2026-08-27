@@ -46,7 +46,7 @@ interface SequenceRunner {
   activeStepRunners: AnimOrPhysics[];
 }
 
-export function evaluateEasing(t: number, easing: string): number {
+function evaluateEasing(t: number, easing: string): number {
   if (t <= 0) return 0;
   if (t >= 1) return 1;
   switch (easing) {
@@ -58,7 +58,7 @@ export function evaluateEasing(t: number, easing: string): number {
   }
 }
 
-export function getEasingDerivativeAtEnd(easing: string): number {
+function getEasingDerivativeAtEnd(easing: string): number {
   switch (easing) {
     case "easeIn":    return 2.0;
     case "easeOut":   return 0.5;
@@ -68,11 +68,17 @@ export function getEasingDerivativeAtEnd(easing: string): number {
   }
 }
 
-export function lerp(a: number, b: number, t: number): number {
+function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
-export function applyAnim(ra: RunningAnim, alpha: number): void {
+/**
+ * Paint-phase counterpart of `SceneRuntime.tickAnim`, and the other half of
+ * AGENTS.md's invariant 2: `tickAnim` advances state and fires completion side
+ * effects, `applyAnim` only writes display properties. It sits outside the
+ * class purely because it never touches the world.
+ */
+function applyAnim(ra: RunningAnim, alpha: number): void {
   const e = evaluateEasing(animProgress(ra.time, alpha), ra.anim.easing);
 
   if (ra.anim.property === "alpha") {
@@ -98,7 +104,7 @@ export function applyAnim(ra: RunningAnim, alpha: number): void {
   }
 }
 
-export function getCurrentVal(container: Container, prop: string): number | IRPoint {
+function getCurrentVal(container: Container, prop: string): number | IRPoint {
   if (prop === "position") {
     return container.__declareLayout
       ? { x: container.__declareLayout.currentPos.x, y: container.__declareLayout.currentPos.y }
@@ -129,7 +135,7 @@ export function getCurrentVal(container: Container, prop: string): number | IRPo
  * module has no runtime dependency on PixiJS.
  */
 export class SceneRuntime {
-  readonly world: IPhysicsWorld;
+  private readonly world: IPhysicsWorld;
   private readonly bindings: PhysicsBinding[];
   private readonly runningAnims: RunningAnim[] = [];
   private readonly physicsRunners: PhysicsRunner[] = [];
@@ -437,5 +443,20 @@ export class SceneRuntime {
     return this.runningAnims.length === 0
       && this.sequenceRunners.length === 0
       && this.world.isIdle();
+  }
+
+  /**
+   * Release the world this runtime was given.
+   *
+   * The constructor acquires — it creates a body per qualifying container and
+   * pins each one — so the release belongs here rather than in the caller.
+   * An export driver constructs a runtime, runs it to completion, and needs a
+   * defined way to let it go.
+   */
+  destroy(): void {
+    this.world.destroy();
+    this.runningAnims.length = 0;
+    this.physicsRunners.length = 0;
+    this.sequenceRunners.length = 0;
   }
 }

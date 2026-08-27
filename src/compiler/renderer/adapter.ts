@@ -122,7 +122,7 @@ export const pixiRendererAdapter: IRendererAdapter = {
 
     return () => {
       resizeObserver.disconnect();
-      world.destroy();
+      runtime.destroy();
       if (sharedApp) {
         const oldChildren = sharedApp.stage.removeChildren();
         oldChildren.forEach(c => c.destroy({ children: true, texture: true }));
