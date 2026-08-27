@@ -2312,8 +2312,16 @@ Two lessons worth carrying into later phases, both recorded in the skill:
   needs a scene that freezes mid-motion, which is how the bug above surfaced after four
   settling scenes had all reported clean.
 
-Still not verified, because it needs a human eye rather than a screenshot: whether motion
-looks smooth on a high-refresh display, where `pump()` returns zero ticks on some frames.
+**High-refresh smoothness was confirmed by eye**, which a screenshot cannot settle. A scene
+running an animation-driven marker and a physics-driven marker down parallel lanes past
+fixed posts — the animated one being the control, since animations have always interpolated
+between ticks — showed no difference between them. That closes the judder issue the Phase 0
+execution notes deferred into this phase.
+
+The reviewing display's refresh rate was not recorded. The check is only meaningful on one
+whose refresh does not divide 120Hz evenly (144Hz, 90Hz), because at 60 or 120 it looks
+correct whether or not the interpolation works. If judder is ever reported on an odd-refresh
+display, re-run it rather than trusting this line.
 
 The sync layer also turned out to be headlessly testable after all — every import in
 `physicsSync.ts` is `import type`, so it has no runtime dependency on PixiJS and now has 29
