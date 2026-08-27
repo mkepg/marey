@@ -77,18 +77,26 @@ negative. Siblings with equal `z` draw in source order.
 
 `rotation` is written in **degrees** in source; the renderer converts to
 radians internally (multiplying by `Math.PI / 180`) when applying it to the
-scene graph.
+scene graph. It defaults to `0`.
 
 `alpha` runs from `0.0` to `1.0` inclusive. A value outside that range is a
-compile error.
+compile error. It defaults to `1.0` — fully opaque.
+
+`scale` defaults to `(1, 1)` — unscaled — on every object, including `group`.
 
 Colours are written as a hex code after `#` — 3 digits (`#f00`) or 6 digits
 (`#ff0000`) — or as one of nine named-colour keywords: `red`, `green`,
 `blue`, `white`, `black`, `yellow`, `cyan`, `magenta`, `orange`. Named colours
 lex as their own token type, so they cannot be reused as identifiers (`def
-cyan = ...` is a parse error).
+cyan = ...` is a parse error). `color` defaults to `#ffffff` (white) on every
+shape that accepts it.
 
 `//` begins a line comment, running to the end of the line.
+
+Properties inside any block — `scene`, a shape, `group`, `animate`, or
+`physics` — may be written one per line or comma-separated on a single line.
+The two styles are interchangeable everywhere and may be mixed within the
+same block.
 
 ## Shapes
 
@@ -103,9 +111,14 @@ relative to `position`. It must have at least 3 points.
 `line` requires `position`, `points` (at least 2, relative to `position`),
 and `thickness`, which must be greater than 0.
 
+Each coordinate inside a point list follows the same rules as any other
+numeric value: it may be a number literal, a `def`-bound name, or an
+arithmetic expression combining them. See the worked example under
+"Reuse" for a `polygon` whose points are computed this way.
+
 `text` requires `position` and `content`, a quoted string of at most 500
-characters. `fontSize` is optional. A scene may contain at most 500 `text`
-objects in total.
+characters. `fontSize` is optional and defaults to `16`. A scene may contain
+at most 500 `text` objects in total.
 
 `group` has no required properties. **Only `group` may contain other visual
 objects** — nesting a shape inside a `circle`, `rectangle`, `polygon`,
@@ -388,6 +401,11 @@ defaults to `(0, 0)`.
 no bounce — the object stops dead on impact. `1.0` preserves the collision's
 energy. It defaults to `0.65`.
 
+**When two objects with different `bounce` collide, the higher value governs
+the collision.** Matter combines restitution with `max`, not an average — a
+bouncy object makes every collision it takes part in bouncy, and a low
+`bounce` on its partner cannot damp it.
+
 **`airDrag` is inverted: `0.0` is a vacuum and `1.0` is maximum resistance.**
 It ranges from `0.0` to `1.0` inclusive, defaulting to `0.0`. Useful values
 are small — the shipped default scene uses `0.006`. Some editor snippets in
@@ -411,6 +429,13 @@ box of everything inside it (only meaningful if the `physics` block sits on
 the group itself, giving the whole group one shared body). **`polygon` gets
 the convex hull of its points, not its exact outline** — a concave polygon
 collides as its hull, even though it is drawn with its true, concave shape.
+
+**Bodies that start overlapping — for instance, two objects placed at the
+same `position` — are separated within a single tick.** The engine pushes
+them apart along the contact axis as soon as the simulation starts; the
+correction is a direct position change, not an added velocity, so it does
+not launch either object. Once separated, both proceed under gravity and
+collision as normal.
 
 ### When duration expires
 
@@ -532,6 +557,24 @@ comparison operator. An operand may be a number literal or a `def`-bound
 name; a name bound to a non-number value used in a math expression is a
 compile error.
 
+**The right-hand side of a `def` is a full value expression, not only a
+literal.** It may be arithmetic, and it may reference an earlier `def` in
+scope:
+
+```declare
+def base    = 20
+def spacing = base * 2 + 10
+
+scene {
+  size: (800, 600)
+  circle c {
+    position: (spacing, 300)
+    radius: base
+    color: cyan
+  }
+}
+```
+
 ### `generate`
 
 `generate i from A to B { ... }` repeats its body once for each integer `i`
@@ -579,9 +622,11 @@ expanded, either directly or through a cycle of other templates, is a
 compile error.
 
 ```declare
-def ink    = #e2e8f0
-def gap    = 120
-def beat   = 1.5
+def ink      = #e2e8f0
+def gap      = 120
+def beat     = 1.5
+def apex     = -30
+def halfBase = gap / 5
 
 template Badge(tone) {
   circle disc {
@@ -604,6 +649,12 @@ scene {
     use Badge(cyan) badge { position: (100 + i * gap, 200) }
   }
 
+  polygon marker {
+    position: (400, 480)
+    points: [(0, apex), (halfBase, -apex / 2), (-halfBase, -apex / 2)]
+    color: white
+  }
+
   circle mover {
     position: (100, 400)
     radius: 14
@@ -617,6 +668,10 @@ scene {
   }
 }
 ```
+
+`marker`'s `points` show a point list built entirely from `def` names and
+arithmetic (`halfBase` is itself `gap / 5`) — the same rule as any other
+numeric value, stated under "Shapes" above.
 
 ### Current limits (as of v0.3.x)
 

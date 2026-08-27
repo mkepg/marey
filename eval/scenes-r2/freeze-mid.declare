@@ -1,0 +1,37 @@
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  circle dropA {
+    position: (200, 50)
+    radius: 20
+    color: cyan
+    physics {
+      gravity: (0, 300)
+      collideBounds: true
+      duration: 1
+    }
+  }
+
+  circle dropB {
+    position: (400, 50)
+    radius: 20
+    color: magenta
+    physics {
+      gravity: (0, 300)
+      collideBounds: true
+      duration: 1
+    }
+  }
+
+  circle dropC {
+    position: (600, 50)
+    radius: 20
+    color: yellow
+    physics {
+      gravity: (0, 300)
+      collideBounds: true
+      duration: 1
+    }
+  }
+}

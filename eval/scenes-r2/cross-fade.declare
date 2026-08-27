@@ -1,0 +1,28 @@
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  rectangle leftBox {
+    position: (300, 300)
+    size: (150, 150)
+    color: cyan
+    alpha: 1.0
+    animate {
+      property: alpha
+      to: 0.0
+      duration: 2.0
+    }
+  }
+
+  rectangle rightBox {
+    position: (500, 300)
+    size: (150, 150)
+    color: magenta
+    alpha: 0.0
+    animate {
+      property: alpha
+      to: 1.0
+      duration: 2.0
+    }
+  }
+}

@@ -1,0 +1,52 @@
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  rectangle boxA {
+    position: (400, 50)
+    size: (60, 60)
+    color: cyan
+    physics {
+      gravity: (0, 900)
+      bounce: 0.15
+      collideBounds: true
+      duration: indefinitely
+    }
+  }
+
+  rectangle boxB {
+    position: (400, 180)
+    size: (60, 60)
+    color: magenta
+    physics {
+      gravity: (0, 900)
+      bounce: 0.15
+      collideBounds: true
+      duration: indefinitely
+    }
+  }
+
+  rectangle boxC {
+    position: (400, 310)
+    size: (60, 60)
+    color: yellow
+    physics {
+      gravity: (0, 900)
+      bounce: 0.15
+      collideBounds: true
+      duration: indefinitely
+    }
+  }
+
+  rectangle boxD {
+    position: (400, 440)
+    size: (60, 60)
+    color: orange
+    physics {
+      gravity: (0, 900)
+      bounce: 0.15
+      collideBounds: true
+      duration: indefinitely
+    }
+  }
+}

@@ -1,0 +1,38 @@
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  rectangle square {
+    position: (130, 200)
+    size: (34, 34)
+    color: magenta
+    sequence {
+      animate {
+        property: rotation
+        to: 180
+        duration: 0.9
+        easing: easeInOut
+      }
+      parallel {
+        animate {
+          property: position
+          to: (500, 200)
+          duration: 1.2
+          easing: easeInOut
+        }
+        animate {
+          property: scale
+          to: (1.6, 1.6)
+          duration: 1.2
+          easing: easeOut
+        }
+      }
+      physics {
+        gravity: (0, 900)
+        bounce: 0.4
+        collideBounds: true
+        duration: 4
+      }
+    }
+  }
+}

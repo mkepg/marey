@@ -1,0 +1,26 @@
+// Twelve dots evenly spaced around the circumference of a circle centred
+// in the scene at (400, 300) with radius 200.
+//
+// The language has no trigonometry (documented in LANGUAGE.md's "Current
+// limits" section), so a radial layout cannot be produced by `generate` —
+// every (x, y) below was computed by hand as cx + r*cos(theta),
+// cy + r*sin(theta) for theta = 0, 30, 60, ... 330 degrees, and written out
+// as twelve separate literal circles.
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  circle dot0  { position: (600, 300), radius: 10, color: cyan }
+  circle dot1  { position: (573, 400), radius: 10, color: cyan }
+  circle dot2  { position: (500, 473), radius: 10, color: cyan }
+  circle dot3  { position: (400, 500), radius: 10, color: cyan }
+  circle dot4  { position: (300, 473), radius: 10, color: cyan }
+  circle dot5  { position: (227, 400), radius: 10, color: cyan }
+  circle dot6  { position: (200, 300), radius: 10, color: cyan }
+  circle dot7  { position: (227, 200), radius: 10, color: cyan }
+  circle dot8  { position: (300, 127), radius: 10, color: cyan }
+  circle dot9  { position: (400, 100), radius: 10, color: cyan }
+  circle dot10 { position: (500, 127), radius: 10, color: cyan }
+  circle dot11 { position: (573, 200), radius: 10, color: cyan }
+}

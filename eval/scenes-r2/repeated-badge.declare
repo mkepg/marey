@@ -1,0 +1,33 @@
+// A reusable "badge": a circle with a smaller square on top of it, defined
+// once as a template and placed five times in a row at different positions.
+//
+// "On top of it" is read as stacked above the circle (like a tab/pin), not
+// overlaid at the same point — following the shape of the `Badge` template
+// example in LANGUAGE.md's Reuse section, which is the only worked example
+// of this exact pattern (circle + smaller square, template + use + generate).
+
+def ink = #e2e8f0
+
+template Badge(tone) {
+  circle disc {
+    position: (0, 0)
+    radius: 24
+    color: tone
+  }
+  rectangle pip {
+    position: (0, -24)
+    size: (14, 14)
+    color: ink
+  }
+}
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate i from 0 to 4 {
+    use Badge(cyan) badge {
+      position: (140 + i * 130, 300)
+    }
+  }
+}

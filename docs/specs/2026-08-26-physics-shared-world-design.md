@@ -506,6 +506,44 @@ which are real properties (`sceneIR.ts:57` records anchor's removal; rectangles 
   `handoff` will break the build until the reference is updated. That is the
   intended mechanism, not an obstacle.
 
+### 8.1 Phase 3b — Macro-layer expressiveness
+
+*Added 2026-08-27. Placed here rather than given its own number because it needs
+the parser already open, which is what §8 does. Like §10.1, it is recorded
+because this roadmap had no slot for it at all.*
+
+`eval/RESULTS.md` finding 1: the metaprogramming layer **cannot express the cases
+that justify it**. `generate` handles "N of the same thing, spaced linearly." It does
+not handle data. Three of four data-driven briefs had to be partly hand-unrolled —
+precisely the work the layer exists to eliminate:
+
+| Missing | Observed consequence |
+|---|---|
+| No arrays or indexing | A bar chart over seven literal values could not be looped. Seven `rectangle` blocks were written by hand. **This makes the data-driven use case largely unreachable.** |
+| No trigonometry | A radial layout of twelve dots could not be looped. All twelve coordinates were hand-computed. Any radial, circular or wave layout is out of reach. |
+| No modulo, no conditionals | "Every fifth tick is longer" needed two overlapping `generate` loops, drawing short ticks underneath long ones. |
+
+**Why this matters more than its size suggests.** §1.1 stakes Declare's whole position
+on `template`/`use`/`generate` over a diffable text file being a real gap between GSAP,
+Lottie and Rive. A macro layer that cannot iterate data does not differentiate. This is
+the roadmap's only item that defends the stated position directly.
+
+**Why it sits with Phase 3 rather than earlier or later.** Phase 3 already reopens the
+parser and collapses the four property tables. Adding a literal list to iterate and a
+modulo operator is a far smaller change while that work is in pieces than as a separate
+excavation. It also lands before Phase 5's export, so exported artifacts can be
+data-driven from the start.
+
+**Minimum worth shipping:** a literal list bindable with `def` and iterable by
+`generate`, plus modulo. Trig is desirable and strictly larger — decide its inclusion
+when this is scoped, not now. Note the parser already accepts a `pointList` value and
+`def` can already bind one (`parseDef.ts` restricts nothing); what is missing is any
+syntax to read an element out of it, which makes the increment smaller than it looks.
+
+**How it is measured.** Re-run `.eval` and ask whether `radial-dots`, `bar-chart` and
+`timeline-ticks` can be written without hand-unrolling. That is the direct test of
+finding 1, and unlike compile rate it is not already at ceiling.
+
 ---
 
 ## 9. Phase 4 — Physics syntax
@@ -615,6 +653,7 @@ has no color branch). Then `stagger`/`delay` and spring easing.
 | 1 — Shared world | Large | **Yes** | No | Yes — headless snapshots |
 | 2 — Compound groups | Medium | Yes | 1 rule | Partly |
 | 3 — Foundations | Medium | No | Yes | Yes |
+| 3b — Expressiveness | Medium | **Yes** | Yes | **Yes — the eval tests it directly** |
 | 4 — Physics syntax | Medium | Yes | Yes | Yes |
 | 5 — Export | Large | Yes | Yes | Yes |
 | 5b — Docs site | Medium | **Yes** | No | Partly — links rot silently |

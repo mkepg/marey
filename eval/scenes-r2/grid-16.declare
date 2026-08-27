@@ -1,0 +1,23 @@
+// 4x4 grid of small squares, evenly spaced, all the same colour.
+// Nested `generate` loops handle both axes: outer i = row, inner j = column,
+// with each object's position computed from the loop variables by arithmetic.
+
+def colGap  = 160
+def rowGap  = 130
+def startX  = 160
+def startY  = 150
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate i from 0 to 3 {
+    generate j from 0 to 3 {
+      rectangle sq {
+        position: (startX + j * colGap, startY + i * rowGap)
+        size: (40, 40)
+        color: cyan
+      }
+    }
+  }
+}
