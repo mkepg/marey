@@ -39,21 +39,27 @@ author or an experienced developer who wants an exact answer, not a ramp.
 
 No product change is in scope. The playground gains no docs panel, no link, and no new UI.
 
-### 1.2 The later docs site
+### 1.2 The later docs site — Phase 5b
 
 Recorded here so this reference's scope is understood as deliberate rather than partial.
 
-The Declare website — today only the playground IDE — is intended to become a full
-documentation site carrying tutorials, guides, examples and supporting content, structured
-along the lines of the Matter.js site:
+The Declare website — today only the playground IDE — becomes a full documentation site
+carrying tutorials, guides, examples and getting-started material, structured along the
+lines of the Matter.js site:
 
 **https://brm.io/matter-js/**
 
-That work is deferred with no date set and is not part of this slot. It is what the
-narrative and onboarding material is being reserved *for*, which is why §6 rules a README,
-a docs panel and any in-app tutorial out of scope here rather than treating them as gaps.
-`docs/LANGUAGE.md` is expected to survive that transition as the reference layer beneath
-it, so it is written to be correct rather than welcoming.
+That work is **Phase 5b**, paired with export. It was unphased when this spec was first
+written; it is now recorded in the physics design's §10.1, which is the authoritative phase
+list. The short reason it pairs with export: those two are the only items on the roadmap
+whose purpose is adoption rather than capability, and neither converts a visitor alone. The
+longer reason, including why it cannot land before Phase 3's and Phase 4's renames, is in
+§10.1.
+
+It is what the narrative and onboarding material is being reserved *for*, which is why §6
+rules a README, a docs panel and any in-app tutorial out of scope here rather than treating
+them as gaps. `docs/LANGUAGE.md` is expected to survive that transition as the reference
+layer beneath the site, so it is written to be correct rather than welcoming.
 
 ---
 

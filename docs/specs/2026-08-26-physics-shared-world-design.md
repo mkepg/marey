@@ -544,6 +544,36 @@ No wall clock. Frame-accurate by construction, given Phase 0.
 
 GIF is easy and looks poor. SVG/SMIL cannot carry baked per-frame data at reasonable size.
 
+### 10.1 Phase 5b — Documentation site
+
+*Added 2026-08-27. Placed here rather than given its own number because it is the same
+push as §10: this roadmap had no documentation or adoption track at all, which is the
+gap being closed.*
+
+The Declare website is today only the playground IDE. It becomes a full documentation
+site — tutorials, guides, examples, getting-started — structured along the lines of the
+Matter.js site, **https://brm.io/matter-js/**.
+
+**Why it pairs with export rather than standing alone.** §10 opens by observing that no
+way to get output out is "arguably a larger barrier than any feature discussed above."
+Export and documentation are that same barrier from two sides. A polished site for a tool
+whose output cannot leave the playground documents a toy; export that nobody can find how
+to use ships a capability into silence. These are the only two items on this roadmap whose
+purpose is adoption rather than capability, and neither converts a visitor alone.
+
+**Why not earlier.** Phase 3 renames `def`, `handOff`, `z` and `sceneFit` (§4), and Phase 4
+adds `lockPosition`, `lockRotation`, `spin` and `world { }` (§9) — the last planned syntax
+break. A site built before both is rewritten after them, and unlike `docs/LANGUAGE.md` it
+has no compiled-examples test to make that rewrite a red build rather than a slow rot.
+
+**Why it is cheaper than it looks.** The bulk of the Matter.js site is a live demo gallery.
+Declare's share links already carry an entire scene in the URL hash fragment, so a gallery
+entry is a link rather than a build artifact. The expensive half is already paid for.
+
+`docs/LANGUAGE.md` — specified in `2026-08-27-language-reference-design.md` and written
+before Phase 2 — is expected to survive this as the reference layer beneath the site. The
+site supplies the narrative material that reference deliberately excludes.
+
 ---
 
 ## 11. Phase 6+ — Motion-graphics core and editor payoff
@@ -574,6 +604,7 @@ has no color branch). Then `stagger`/`delay` and spring easing.
 | 3 — Foundations | Medium | No | Yes | Yes |
 | 4 — Physics syntax | Medium | Yes | Yes | Yes |
 | 5 — Export | Large | Yes | Yes | Yes |
+| 5b — Docs site | Medium | **Yes** | No | Partly — links rot silently |
 
 **Phases 0 and 3 ship nothing a user can see**, which makes them the ones most tempting to
 skip. Phase 0 is what makes export possible at all; Phase 3 is what stops the four-way
