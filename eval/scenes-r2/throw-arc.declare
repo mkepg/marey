@@ -1,0 +1,24 @@
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  circle ball {
+    position: (100, 500)
+    radius: 20
+    color: yellow
+    animate {
+      property: position
+      to: (400, 300)
+      duration: 1.0
+      easing: easeOut
+      handOff: true
+    }
+    physics {
+      gravity: (0, 900)
+      airDrag: 0.006
+      bounce: 0.5
+      collideBounds: true
+      duration: indefinitely
+    }
+  }
+}

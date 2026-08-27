@@ -1,0 +1,31 @@
+// Ten vertical bars in a row. Each pulses taller and shorter on a loop,
+// each slightly slower than the one to its left, so the row ripples.
+//
+// Duration grows with the loop index (0.6 + k / 10), so bars further right
+// (higher k) complete each cycle more slowly than the ones to their left.
+
+def barW   = 24
+def barH   = 60
+def gapX   = 70
+def startX = 90
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate k from 0 to 9 {
+    rectangle bar {
+      position: (startX + k * gapX, 300)
+      size: (barW, barH)
+      color: magenta
+      animate {
+        property: scale
+        to: (1, 1.8)
+        duration: 0.6 + k / 10
+        easing: easeInOut
+        loop: true
+        yoyo: true
+      }
+    }
+  }
+}

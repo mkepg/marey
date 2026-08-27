@@ -1,0 +1,24 @@
+// Nine circles in a row, growing from small on the left to large on the
+// right. Both the x position and the radius are linear functions of the
+// loop variable, matching the pattern already shown in docs/LANGUAGE.md's
+// own examples (e.g. `position: (400, 100 + i * 60)` and
+// `duration: 0.9 + k / 12`), so this is fully generated with no
+// hand-unrolling and no real uncertainty.
+
+def startX  = 100
+def stepX   = 75
+def minR    = 10
+def stepR   = 6
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate i from 0 to 8 {
+    circle dot {
+      position: (startX + i * stepX, 300)
+      radius: minR + i * stepR
+      color: magenta
+    }
+  }
+}

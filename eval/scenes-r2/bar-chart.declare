@@ -1,0 +1,45 @@
+// Bar chart of seven data values: 3, 7, 2, 9, 5, 8, 4.
+//
+// The language has no arrays/indexing (per docs/LANGUAGE.md "Current limits":
+// "A chart driven by seven data values must still be written as seven
+// separate rectangle blocks."), so each bar below is written out by hand.
+// `generate` could produce the evenly-spaced x positions on its own, but it
+// cannot pull a different height for each iteration from a data list — there
+// is nothing to index into — so mixing generate (for position) with manual
+// per-bar height overrides isn't possible either. All seven bars are
+// hand-written for consistency.
+//
+// Each bar's height is `value * unit`, so height is proportional to value.
+// Bars are bottom-aligned to `baseY` by computing the rectangle's centre y
+// as `baseY - height / 2`, since `position` places the shape's centre, not
+// its top-left corner.
+
+def unit  = 40
+def baseY = 500
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  line axis {
+    position: (400, baseY)
+    points: [(-360, 0), (360, 0)]
+    thickness: 2
+    color: white
+  }
+
+  // value 3
+  rectangle bar0 { position: (150, baseY - (3 * unit) / 2), size: (60, 3 * unit), color: cyan }
+  // value 7
+  rectangle bar1 { position: (250, baseY - (7 * unit) / 2), size: (60, 7 * unit), color: cyan }
+  // value 2
+  rectangle bar2 { position: (350, baseY - (2 * unit) / 2), size: (60, 2 * unit), color: cyan }
+  // value 9
+  rectangle bar3 { position: (450, baseY - (9 * unit) / 2), size: (60, 9 * unit), color: cyan }
+  // value 5
+  rectangle bar4 { position: (550, baseY - (5 * unit) / 2), size: (60, 5 * unit), color: cyan }
+  // value 8
+  rectangle bar5 { position: (650, baseY - (8 * unit) / 2), size: (60, 8 * unit), color: cyan }
+  // value 4
+  rectangle bar6 { position: (750, baseY - (4 * unit) / 2), size: (60, 4 * unit), color: cyan }
+}

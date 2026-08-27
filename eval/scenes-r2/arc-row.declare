@@ -1,0 +1,43 @@
+// Twenty small squares in a row, tracing a smooth arc: highest (smallest y,
+// since y increases downward) in the middle, lower toward both ends.
+//
+// docs/LANGUAGE.md "Current limits" says there is no sin/cos, so a true
+// circular arc can't be generated — every coordinate for that would have to
+// be a hand-written literal. But the brief only asks for something that
+// *looks* smoothly arced and peaks in the middle, and the arithmetic grammar
+// (+, -, *, /, with parentheses) is enough to compute a parabola from the
+// loop variable, which has the same qualitative shape (high in the middle,
+// falling off toward both ends) without needing trigonometry. This is
+// therefore fully generated — no hand-unrolling was needed for this scene,
+// unlike bar-chart.declare and (partially) timeline-ticks.declare.
+//
+// y = baseY - coeff * (i - mid) * (i - mid)
+// At i = mid (the row's centre), the offset is ~0, so y is highest
+// (smallest). At the row's ends (i = 0 or 19), (i - mid)^2 is largest, so y
+// is pushed down the most.
+//
+// Uncertain: I could not find an example in the docs of a def-bound decimal
+// combined this way with the loop variable inside a squared term — the
+// arithmetic section only shows simple linear forms like `100 + i * 60`. I'm
+// inferring this nested multiplication is legal from the general grammar
+// rule ("Parentheses group and may nest" / "*" and "/" bind tighter than "+"
+// and "-"), not from a worked example.
+
+def mid   = 9.5
+def coeff = 1.5
+def baseY = 300
+def startX = 58
+def spacing = 36
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate i from 0 to 19 {
+    rectangle sq {
+      position: (startX + i * spacing, baseY - coeff * (i - mid) * (i - mid))
+      size: (20, 20)
+      color: cyan
+    }
+  }
+}

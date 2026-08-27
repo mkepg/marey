@@ -1,0 +1,25 @@
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  circle fader {
+    position: (400, 80)
+    radius: 25
+    color: cyan
+    alpha: 0.0
+    sequence {
+      animate {
+        property: alpha
+        to: 1.0
+        duration: 0.5
+        easing: easeIn
+      }
+      physics {
+        gravity: (0, 900)
+        bounce: 0.5
+        collideBounds: true
+        duration: 6
+      }
+    }
+  }
+}

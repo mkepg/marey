@@ -1,0 +1,18 @@
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  circle dot {
+    position: (400, 300)
+    radius: 40
+    color: cyan
+    animate {
+      property: scale
+      to: (1.3, 1.3)
+      duration: 1.0
+      easing: easeInOut
+      loop: true
+      yoyo: true
+    }
+  }
+}

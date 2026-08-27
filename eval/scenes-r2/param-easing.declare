@@ -1,0 +1,32 @@
+// Four rows, each a dot travelling the same distance in the same time but
+// with a different easing curve, for side-by-side comparison. A single
+// template parameterised by `curve` is instantiated four times with a
+// different easing keyword each time, mirroring the `Racer(curve)` template
+// in the shipped default scene, which does exactly this for its easing race.
+
+def travel = 500
+def beat   = 2.0
+
+template Racer(curve) {
+  circle dot {
+    position: (0, 0)
+    radius: 12
+    color: cyan
+    animate {
+      property: position
+      to: (travel, 0)
+      duration: beat
+      easing: curve
+    }
+  }
+}
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  use Racer(linear)    row1 { position: (150, 150) }
+  use Racer(easeIn)    row2 { position: (150, 250) }
+  use Racer(easeOut)   row3 { position: (150, 350) }
+  use Racer(easeInOut) row4 { position: (150, 450) }
+}
