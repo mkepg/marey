@@ -25,3 +25,5 @@ dist-ssr
 
 # Others
 .repomix
+# Output from the visual-check skill (PNGs and reports)
+.visual-check/

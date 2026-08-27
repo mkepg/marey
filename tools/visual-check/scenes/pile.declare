@@ -1,0 +1,17 @@
+scene {
+  size: (800, 600)
+  background: #080811
+  generate i from 0 to 4 {
+    rectangle box {
+      position: (400 + i * 4, 60 + i * 70)
+      size: (52, 52)
+      color: #38bdf8
+      physics {
+        gravity: (0, 900)
+        bounce: 0.2
+        collideBounds: true
+        duration: indefinitely
+      }
+    }
+  }
+}
