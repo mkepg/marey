@@ -260,6 +260,36 @@ describe("LANGUAGE.md · Animation · loop and yoyo", () => {
   });
 });
 
+describe("LANGUAGE.md · Reuse · generate", () => {
+  it("nested generate suffixes the innermost loop index first: dot_<j>_<i>", () => {
+    const source = `
+      scene {
+        size: (800, 600)
+        generate i from 0 to 1 {
+          generate j from 0 to 2 {
+            circle dot {
+              position: (0, 0)
+              radius: 5
+            }
+          }
+        }
+      }
+    `;
+    const { ast, errors } = parse(lex(source));
+    expect(errors).toEqual([]);
+    const { errors: typeErrors, ir } = typeCheck(ast!);
+    expect(typeErrors).toEqual([]);
+    // Registry keys are scope-qualified ("scene.<name>"), not the bare name
+    // (builder.ts:288). i has range 0..1, j has range 0..2 — the two ranges
+    // differ so which loop contributes which suffix position is unambiguous.
+    expect(Object.keys(ir!.registry).sort()).toEqual([
+      "scene.dot_0_0", "scene.dot_0_1",
+      "scene.dot_1_0", "scene.dot_1_1",
+      "scene.dot_2_0", "scene.dot_2_1",
+    ]);
+  });
+});
+
 describe("LANGUAGE.md · Physics · collideBounds", () => {
   it("defaults to true when the property is omitted", () => {
     const source = `
