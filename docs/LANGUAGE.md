@@ -293,9 +293,13 @@ stopping dead and dropping straight down.
 
 The exit velocity is derived from the animation's average speed — the
 displacement from its starting value to `to`, divided by `duration` — scaled
-by the slope of the easing curve at the instant the animation ends. That
-slope multiplier is `2.0` for `easeIn`, `0.5` for `easeOut`, `0.5` for
-`easeInOut`, and `1.0` for `linear`.
+by a fixed multiplier that depends on the easing. That multiplier is `2.0`
+for `easeIn`, `0.5` for `easeOut`, `0.5` for `easeInOut`, and `1.0` for
+`linear`: a `linear` animation hands off at its average speed, `easeIn` at
+twice that speed, and `easeOut` and `easeInOut` at half of it. `easeOut` and
+`easeInOut` are momentarily flat at the instant they end, so using that
+literally would hand off no momentum at all; the `0.5` is a deliberate
+choice, not a measurement of the curve.
 
 Four rules govern `handOff: true`, each a compile error when broken:
 
