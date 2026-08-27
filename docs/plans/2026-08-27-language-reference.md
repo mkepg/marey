@@ -1138,3 +1138,151 @@ say so — an empty section is a finding.)*
 
   **Task 1's code block above still shows the `readFileSync` version.** The
   committed file is the `?raw` version. Do not "restore" it.
+
+## Execution notes
+
+### Defects in this plan
+
+1. **Task 1's `node:fs` import broke `npm run build`.** `tsconfig.app.json`
+   pins `"types": ["vite/client"]`, so `readFileSync` has no declaration under
+   it and `tsc -b` fails while `npm test` still passes (Vitest transpiles
+   without typechecking). Fixed by importing the document via `?raw`
+   (`vite/client.d.ts` declares that suffix, so no config change is needed).
+   Relocating the test to `tsconfig.node.json` was not viable: that project has
+   `"lib": ["ES2023"]` with no DOM, and `sceneIR.ts` references
+   `HTMLDivElement`, so the compiler's own modules would not typecheck there.
+   This is recorded above too, from when it was found; restated here so it
+   isn't missed as the entry point to this section.
+
+2. **The plan said the default easing is `linear`.** It is **`easeInOut`** —
+   `typeChecker/builder.ts:42` reads
+   `easing: resolveEasing(an.props, "easing", "easeInOut")`. `docs/LANGUAGE.md`
+   states the correct default.
+
+3. **The plan's `collideBounds` test used registry key `"a"`.** Registry keys
+   are scope-qualified; the object above is `circle a` inside the top-level
+   `scene`, so its key is `"scene.a"`. The committed test
+   (`src/compiler/languageDocs.test.ts:284`) already reads
+   `ir!.registry["scene.a"].props.physics?.collideBounds`, so this was caught
+   before it could produce a false pass (a lookup miss on `"a"` would return
+   `undefined`, and `undefined !== true`, so the test would have failed loudly
+   rather than silently — but the plan's text would have sent a fresh
+   implementer down the wrong path first).
+
+4. **The plan said the `generate` cap is 10,000 iterations.** It is
+   **10,001**. `parser/parseGenerate.ts:46` rejects only when
+   `end - start > 10000`; since both bounds are inclusive, `end - start ===
+   10000` is 10,001 values and is accepted.
+
+5. **The plan implied the 15,000 ceiling counts generated objects.** It counts
+   **all** parsed objects, plus one increment per `use` expansion and one per
+   `generate` iteration. `state.globalNodeCount` is checked in three places —
+   `parser/parseObject.ts:155` (every object), `parser/parseUse.ts:13` (every
+   `use`), and `parser/parseGenerate.ts:82` (every loop iteration) — so the
+   limit is a shared global counter, not a per-construct one.
+
+6. **The plan described handOff's multiplier as "the slope of the easing
+   curve at the end."** It is a **fixed per-easing constant**:
+   `getEasingDerivativeAtEnd` (`renderer/adapter.ts:69-77`) returns `2.0` for
+   `easeIn`, `0.5` for `easeOut` and `easeInOut`, and `1.0` for `linear` —
+   values chosen by feel, not measured off the curve. The true derivative of
+   `easeOut` and `easeInOut` at `t=1` is 0 (both curves are momentarily flat
+   at the end), which would hand off no momentum at all if used literally.
+   `getEasingDerivativeAtEnd` is a misleading name for what it does; renaming
+   it is a source change and stayed out of scope. `docs/LANGUAGE.md:294-302`
+   documents the actual constants and says outright that `0.5` is a
+   deliberate choice, not a measurement.
+
+### Defects found by review
+
+7. **The example extractor silently skipped a mistagged fence.** A typo like
+   ` ```Declare ` (wrong case) or an unrecognised tag would have fallen
+   through both the ` ```declare ` and ` ```text ` branches and produced zero
+   coverage while the suite still reported green — defeating the harness's
+   entire purpose, since the whole point of Task 1 is that a broken example
+   cannot hide. `extractExamples` (`src/compiler/languageDocs.test.ts`) now
+   throws on any fence tag it doesn't recognise, naming the bad tag and its
+   line, and also throws on a four-or-more-backtick fence, since the extractor
+   is a line scanner rather than a nested-fence parser. A caught
+   lexer/parser/typeChecker throw is now surfaced as a readable `THREW: ...`
+   entry instead of escaping as an uncaught exception.
+
+8. **The claim "every object's pivot is its geometric centre"** — lifted from
+   `AGENTS.md`'s own wording — is false for `group` and imprecise for
+   `polygon`/`line`. A `group`'s pivot is the local origin it is positioned
+   at, never derived from its children; children placed asymmetrically around
+   that origin rotate about the origin, not about the visual centre of the
+   group's content. For `polygon` and `line` the pivot is the bounding-box
+   midpoint, not the centroid — for the document's own triangle example
+   (`points: [(0, -30), (26, 15), (-26, 15)]`) that is `(0, -7.5)`, 7.5px away
+   from the centroid at `(0, 0)`. `docs/LANGUAGE.md:44-53` now states this
+   precisely, including the worked triangle offset. `AGENTS.md`'s own sentence
+   (line 119) still carries the original imprecision — left uncorrected, see
+   below.
+
+9. **A paragraph said a pinned body is "held immobile" and then described it
+   sliding into place**, which is self-contradictory: `pushAnimToWorld` writes
+   the body's position every tick from the animation, so a position-pinned
+   body visibly moves along the animated path — pinning removes its response
+   to *forces*, not its motion. `docs/LANGUAGE.md`'s current "Animation and
+   physics together" section (around line 424) instead says physics "does not
+   move the object — but the object remains solid, so it can still knock
+   other things over as it moves along the animated path," which states both
+   halves without contradicting itself.
+
+### Left open deliberately
+
+- The non-completing yoyo is documented, not fixed. Filed against Phase 3 in
+  `docs/specs/2026-08-26-physics-shared-world-design.md` §8.
+- `AGENTS.md`'s pivot sentence carries the same imprecision as finding 8 and
+  was not corrected — `AGENTS.md` is internal documentation, not part of this
+  plan's deliverable, and touching it here would have been scope creep beyond
+  filing the observation.
+- `getEasingDerivativeAtEnd` is a misleadingly named function; renaming it is
+  a source change and out of scope for a documentation plan.
+- The eval was re-run only as a regression check (Task 12 Step 3: still
+  `20/20 compiled clean`). Whether the reference actually shrinks authors'
+  recorded uncertainty is unmeasured — `BRIEFS.md` itself says the comparison
+  worth making is whether that uncertainty shrinks, not the compile rate,
+  and that needs a fresh author run against the amended protocol, which this
+  plan does not do.
+
+### The anti-drift check, run for real
+
+This is the plan's central claim, so it was exercised rather than assumed.
+Renaming every top-level `def` to `let` in `docs/LANGUAGE.md`
+(`sed -i 's/^def /let /' docs/LANGUAGE.md`, which touches the three bindings
+in the metaprogramming example: `ink`, `gap`, `beat`) and re-running
+`src/compiler/languageDocs.test.ts` produced one failing test:
+
+```
+FAIL  src/compiler/languageDocs.test.ts > docs/LANGUAGE.md examples > the example at LANGUAGE.md line 566 compiles
+AssertionError: expected [ Array(1) ] to deeply equal []
++ [
++   "LANGUAGE.md:567: A Declare program must begin with the 'scene' keyword, but found identifier 'let'. Did you forget to open with 'scene {'?",
++ ]
+```
+
+21 of 22 tests still passed; only the one example touched by the rename
+failed, and it failed for the expected reason — the parser rejecting `let` as
+a program opener, not an unrelated crash. `git checkout docs/LANGUAGE.md`
+restored a clean 22/22.
+
+A second, sharper check confirmed the mechanism catches a smaller, more
+plausible typo, not just a wholesale keyword swap: changing `handOff: true`
+to `handoff: true` throughout the document (three occurrences — two in
+prose, one in the handOff example's code fence) also produced exactly one
+failure, this time a type error rather than a parse error:
+
+```
+FAIL  src/compiler/languageDocs.test.ts > docs/LANGUAGE.md examples > the example at LANGUAGE.md line 315 compiles
+AssertionError: expected [ Array(1) ] to deeply equal []
++ [
++   "LANGUAGE.md:328: The 'animate' block has an unknown property 'handoff'. Valid properties for 'animate' are: 'property', 'to', 'duration', 'easing', 'loop', 'yoyo', 'handOff'.",
++ ]
+```
+
+Both reverted cleanly. The mechanism works exactly as designed: a rename that
+the future `def`→`let`/`handOff`→`handoff` Phase 3 work will make breaks the
+build immediately and specifically, rather than leaving the reference quietly
+wrong.
