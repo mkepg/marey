@@ -180,12 +180,25 @@ Rive. Documenting it honestly costs nothing and saves an author a wasted round.
 
 ## 5. Anti-drift mechanism (L2)
 
-A new `docs/language.test.ts`, running in the existing suite.
+A new test file, running in the existing suite.
+
+> **Deviation, recorded 2026-08-27 during planning.** This section originally specified
+> `docs/language.test.ts`. The test actually ships as **`src/compiler/languageDocs.test.ts`**.
+> `vitest.config.ts` includes only `src/**/*.test.ts`, so a test under `docs/` would never
+> have run under `npm test` — it would have passed by not existing, which is precisely the
+> failure this mechanism exists to prevent. Relocating instead to `tsconfig.node.json` was
+> also not viable: that project has no DOM lib and `sceneIR.ts` references `HTMLDivElement`.
+> The path below is left as written for the record; the shipping path is the one above.
 
 **Examples are compiled.** Every fenced ` ```declare ` block in `docs/LANGUAGE.md` that is a
 complete scene is extracted at test time, run through the compiler, and asserted to produce
 zero errors. The document is the only copy — no parallel fixture directory to fall out of
 sync with it. Fences that are deliberate fragments are marked and skipped.
+
+**Unrecognised fences fail loudly.** Added during execution, after review found that a
+mistagged fence — ` ```Declare ` with a capital D — was silently skipped, producing zero
+coverage while the suite reported green. Any tag other than `declare` or `text`, and any
+four-backtick fence, now throws.
 
 **Behavioural claims are asserted.** Each claim in §4.2 gets a test named after the heading
 it appears under, so a failure points at the sentence it falsifies. Seeded by the probe that
@@ -214,7 +227,8 @@ and is why §4 keeps claims short and concrete rather than discursive.
 
 ## 7. Verification
 
-- `npm test` passes, including the new `docs/language.test.ts`.
+- `npm test` passes, including the new `src/compiler/languageDocs.test.ts` (see §5's
+  deviation note for why it is not under `docs/`).
 - `npm run build` passes.
 - Every complete example in `docs/LANGUAGE.md` compiles, by construction of §5.
 - Each fact in §4.2 has a named assertion.

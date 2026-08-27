@@ -33,8 +33,23 @@ may still appear inside the scene body itself, but `template` may not.
 
 `scene` requires a `size: (width, height)` property. `background` takes a
 colour and is optional. `sceneFit` is optional and takes one of four unquoted
-keywords: `contain`, `cover`, `fill`, or `none`; passing it as a quoted string
-is a compile error.
+keywords; passing it as a quoted string is a compile error.
+
+`size` declares the scene's *logical* dimensions. `sceneFit` decides how those
+logical dimensions are mapped onto the preview area, which may be any size:
+
+- `contain` — scale to fit entirely inside the preview, preserving aspect
+  ratio, and centre. The whole scene is visible; there may be letterboxing.
+  **This is the default when `sceneFit` is omitted.**
+- `cover` — scale to fill the preview, preserving aspect ratio, and centre.
+  Nothing is letterboxed; the scene may be cropped.
+- `fill` — scale each axis independently so the scene exactly fills the
+  preview. Aspect ratio is not preserved, so the scene may be distorted.
+- `none` — no scaling. The scene is drawn at its logical size and anchored at
+  the preview's top-left corner, not centred.
+
+`sceneFit` affects presentation only. It does not change any coordinate you
+write, and physics is simulated in logical units regardless of it.
 
 Coordinates are in pixels. X increases rightward and **y increases
 downward**, with the origin at the top-left of the scene. Physics gravity's
