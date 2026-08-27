@@ -69,8 +69,12 @@ This task's only oracle is that nothing changes. Capture it before touching code
 Start the dev server in one terminal and leave it running:
 
 ```bash
-npx vite --port 5199
+npx vite --port 5199 --strictPort
 ```
+
+`--strictPort` matters. Without it vite walks forward to 5200, 5201… when the port is taken and prints the one it bound, while `check.mjs` still defaults to `http://localhost:5199` — so a stale pre-existing server absorbs every capture and this task, whose only oracle is "nothing changed", reports a confident false pass. If you must use another port, append `--url http://localhost:<port>` to every `check.mjs` call.
+
+Note also that `--at 300` lands before the renderer initialises (~900–1100 ms), so that frame is not a reproducible oracle even on unmodified code — compare frames from 1500 ms onward.
 
 Then, in another terminal:
 
@@ -1027,11 +1031,13 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-## Task 3: Fix the rotation-override lock
+## Task 3: Stop completed animations pushing to the world
 
-**A live defect, found while writing Task 2. Not in the spec — added deliberately.**
+**Two live defects with one root cause. Not in the spec — added deliberately.**
 
-A `rotation` animation permanently locks a physics object's angle. `tickAnim` releases the override on the completion tick, but `pushAnimToWorld` runs immediately afterwards over the same list — the runner is not spliced until the paint phase — and writes the final angle straight back. Nothing ever clears it again, so `step()` re-applies `Body.setAngle` forever.
+**The root cause.** `advanceOneTick` runs `tickAnim` over every runner, then `pushAnimToWorld` over *the same list*. Completed runners are not spliced until the paint phase, so between completing and being spliced they keep pushing. Two things go wrong, and they need different fixes.
+
+**Defect A — a `rotation` animation permanently locks a physics object's angle.** `tickAnim` releases the override on the completion tick, but `pushAnimToWorld` writes the final angle straight back on that same tick. Nothing clears it again, so `step()` re-applies `Body.setAngle` for the rest of the scene.
 
 Measured before writing this task. A 40x40 square dropped off-centre onto a static ledge, its rotation animation finished long before impact:
 
@@ -1045,13 +1051,24 @@ This is the fourth instance of the rotation-override family. Phase 1's execution
 
 It also falsifies `docs/LANGUAGE.md`, which says "When an animation finishes, the object returns to full physics control on whichever property the animation was driving", and it means physics spec §6.11's claim that `stepper` "will tumble on impact instead of landing flat" has never been true — its angle is locked at 180° before its physics step begins.
 
+**Defect B — a completed `position` animation re-teleports its body once per tick for the rest of a catch-up burst.** Found by the Task 1 code-quality review and confirmed by measurement. `LiveDriver` advances up to 12 ticks in one frame, so an animation that completes early in a burst keeps pushing for every remaining tick of it.
+
+Measured: a 6-tick position animation inside a 12-tick burst produced **12 `setPosition` calls**, the last six all writing the animation's endpoint `(200, 0)` — after `tickAnim` had completed the animation and unpinned the body. `Body.setPosition` preserves velocity, so the body is dragged back to the endpoint while keeping its momentum.
+
+**How many stale pushes happen depends on how many ticks that frame absorbed, which is the wall clock.** That makes the simulation a function of frame rate — the exact thing AGENTS.md's invariant 3 exists to prevent, arriving by a route the invariant's own wording does not cover, since no `driver.alpha` is involved.
+
+**The two fixes differ, and the difference matters.**
+
+- *Rotation* must skip on the completion tick **and after**. The override is a latch: `tickAnim` released it, and re-arming it even once is what makes Defect A permanent.
+- *Position and scale* must push on the completion tick **but not after**. That one final push is what leaves the body exactly at the animation's target; suppressing it would leave the body one tick short. Suppressing the *later* ones is what removes the frame-rate dependence.
+
 **Files:**
-- Modify: `src/compiler/renderer/sceneRuntime.ts` (`pushAnimToWorld`)
+- Modify: `src/compiler/renderer/sceneRuntime.ts` (`advanceOneTick` and `pushAnimToWorld`)
 - Modify: `src/compiler/renderer/sceneRuntime.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write the two failing tests**
 
-Append inside the `describe("SceneRuntime · tick phase", ...)` block in `src/compiler/renderer/sceneRuntime.test.ts`:
+Append both inside the `describe("SceneRuntime · tick phase", ...)` block in `src/compiler/renderer/sceneRuntime.test.ts`:
 
 ```ts
   it("leaves the angle released after a rotation animation finishes", () => {
@@ -1077,6 +1094,30 @@ Append inside the `describe("SceneRuntime · tick phase", ...)` block in `src/co
     rt.paint(1);
     expect(world.angleOverrides.get(id)).toBeNull();
   });
+
+  it("stops pushing a completed position animation for the rest of a burst", () => {
+    // Defect B. LiveDriver advances up to 12 ticks in one frame, so an
+    // animation that finishes early in a burst keeps re-teleporting its body
+    // to the endpoint for every remaining tick — and how many that is depends
+    // on the wall clock, which makes the simulation frame-rate dependent.
+    //
+    // The completion tick's own push is kept deliberately: it is what leaves
+    // the body exactly at the target rather than one tick short.
+    const c = makeContainer({
+      animations: [anim({ duration: 6 / TICK_HZ, to: { x: 200, y: 0 } })],
+      physics: { ...PHYSICS, duration: "indefinitely" },
+    });
+    const world = new RecordingWorld();
+    const rt = new SceneRuntime(world, makeRoot(c));
+
+    for (let i = 0; i < 12; i++) rt.advanceOneTick();
+    rt.paint(1);
+
+    const pushes = world.calls.filter((s) => s.startsWith("setPosition:"));
+    expect(pushes).toHaveLength(6);
+    // The last one is the completion tick, and it lands exactly on target.
+    expect(pushes[5]).toBe("setPosition:b0:200.0000,0.0000");
+  });
 ```
 
 - [ ] **Step 2: Run it to confirm it fails**
@@ -1085,35 +1126,76 @@ Run: `npx vitest run src/compiler/renderer/sceneRuntime.test.ts -t "leaves the a
 
 Expected: FAIL — `expected 3.14159... to be null`. That number is 180° in radians, which is the animation's own `to`: the proof that the override was re-armed rather than released.
 
+Run: `npx vitest run src/compiler/renderer/sceneRuntime.test.ts -t "stops pushing a completed position"`
+
+Expected: FAIL — `expected length 12 to be 6`. The six extra pushes are the stale ones.
+
 - [ ] **Step 3: Fix it**
 
-In `src/compiler/renderer/sceneRuntime.ts`, change `pushAnimToWorld`'s rotation branch:
+Two changes in `src/compiler/renderer/sceneRuntime.ts`.
+
+**First**, `advanceOneTick` must tell the push loop which runners completed *on this tick*, because position and scale still need their final push and rotation does not. `tickAnim` already returns that boolean; it is currently discarded. Replace the first two loops of `advanceOneTick` with:
 
 ```ts
+    // A runner that completed is not spliced until the paint phase, so without
+    // this set it would keep pushing for every remaining tick of a catch-up
+    // burst — making the simulation a function of how many ticks the frame
+    // happened to absorb. `justCompleted` is kept because position and scale
+    // still owe the world one final push at their target value.
+    const justCompleted = new Set<RunningAnim>();
+    for (let i = 0; i < this.runningAnims.length; i++) {
+      const ra = this.runningAnims[i];
+      if (this.tickAnim(ra)) justCompleted.add(ra);
+    }
+
+    // Animations own their properties; push the tick-aligned values into the
+    // world before it steps, so physics never sees a wall-clock-derived value.
+    for (let i = 0; i < this.runningAnims.length; i++) {
+      const ra = this.runningAnims[i];
+      if (ra.time.completed && !justCompleted.has(ra)) continue;
+      this.pushAnimToWorld(ra, justCompleted.has(ra));
+    }
+```
+
+**Second**, `pushAnimToWorld` takes the flag and uses it to split rotation from the other two:
+
+```ts
+  private pushAnimToWorld(ra: RunningAnim, completedThisTick: boolean): void {
+    const id = ra.container.__body;
+    if (!id) return;
+
+    const e = evaluateEasing(animProgress(ra.time, 0), ra.anim.easing);
+
+    if (ra.anim.property === "position") {
+      const startPt = ra.startVal as IRPoint;
+      const targetPt = ra.targetVal as IRPoint;
+      this.world.setPosition(id, lerp(startPt.x, targetPt.x, e), lerp(startPt.y, targetPt.y, e));
     } else if (ra.anim.property === "rotation") {
-      // tickAnim released the angle back to the solver on the completion tick.
-      // Re-arming it here would re-lock it for good: this runner is spliced in
-      // the paint phase, so nothing would ever clear it again, and step() would
-      // force Body.setAngle to the animation's final value on every tick for
-      // the rest of the scene.
-      //
-      // Position and scale deliberately do NOT get this guard. Pushing an
-      // animation's final value once on the completion tick is what leaves the
-      // body exactly at its target; only rotation is a latched override rather
-      // than a plain write.
-      if (ra.time.completed) return;
+      // Unlike position and scale, the angle override is a LATCH: step()
+      // re-applies it every tick until something clears it. `tickAnim` cleared
+      // it on the completion tick, and re-arming it even once would re-lock the
+      // body's angle for the rest of the scene, because this runner is spliced
+      // in the paint phase and nothing would ever clear it again.
+      if (completedThisTick) return;
       const deg = lerp(ra.startVal as number, ra.targetVal as number, e);
       this.world.overrideAngle(id, deg * (Math.PI / 180));
     } else if (ra.anim.property === "scale") {
+      const startPt = ra.startVal as IRPoint;
+      const targetPt = ra.targetVal as IRPoint;
+      this.world.setScale(id, lerp(startPt.x, targetPt.x, e), lerp(startPt.y, targetPt.y, e));
+    }
+  }
 ```
 
-This is an early `return` from `pushAnimToWorld`, so the branch order matters: the rotation branch must stay ahead of the scale branch, exactly as written.
+Note the asymmetry is deliberate and is the whole point: the caller's `continue` handles "completed on an earlier tick" for all three properties, and the `completedThisTick` guard inside handles "completed right now" for rotation alone.
+
+Update the method's docstring to state that it is only called for runners that are still running or completed on this very tick.
 
 - [ ] **Step 4: Run the test**
 
 Run: `npx vitest run src/compiler/renderer/sceneRuntime.test.ts`
 
-Expected: PASS, 9 tests.
+Expected: PASS, 10 tests.
 
 - [ ] **Step 5: Full suite and typecheck**
 
@@ -1125,7 +1207,7 @@ Expected: clean, all green.
 
 This changes shipped output: the default scene's `stepper` now tumbles on impact instead of landing flat, which is what physics spec §6.11 said Phase 1 would do.
 
-With the dev server running (`npx vite --port 5199`):
+With the dev server running. **Start it as `npx vite --port 5199 --strictPort`, or read the port it prints and append `--url http://localhost:<port>` to every `check.mjs` call below.** Without `--strictPort`, vite silently walks forward to 5200, 5201… when 5199 is taken, while `check.mjs` still defaults to 5199 — so the capture can hit a stale pre-existing server and report a confident pass without ever exercising your code. This happened during Task 1.
 
 ```bash
 node tools/visual-check/check.mjs --scene default --at 300,2400,4000,6000 --out .visual-check/t3-default-after
@@ -1139,25 +1221,32 @@ If `stepper` still lands flat, the fix did not reach it. Check that it actually 
 
 ```bash
 git add src/compiler/renderer/sceneRuntime.ts src/compiler/renderer/sceneRuntime.test.ts
-git commit -m "fix(renderer): stop a finished rotation animation locking the angle
+git commit -m "fix(renderer): stop completed animations pushing to the world
 
-tickAnim releases the angle override on the completion tick, but
-pushAnimToWorld ran straight after it over the same not-yet-spliced list
-and re-armed it with the animation's final value. The runner is spliced in
-the paint phase, so nothing ever cleared it again: step() forced
-Body.setAngle to that value for the rest of the scene.
+advanceOneTick runs tickAnim over every runner, then pushAnimToWorld over
+the same list. Completed runners are not spliced until the paint phase, so
+they keep pushing in between. Two defects, one cause.
 
-Measured on a square dropped off-centre onto a ledge with its rotation
-animation long finished: 20.00deg before, which is the animation's own 'to'
-and means no rotation at all through the impact, against -269.19deg after.
+A rotation animation permanently locked its object's angle: tickAnim
+released the override on the completion tick and pushAnimToWorld re-armed
+it on that same tick, after which nothing ever cleared it and step() forced
+Body.setAngle to the animation final value for the rest of the scene.
+Measured on a square dropped off-centre onto a ledge, rotation animation
+long finished: 20.00deg after impact, which is the animation own to and
+means no rotation at all, against -269.19deg with the fix.
 
-Fourth instance of the rotation-override family. Phase 1's notes record the
-third, which was the same release in the wrong phase; this one is in the
-right phase but the wrong order within the tick.
+A completed position animation re-teleported its body once per tick for the
+rest of a catch-up burst. A 6-tick animation inside a 12-tick burst made 12
+setPosition calls, the last six writing the endpoint after the body had
+been unpinned. How many stale pushes occur depends on how many ticks the
+frame absorbed, so the simulation was a function of frame rate.
 
-Falsified LANGUAGE.md's 'returns to full physics control' and physics spec
-6.11's prediction that stepper would tumble rather than land flat. The
-default scene changes: stepper now tumbles.
+The two fixes differ: rotation is a latch and must skip the completion tick
+too, while position and scale still owe one final push at their target.
+
+Falsified LANGUAGE.md returns to full physics control and physics spec 6.11
+prediction that stepper would tumble rather than land flat. The default
+scene changes: stepper now tumbles.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
@@ -3270,7 +3359,7 @@ scene {
 
 - [ ] **Step 3: Run the checks**
 
-With the dev server running (`npx vite --port 5199`):
+With the dev server running. **Start it as `npx vite --port 5199 --strictPort`, or read the port it prints and append `--url http://localhost:<port>` to every `check.mjs` call below.** Without `--strictPort`, vite silently walks forward to 5200, 5201… when 5199 is taken, while `check.mjs` still defaults to 5199 — so the capture can hit a stale pre-existing server and report a confident pass without ever exercising your code. This happened during Task 1.
 
 ```bash
 node tools/visual-check/check.mjs \

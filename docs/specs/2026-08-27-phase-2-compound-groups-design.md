@@ -130,7 +130,7 @@ Six pieces, in dependency order.
 
 | # | Piece | Files |
 |---|---|---|
-| 0 | Fix the rotation-override lock (§3.1) | `renderer/sceneRuntime.ts` |
+| 0 | Stop completed animations pushing to the world (§3.1) | `renderer/sceneRuntime.ts` |
 | 1 | Extract the scene runtime | `renderer/sceneRuntime.ts` (new), `renderer/adapter.ts` |
 | 2 | Compound geometry | `renderer/builder.ts`, `renderer/physicsWorld.ts` |
 | 3 | Reference-point unification | `renderer/physicsWorld.ts` |
@@ -148,11 +148,11 @@ behaviour-preserving refactor, and piece 4 can move to Phase 3b, where the macro
 layer is already the theme and `use` is being reopened. Neither is planned; both
 are pre-authorised.
 
-### 3.1 Piece 0 — the rotation-override lock
+### 3.1 Piece 0 — completed animations still pushing to the world
 
-Found while writing the plan's `SceneRuntime` tests, not while scoping the
-feature. Added to this phase because the fix is one line inside a function
-piece 1 relocates anyway.
+Neither defect was found by scoping the feature. The first surfaced while writing
+the plan's `SceneRuntime` tests, the second in the code-quality review of piece 1.
+Both are in the code piece 1 relocates, so they are cheapest to fix here.
 
 **A `rotation` animation permanently locks a physics object's angle.**
 `tickAnim` releases the override on the completion tick, but `pushAnimToWorld`
@@ -183,6 +183,28 @@ Two documents are falsified by it and are corrected here:
 - The parent spec's §6.11 — "`stepper` will tumble on impact instead of landing
   flat." That has never been true; its angle is locked at 180° before its
   physics step begins.
+
+**A second defect shares the cause**, found by the code-quality review of piece
+1 rather than by scoping. A completed `position` animation keeps pushing for the
+rest of a catch-up burst: `LiveDriver` advances up to 12 ticks per frame, and the
+runner is not spliced until the paint phase. Measured — a 6-tick animation inside
+a 12-tick burst produced **12 `setPosition` calls**, the last six writing the
+animation's endpoint after `tickAnim` had unpinned the body. `Body.setPosition`
+preserves velocity, so the body is dragged back to the endpoint while keeping its
+momentum.
+
+How many stale pushes occur depends on how many ticks that frame absorbed, which
+is the wall clock. **That makes the simulation a function of frame rate** — the
+thing invariant 3 exists to prevent, reached by a route its own wording does not
+cover, since no `driver.alpha` is involved. The invariant should be restated in
+`AGENTS.md` as *nothing fed into the physics world may derive from the wall
+clock*, of which alpha is one instance and burst length another.
+
+The two fixes differ, and the difference is the interesting part. Rotation's
+angle override is a **latch** — `step()` re-applies it until something clears it —
+so it must skip the completion tick as well. Position and scale are plain writes,
+and still owe the world one final push at their target value; suppressing that
+would leave the body a tick short of where it was animated to.
 
 **Accepted consequence:** the shipped default scene changes. `stepper` now
 tumbles. That is the behaviour §6.11 already promised, so the card's own
@@ -487,9 +509,9 @@ either corpus places `physics` inside a group.
 1. Extract `sceneRuntime.ts`. Verify against the 121 existing tests and
    `visual-check` on the default scene (§4.2).
 2. Tests for `sceneRuntime.ts`.
-3. Fix the rotation-override lock (§3.1). It sits here rather than first because
-   the test that catches it is one of piece 1's, and the fix lands in the file
-   piece 1 creates.
+3. Stop completed animations pushing to the world (§3.1). It sits here rather
+   than first because the tests that catch both defects are piece 1's, and the
+   fixes land in the file piece 1 creates.
 4. `transform.ts`, the shared 2D transform algebra.
 5. Compound `BodyGeometry`, welding, and the reference-point unification in
    `physicsWorld.ts`.
