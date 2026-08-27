@@ -2285,14 +2285,39 @@ is the same tick/paint-split mistake the Phase 0 plan made and its notes warn ab
 
 ### Gaps left open deliberately
 
-**Task 11's browser verification was not done — no browser driver was available.** The dev
-server was confirmed to boot and serve (HTTP 200), and the sync layer turned out to be
-headlessly testable after all — every import in `physicsSync.ts` is `import type`, so it has
-no runtime dependency on PixiJS and now has 26 tests against a fake world. What remains
-genuinely unverified is anything that needs a real canvas: that the amber ball's handoff arc
-looks right, that the rose square visibly tumbles, that the pile settles and CPU actually
-drops when the ticker stops, that a mid-air freeze looks correct, and that a scene replays
-identically across a real page reload rather than only within one process.
+**Task 11's browser verification ran, and found a bug.** It was initially skipped for want
+of a browser driver; Playwright plus headless Chromium was added afterwards and packaged as
+the `visual-check` skill in `.claude/skills/`. Every check passed except one, and that one
+mattered.
+
+A body frozen by `duration` expiry rendered to one of two different pixel results depending
+on the page load — reproducible with a *single box and no contacts at all*, frozen in free
+fall. `syncWorldToContainers` skips pinned bodies and freezing pins, so a frozen object kept
+the position it was last *painted* at, and that paint used the driver's wall-clock `alpha`.
+It therefore settled up to one tick of motion away from where the simulation actually
+stopped it, varying per run. Fixed in `f9de4a9` by snapping the container to the body's
+tick-aligned state at the moment of the freeze; the probe scene is now byte-identical across
+six independent page loads.
+
+None of the 94 headless tests could have caught this: it lives entirely in the relationship
+between the tick phase, the paint phase, and a real wall clock.
+
+Two lessons worth carrying into later phases, both recorded in the skill:
+
+- Reading canvas pixels in-page returns blank, because PixiJS does not set
+  `preserveDrawingBuffer`. Screenshot from the driver instead. An in-page pixel read will
+  confidently report a working scene as blank — it did, and cost time.
+- **"Identical at rest" is a weak determinism check for a scene that settles.** A pile
+  converges on the same fixed point even when the trajectory diverged. Testing a trajectory
+  needs a scene that freezes mid-motion, which is how the bug above surfaced after four
+  settling scenes had all reported clean.
+
+Still not verified, because it needs a human eye rather than a screenshot: whether motion
+looks smooth on a high-refresh display, where `pump()` returns zero ticks on some frames.
+
+The sync layer also turned out to be headlessly testable after all — every import in
+`physicsSync.ts` is `import type`, so it has no runtime dependency on PixiJS and now has 29
+tests against a fake world.
 
 **`adapter.ts` still has no tests**, and all three review findings were there. Testing it
 needs a DOM and a PixiJS `Application`, which is out of scope here. The orchestration worth
