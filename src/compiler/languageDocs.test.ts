@@ -32,6 +32,7 @@ import markdownDoc from "../../docs/LANGUAGE.md?raw";
 import { lex } from "./lexer";
 import { parse } from "./parser";
 import { typeCheck } from "./typeChecker";
+import { advanceAnimTime, type AnimTime } from "./renderer/timeline";
 
 interface Example {
   /** 1-indexed line in LANGUAGE.md where the fence opens. */
@@ -99,7 +100,17 @@ function compileErrors(source: string, fenceLine: number): string[] {
       out.push(...typeErrors.map((e) => `LANGUAGE.md:${absolute(e.line)}: ${e.message}`));
     }
   } catch (err) {
-    out.push(`THREW: ${String(err).slice(0, 200)}`);
+    if (
+      err !== null &&
+      typeof err === "object" &&
+      !(err instanceof Error) &&
+      typeof (err as { message?: unknown }).message === "string"
+    ) {
+      const e = err as { message: string; line?: number };
+      out.push(`THREW: LANGUAGE.md:${absolute(e.line)}: ${e.message}`.slice(0, 200));
+    } else {
+      out.push(`THREW: ${String(err).slice(0, 200)}`);
+    }
   }
   return out;
 }
@@ -176,5 +187,93 @@ describe("extractExamples", () => {
     const lf = ["```declare", "scene { }", "```"].join("\n");
     const crlf = lf.replace(/\n/g, "\r\n");
     expect(extractExamples(crlf)).toEqual(extractExamples(lf));
+  });
+});
+
+/**
+ * Facts asserted by docs/LANGUAGE.md that a reader cannot verify from the
+ * document alone. Each test is named after the heading whose claim it locks.
+ */
+
+function mkAnimTime(over: Partial<AnimTime> = {}): AnimTime {
+  return {
+    elapsedTicks: 0,
+    durationTicks: 10,
+    direction: 1,
+    completed: false,
+    loop: false,
+    yoyo: false,
+    ...over,
+  };
+}
+
+/** Elapsed-tick values produced by `n` successive ticks. */
+function elapsedSequence(t: AnimTime, n: number): number[] {
+  const seq: number[] = [];
+  for (let i = 0; i < n; i++) {
+    advanceAnimTime(t);
+    seq.push(t.elapsedTicks);
+  }
+  return seq;
+}
+
+/** Tick index (1-based) at which the animation reports completion, or -1. */
+function completesAtTick(t: AnimTime, limit: number): number {
+  for (let i = 0; i < limit; i++) {
+    if (advanceAnimTime(t)) return i + 1;
+  }
+  return -1;
+}
+
+describe("LANGUAGE.md · Animation · loop and yoyo", () => {
+  it("duration is the half-cycle: a there-and-back yoyo takes 2x duration", () => {
+    const t = mkAnimTime({ yoyo: true, loop: true });
+    // Out over 10 ticks, back over 10, then repeats. One full cycle is 20.
+    expect(elapsedSequence(t, 20)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+      9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
+    ]);
+    expect(elapsedSequence(t, 10)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  });
+
+  it("a plain animation completes at exactly durationTicks", () => {
+    expect(completesAtTick(mkAnimTime(), 500)).toBe(10);
+  });
+
+  it("yoyo without loop never completes — see the warning in that section", () => {
+    const t = mkAnimTime({ yoyo: true, loop: false });
+    expect(completesAtTick(t, 500)).toBe(-1);
+    expect(t).toMatchObject({ elapsedTicks: 0, direction: -1, completed: false });
+  });
+
+  it("yoyo without loop rests at its start value rather than drifting", () => {
+    const t = mkAnimTime({ yoyo: true, loop: false });
+    const seq = elapsedSequence(t, 25);
+    expect(seq.slice(20)).toEqual([0, 0, 0, 0, 0]);
+  });
+});
+
+describe("LANGUAGE.md · Physics · collideBounds", () => {
+  it("defaults to true when the property is omitted", () => {
+    const source = `
+      scene {
+        size: (800, 600)
+        circle a {
+          position: (400, 100)
+          radius: 20
+          color: cyan
+          physics { gravity: (0, 900), duration: 2 }
+        }
+      }
+    `;
+    const { ast, errors } = parse(lex(source));
+    expect(errors).toEqual([]);
+    const { errors: typeErrors, ir } = typeCheck(ast!);
+    expect(typeErrors).toEqual([]);
+    // Note the `.props` hop: IRObjectNode is { id, props, children } and the
+    // physics block hangs off `props`, not off the node (sceneIR.ts:96-115).
+    // Top-level registry keys are scope paths ("scene.<name>"), not the bare
+    // name (builder.ts:288).
+    expect(ir!.registry["scene.a"].props.physics?.collideBounds).toBe(true);
   });
 });
