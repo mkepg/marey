@@ -5,7 +5,7 @@ import { TICK_HZ } from "./clock";
 import type {
   IPhysicsWorld, BodyGeometry, BodyState, PhysicsParams, PinReason,
 } from "./physicsWorld";
-import type { IRAnimation, IRPhysics } from "../sceneIR";
+import type { IRAnimation, IRPhysics, IRSequence } from "../sceneIR";
 
 /**
  * A world that records what it was told rather than simulating.
@@ -86,6 +86,15 @@ function anim(over: Partial<IRAnimation> = {}): IRAnimation {
   };
 }
 
+/** animate to 120 over 6 ticks, then to 240 over 30, then simulate. */
+const TWO_STEP_SEQUENCE: IRSequence = {
+  steps: [
+    { ...anim({ to: { x: 120, y: 0 }, duration: 6 / TICK_HZ }) },
+    { ...anim({ to: { x: 240, y: 0 }, duration: 30 / TICK_HZ }) },
+    { ...PHYSICS, duration: "indefinitely" },
+  ],
+};
+
 /**
  * A minimal container carrying the `__`-prefixed runtime fields the runtime
  * reads. Built by hand rather than through `buildNode` so each test states
@@ -94,6 +103,7 @@ function anim(over: Partial<IRAnimation> = {}): IRAnimation {
 function makeContainer(over: {
   animations?: IRAnimation[];
   physics?: IRPhysics;
+  sequence?: IRSequence;
   position?: { x: number; y: number };
 } = {}): Container {
   const c = new Container();
@@ -112,7 +122,7 @@ function makeContainer(over: {
     alpha: 1,
   };
   c.__animations = over.animations ?? [];
-  c.__sequences = [];
+  c.__sequences = over.sequence ? [over.sequence] : [];
   c.__physics = over.physics;
   c.__kinematicPosAnimCount = 0;
   c.__bodyShape = { kind: "circle", radius: 10 };
@@ -340,5 +350,52 @@ describe("SceneRuntime · paint phase", () => {
     rt.advanceOneTick();
     rt.paint(1);
     expect(rt.isIdle()).toBe(false);
+  });
+});
+
+/**
+ * Frame pacing must not change what the physics world is told.
+ *
+ * Three separate defects in this phase have been "a wall-clock-derived value
+ * reached the world", and none of them involved `driver.alpha` directly, which
+ * is why reading invariant 3 literally did not prevent any of them. This runs a
+ * scene at two very different frame pacings for an identical number of ticks
+ * and requires the world to see the identical call sequence.
+ */
+function runAtPacing(ticksPerFrame: number, totalTicks: number): string[] {
+  const c = makeContainer({ sequence: TWO_STEP_SEQUENCE });
+  const world = new RecordingWorld();
+  const rt = new SceneRuntime(world, makeRoot(c));
+  let done = 0;
+  while (done < totalTicks) {
+    const n = Math.min(ticksPerFrame, totalTicks - done);
+    for (let i = 0; i < n; i++) rt.advanceOneTick();
+    // A deliberately awkward alpha: 0 and 1 are the two values that hide this.
+    rt.paint(0.5);
+    done += n;
+  }
+  return world.calls;
+}
+
+describe("SceneRuntime · frame pacing must not reach the world", () => {
+  it("sends the world the same calls at 1 tick per frame as at 7", () => {
+    expect(runAtPacing(7, 40)).toEqual(runAtPacing(1, 40));
+  });
+
+  it("sends the same calls at 12 ticks per frame — LiveDriver's catch-up ceiling", () => {
+    expect(runAtPacing(12, 60)).toEqual(runAtPacing(1, 60));
+  });
+
+  it("starts a sequence's second animation from the first one's exact target", () => {
+    // The specific mechanism: the second animation's startVal is read from
+    // container state that the paint phase last wrote at the driver's alpha.
+    const calls = runAtPacing(7, 40);
+    const positions = calls.filter((s) => s.startsWith("setPosition:"));
+    const firstTargetIndex = positions.indexOf("setPosition:b0:120.0000,0.0000");
+    expect(firstTargetIndex).toBeGreaterThan(-1);
+    // Whatever comes next must continue from 120, not jump back toward 0.
+    const next = positions[firstTargetIndex + 1];
+    const x = Number(next.split(":")[2].split(",")[0]);
+    expect(x).toBeGreaterThanOrEqual(120);
   });
 });

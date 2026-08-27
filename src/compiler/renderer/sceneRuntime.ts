@@ -158,6 +158,23 @@ export class SceneRuntime {
   private tickAnim(ra: RunningAnim): boolean {
     const justCompleted = advanceAnimTime(ra.time);
 
+    // Snap the animated property to its exact final value, in the TICK phase.
+    //
+    // Whatever runs next reads this container's state as its own starting
+    // point — `spawnAnim` calls `getCurrentVal`, which reads `currentPos`,
+    // `rotation` and `alpha`. Those are all last written by the PAINT phase at
+    // the driver's wall-clock alpha, so without this snap a sequence's second
+    // animation starts from a frame-rate-dependent value and pushes it straight
+    // into the physics world. Measured at ~110px of divergence between 1-tick
+    // and 7-tick frames over the same 40 ticks.
+    //
+    // This is a state snap in the tick phase, not a side effect moved into
+    // paint, so it does not conflict with invariant 2 — it is the same move
+    // `snapContainerToBody` already makes for the freeze transition, and for
+    // the same reason. `animProgress` returns 1 for a completed runner, so
+    // evaluating at alpha 0 gives exactly the final value.
+    if (justCompleted) applyAnim(ra, 0);
+
     // Completion side effects are state, not paint, so they must happen on the
     // tick they occur — not once per rendered frame. Deferring them would let
     // physics skip ticks while a stale kinematic count is still set.
