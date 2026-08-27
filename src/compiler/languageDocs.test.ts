@@ -9,14 +9,18 @@
  *
  * Fences tagged ```declare are compiled. Fences tagged ```text are prose
  * fragments and are skipped deliberately.
+ *
+ * The document is pulled in as a build-time dependency via Vite's `?raw`
+ * import (declared by `vite/client`), rather than read from disk with
+ * `node:fs`, so this typechecks under `tsconfig.app.json` without pulling in
+ * node types. It also resolves relative to this file instead of the process
+ * working directory, so it isn't sensitive to where `vitest` is invoked from.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import markdownDoc from "../../docs/LANGUAGE.md?raw";
 import { lex } from "./lexer";
 import { parse } from "./parser";
 import { typeCheck } from "./typeChecker";
-
-const DOC_PATH = "docs/LANGUAGE.md";
 
 interface Example {
   /** 1-indexed line in LANGUAGE.md where the fence opens. */
@@ -58,7 +62,7 @@ function compileErrors(source: string): string[] {
 }
 
 describe("docs/LANGUAGE.md examples", () => {
-  const markdown = readFileSync(DOC_PATH, "utf8");
+  const markdown = markdownDoc;
   const examples = extractExamples(markdown);
 
   it("contains at least one example", () => {
