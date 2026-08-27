@@ -157,7 +157,7 @@ describe("SceneRuntime · tick phase", () => {
     expect(world.pins.get(id)!.has("POS_ANIM")).toBe(false);
   });
 
-  it("releases a rotation override on the completion tick even under a catch-up burst", () => {
+  it("releases a rotation override on the completion tick, not in the paint phase", () => {
     // Phase 1 bug 3: the release lived in the paint-phase splice loop, so a
     // frame that advanced several ticks kept re-applying the override for ticks
     // after the animation had finished.
@@ -276,6 +276,44 @@ describe("SceneRuntime · tick phase", () => {
     expect(pushes).toHaveLength(6);
     // The last one is the completion tick, and it lands exactly on target.
     expect(pushes[5]).toBe("setPosition:b0:200.0000,0.0000");
+  });
+
+  it("stops pushing a completed scale animation, but lands its final value", () => {
+    // The other half of the asymmetry. Without this, hoisting the rotation
+    // guard to the top of pushAnimToWorld — the exact "simplify it back into a
+    // bug" move — leaves the scale regression green.
+    const c = makeContainer({
+      animations: [anim({ property: "scale", duration: 6 / TICK_HZ, to: { x: 2, y: 2 } })],
+      physics: { ...PHYSICS, duration: "indefinitely" },
+    });
+    const world = new RecordingWorld();
+    const rt = new SceneRuntime(world, makeRoot(c));
+
+    for (let i = 0; i < 12; i++) rt.advanceOneTick();
+    rt.paint(1);
+
+    // bindPhysicsBodies emits one setScale at bind time; drop it.
+    const pushes = world.calls.filter((s) => s.startsWith("setScale:")).slice(1);
+    expect(pushes).toHaveLength(6);
+    expect(pushes[5]).toBe("setScale:b0:2.0000,2.0000");
+  });
+
+  it("snaps a frozen container to the body's tick-aligned state, not its painted one", () => {
+    // Without this the container keeps whatever position it was last PAINTED
+    // at, which used the driver's wall-clock alpha — so a frozen object settles
+    // a varying distance from where the simulation actually stopped it.
+    const c = makeContainer({ physics: { ...PHYSICS, duration: 1 } });
+    const world = new RecordingWorld();
+    const rt = new SceneRuntime(world, makeRoot(c));
+    const id = c.__body!;
+
+    world.positions.set(id, { x: 777, y: 555 });
+    c.__declareLayout!.currentPos.x = -1;
+    c.__declareLayout!.currentPos.y = -1;
+
+    for (let i = 0; i < TICK_HZ; i++) rt.advanceOneTick();
+
+    expect(c.__declareLayout!.currentPos).toEqual({ x: 777, y: 555 });
   });
 });
 

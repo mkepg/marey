@@ -28,6 +28,12 @@ export interface RunningAnim {
   targetVal: number | IRPoint;
   time: AnimTime;
   isPosAnim: boolean;
+  /**
+   * Whether `tickAnim` completed this runner on the tick currently being
+   * advanced. Lives on the runner rather than in a per-tick side table so the
+   * two lifecycle bits — `time.completed` and this — sit on the same object.
+   */
+  completedThisTick: boolean;
 }
 
 export interface PhysicsRunner {
@@ -254,6 +260,7 @@ export class SceneRuntime {
         yoyo: anim.yoyo,
       },
       isPosAnim: isPos,
+      completedThisTick: false,
     };
     this.runningAnims.push(ra);
     localList.push(ra);
@@ -355,22 +362,26 @@ export class SceneRuntime {
    */
   advanceOneTick(): void {
     // A runner that completed is not spliced until the paint phase, so without
-    // this set it would keep pushing for every remaining tick of a catch-up
-    // burst — making the simulation a function of how many ticks the frame
-    // happened to absorb. `justCompleted` is kept because position and scale
-    // still owe the world one final push at their target value.
-    const justCompleted = new Set<RunningAnim>();
+    // the guard below it would keep pushing for every remaining tick of a
+    // catch-up burst — making the simulation a function of how many ticks the
+    // frame happened to absorb. `completedThisTick` is recorded because
+    // position and scale still owe the world one final push at their target.
     for (let i = 0; i < this.runningAnims.length; i++) {
       const ra = this.runningAnims[i];
-      if (this.tickAnim(ra)) justCompleted.add(ra);
+      ra.completedThisTick = this.tickAnim(ra);
     }
 
     // Animations own their properties; push the tick-aligned values into the
     // world before it steps, so physics never sees a wall-clock-derived value.
+    //
+    // Deliberately a second loop, not fused with the one above. Two runners can
+    // share a container, and spawnPhysics documents that unpinning collapses a
+    // body to rest — so fusing would let runner 0's setPosition land before
+    // runner 1's unpinBody, which is a real reordering, not a tidy-up.
     for (let i = 0; i < this.runningAnims.length; i++) {
       const ra = this.runningAnims[i];
-      if (ra.time.completed && !justCompleted.has(ra)) continue;
-      this.pushAnimToWorld(ra, justCompleted.has(ra));
+      if (ra.time.completed && !ra.completedThisTick) continue;
+      this.pushAnimToWorld(ra, ra.completedThisTick);
     }
 
     // Before freeze, so an escaped body is removed rather than frozen into
