@@ -337,3 +337,138 @@ scene {
   }
 }
 ```
+
+## Physics
+
+**Every object that declares a `physics` block shares one simulated world with
+every other such object, and they collide with each other.** They stack,
+tumble, and settle against one another, not just against the scene edges.
+
+**An object gets a collision body if, and only if, it declares a `physics`
+block — either directly, or in any step of its `sequence`.** An object with
+only `animate` blocks is not a collider: nothing rests on it, and things pass
+through it.
+
+**A collision body is created when the scene starts, not when the object's
+physics step begins.** For an object whose `sequence` opens with `animate`
+and reaches `physics` later, the body already exists during that opening
+`animate` step, held immobile at the object's current position. So an object
+sliding into place shoves anything already in its path before its own physics
+step ever starts.
+
+### Properties
+
+`gravity: (x, y)` is an acceleration in **pixels per second squared**,
+applied per object, not per scene — there is no scene-level gravity property.
+Positive `y` accelerates downward, matching the scene's y-down coordinate
+system. It defaults to `(0, 980)`.
+
+`velocity: (x, y)` is an initial speed in **pixels per second**, applied at
+the moment the object's simulation starts — scene start for a top-level
+`physics` block, or the moment a `sequence` reaches that `physics` step. It
+defaults to `(0, 0)`.
+
+`bounce` sets how much of a collision's energy is preserved, from `0.0` to
+`1.0` inclusive; a value outside that range is a compile error. `0.0` means
+no bounce — the object stops dead on impact. `1.0` preserves the collision's
+energy. It defaults to `0.65`.
+
+**`airDrag` is inverted: `0.0` is a vacuum and `1.0` is maximum resistance.**
+It ranges from `0.0` to `1.0` inclusive, defaulting to `0.0`. Useful values
+are small — the shipped default scene uses `0.006`. Some editor snippets in
+`language.ts` still insert `airDrag: 0.99` as a placeholder value, left over
+from before the inversion; under the current semantics that is near-total
+drag, not a light touch.
+
+`collideBounds` governs collision with the scene's four edges only, and
+defaults to `true`. It has no bearing on collision between objects — that is
+always on and cannot be turned off. An object with `collideBounds: false`
+that drifts far enough past a scene edge is not stopped by anything; once it
+travels 800 pixels beyond the scene's bounds, it is removed from the
+simulation entirely and its visual is hidden.
+
+The collision shape a body gets depends on the object's kind: `circle` gets a
+circle at its declared radius; `rectangle` gets a rectangle at its declared
+size; `text` gets a rectangle sized to the rendered text's bounding box;
+`line` gets a rectangle spanning its points' bounding box, widened to at
+least its `thickness`; `group` gets a single rectangle spanning the bounding
+box of everything inside it (only meaningful if the `physics` block sits on
+the group itself, giving the whole group one shared body). **`polygon` gets
+the convex hull of its points, not its exact outline** — a concave polygon
+collides as its hull, even though it is drawn with its true, concave shape.
+
+### When duration expires
+
+`duration` is a number of seconds, or the keyword `indefinitely`.
+
+**When a numeric `duration` expires, the object freezes exactly where it is
+and stays collidable.** It does not reset to a starting position, drift, or
+disappear. Freezing happens wherever the object is at that instant, including
+mid-air or mid-collision. A frozen object becomes scenery: later objects can
+land on it, stack on it, and bounce off it, exactly as they would off any
+other static body.
+
+**Frozen and asleep look identical and behave oppositely.** An object at rest
+under a numeric `duration` that has expired is frozen: immovable, and
+unaffected by anything that collides with it afterward. An object at rest
+under `duration: indefinitely` is merely asleep — dormant to save work, but it
+still collides, and a collision wakes it and sets it moving again. Nothing in
+a single rendered frame distinguishes the two.
+
+Freezing is reversible. If the same object later starts a new `animate` or
+`physics` step — for instance, the next step of its `sequence` — the freeze
+lifts and the object rejoins the simulation.
+
+### Animation and physics together
+
+While an `animate` block drives `position`, physics does not move the
+object — but the object remains solid, so it can still knock other things
+over as it moves along the animated path.
+
+While an `animate` block drives `rotation`, physics does not spin the
+object, though the object still moves under gravity and collisions; only its
+angle is held to the animation.
+
+`animate scale` resizes the object's collision shape to match its visual size
+as the animation progresses.
+
+When an animation finishes, the object returns to full physics control on
+whichever property the animation was driving.
+
+```declare
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate i from 0 to 3 {
+    rectangle box {
+      position: (400, 100 + i * 60)
+      size: (60, 60)
+      color: cyan
+      physics {
+        gravity: (0, 900)
+        bounce: 0.2
+        collideBounds: true
+        duration: indefinitely
+      }
+    }
+  }
+}
+```
+
+```declare
+scene {
+  size: (800, 600)
+
+  circle faller {
+    position: (400, 100)
+    radius: 20
+    color: orange
+    physics {
+      gravity: (0, 900)
+      collideBounds: true
+      duration: 2
+    }
+  }
+}
+```
