@@ -59,10 +59,19 @@ impossible.
 | D13 | A body exists only for an object that declares `physics` — directly or inside a `sequence` | Physicality stays visible in the diff, which is the whole position in §1.1. The alternative makes a bare `rectangle` a silent collider with no opt-out, since §3 cut collision filtering as syntax. Revisited in Phase 4 (§9). |
 | D14 | Declare's per-body gravity is injected as a velocity delta, and the sleeping pass is driven manually | `Sleeping.update` force-wakes any body carrying a force, and runs *before* gravity inside `Engine.update`. Applying gravity as `body.force` therefore stops anything ever sleeping, which removes both §6.7's frozen-vs-asleep distinction and §6.9's idle detection. See §6.4. |
 | D15 | The centroid-vs-bbox-centre offset lands in Phase 1, not Phase 2 | §7's rationale — "zero for every symmetric shape" — does not hold for `polygon`, and Phase 1 is the first time physics rotates anything. Without it a tumbling triangle renders visibly off its own collision shape. |
+| D16 | A group's collision **reference point is its local origin**, not its content bbox centre. The stored offset generalises to `pivot − centreOfMass`, subsuming D15. | Pivot-at-origin is documented behaviour and is what gives `use Template() x { position: … }` a stable anchor. Moving the visual pivot to the content centre would silently change every existing rotating or scaling group scene. Fix the body, not the visual. See §7.1. |
+| D17 | `physics` is allowed under a group **iff every ancestor group is static** — declares no `physics`, `animate` or `sequence`. The ancestor transform composes at bind time. | A static ancestor chain is a constant transform, so composing it involves no `alpha` and cannot make the simulation frame-rate dependent (§6.9's invariant). An animating ancestor would. This is what makes a `template` carry physics correctly — today every instance of one simulates at `(0, 0)`. |
+| D18 | A compound flattens across nested groups. A child's `animate` inside a physics group is **visual-only** and is not rejected. | Flattening makes nested groups need no special case. Banning child `animate` would ban a legitimate shot — a logo tumbling as one body while an element inside it breathes. It ships documented instead. |
 
 Corrections D13–D15 were added on 2026-08-26 while scoping Phase 1. D14 and the unit
 corrections in §6.3 are defects in the original §6.2, found by reading Matter 0.20.0's
 source; they are recorded here rather than silently fixed in code.
+
+D16–D18 were added on 2026-08-27 while scoping Phase 2. D16 and D17 exist because §7 as
+written was unaware of two live defects — a group's collision box is positioned at its
+origin while sized from its children's extent, and any `physics` block inside any group
+simulates at local coordinates read as scene coordinates. Both were confirmed by running
+code; see `2026-08-27-phase-2-compound-groups-design.md` §1.
 
 ---
 
@@ -452,19 +461,44 @@ rotation animation completes before its physics step begins, so the two do not f
 
 ## 7. Phase 2 — Compound groups
 
-**Renderer plus one validator rule.**
+**Renderer plus two validator rules. Expanded in
+`2026-08-27-phase-2-compound-groups-design.md`, which supersedes this section
+where they differ.**
 
 A `group` carrying a `physics` block welds its children into one body via
 `Body.create({ parts })`; child transforms become shape offsets in the group's local
-space.
+space. Nested groups flatten into the same part list (D18).
 
 *(The centroid-vs-(0.5, 0.5) offset was originally scheduled here. It moved to Phase 1 as
 D15 — the stated reason for deferring it, that it is zero for every symmetric shape, does
 not hold for `polygon`, and Phase 1 is where bodies first rotate.)*
 
-Validator rejects `physics` blocks on children of a physics group.
+Validator rejects `physics` blocks on children of a physics group, **and** on children of
+an animated one (D17).
 
 *Ships:* a multi-part logo tumbles as one coherent object instead of exploding.
+
+### 7.1 What scoping found
+
+This section was three sentences, and it was wrong about its own size. Scoping it turned
+up two live defects it did not anticipate and one structural blocker, all three confirmed
+by running code rather than reading it:
+
+- **A group's collision box is placed at its origin but sized from its children's
+  extent** (`builder.ts:199` versus `builder.ts:210-216`). For a group at `(400, 300)`
+  with one circle child at local `(100, 0)`, the box sits 100px from the circle. D16.
+- **`physics` inside any group simulates at local coordinates.** A `template` carrying a
+  physics object produces one body per instance, all at `(0, 0)` — `use` expands to a
+  `group` node (`parseUse.ts:175`), so this covers every template. D17.
+- **`advanceOneTick` is closure-scoped inside `render()`**, so Phase 5's export driver has
+  no caller surface to attach to, and §5.3's "a different *caller* rather than a different
+  engine" is not yet true of the code. Phase 1's execution notes blamed the DOM for
+  `adapter.ts` being untestable; that is false — PixiJS `Container` and `Graphics` run in
+  plain Node, and only `Text` needs a canvas. Phase 2 extracts a `SceneRuntime`.
+
+Phase 2 is therefore **Large**, not the Medium §12 records. The compound-group feature
+itself touches `adapter.ts` not at all — `__bodyShape` has exactly one consumer,
+`physicsSync.ts:71-85`.
 
 ---
 
