@@ -18,14 +18,19 @@ Authors are fresh subagents with no access to this conversation.
 - `src/store/defaultScene.ts` — the worked example every user sees on first load
 - `src/components/Editor/MonacoEditor/language.ts` — IDE completions and snippets
 - `src/components/Editor/MonacoEditor/constants.ts` — IDE hover documentation
+- `docs/LANGUAGE.md` — the formal language reference
 
 **They may not read** the compiler (`lexer/`, `parser/`, `typeChecker/`), the
 spec, the plans, or `AGENTS.md`. Those are internal. An external author would
 not have them, and `AGENTS.md` in particular documents the known gotchas, which
 would measure the internal docs rather than the language.
 
-There is no README and no language reference — that absence is part of what is
-being measured.
+There is still no README. `docs/LANGUAGE.md` was added on 2026-08-27, after the
+baseline run — the results in `RESULTS.md` were measured **without** it, and its
+second finding is what motivated writing it. Any re-run therefore measures a
+different surface than the baseline, which is the point: compile rate was
+already at 100% and cannot improve, so the comparison to make is whether the
+authors' recorded uncertainty shrinks.
 
 **Round 1 is blind.** Authors write all their scenes before anything is
 compiled, so the first-pass number is not contaminated by feedback. Rounds 2+
