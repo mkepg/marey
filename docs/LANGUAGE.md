@@ -41,10 +41,16 @@ downward**, with the origin at the top-left of the scene. Physics gravity's
 default value, `(0, 980)`, is consistent with this: a positive y-velocity
 falls toward the bottom of the scene.
 
-**Every object's pivot is its geometric centre.** There is no `anchor`
-property. `position` places that centre, not a corner — a `rectangle` with
-`position: (100, 100)` and `size: (60, 40)` is centred on `(100, 100)`, not
-top-left-aligned to it. `rotation` and `scale` act about that same centre.
+**Every object's pivot is the centre of its bounding box.** There is no
+`anchor` property. `position` places that point, not a corner — a `rectangle`
+with `position: (100, 100)` and `size: (60, 40)` is centred on `(100, 100)`,
+not top-left-aligned to it. `rotation` and `scale` act about the pivot. For
+`polygon` and `line`, the bounding-box centre is not the same as the centroid
+when the shape is asymmetric — the triangle below pivots at `(0, -7.5)`, not
+at its centroid `(0, 0)`. **A `group`'s pivot is the local origin it is
+positioned at, not the centre of its children** — children placed
+asymmetrically around that origin still rotate about the origin, not about
+the visual centre of the group's content.
 
 A child object's `position` is relative to its parent `group`'s local space,
 not to the scene origin — moving or rotating the group moves and rotates its
