@@ -492,6 +492,19 @@ which are real properties (`sceneIR.ts:57` records anchor's removal; rectangles 
   handoff can write velocity into an already-completed runner and silently do nothing.
 - Add a body-count ceiling. The compiler caps objects at 15,000; Matter cannot carry that
   many dynamic bodies.
+- **Fix the non-completing yoyo.** `advanceAnimTime` reverses at `durationTicks`
+  when `yoyo` is set, but on returning to 0 it only restarts if `loop` is also
+  set (`timeline.ts:37-43`). A `yoyo: true` without `loop: true` therefore never
+  reports completion: the runner is never spliced, so `isIdle()` never becomes
+  true and the ticker runs forever, and a `POS_ANIM` pin is never released, so a
+  body on the same object stays pinned permanently. The validator already
+  rejects this shape inside a `sequence` (`TYPE_SEQ_YOYO`) for exactly this
+  reason; the top-level case is unguarded. Found while writing
+  `docs/LANGUAGE.md`, which documents the current behaviour and warns against it.
+- **Update `docs/LANGUAGE.md` for the renames.** Its examples are compiled by
+  `src/compiler/languageDocs.test.ts`, so `def` → `let` and `handOff` →
+  `handoff` will break the build until the reference is updated. That is the
+  intended mechanism, not an obstacle.
 
 ---
 
