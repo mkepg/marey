@@ -1205,7 +1205,11 @@ Expected: clean, all green.
 
 - [ ] **Step 6: Confirm the behaviour change in the browser**
 
-This changes shipped output: the default scene's `stepper` now tumbles on impact instead of landing flat, which is what physics spec §6.11 said Phase 1 would do.
+**CORRECTED 2026-08-28 — this step's original premise was false.** It claimed the fix would make the default scene's `stepper` start tumbling, citing physics spec §6.11. `stepper` is released from a completed `easeInOut` position animation with no exit velocity and lands flat on a flat floor: symmetric contact, no torque, no rotation, override bug or not. The card's own header comment in `src/store/defaultScene.ts` has said so since commit `91172b1`; §6.11 was stale and has now been corrected in place.
+
+So this step is **a regression check, not a change check**: the default scene must look the *same* before and after.
+
+To actually see Defect A, build a scene with an asymmetric landing — a triangle whose `rotation` animation finishes well before it lands off-centre on a static ledge. Do not use a square: one settling at 0° or 90° looks identical either way and hides the effect.
 
 With the dev server running. **Start it as `npx vite --port 5199 --strictPort`, or read the port it prints and append `--url http://localhost:<port>` to every `check.mjs` call below.** Without `--strictPort`, vite silently walks forward to 5200, 5201… when 5199 is taken, while `check.mjs` still defaults to 5199 — so the capture can hit a stale pre-existing server and report a confident pass without ever exercising your code. This happened during Task 1.
 
@@ -1213,9 +1217,9 @@ With the dev server running. **Start it as `npx vite --port 5199 --strictPort`, 
 node tools/visual-check/check.mjs --scene default --at 300,2400,4000,6000 --out .visual-check/t3-default-after
 ```
 
-Read the PNGs and compare against `.visual-check/t1-default-before` from Task 1. Expected: identical up to the point `stepper`'s physics step begins, then `stepper` lands at an angle and rocks rather than sitting perfectly square. Everything else in the card — the three easing lanes, the `handOff` arc, the breathing rings — must be unchanged.
+Read the PNGs and compare against `.visual-check/t1-default-before` from Task 1. Expected: the card is unchanged — three easing lanes, the `handOff` arc, the breathing rings, the bar wave, and `stepper` landing flat exactly as before. Note that only the 300 ms and 4000 ms samples are directly comparable, since Task 1 captured `--at 300,1500,4000`.
 
-If `stepper` still lands flat, the fix did not reach it. Check that it actually has a body: D13 gives it one because its `sequence` contains a `physics` step.
+Then capture your asymmetric-landing scene before and after the production change (stash it to get the "before"). Expected: before, the shape's angle latches the instant its animation ends and it never rotates again, coming to rest in a physically impossible tilted pose; after, it rocks and settles flat against the ledge.
 
 - [ ] **Step 7: Commit**
 
@@ -1879,6 +1883,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 **Files:**
 - Modify: `src/compiler/renderer/builder.ts:193-218` (the `group` case), plus the `declare module` block
 - Create: `src/compiler/renderer/builder.test.ts`
+
+**One thing to check while you are here.** Task 3's browser verification noticed that a polygon appears to render rotated roughly −90° from what its `points` suggest — a `[(0,-40),(34,22),(-34,22)]` triangle at `rotation: 35` draws apex-left rather than apex-up. That was confirmed to be identical with and without a `physics` block, so it is a drawing-side observation, not an animation-versus-physics divergence, and it is pre-existing rather than caused by this phase. `builder.ts` is the file that would own it. **Investigate far enough to say whether it is real**, and if it is, record it in your report rather than fixing it — a rotation offset in the drawing layer is out of Phase 2's scope and needs its own decision.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -3426,7 +3432,10 @@ Every plan in `docs/plans/` carries an "Execution notes" section recording defec
 
 Append an `## Execution notes` section to this file, following the structure Phase 1's plan uses: **Defects in this plan**, **Bugs found by review**, **Gaps left open deliberately**. Record, at minimum:
 
-- Anything in this plan that turned out to be wrong when executed. Phase 1's notes record three such defects; assume this plan has some too and write down what they were, not just that they existed.
+- Anything in this plan that turned out to be wrong when executed. Phase 1's notes record three such defects; this plan has at least these:
+  - **Task 3 Step 6's premise was false**, and because the step told the implementer to use the Step 7 commit message verbatim, **commit `25c655b`'s message asserts "The default scene changes: stepper now tumbles", which is untrue.** `stepper` lands flat and always did — a symmetric flat contact has no torque. The claim came from physics spec §6.11, which had been stale since `91172b1` corrected the scene's own comment. §6.11 is now fixed in place. Record the bad commit message explicitly: it cannot be rewritten without rewriting history, so the note is the only correction that will be found later.
+  - The browser steps originally said `npx vite --port 5199` without `--strictPort`. Vite walks forward silently when the port is taken while `check.mjs` keeps defaulting to 5199, so a stale server can absorb every capture and report a confident false pass. Found during Task 1, fixed in the plan, and it then happened again in Task 3 (both 5199 and 5200 were stale).
+  - `--at 300` samples before the renderer initialises (~900–1100 ms), so that frame is not a reproducible oracle even on unmodified code.
 - Whether `visual-check` found anything the headless suite missed, which it did in Phase 1.
 - The two caveats §5.4 of the spec records but does not fix: a circle *part*'s stale `circleRadius` under non-uniform scale, and `Body.scale` fighting `setStatic`'s `_original` mass snapshot. Both are pre-existing and equally true of single bodies.
 - The shear approximation from spec §5.3: a rotated child beneath a nested group carrying non-uniform scale collides unsheared.

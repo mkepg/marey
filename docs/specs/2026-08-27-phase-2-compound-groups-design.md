@@ -175,14 +175,10 @@ this one is in the right phase but the wrong *order within the tick*. That the
 family keeps recurring is itself the argument for piece 1: every instance has
 lived in the file with no coverage.
 
-Two documents are falsified by it and are corrected here:
-
-- `LANGUAGE.md` — "When an animation finishes, the object returns to full
-  physics control on whichever property the animation was driving." This gets a
-  behavioural assertion, since prose alone did not stop it being false.
-- The parent spec's §6.11 — "`stepper` will tumble on impact instead of landing
-  flat." That has never been true; its angle is locked at 180° before its
-  physics step begins.
+`LANGUAGE.md` is falsified by it — "When an animation finishes, the object
+returns to full physics control on whichever property the animation was driving"
+— and is corrected here, with a behavioural assertion, since prose alone did not
+stop it being false.
 
 **A second defect shares the cause**, found by the code-quality review of piece
 1 rather than by scoping. A completed `position` animation keeps pushing for the
@@ -206,9 +202,23 @@ so it must skip the completion tick as well. Position and scale are plain writes
 and still owe the world one final push at their target value; suppressing that
 would leave the body a tick short of where it was animated to.
 
-**Accepted consequence:** the shipped default scene changes. `stepper` now
-tumbles. That is the behaviour §6.11 already promised, so the card's own
-commentary needs no rewrite.
+**The shipped default scene does not change, and an earlier draft of this
+section said it would.** That draft asserted `stepper` would start tumbling,
+citing the parent spec's §6.11. Both were wrong. `stepper` is released from a
+completed `easeInOut` position animation with no exit velocity and falls straight
+down onto a flat floor — a symmetric contact, so no torque, so no rotation,
+override bug or not. The card's own header comment has said exactly this since
+`91172b1`; §6.11 was never reconciled with it and has now been corrected in
+place.
+
+The error is worth recording rather than quietly deleting, because it did damage
+in both directions: it put a false claim into commit `25c655b`'s message, and it
+sent a plan step looking for a bug that did not exist. **A stale prediction in a
+spec is not an oracle.** Defect A was demonstrated instead on a purpose-built
+scene — a triangle whose rotation animation finishes before it lands off-centre
+on a ledge, so the contact is asymmetric and there is real torque to observe. A
+square was rejected for the job because one settling at 0° or 90° looks identical
+either way and would have hidden the effect.
 
 ---
 

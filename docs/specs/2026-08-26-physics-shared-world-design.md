@@ -448,9 +448,20 @@ second body — which is the case D14 exists to protect.
 The default scene has been replaced since this was written; it now lives in
 `store/defaultScene.ts` as a motion test card. Two of its objects declare `physics` —
 `launcher` (a circle, `duration: indefinitely`) and `stepper` (a rectangle, the last step of
-a `sequence`). Under a shared world they can now collide with each other, and `stepper`
-will tumble on impact instead of landing flat, since this is the first phase in which
-physics rotates anything.
+a `sequence`). Under a shared world they can now collide with each other.
+
+**Correction, 2026-08-28.** This section originally predicted that `stepper` "will tumble on
+impact instead of landing flat, since this is the first phase in which physics rotates
+anything." That was wrong, and stayed wrong through two phases. `stepper` is released from a
+completed `easeInOut` position animation with no exit velocity and falls straight down onto a
+flat floor: the contact is symmetric, so there is no torque and nothing to rotate it. The
+card's own header comment was corrected to say so in `91172b1` — *"the square lands flat — a
+flat landing has no torque, so it should NOT tumble"* — but this section was not, so the
+stale prediction was still being cited as an oracle while scoping Phase 2. It caused a Phase 2
+plan step to instruct an implementer to go looking for a bug that did not exist, and put a
+false claim into commit `25c655b`'s message. Rotation on impact is real and is demonstrable —
+see `tools/visual-check/scenes/`, whose `tumble.declare` and Phase 2's `logo.declare`
+exercise it deliberately — but `stepper` was never the case that shows it.
 
 The card's header comment currently reads *"falling objects pass through each other and
 land in a heap. That is expected — objects do not yet collide with one another."* That
