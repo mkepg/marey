@@ -1,0 +1,15 @@
+scene {
+  size: (800, 600)
+  background: #080811
+  circle ball {
+    position: (400, 80)
+    radius: 20
+    color: #38bdf8
+    physics {
+      gravity: (0, 980)
+      bounce: 0.6
+      collideBounds: true
+      duration: indefinitely
+    }
+  }
+}

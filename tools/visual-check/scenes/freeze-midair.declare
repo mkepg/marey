@@ -1,0 +1,10 @@
+scene {
+  size: (800, 600)
+  background: #080811
+  rectangle box {
+    position: (400, 100)
+    size: (52, 52)
+    color: #38bdf8
+    physics { gravity: (0, 900), bounce: 0, collideBounds: true, duration: 0.5 }
+  }
+}

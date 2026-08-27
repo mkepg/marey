@@ -1,0 +1,16 @@
+scene {
+  size: (800, 600)
+  background: #080811
+  polygon wedge {
+    position: (380, 80)
+    points: [(0, -34), (30, 18), (-30, 18)]
+    color: #fbbf24
+    physics { gravity: (0, 900), bounce: 0.35, collideBounds: true, duration: indefinitely }
+  }
+  rectangle slab {
+    position: (420, 260)
+    size: (70, 40)
+    color: #a78bfa
+    physics { gravity: (0, 900), bounce: 0.2, collideBounds: true, duration: indefinitely }
+  }
+}

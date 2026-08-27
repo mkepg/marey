@@ -1,7 +1,7 @@
 # Rigid-Body Physics and the Deterministic Clock
 
 **Date:** 2026-08-26
-**Status:** Approved design, not yet implemented
+**Status:** Approved design. Phase 0 implemented and merged; Phase 1 in progress.
 **Supersedes:** `physics-upgrade-plan-custom.txt`, `physics-upgrade-plan-matter.txt`
 
 ---
@@ -56,6 +56,13 @@ impossible.
 | D10 | Export is designed for, not built yet | Phase 1 must satisfy export's constraints; the exporter itself is Phase 5. |
 | D11 | Renames of existing properties break old share links; no aliases | Deliberate, accepted at v0.3.x. Keeps the parser free of legacy spellings. |
 | D12 | Mass is left to Matter's area × density default | A motion designer thinks "heavy," not "500kg." |
+| D13 | A body exists only for an object that declares `physics` — directly or inside a `sequence` | Physicality stays visible in the diff, which is the whole position in §1.1. The alternative makes a bare `rectangle` a silent collider with no opt-out, since §3 cut collision filtering as syntax. Revisited in Phase 4 (§9). |
+| D14 | Declare's per-body gravity is injected as a velocity delta, and the sleeping pass is driven manually | `Sleeping.update` force-wakes any body carrying a force, and runs *before* gravity inside `Engine.update`. Applying gravity as `body.force` therefore stops anything ever sleeping, which removes both §6.7's frozen-vs-asleep distinction and §6.9's idle detection. See §6.4. |
+| D15 | The centroid-vs-bbox-centre offset lands in Phase 1, not Phase 2 | §7's rationale — "zero for every symmetric shape" — does not hold for `polygon`, and Phase 1 is the first time physics rotates anything. Without it a tumbling triangle renders visibly off its own collision shape. |
+
+Corrections D13–D15 were added on 2026-08-26 while scoping Phase 1. D14 and the unit
+corrections in §6.3 are defects in the original §6.2, found by reading Matter 0.20.0's
+source; they are recorded here rather than silently fixed in code.
 
 ---
 
@@ -184,33 +191,137 @@ Existing scenes render the same. Re-running a scene produces an identical state 
 IPhysicsWorld
   addBody(id, geometry, physics)     lifecycle
   removeBody(id)
-  pin(id, reason) / unpin(id, reason)
+  pin(id, reason) / unpin(id, reason)   reason-counted; see §6.6
+  setTransform(id, x, y, angle)      drives a pinned body
+  setVelocity(id, vx, vy)            spawn and handoff, px/s
+  setScale(id, sx, sy)               D7
   overrideAngle(id, radians)         post-step angle forcing
   step()                             no time argument
-  readState(id) → {x, y, angle}      for sync
+  readState(id, alpha) → {x, y, angle}  interpolated, for sync
   isIdle()
   destroy()
 ```
 
 Per D9, this module takes plain geometry in and plain transforms out. It must not import
-from `pixi.js`. `adapter.ts` owns all Pixi interaction and all lifecycle.
+from `pixi.js`, so it stays testable headlessly in Node (§6.10). All conversion between
+Declare units and Matter units happens behind this interface — a caller passes px/s and
+radians and never sees `_baseDelta`.
 
-### 6.2 Translation
+Two modules sit above and below it:
 
-| Declare | Matter | Note |
+| Module | Imports `pixi.js` | Owns |
 |---|---|---|
-| `gravity` (per object, px/s²) | per-body force `F = mass × a` | `engine.gravity.scale = 0`. Matter has one world gravity; Declare's is per-block. |
-| `velocity` (px/s) | px/tick | Divide by 120. Convert at spawn **and** at handoff (`adapter.ts:227`). |
-| `airDrag` | `frictionAir = 1 - sqrt(1 - airDrag)` | Not 1:1 at 120Hz. `airDrag` is defined per 1/60s (`pow(1 - airDrag, step × 60)` at `adapter.ts:84`), while `frictionAir` applies once per tick. Matching one second of damping gives `(1 - frictionAir)^120 = (1 - airDrag)^60`, hence the square root. Getting this wrong doubles the drag on every existing scene. |
+| `renderer/physicsWorld.ts` | no | this interface, the Matter engine, units, walls, sleeping |
+| `renderer/physicsSync.ts` | yes | container → geometry, pin bookkeeping, read-back, scale, culling |
+| `renderer/adapter.ts` | yes | app, ticker, animation and sequence runners, lifecycle |
+
+`NativePhysicsEngine` and `IPhysicsEngine` are deleted by this phase.
+
+### 6.2 Which objects get a body (D13)
+
+A container gets a body **iff it declares a `physics` block** — either directly, or in any
+step of any `sequence` it owns. That is a single predicate over `__physics` and
+`__sequences`, evaluated once at collect time.
+
+The body is created at scene start, not when its physics runner spawns, and it lives until
+teardown or culling. Creating it early is what satisfies D6: through the `animate` step of
+`sequence { animate position …; physics … }` the object is a pinned static body, so it
+genuinely shoves a pile on its way in rather than ghosting through.
+
+Objects with only `animate` blocks get no body and stay non-colliding, exactly as today.
+The alternative — every visual object becomes a body — is discussed and deferred in §9.
+
+### 6.3 Translation
+
+**These conversions were corrected on 2026-08-26.** The original table was written against
+Matter 0.19 semantics. Matter 0.20.0 normalises both velocity and air friction against
+`Common._baseDelta = 1000/60`, independently of the delta actually passed to
+`Engine.update`, which changes two of the six rows.
+
+Let `r = TICK_MS / Common._baseDelta = 60 / TICK_HZ`, which is `0.5` at 120Hz.
+
+| Declare | Matter 0.20 | Conversion |
+|---|---|---|
+| `gravity` (per object, px/s²) | velocity delta added once per tick, in the px-per-1/60 s units of the row below | `÷ (TICK_HZ × 60)` = `÷ 7200`. `engine.gravity.scale = 0`; see §6.4 for why this is a velocity delta and not a force. |
+| `velocity` (px/s) | `Body.setVelocity`, px per 1/60 s | `÷ 60`. Convert at spawn **and** at handoff. |
+| `airDrag` | `frictionAir` | `(1 − (1 − airDrag)^r) / r` |
 | `bounce` | `restitution` | Direct. |
 | `collideBounds` | `collisionFilter.mask` | Toggles the wall category. |
-| mass | Matter default | Not overridden (D12). |
+| mass, `friction` | Matter defaults | Not overridden (D12); `friction` is cut by §3. |
 
-### 6.3 Body geometry
+**Velocity is per 1/60 s, not per tick.** `Body.setVelocity` scales its argument by
+`body.deltaTime / Body._baseDelta`, so its units do not follow the tick rate. The original
+"divide by 120" would launch every object, and every `handOff`, at half speed.
+
+**Air drag carries the same `r` factor.** `Body.update` computes its damping as
+`1 − body.frictionAir × (deltaTime / Common._baseDelta)` — that `× 0.5` at 120Hz is what
+the original derivation omitted. Matching one second of damping against the old engine's
+`(1 − airDrag)^60` gives `1 − fa·r = (1 − airDrag)^r`, hence the formula above; at 120Hz it
+reduces to `2 × (1 − √(1 − airDrag))`, exactly twice the original figure. The original
+would also make `airDrag: 1.0` unreachable — it yields a half-per-tick decay rather than
+the full stop the property promises.
+
+Both are written in terms of `r` rather than hard-coded for 120Hz, so a future tick-rate
+change does not silently re-introduce the bug.
+
+One more, easy to miss: **set `body.deltaTime = TICK_MS` at creation.** `Body.create`
+defaults it to `1000/60`, so without this the very first tick runs with Matter's time
+correction at `0.5`.
+
+### 6.4 Step ordering, gravity, and sleeping (D14)
+
+Declare's gravity is per-block; Matter's is per-world. The obvious translation is to zero
+`engine.gravity` and push a per-body force instead. **That silently disables sleeping.**
+
+`Engine.update` runs its phases in this order:
+
+```
+Sleeping.update(bodies, delta)        ← force-wakes any body with a non-zero force
+Engine._bodiesApplyGravity(...)       ← world gravity is applied here
+Engine._bodiesUpdate(...)             ← integrate
+…solve…
+Engine._bodiesClearForces(bodies)     ← forces zeroed for next time
+```
+
+Matter's own gravity is applied *after* the sleeping pass and cleared before the next one,
+so at the moment `Sleeping.update` runs, every force buffer is zero. A force we set
+ourselves before calling `Engine.update` is still there when the sleeping pass reads it, so
+every gravity-affected body is woken on every tick and nothing ever sleeps. That would take
+out both §6.7's frozen-vs-asleep distinction and §6.9's idle detection. Matter 0.20 has no
+per-body `gravityScale` to fall back on.
+
+The fix is to keep Matter's phase order but supply our own gravity inside it:
+
+```
+step()
+  Sleeping.update(bodies, TICK_MS)        // engine.enableSleeping is false
+  applyPerBodyGravity()                   // awake, non-static bodies only
+  Engine.update(engine, TICK_MS)
+  applyAngleOverrides()                   // D8
+  Sleeping.afterCollisions(engine.pairs.list)
+```
+
+Gravity is injected as a velocity delta through `Body.getVelocity`/`setVelocity`, never as
+`body.force`, so the sleeping pass never sees a force. `Matter.Sleeping` is a public module,
+and `_bodiesUpdate` and every `Resolver` path already honour `body.isSleeping`
+independently of `engine.enableSleeping`, so turning the engine's own pass off is safe.
+
+Two accepted approximations:
+
+- The gravity delta is damped by `frictionAir` in the tick it is added, where Matter's force
+  path escapes one tick of damping. At `airDrag: 0.006` that shifts terminal velocity by
+  about 0.3%.
+- `Sleeping.afterCollisions` runs one tick later than it would inside `Engine.update`, so a
+  sleeping body struck by another wakes on the following tick. Not observable at 120Hz.
+
+### 6.5 Body geometry
 
 - `circle` → `Bodies.circle`
 - `rectangle` → `Bodies.rectangle`
-- `polygon` → `Bodies.fromVertices`, convex hull (no decomposition)
+- `polygon` → `Bodies.fromVertices` on vertices we hull ourselves via `Vertices.hull`, so no
+  decomposition is needed. Hulling up front rather than relying on Matter's internal
+  fallback also avoids its `warnOnce` about the missing `poly-decomp`, which would
+  otherwise fire on every concave polygon in every scene.
 - `line` → bounding box inflated to at least `thickness`. A line has no area and a
   horizontal or vertical one has a degenerate box. Preserves today's behavior rather than
   silently dropping the object. A validator error replaces this in Phase 3.
@@ -219,7 +330,7 @@ from `pixi.js`. `adapter.ts` owns all Pixi interaction and all lifecycle.
   `builder.ts:187` and would produce a zero-area body. Phase 2 replaces this with real
   welded parts.
 
-### 6.4 State machine
+### 6.6 State machine
 
 Two body states, plus an independent angle override.
 
@@ -237,12 +348,30 @@ Because pinned means container → body, a body that freezes while a sibling ani
 still runs keeps following that animation. A naive "frozen = don't touch" implementation
 would silently drift the collision shape away from the visual.
 
+The three reasons a body is pinned:
+
+| Reason | Added | Removed |
+|---|---|---|
+| `NO_RUNNER` | at body creation (§6.2) | `spawnPhysics` |
+| `POS_ANIM` | `spawnAnim` for `property: position` | on that animation's completion tick |
+| `FROZEN` | physics `duration` expiry | `spawnAnim` / `spawnPhysics` (§6.7) |
+
+Pinning is `Body.setStatic(true)`, unpinning `setStatic(false)` followed by an explicit
+`setVelocity`, because `setStatic` collapses `positionPrev` onto `position` and so leaves
+the body at rest.
+
+`setStatic` also zeroes `restitution` and sets `friction` to 1 on the pinned body. That is
+harmless but worth stating, because it looks alarming: Matter combines a contact's
+`restitution` with `max` and its `friction` with `min`, so a dynamic partner's `bounce`
+still wins against a pinned body and against the walls, which are static for their whole
+lives.
+
 **Angle override (D8) is separate.** A rotation animation must own the angle while
 position stays dynamic, and Matter has no such mode. Implemented as a post-step override:
 after `Engine.update`, force `Body.setAngle` and zero the angular velocity. Phase 4's
 `lockRotation` uses the same mechanism.
 
-### 6.5 Freeze semantics (D4, D5)
+### 6.7 Freeze semantics (D4, D5)
 
 - On `duration` expiry, add the `FROZEN` pin reason.
 - `spawnAnim` (`adapter.ts:261`) and `spawnPhysics` (`adapter.ts:284`) are the only places
@@ -257,7 +386,7 @@ frozen — static, infinite mass, unmoved by impact. `duration: indefinitely` at
 asleep — dynamic, dormant, moves when hit. This is how scenery is distinguished from
 props, but it is invisible in the rendered frame, so hover docs must state it loudly.
 
-### 6.6 Determinism work
+### 6.8 Determinism work
 
 - Reset Matter's seeded RNG (`Common._seed`) at world creation. It persists across world
   creations in a page session, so re-running without resetting can diverge from a cold
@@ -270,28 +399,54 @@ and Matter uses trig throughout rotation, so cross-machine results are close but
 guaranteed. Export sidesteps this entirely — the artifact is baked on one machine and is
 identical everywhere by construction.
 
-### 6.7 Other work
+### 6.9 Other work
 
 - Four static wall bodies at logical scene bounds on their own collision category,
   created at render start and destroyed on cleanup.
-- `Body.scale` during sync from the per-frame delta ratio (D7).
-- Previous-state buffer and `alpha` interpolation for rendered physics positions.
-- Culling of bodies beyond a margin outside the scene.
+- `Body.scale` during sync from the per-tick delta ratio (D7).
+- Previous-state buffer and `alpha` interpolation for rendered physics positions. This also
+  closes the judder deferred out of Phase 0 — see that plan's execution notes.
+- **Centroid offset (D15).** `Bodies.fromVertices` places a body's centre of mass at the
+  given point, while a Declare container's pivot is its bounding-box centre. Store
+  `bboxCentre − centroid` in body-local space and rotate it by `body.angle` on read-back.
+  Zero for `circle` and `rectangle`; non-zero for `polygon`, which this phase tumbles.
+- Culling of bodies beyond a margin outside the scene, checked before freeze (§6.7).
 - Idle means every body asleep or pinned, plus no running animations and no pending
-  sequences.
+  sequences. This is also a fix: `duration: indefinitely` currently keeps the ticker
+  running forever, because its runner never completes.
 
-### 6.8 Verification
+### 6.10 Verification
 
 Headless snapshot tests in Node, enabled by D9 and D3: run a fixture scene 120 ticks,
 snapshot every body's position and angle, diff. No browser, Pixi, or canvas required.
 This is available in Phase 1 rather than waiting for Phase 3's harness.
 
-### 6.9 Expected behavior change
+The corrected conversions in §6.3 get direct assertions rather than only snapshots, since
+both were wrong in the original spec and a snapshot would have happily frozen the wrong
+number:
 
-The default scene at `store/index.ts:75-96` will look different — five cubes that
-currently ignore each other will collide. Per D8 their scheduled rotation animation still
-wins over physics, which preserves the unphysical scheduled spin the upgrade is partly
-meant to fix. Worth revisiting the default scene once compound groups land.
+- One second of `airDrag` damping must match the old engine's `(1 − airDrag)^60` to within
+  floating-point tolerance, checked across several `airDrag` values including `1.0`.
+- A body given `velocity: (600, 0)` in a vacuum must travel 600px in one second.
+- A body under `gravity: (0, 980)` must reach 980 px/s after one second.
+
+Plus: a two-body stack that must not interpenetrate, a re-run equality check on a
+100-tick state sequence, and a fixture that falls, settles, sleeps, and is then woken by a
+second body — which is the case D14 exists to protect.
+
+### 6.11 Expected behavior change
+
+The default scene has been replaced since this was written; it now lives in
+`store/defaultScene.ts` as a motion test card. Two of its objects declare `physics` —
+`launcher` (a circle, `duration: indefinitely`) and `stepper` (a rectangle, the last step of
+a `sequence`). Under a shared world they can now collide with each other, and `stepper`
+will tumble on impact instead of landing flat, since this is the first phase in which
+physics rotates anything.
+
+The card's header comment currently reads *"falling objects pass through each other and
+land in a heap. That is expected — objects do not yet collide with one another."* That
+becomes false and must be rewritten as part of this phase. Per D8, `stepper`'s scheduled
+rotation animation completes before its physics step begins, so the two do not fight.
 
 ---
 
@@ -301,8 +456,11 @@ meant to fix. Worth revisiting the default scene once compound groups land.
 
 A `group` carrying a `physics` block welds its children into one body via
 `Body.create({ parts })`; child transforms become shape offsets in the group's local
-space. The centroid-vs-(0.5, 0.5) offset lands here rather than in Phase 1, because it is
-zero for every symmetric shape and only matters once bodies are asymmetric.
+space.
+
+*(The centroid-vs-(0.5, 0.5) offset was originally scheduled here. It moved to Phase 1 as
+D15 — the stated reason for deferring it, that it is zero for every symmetric shape, does
+not hold for `polygon`, and Phase 1 is where bodies first rotate.)*
 
 Validator rejects `physics` blocks on children of a physics group.
 
@@ -343,6 +501,14 @@ which are real properties (`sceneIR.ts:57` records anchor's removal; rectangles 
 
 - `lockPosition`, `lockRotation`, `spin` — correctly named from day one, no migration.
 - `world { gravity, bounds }` so gravity is declared once rather than per object.
+- **Revisit D13.** Phase 1 gives a body only to objects that declare `physics`, because
+  §3 cut collision filtering and so left no way to say "this label is not a wall." Once
+  `lockPosition` and `world { }` exist, an author *can* say it, and the alternative reading
+  of D6 — every visual object is a collider — becomes available. It is the better first-run
+  experience: draw a ledge, drop a ball, it lands. The competing consideration is that it
+  makes physicality invisible in the diff, which is the position §1.1 stakes everything on.
+  Decide it here, with the opt-out in hand; widening D13 is compatible, narrowing it later
+  would not be.
 - **Scene-level duration.** Nominally a syntax feature, actually an export prerequisite:
   `duration: indefinitely` has no end frame, so export has nothing to bound.
 
@@ -424,3 +590,8 @@ property-table drift from compounding.
 - `IPhysicsWorld` preserves an escape hatch. Rapier (Rust/WASM) offers cross-platform
   determinism Matter structurally cannot — not a reason to revisit D1, but a reason the
   abstraction earns its keep.
+- **Matter's private surface.** D14 depends on `Sleeping.update`, `Sleeping.afterCollisions`
+  and the phase order inside `Engine.update`; §6.3 depends on `Body._baseDelta` semantics.
+  These are stable across 0.20.x but are not the documented API, so the `matter-js`
+  dependency should be pinned rather than floated on a caret range, and a version bump needs
+  the §6.10 conversion assertions re-run deliberately rather than trusted.

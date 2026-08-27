@@ -24,9 +24,13 @@ export const DEFAULT_CODE = `// ══ DECLARE · MOTION TEST CARD ════�
 //   4. LOOP       the rings breathe forever, at different rates.
 //   5. STAGGER    the bar wave ripples; each bar is slightly slower
 //                 than its neighbour.
+//   6. PHYSICS    the ball and the square share one world and collide
+//                 with the scene edges. As choreographed they land far
+//                 apart, and the square lands flat — a flat landing has
+//                 no torque, so it should NOT tumble. Both are correct.
 //
-// Note: falling objects pass through each other and land in a heap.
-// That is expected — objects do not yet collide with one another.
+// Note: only objects with a physics block are solid. The labels, rings
+// and bars have none, so falling objects pass straight through them.
 
 def ink    = #e2e8f0
 def dim    = #64748b

@@ -1,7 +1,7 @@
 import { Application, Container, Graphics, Ticker } from "pixi.js";
 import type { IRSceneNode, IRendererAdapter, IRAnimation, IRPhysics, IRSequence, IRPoint, IRParallelStep } from "../sceneIR";
 import { buildNode } from "./builder";
-import { LiveDriver, secondsToTicks, TICK_SECONDS } from "./clock";
+import { LiveDriver, secondsToTicks } from "./clock";
 import {
   advanceAnimTime,
   animProgress,
@@ -9,6 +9,18 @@ import {
   type AnimTime,
   type PhysicsTime,
 } from "./timeline";
+import { MatterWorld, type IPhysicsWorld } from "./physicsWorld";
+import {
+  bindPhysicsBodies,
+  cullEscapedBodies,
+  pinBody,
+  physicsParamsFromIR,
+  snapContainerToBody,
+  syncWorldToContainers,
+  unpinBody,
+  CULL_MARGIN,
+  type PhysicsBinding,
+} from "./physicsSync";
 
 export interface RunningAnim {
   container: Container;
@@ -35,100 +47,12 @@ interface SequenceRunner {
   activeStepRunners: AnimOrPhysics[];
 }
 
-export interface IPhysicsEngine {
-  tickContainer(
-    pr: PhysicsRunner,
-    container: Container,
-    logicalWidth: number,
-    logicalHeight: number
-  ): boolean;
-}
-
-export class NativePhysicsEngine implements IPhysicsEngine {
-  tickContainer(
-    pr: PhysicsRunner,
-    container: Container,
-    logicalWidth: number,
-    logicalHeight: number
-  ): boolean {
-    const justCompleted = advancePhysicsTime(pr.time);
-
-    if ((container.__kinematicPosAnimCount || 0) > 0) {
-      return justCompleted;
-    }
-
-    const p = container.__physics!;
-    const s = container.__physicsState!;
-    const layout = container.__declareLayout;
-    if (!layout) return justCompleted;
-
-    // One fixed tick of integration. Previously this was an accumulator loop
-    // over a variable delta; the clock now guarantees a constant step.
-    const step = TICK_SECONDS;
-
-    s.velocity.x += p.gravity.x * step;
-    s.velocity.y += p.gravity.y * step;
-
-    // INVERTED DRAG FIX: 0 = vacuum, 1 = maximum resistance
-    const f = Math.pow(1.0 - p.airDrag, step * 60);
-    s.velocity.x *= f;
-    s.velocity.y *= f;
-
-    layout.currentPos.x += s.velocity.x * step;
-    layout.currentPos.y += s.velocity.y * step;
-
-    if (p.collideBounds && container.__baseSize) {
-      const absScaleX = Math.abs(layout.currentScale.x);
-      const absScaleY = Math.abs(layout.currentScale.y);
-
-      const baseW = container.__baseSize.w * absScaleX;
-      const baseH = container.__baseSize.h * absScaleY;
-
-      const cos = Math.abs(Math.cos(container.rotation));
-      const sin = Math.abs(Math.sin(container.rotation));
-
-      const projW = baseW * cos + baseH * sin;
-      const projH = baseW * sin + baseH * cos;
-
-      const projAnchorX = projW * 0.5;
-      const projAnchorY = projH * 0.5;
-
-      const left   = layout.currentPos.x - projAnchorX;
-      const top    = layout.currentPos.y - projAnchorY;
-      const right  = left + projW;
-      const bottom = top  + projH;
-
-      if (left < 0) {
-        layout.currentPos.x += -left;
-        if (s.velocity.x < 0) s.velocity.x = -s.velocity.x * p.bounce;
-      } else if (right > logicalWidth) {
-        layout.currentPos.x -= (right - logicalWidth);
-        if (s.velocity.x > 0) s.velocity.x = -s.velocity.x * p.bounce;
-      }
-
-      if (top < 0) {
-        layout.currentPos.y += -top;
-        if (s.velocity.y < 0) s.velocity.y = -s.velocity.y * p.bounce;
-      } else if (bottom > logicalHeight) {
-        layout.currentPos.y -= (bottom - logicalHeight);
-        if (s.velocity.y > 0) {
-          if (s.velocity.y < p.gravity.y * step * 2.5) {
-            s.velocity.y = 0;
-          } else {
-            s.velocity.y = -s.velocity.y * p.bounce;
-          }
-        }
-        if (s.velocity.y === 0 && p.gravity.y > 0) {
-          s.velocity.x *= 0.95;
-          if (Math.abs(s.velocity.x) < 5) s.velocity.x = 0;
-        }
-      }
-    }
-
-    container.__updateLayout?.();
-    return justCompleted;
-  }
-}
+/**
+ * The world for the scene currently being rendered. Module-level because
+ * spawnAnim/spawnPhysics are reached from several call sites; there is only
+ * ever one scene rendering at a time, and `render` resets it.
+ */
+let activeWorld: IPhysicsWorld | null = null;
 
 function evaluateEasing(t: number, easing: string): number {
   if (t <= 0) return 0;
@@ -166,23 +90,59 @@ function tickAnim(ra: RunningAnim): boolean {
     ra.container.__kinematicPosAnimCount = Math.max(0, (ra.container.__kinematicPosAnimCount || 1) - 1);
 
     if (ra.anim.handOff && ra.anim.duration > 0) {
-      if (!ra.container.__physicsState) {
-        ra.container.__physicsState = { velocity: { x: 0, y: 0 } };
-      }
-
       const startPt = ra.startVal as IRPoint;
       const targetPt = ra.targetVal as IRPoint;
       const deriv = getEasingDerivativeAtEnd(ra.anim.easing);
       const durSec = Math.max(ra.anim.duration, 0.001);
-      const dx = targetPt.x - startPt.x;
-      const dy = targetPt.y - startPt.y;
 
-      ra.container.__physicsState.velocity.x = (dx / durSec) * deriv;
-      ra.container.__physicsState.velocity.y = (dy / durSec) * deriv;
+      ra.container.__pendingVelocity = {
+        x: ((targetPt.x - startPt.x) / durSec) * deriv,
+        y: ((targetPt.y - startPt.y) / durSec) * deriv,
+      };
     }
+
+    if (activeWorld) unpinBody(ra.container, activeWorld, "POS_ANIM");
+  }
+
+  // The rotation-override release is state, not paint, for the same reason:
+  // it must happen on the tick the animation completes, not once per rendered
+  // frame. Leaving it in the paint-phase splice loop let a catch-up burst of
+  // several ticks per frame keep re-applying the override for ticks after the
+  // animation had already finished.
+  if (justCompleted && ra.anim.property === "rotation" && ra.container.__body && activeWorld) {
+    activeWorld.overrideAngle(ra.container.__body, null);
   }
 
   return justCompleted;
+}
+
+/**
+ * Push an animation's tick-aligned value into the physics world.
+ *
+ * Evaluated at alpha 0 deliberately. `applyAnim` paints at the driver's
+ * wall-clock alpha, and feeding that to the world would make body positions a
+ * function of frame rate — which is exactly the determinism Phase 0 bought.
+ * The cost is that during a position animation the drawn position leads the
+ * collision shape by up to one tick.
+ */
+function pushAnimToWorld(ra: RunningAnim, world: IPhysicsWorld): void {
+  const id = ra.container.__body;
+  if (!id) return;
+
+  const e = evaluateEasing(animProgress(ra.time, 0), ra.anim.easing);
+
+  if (ra.anim.property === "position") {
+    const startPt = ra.startVal as IRPoint;
+    const targetPt = ra.targetVal as IRPoint;
+    world.setPosition(id, lerp(startPt.x, targetPt.x, e), lerp(startPt.y, targetPt.y, e));
+  } else if (ra.anim.property === "rotation") {
+    const deg = lerp(ra.startVal as number, ra.targetVal as number, e);
+    world.overrideAngle(id, deg * (Math.PI / 180));
+  } else if (ra.anim.property === "scale") {
+    const startPt = ra.startVal as IRPoint;
+    const targetPt = ra.targetVal as IRPoint;
+    world.setScale(id, lerp(startPt.x, targetPt.x, e), lerp(startPt.y, targetPt.y, e));
+  }
 }
 
 function applyAnim(ra: RunningAnim, alpha: number): void {
@@ -233,6 +193,12 @@ function spawnAnim(container: Container, anim: IRAnimation, globalList: RunningA
     container.__kinematicPosAnimCount = (container.__kinematicPosAnimCount || 0) + 1;
   }
 
+  // A new runner attaching to this container thaws it (spec 6.7).
+  if (activeWorld) {
+    unpinBody(container, activeWorld, "FROZEN");
+    if (isPos) pinBody(container, activeWorld, "POS_ANIM");
+  }
+
   const sVal = getCurrentVal(container, anim.property);
   let tVal = anim.to;
   if ((anim.property === "position" || anim.property === "scale") && typeof tVal === "number") {
@@ -258,15 +224,25 @@ function spawnAnim(container: Container, anim: IRAnimation, globalList: RunningA
 }
 
 function spawnPhysics(container: Container, phIR: IRPhysics, globalList: PhysicsRunner[], localList: AnimOrPhysics[]) {
-  const exitVelX = container.__physicsState?.velocity.x ?? phIR.velocity.x;
-  const exitVelY = container.__physicsState?.velocity.y ?? phIR.velocity.y;
   container.__physics = phIR;
-  
-  if (!container.__physicsState) {
-    container.__physicsState = { velocity: { x: exitVelX, y: exitVelY } };
-  } else {
-    container.__physicsState.velocity.x = exitVelX;
-    container.__physicsState.velocity.y = exitVelY;
+
+  const id = container.__body;
+  if (id && activeWorld) {
+    activeWorld.setParams(id, physicsParamsFromIR(phIR));
+
+    // A handoff that already fired wins over the declared velocity.
+    container.__pendingVelocity = {
+      x: container.__pendingVelocity?.x ?? phIR.velocity.x,
+      y: container.__pendingVelocity?.y ?? phIR.velocity.y,
+    };
+
+    // Unpin before flushing: setStatic(false) collapses the body back to rest,
+    // so a velocity written first would be discarded. unpinBody flushes after
+    // each unpin, so if another reason still holds the pin — a position
+    // animation running alongside this physics block — the velocity stays
+    // parked and whichever unpin releases the last reason flushes it then.
+    unpinBody(container, activeWorld, "FROZEN");
+    unpinBody(container, activeWorld, "NO_RUNNER");
   }
 
   const pr: PhysicsRunner = {
@@ -317,7 +293,7 @@ function collectData(
     }
   }
 
-  if (container.__physicsState && container.__physics) {
+  if (container.__physics) {
     spawnPhysics(container, container.__physics, physicsRunners, nodePhysics);
   }
 
@@ -434,9 +410,15 @@ export const pixiRendererAdapter: IRendererAdapter = {
     const physicsRunners:  PhysicsRunner[]  = [];
     const sequenceRunners: SequenceRunner[] = [];
 
+    const world = new MatterWorld(logicalWidth, logicalHeight);
+    activeWorld = world;
+
+    // Bodies exist before any runner does, so an object animating in during a
+    // sequence is a pinned static obstacle rather than a ghost (spec D6, D13).
+    const bindings: PhysicsBinding[] = bindPhysicsBodies(sceneRoot, world);
+
     collectData(sceneRoot, runningAnims, physicsRunners, sequenceRunners);
 
-    const physicsEngine = new NativePhysicsEngine();
     const driver = new LiveDriver();
 
     // Advance the whole scene exactly one fixed tick. Everything that changes
@@ -447,10 +429,29 @@ export const pixiRendererAdapter: IRendererAdapter = {
         tickAnim(runningAnims[i]);
       }
 
+      // Animations own their properties; push the tick-aligned values into the
+      // world before it steps, so physics never sees a wall-clock-derived value.
+      for (let i = 0; i < runningAnims.length; i++) {
+        pushAnimToWorld(runningAnims[i], world);
+      }
+
+      // Before freeze, so an escaped body is removed rather than frozen into
+      // an invisible off-screen obstacle (spec 6.7).
+      cullEscapedBodies(bindings, world, CULL_MARGIN);
+
       for (let i = 0; i < physicsRunners.length; i++) {
         const pr = physicsRunners[i];
-        physicsEngine.tickContainer(pr, pr.container, logicalWidth, logicalHeight);
+        if (advancePhysicsTime(pr.time)) {
+          pinBody(pr.container, world, "FROZEN");
+          // Snap to the exact tick the freeze happened on. Pinned bodies are
+          // skipped by the paint-phase sync, so without this the object keeps
+          // the alpha-interpolated position of the last frame painted before
+          // it froze — which is wall-clock dependent and differs between runs.
+          snapContainerToBody(pr.container, world);
+        }
       }
+
+      world.step();
 
       for (let i = 0; i < sequenceRunners.length; i++) {
         const sr = sequenceRunners[i];
@@ -494,7 +495,14 @@ export const pixiRendererAdapter: IRendererAdapter = {
         applyAnim(runningAnims[i], driver.alpha);
       }
 
+      // Physics writes after animations, so a dynamic body's position wins over
+      // a stale one. A body driven by a position animation is pinned, and
+      // syncWorldToContainers skips pinned bodies, so the two never fight.
+      syncWorldToContainers(bindings, world, driver.alpha);
+
       for (let i = runningAnims.length - 1; i >= 0; i--) {
+        // The rotation-override release lives in tickAnim (the tick phase),
+        // not here — see the comment there. This loop only splices.
         if (runningAnims[i].time.completed) runningAnims.splice(i, 1);
       }
       for (let i = physicsRunners.length - 1; i >= 0; i--) {
@@ -504,7 +512,11 @@ export const pixiRendererAdapter: IRendererAdapter = {
         if (sequenceRunners[i].state === "DONE") sequenceRunners.splice(i, 1);
       }
 
-      if (runningAnims.length === 0 && physicsRunners.length === 0 && sequenceRunners.length === 0) {
+      // Physics runners are no longer part of the idle test: a
+      // `duration: indefinitely` runner never completes, so it would pin the
+      // ticker open forever. The world reports idle once every body is asleep
+      // or pinned.
+      if (runningAnims.length === 0 && sequenceRunners.length === 0 && world.isIdle()) {
         sharedApp?.ticker.stop();
       }
     };
@@ -514,6 +526,8 @@ export const pixiRendererAdapter: IRendererAdapter = {
 
     return () => {
       resizeObserver.disconnect();
+      world.destroy();
+      if (activeWorld === world) activeWorld = null;
       if (sharedApp) {
         const oldChildren = sharedApp.stage.removeChildren();
         oldChildren.forEach(c => c.destroy({ children: true, texture: true }));
