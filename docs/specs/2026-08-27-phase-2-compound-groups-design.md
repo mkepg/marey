@@ -130,6 +130,7 @@ Six pieces, in dependency order.
 
 | # | Piece | Files |
 |---|---|---|
+| 0 | Fix the rotation-override lock (§3.1) | `renderer/sceneRuntime.ts` |
 | 1 | Extract the scene runtime | `renderer/sceneRuntime.ts` (new), `renderer/adapter.ts` |
 | 2 | Compound geometry | `renderer/builder.ts`, `renderer/physicsWorld.ts` |
 | 3 | Reference-point unification | `renderer/physicsWorld.ts` |
@@ -146,6 +147,46 @@ Two natural cut lines if it runs long: piece 1 can merge on its own as a
 behaviour-preserving refactor, and piece 4 can move to Phase 3b, where the macro
 layer is already the theme and `use` is being reopened. Neither is planned; both
 are pre-authorised.
+
+### 3.1 Piece 0 — the rotation-override lock
+
+Found while writing the plan's `SceneRuntime` tests, not while scoping the
+feature. Added to this phase because the fix is one line inside a function
+piece 1 relocates anyway.
+
+**A `rotation` animation permanently locks a physics object's angle.**
+`tickAnim` releases the override on the completion tick, but `pushAnimToWorld`
+runs immediately afterwards over the same list — the runner is not spliced until
+the paint phase — and writes the final angle straight back. Nothing clears it
+again, so `step()` re-applies `Body.setAngle` for the rest of the scene.
+
+Measured. A 40×40 square dropped off-centre onto a static ledge, its rotation
+animation finished long before impact:
+
+| ordering | final angle after impact |
+|---|---|
+| current | **20.00°** — exactly the animation's `to`; it does not rotate at all |
+| override cleared after splice | −269.04° |
+| skip the push once completed | −269.19° |
+
+This is the fourth instance of the rotation-override family. Phase 1's execution
+notes record the third, which was the same release running in the wrong *phase*;
+this one is in the right phase but the wrong *order within the tick*. That the
+family keeps recurring is itself the argument for piece 1: every instance has
+lived in the file with no coverage.
+
+Two documents are falsified by it and are corrected here:
+
+- `LANGUAGE.md` — "When an animation finishes, the object returns to full
+  physics control on whichever property the animation was driving." This gets a
+  behavioural assertion, since prose alone did not stop it being false.
+- The parent spec's §6.11 — "`stepper` will tumble on impact instead of landing
+  flat." That has never been true; its angle is locked at 180° before its
+  physics step begins.
+
+**Accepted consequence:** the shipped default scene changes. `stepper` now
+tumbles. That is the behaviour §6.11 already promised, so the card's own
+commentary needs no rewrite.
 
 ---
 
@@ -446,14 +487,22 @@ either corpus places `physics` inside a group.
 1. Extract `sceneRuntime.ts`. Verify against the 121 existing tests and
    `visual-check` on the default scene (§4.2).
 2. Tests for `sceneRuntime.ts`.
-3. `builder.test.ts`, locking the desired group behaviour first — it fails
-   against the current code, which is the point.
-4. Compound `BodyGeometry` and the builder's flattening.
-5. Reference-point unification in `physicsWorld.ts`.
-6. Ancestor-transform composition in `physicsSync.ts`.
-7. Validator rules.
-8. `LANGUAGE.md` and its behavioural assertions.
-9. `visual-check` and the `.eval` re-run.
+3. Fix the rotation-override lock (§3.1). It sits here rather than first because
+   the test that catches it is one of piece 1's, and the fix lands in the file
+   piece 1 creates.
+4. `transform.ts`, the shared 2D transform algebra.
+5. Compound `BodyGeometry`, welding, and the reference-point unification in
+   `physicsWorld.ts`.
+6. The builder's flattening, with `builder.test.ts` locking the desired group
+   behaviour first — it fails against the current code, which is the point.
+7. Ancestor-transform composition in `physicsSync.ts`.
+8. Validator rules.
+9. `LANGUAGE.md` and its behavioural assertions.
+10. `visual-check` and the `.eval` re-run.
+11. Execution notes and the `AGENTS.md` roadmap update.
+
+The plan at `docs/plans/2026-08-27-phase-2-compound-groups.md`
+follows this order task-for-task.
 
 ---
 
