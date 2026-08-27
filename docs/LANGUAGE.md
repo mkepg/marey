@@ -112,3 +112,110 @@ scene {
   }
 }
 ```
+
+## Animation
+
+`animate` is a child block of a shape or `group`. It requires `property`,
+`to`, and `duration`. `easing`, `loop`, `yoyo`, and `handOff` are optional.
+`handOff` only matters inside a `sequence` and is covered there.
+
+`duration` is a number of seconds and must be strictly greater than 0.
+
+Only four properties can be animated: `position`, `rotation`, `scale`, and
+`alpha`. Naming any other property is a compile error listing those four.
+
+`to` must match the animated property. `position` requires a point.
+`rotation` and `alpha` require a number. `scale` accepts either a number
+(applied to both axes) or a point.
+
+`easing` is one of four unquoted keywords: `linear`, `easeIn`, `easeOut`, or
+`easeInOut`. Omitting `easing` defaults to `easeInOut`.
+
+**An animation starts from the value the object holds when the animation
+starts — there is no `from` property.** Declaring a property (e.g.
+`position: (-60, 300)`) and then animating that same property is not a
+conflict: the declared value is read as the animation's starting point, and
+`to` is where it ends up.
+
+An object may have more than one `animate` block. All of an object's
+`animate` blocks are collected and started together when the scene is built,
+so they run concurrently from scene start — a second `animate` block does not
+wait for the first to finish. To run animations one after another, use a
+`sequence` block, covered in a later section.
+
+```declare
+scene {
+  size: (800, 600)
+
+  rectangle card {
+    position: (-60, 300)
+    size: (120, 80)
+    color: red
+    animate {
+      property: position
+      to: (400, 300)
+      duration: 1.0
+      easing: easeOut
+    }
+  }
+}
+```
+
+### loop and yoyo
+
+`loop: true` restarts the animation from the beginning every time it
+completes, forever. `yoyo: true` reverses direction at the end instead of
+restarting, and reverses again on returning to the start — so `loop` and
+`yoyo` together produce a continuous there-and-back motion.
+
+**`duration` is the length of one direction, not of a full cycle.** With
+`yoyo: true`, one complete there-and-back cycle takes `2 × duration`. An
+object that should breathe once every two seconds needs `duration: 1.0`, not
+`duration: 2.0`.
+
+```text
+duration: 1.0 at 120 ticks/second, with yoyo and loop
+
+tick     0 ......... 120 ......... 240 ......... 360
+progress 0 --------→ 1  ---------→ 0  ---------→ 1
+         |  out      |   back      |   out
+         └── duration ┘
+         └──────── one full cycle ─────────┘
+```
+
+**Pair `yoyo` with `loop`.** `yoyo: true` without `loop: true` plays out to
+`to`, plays back to its starting value, and then never finishes: on the tick
+it returns to the start it does not complete, it simply holds — the internal
+direction stays reversed and the elapsed position stays pinned at the start,
+tick after tick. The object rests at its original value, which usually looks
+correct, but the animation is still considered running. This has two
+consequences. The renderer's idle check never passes, so the ticker never
+stops. And if the same object also has a `physics` block, the position
+animation's hold on the object's body is never released, so the body stays
+pinned in place and never falls under gravity or responds to collisions.
+Every `yoyo: true` in the shipped default scene is paired with `loop: true`
+for exactly this reason.
+
+Inside a `sequence` or `parallel` block, `loop: true` and `yoyo: true` are
+both compile errors (`TYPE_SEQ_LOOP`, `TYPE_SEQ_YOYO`) — a step that never
+finishes would stall the rest of the timeline.
+
+```declare
+scene {
+  size: (800, 600)
+
+  circle pulse {
+    position: (400, 300)
+    radius: 40
+    color: cyan
+    animate {
+      property: scale
+      to: (1.4, 1.4)
+      duration: 1.0
+      easing: easeInOut
+      loop: true
+      yoyo: true
+    }
+  }
+}
+```
