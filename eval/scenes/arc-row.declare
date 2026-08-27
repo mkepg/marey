@@ -1,0 +1,39 @@
+// Twenty small squares in a row, arcing smoothly: highest in the
+// middle, lower toward both ends. There is no sine/cosine or power
+// operator available, so the arc is approximated with a parabola
+// built from plain multiplication and subtraction:
+//   y = topY + riseScale * (i - midIndex) * (i - midIndex)
+// The squared term is 0 at the middle (i = midIndex = 9.5), so that
+// row sits at topY (smallest y, highest on screen), and grows toward
+// the ends, pushing them down toward the baseline.
+
+def ink = #e2e8f0
+def sky = #38bdf8
+
+def startX     = 60
+def spacingX   = 38
+def topY       = 230
+def riseScale  = 1.33
+def midIndex   = 9.5
+def squareSize = 18
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  sceneFit: contain
+
+  text title {
+    position: (400, 40)
+    content: "arc row"
+    fontSize: 20
+    color: ink
+  }
+
+  generate i from 0 to 19 {
+    rectangle sq {
+      position: (startX + i * spacingX, topY + riseScale * (i - midIndex) * (i - midIndex))
+      size: (squareSize, squareSize)
+      color: sky
+    }
+  }
+}

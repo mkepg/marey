@@ -1,0 +1,37 @@
+// A ball slides up and to the right under an animation, then hands
+// its exit velocity off to the physics simulation so it continues
+// in an arc and falls, rather than stopping dead.
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  sceneFit: contain
+
+  line floor {
+    position: (400, 596)
+    points: [(-400, 0), (400, 0)]
+    thickness: 1
+    color: #64748b
+    alpha: 0.35
+  }
+
+  circle ball {
+    position: (120, 480)
+    radius: 24
+    color: #fbbf24
+    animate {
+      property: position
+      to: (420, 300)
+      duration: 1.0
+      easing: easeOut
+      handOff: true
+    }
+    physics {
+      duration: indefinitely
+      gravity: (0, 900)
+      airDrag: 0.01
+      bounce: 0.5
+      collideBounds: true
+    }
+  }
+}

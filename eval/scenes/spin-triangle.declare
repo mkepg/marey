@@ -1,0 +1,18 @@
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  sceneFit: contain
+
+  polygon triangle {
+    position: (400, 300)
+    points: [(0, -60), (52, 30), (-52, 30)]
+    color: #fbbf24
+    animate {
+      property: rotation
+      to: 360
+      duration: 3.0
+      easing: linear
+      loop: true
+    }
+  }
+}

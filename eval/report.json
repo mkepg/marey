@@ -1,0 +1,142 @@
+[
+  {
+    "file": "arc-row.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 21
+  },
+  {
+    "file": "bar-chart.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 9
+  },
+  {
+    "file": "collide-stack.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 5
+  },
+  {
+    "file": "cross-fade.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 2
+  },
+  {
+    "file": "drop-ball.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 2
+  },
+  {
+    "file": "fade-then-drop.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 2
+  },
+  {
+    "file": "fade-title.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 1
+  },
+  {
+    "file": "freeze-mid.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 3
+  },
+  {
+    "file": "grid-16.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 16
+  },
+  {
+    "file": "param-easing.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 16
+  },
+  {
+    "file": "pulse-dot.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 1
+  },
+  {
+    "file": "radial-dots.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 13
+  },
+  {
+    "file": "repeated-badge.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 15
+  },
+  {
+    "file": "scale-ramp.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 10
+  },
+  {
+    "file": "slide-card.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 1
+  },
+  {
+    "file": "spin-triangle.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 1
+  },
+  {
+    "file": "stagger-bars.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 10
+  },
+  {
+    "file": "three-act.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 1
+  },
+  {
+    "file": "throw-arc.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 2
+  },
+  {
+    "file": "timeline-ticks.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 16
+  }
+]

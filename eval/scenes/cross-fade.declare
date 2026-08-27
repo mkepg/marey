@@ -1,0 +1,31 @@
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  sceneFit: contain
+
+  rectangle leftBox {
+    position: (280, 300)
+    size: (180, 180)
+    color: blue
+    alpha: 1.0
+    animate {
+      property: alpha
+      to: 0.0
+      duration: 2.0
+      easing: linear
+    }
+  }
+
+  rectangle rightBox {
+    position: (520, 300)
+    size: (180, 180)
+    color: orange
+    alpha: 0.0
+    animate {
+      property: alpha
+      to: 1.0
+      duration: 2.0
+      easing: linear
+    }
+  }
+}

@@ -1,0 +1,41 @@
+// Several objects fall under gravity, then stop dead in mid-air
+// after one second and stay there.
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  sceneFit: contain
+
+  circle dropA {
+    position: (200, 80)
+    radius: 24
+    color: #38bdf8
+    physics {
+      duration: 1.0
+      gravity: (0, 980)
+      collideBounds: true
+    }
+  }
+
+  rectangle dropB {
+    position: (400, 40)
+    size: (50, 50)
+    color: #a78bfa
+    physics {
+      duration: 1.0
+      gravity: (0, 980)
+      collideBounds: true
+    }
+  }
+
+  circle dropC {
+    position: (600, 100)
+    radius: 30
+    color: #fb7185
+    physics {
+      duration: 1.0
+      gravity: (0, 980)
+      collideBounds: true
+    }
+  }
+}

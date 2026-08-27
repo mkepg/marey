@@ -1,0 +1,47 @@
+// Four rows, each a dot travelling the same distance in the same time but
+// with a different easing curve, so they can be compared. A single
+// reusable definition (template) parameterised by the easing curve.
+
+def travel     = 300
+def beat       = 1.5
+def dotColor   = #38bdf8
+def trackColor = #64748b
+
+template Row(curve) {
+  line track {
+    position: (0, 0)
+    points: [(0, 0), (travel, 0)]
+    thickness: 2
+    color: trackColor
+    alpha: 0.4
+  }
+  circle dot {
+    position: (0, 0)
+    radius: 10
+    color: dotColor
+    animate {
+      property: position
+      to: (travel, 0)
+      duration: beat
+      easing: curve
+      loop: true
+      yoyo: true
+    }
+  }
+}
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  sceneFit: contain
+
+  use Row(linear)    rowLinear { position: (150, 150) }
+  use Row(easeIn)    rowIn     { position: (150, 250) }
+  use Row(easeOut)   rowOut    { position: (150, 350) }
+  use Row(easeInOut) rowInOut  { position: (150, 450) }
+
+  text lblLinear { position: (80, 150), content: "linear",    fontSize: 12, color: trackColor }
+  text lblIn     { position: (80, 250), content: "easeIn",    fontSize: 12, color: trackColor }
+  text lblOut    { position: (80, 350), content: "easeOut",   fontSize: 12, color: trackColor }
+  text lblInOut  { position: (80, 450), content: "easeInOut", fontSize: 12, color: trackColor }
+}

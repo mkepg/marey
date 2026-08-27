@@ -1,0 +1,27 @@
+// Ten vertical bars in a row. Each pulses taller and shorter on a loop, and
+// each is slightly slower than the one to its left, so the row ripples
+// instead of pulsing in unison.
+
+def barColor = #38bdf8
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  sceneFit: contain
+
+  generate k from 0 to 9 {
+    rectangle bar {
+      position: (65 + k * 72, 460)
+      size: (14, 60)
+      color: barColor
+      animate {
+        property: scale
+        to: (1, 2.4)
+        duration: 0.7 + k * 0.12
+        easing: easeInOut
+        loop: true
+        yoyo: true
+      }
+    }
+  }
+}

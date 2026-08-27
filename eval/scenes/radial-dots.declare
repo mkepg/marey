@@ -1,0 +1,40 @@
+// Twelve dots arranged evenly around the circumference of a circle centred
+// in the scene.
+//
+// NOTE: I could not find any trigonometric (sin/cos) function in the
+// language from the permitted reference files, and `generate` only appears
+// to support linear arithmetic (+, -, *, /) on the loop variable. Twelve
+// points evenly spaced on a circle are not a linear function of their
+// index, so I could not drive this from a single `generate` loop the way
+// the grid or bars could be. Instead I precomputed the 12 positions
+// (radius 180 around the centre, 30 degrees apart) by hand and placed them
+// as individual circles sharing one colour def.
+
+def dotColor = #fbbf24
+def dotRadius = 9
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  sceneFit: contain
+
+  circle center {
+    position: (400, 300)
+    radius: 3
+    color: #64748b
+    alpha: 0.5
+  }
+
+  circle dot0  { position: (580, 300), radius: dotRadius, color: dotColor }
+  circle dot1  { position: (556, 390), radius: dotRadius, color: dotColor }
+  circle dot2  { position: (490, 456), radius: dotRadius, color: dotColor }
+  circle dot3  { position: (400, 480), radius: dotRadius, color: dotColor }
+  circle dot4  { position: (310, 456), radius: dotRadius, color: dotColor }
+  circle dot5  { position: (244, 390), radius: dotRadius, color: dotColor }
+  circle dot6  { position: (220, 300), radius: dotRadius, color: dotColor }
+  circle dot7  { position: (244, 210), radius: dotRadius, color: dotColor }
+  circle dot8  { position: (310, 144), radius: dotRadius, color: dotColor }
+  circle dot9  { position: (400, 120), radius: dotRadius, color: dotColor }
+  circle dot10 { position: (490, 144), radius: dotRadius, color: dotColor }
+  circle dot11 { position: (556, 210), radius: dotRadius, color: dotColor }
+}

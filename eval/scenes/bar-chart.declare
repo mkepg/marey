@@ -1,0 +1,76 @@
+// Bar chart of seven values: 3, 7, 2, 9, 5, 8, 4
+// Each bar's height is derived from its value via arithmetic
+// (value * scale), and its center is placed so it rises from
+// a shared baseline (baseline - height / 2).
+
+def ink    = #e2e8f0
+def dim    = #64748b
+def sky    = #38bdf8
+
+def scale    = 30
+def baseline = 500
+def barWidth = 70
+
+def v0 = 3
+def v1 = 7
+def v2 = 2
+def v3 = 9
+def v4 = 5
+def v5 = 8
+def v6 = 4
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  sceneFit: contain
+
+  text title {
+    position: (400, 40)
+    content: "bar chart"
+    fontSize: 20
+    color: ink
+  }
+
+  line baselineRule {
+    position: (400, baseline)
+    points: [(-320, 0), (320, 0)]
+    thickness: 2
+    color: dim
+  }
+
+  rectangle bar0 {
+    position: (100, baseline - (v0 * scale) / 2)
+    size: (barWidth, v0 * scale)
+    color: sky
+  }
+  rectangle bar1 {
+    position: (200, baseline - (v1 * scale) / 2)
+    size: (barWidth, v1 * scale)
+    color: sky
+  }
+  rectangle bar2 {
+    position: (300, baseline - (v2 * scale) / 2)
+    size: (barWidth, v2 * scale)
+    color: sky
+  }
+  rectangle bar3 {
+    position: (400, baseline - (v3 * scale) / 2)
+    size: (barWidth, v3 * scale)
+    color: sky
+  }
+  rectangle bar4 {
+    position: (500, baseline - (v4 * scale) / 2)
+    size: (barWidth, v4 * scale)
+    color: sky
+  }
+  rectangle bar5 {
+    position: (600, baseline - (v5 * scale) / 2)
+    size: (barWidth, v5 * scale)
+    color: sky
+  }
+  rectangle bar6 {
+    position: (700, baseline - (v6 * scale) / 2)
+    size: (barWidth, v6 * scale)
+    color: sky
+  }
+}

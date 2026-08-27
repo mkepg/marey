@@ -1,0 +1,20 @@
+// A 4x4 grid of small squares, evenly spaced, all the same colour.
+
+def squareColor = #38bdf8
+def cellSize     = 40
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  sceneFit: contain
+
+  generate row from 0 to 3 {
+    generate col from 0 to 3 {
+      rectangle cell {
+        position: (160 + col * 160, 120 + row * 120)
+        size: (cellSize, cellSize)
+        color: squareColor
+      }
+    }
+  }
+}

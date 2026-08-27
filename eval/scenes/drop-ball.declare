@@ -1,0 +1,29 @@
+// A ball dropped from the top of the scene. It falls under gravity,
+// bounces off the floor a few times, and settles.
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  sceneFit: contain
+
+  line floor {
+    position: (400, 596)
+    points: [(-400, 0), (400, 0)]
+    thickness: 1
+    color: #64748b
+    alpha: 0.35
+  }
+
+  circle ball {
+    position: (400, 60)
+    radius: 28
+    color: #38bdf8
+    physics {
+      duration: indefinitely
+      gravity: (0, 980)
+      airDrag: 0.01
+      bounce: 0.6
+      collideBounds: true
+    }
+  }
+}

@@ -1,0 +1,32 @@
+// Define a reusable "badge" made of a circle with a smaller square on top
+// of it, then place five of them in a row at different positions.
+
+def badgeColor  = #a78bfa
+def badgeRadius = 28
+
+template Badge(accent) {
+  circle base {
+    position: (0, 0)
+    radius: badgeRadius
+    color: accent
+    z: 0
+  }
+  rectangle tag {
+    position: (0, -22)
+    size: (16, 16)
+    color: #e2e8f0
+    z: 1
+  }
+}
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  sceneFit: contain
+
+  generate i from 0 to 4 {
+    use Badge(badgeColor) tag {
+      position: (133 + i * 133, 300)
+    }
+  }
+}

@@ -1,0 +1,19 @@
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  sceneFit: contain
+
+  text title {
+    position: (400, 300)
+    content: "HELLO"
+    fontSize: 64
+    color: white
+    alpha: 0.0
+    animate {
+      property: alpha
+      to: 1.0
+      duration: 1.5
+      easing: easeInOut
+    }
+  }
+}

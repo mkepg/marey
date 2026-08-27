@@ -1,0 +1,33 @@
+// Nine circles in a row, growing from small on the left to large
+// on the right. Both position and radius are derived from the loop
+// index i via simple arithmetic (i * spacingX, i * radiusStep).
+
+def ink  = #e2e8f0
+def sky  = #38bdf8
+
+def startX     = 100
+def spacingX   = 75
+def rowY       = 300
+def baseRadius = 15
+def radiusStep = 8
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  sceneFit: contain
+
+  text title {
+    position: (400, 40)
+    content: "scale ramp"
+    fontSize: 20
+    color: ink
+  }
+
+  generate i from 0 to 8 {
+    circle dot {
+      position: (startX + i * spacingX, rowY)
+      radius: baseRadius + i * radiusStep
+      color: sky
+    }
+  }
+}

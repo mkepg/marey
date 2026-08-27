@@ -1,0 +1,38 @@
+// A circle fades in over half a second, then falls under gravity
+// and bounces off the floor.
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  sceneFit: contain
+
+  line floor {
+    position: (400, 596)
+    points: [(-400, 0), (400, 0)]
+    thickness: 1
+    color: #64748b
+    alpha: 0.35
+  }
+
+  circle fader {
+    position: (400, 120)
+    radius: 30
+    color: #4ade80
+    alpha: 0.0
+    sequence {
+      animate {
+        property: alpha
+        to: 1.0
+        duration: 0.5
+        easing: easeOut
+      }
+      physics {
+        gravity: (0, 980)
+        airDrag: 0.01
+        bounce: 0.6
+        collideBounds: true
+        duration: 4.0
+      }
+    }
+  }
+}

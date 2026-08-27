@@ -1,0 +1,68 @@
+// Four boxes dropped from different heights, landing on each other
+// to form a stack on the floor.
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  sceneFit: contain
+
+  line floor {
+    position: (400, 596)
+    points: [(-400, 0), (400, 0)]
+    thickness: 1
+    color: #64748b
+    alpha: 0.35
+  }
+
+  rectangle boxA {
+    position: (400, 40)
+    size: (80, 80)
+    color: #38bdf8
+    physics {
+      duration: indefinitely
+      gravity: (0, 980)
+      airDrag: 0.02
+      bounce: 0.1
+      collideBounds: true
+    }
+  }
+
+  rectangle boxB {
+    position: (400, -80)
+    size: (80, 80)
+    color: #a78bfa
+    physics {
+      duration: indefinitely
+      gravity: (0, 980)
+      airDrag: 0.02
+      bounce: 0.1
+      collideBounds: true
+    }
+  }
+
+  rectangle boxC {
+    position: (400, -220)
+    size: (80, 80)
+    color: #fb7185
+    physics {
+      duration: indefinitely
+      gravity: (0, 980)
+      airDrag: 0.02
+      bounce: 0.1
+      collideBounds: true
+    }
+  }
+
+  rectangle boxD {
+    position: (400, -360)
+    size: (80, 80)
+    color: #fbbf24
+    physics {
+      duration: indefinitely
+      gravity: (0, 980)
+      airDrag: 0.02
+      bounce: 0.1
+      collideBounds: true
+    }
+  }
+}

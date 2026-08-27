@@ -27,3 +27,6 @@ dist-ssr
 .repomix
 # Output from the visual-check skill (PNGs and reports)
 .visual-check/
+
+# Rendered PNGs from the authorability baseline
+eval/render/

@@ -1,0 +1,17 @@
+scene {
+  size: (800, 600)
+  background: #111827
+  sceneFit: contain
+
+  rectangle card {
+    position: (-60, 300)
+    size: (100, 100)
+    color: red
+    animate {
+      property: position
+      to: (400, 300)
+      duration: 1.0
+      easing: easeOut
+    }
+  }
+}

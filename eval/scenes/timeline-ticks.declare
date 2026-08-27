@@ -1,0 +1,56 @@
+// A horizontal axis with 11 evenly spaced tick marks. Every fifth
+// tick (indices 0, 5, 10) is drawn longer, in a second generate
+// loop stepping by 5 ticks at a time (j * 5 * tickSpacing).
+
+def ink   = #e2e8f0
+def dim   = #64748b
+def sky   = #38bdf8
+def amber = #fbbf24
+
+def axisY       = 300
+def startX      = 100
+def tickSpacing = 60
+
+def shortHalf    = 6
+def shortHalfNeg = -6
+def longHalf     = 14
+def longHalfNeg  = -14
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  sceneFit: contain
+
+  text title {
+    position: (400, 40)
+    content: "timeline ticks"
+    fontSize: 20
+    color: ink
+  }
+
+  line axis {
+    position: (400, axisY)
+    points: [(-300, 0), (300, 0)]
+    thickness: 2
+    color: dim
+  }
+
+  generate i from 0 to 10 {
+    line tick {
+      position: (startX + i * tickSpacing, axisY)
+      points: [(0, shortHalfNeg), (0, shortHalf)]
+      thickness: 2
+      color: sky
+    }
+  }
+
+  generate j from 0 to 2 {
+    line majorTick {
+      position: (startX + j * 5 * tickSpacing, axisY)
+      points: [(0, longHalfNeg), (0, longHalf)]
+      thickness: 3
+      color: amber
+      z: 1
+    }
+  }
+}
