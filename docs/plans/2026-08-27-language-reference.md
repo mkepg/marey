@@ -1116,3 +1116,25 @@ say so — an empty section is a finding.)*
 
 - **The non-completing yoyo.** Known before execution; see Task 11. Documented
   as current behaviour, filed against Phase 3, not fixed here.
+
+- **Defect in this plan: Task 1's `node:fs` import broke `npm run build`.**
+  Found during execution. `tsconfig.app.json` includes `src` and pins
+  `"types": ["vite/client"]`, so `import { readFileSync } from "node:fs"` has no
+  declaration and `tsc -b` fails — while `npm test` passes, because Vitest
+  transpiles without typechecking. The plan's Task 12 Step 2 would therefore
+  have failed at the very end.
+
+  Relocating the test to `tsconfig.node.json` is **not** a viable fix: that
+  project sets `"lib": ["ES2023"]` with no DOM, and `sceneIR.ts` references
+  `HTMLDivElement`, so the compiler imports would not typecheck there.
+
+  Fixed in `164a954` by importing the document as a build-time dependency:
+  `import markdownDoc from "../../docs/LANGUAGE.md?raw"`. `vite/client` declares
+  `*?raw` (`node_modules/vite/client.d.ts:243`), so this needs no config change
+  and no new ambient types. It is also strictly more robust than the original:
+  `readFileSync` resolved against the process working directory, so the test
+  only worked when run from the repo root, whereas `?raw` resolves relative to
+  the test file.
+
+  **Task 1's code block above still shows the `readFileSync` version.** The
+  committed file is the `?raw` version. Do not "restore" it.
