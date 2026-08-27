@@ -523,8 +523,10 @@ compile error.
 from `A` to `B`, **inclusive of both ends** — `from 0 to 4` runs five times,
 for `i` = 0, 1, 2, 3, 4. `A` and `B` must be integer literals or
 integer-valued `def` names; a non-integer bound is a compile error. A single
-`generate` is capped at 10,000 iterations, and a file at 15,000 generated
-objects in total, to bound compile time.
+`generate`'s span from `A` to `B` cannot exceed 10,000 — since both ends are
+inclusive, that allows up to 10,001 iterations. A file-wide counter shared by
+every object, `use` expansion, and `generate` iteration is capped at 15,000;
+see "Limits the compiler enforces" below for the exact mechanics.
 
 Every object created inside the loop has its declared name suffixed with
 the loop index: a `rectangle tick` inside `generate k from 0 to 9` produces
@@ -552,7 +554,7 @@ argument may be **any** value kind the parser produces, including a keyword
 arguments must match the number of declared parameters exactly.
 
 The instance name must be unique among its siblings and follows the same
-naming rule as `def`. The expansion is wrapped as a `group` node named after
+naming rule as `def`. The expansion is wrapped as a `group` object named after
 the instance; the `{ ... }` block after the instance name sets group-level
 properties on that wrapper — `position`, `rotation`, `scale`, `alpha`, `z` —
 exactly as it would on any other `group`.
@@ -626,3 +628,58 @@ one draws the common case, and a second, at the wider stride, draws over it.
 
 `generate` handles "N of the same thing, spaced by arithmetic on the loop
 variable." It does not handle data.
+
+## Limits the compiler enforces
+
+A short list of hard walls. Crossing any of these is a compile error, not a
+runtime warning or a silent clamp.
+
+- `duration` (on `animate` or `physics`) must be strictly greater than 0
+  (`typeChecker/validator.ts:284-285`).
+- `radius`, `thickness`, and `fontSize` must be greater than 0
+  (`typeChecker/validator.ts:293-294`, `296-297`, `299-300`).
+- `size`'s width and height must each be greater than 0
+  (`typeChecker/validator.ts:314-318`).
+- `alpha`, `airDrag`, and `bounce` must fall between `0.0` and `1.0` inclusive
+  (`typeChecker/validator.ts:287-288`, `290-291`).
+- `polygon` requires at least 3 points, `line` at least 2, and no shape's
+  point list may exceed 10,000 points (`typeChecker/validator.ts:320-322`).
+- `text` content is capped at 500 characters
+  (`typeChecker/validator.ts:302-305`), and a scene may contain at most 500
+  `text` objects in total (`typeChecker/validator.ts:49`, `76`).
+- Type checking stops reporting once 50 errors have accumulated
+  (`typeChecker/validator.ts:58`). Parsing enforces the same 50-error ceiling
+  but aborts outright on reaching it rather than continuing
+  (`parser/state.ts:99-101`), so a badly malformed file can report fewer than
+  50 errors in total.
+- A single `generate` loop's span (`end − start`) cannot exceed 10,000
+  (`parser/parseGenerate.ts:46`). Because both bounds are inclusive, this
+  permits up to **10,001** iterations, not 10,000.
+- A file-wide counter shared by every parsed object, every `use` expansion,
+  and every `generate` iteration is capped at 15,000
+  (`parser/parseObject.ts:154-156`, `parser/parseUse.ts:12-14`,
+  `parser/parseGenerate.ts:81-82`). Exceeding it aborts compilation — even a
+  file with few real objects can hit the ceiling if it has enough loop
+  iterations, since each iteration consumes one unit of the budget before its
+  body is parsed.
+- Parenthesised math expressions nest to a depth of 50
+  (`parser/parseValue.ts:6-8`, `47-49`).
+- Division by zero in a math expression is a compile error, not `Infinity`
+  (`parser/parseValue.ts:69`).
+
+## Not covered here
+
+This document deliberately has no exhaustive per-property type table. A
+later phase generates that table directly from the compiler's own property
+contracts (`PROP_TYPES`, `REQUIRED_PROPS` in `typeChecker/validator.ts`), so
+it cannot drift out of sync with the source the way hand-written prose can.
+Until that phase lands, the editor's own completions and hovers are the
+authority on which properties a given object accepts.
+
+Colour animation is not supported. `animate`'s `property` accepts only
+`position`, `rotation`, `scale`, and `alpha`
+(`typeChecker/validator.ts:207`); naming any other property, including a
+colour, is a compile error.
+
+For the design rationale behind these decisions, and what later phases plan
+to change, see `docs/specs/`.
