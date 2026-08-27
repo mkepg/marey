@@ -219,3 +219,117 @@ scene {
   }
 }
 ```
+
+## Sequencing
+
+`sequence` is a child block of a shape or `group`, like `animate`. Its steps
+run strictly in order — each step starts only when the previous one finishes.
+`sequence` must be placed inside a renderable object: never at the scene
+root, and never inside another `sequence`. An object may hold at most one
+`sequence` block; a second one on the same object is a compile error
+(`TYPE_ONE_STORY`). Each step of a `sequence` must be `animate`, `physics`,
+or `parallel` — any other block is a compile error.
+
+`parallel` must be placed directly inside a `sequence` — it cannot sit at the
+scene root, directly inside a shape, or nested inside another `parallel`. A
+`parallel` block holds `animate` and `physics` children only. All of a
+`parallel`'s children start together, and the sequence advances past that
+step only once every child has finished.
+
+Both `sequence` and `parallel` must contain at least one child of a kind they
+accept; an empty block, or one holding only disallowed children, is a compile
+error.
+
+A `physics` step inside a `sequence` must declare a numeric `duration`.
+Omitting `duration` there is a compile error (`TYPE_SEQ_PHYSICS_DUR`), and
+`duration: indefinitely` is also a compile error there (`TYPE_SEQ_PHYSICS_INDEFINITELY`),
+because a simulation that never ends would prevent the timeline from ever
+advancing past it. `loop: true` and `yoyo: true` are likewise compile errors
+on any `animate` step inside a `sequence` or `parallel` (`TYPE_SEQ_LOOP`,
+`TYPE_SEQ_YOYO`; see above), for the same reason: a step that never finishes
+stalls the rest of the timeline.
+
+The reverse rule applies to an object's own top-level `physics` block: if it
+sets `duration: indefinitely`, that object may not also have a `sequence`
+block, because the sequence could never activate after a simulation that
+never finishes. This is a compile error (`TYPE_INDEFINITELY_WITH_SEQ`).
+
+```declare
+scene {
+  size: (800, 600)
+
+  rectangle stepper {
+    position: (130, 200)
+    size: (34, 34)
+    color: magenta
+    sequence {
+      animate {
+        property: rotation
+        to: 180
+        duration: 0.9
+        easing: easeInOut
+      }
+      parallel {
+        animate { property: position, to: (350, 200), duration: 1.2, easing: easeInOut }
+        animate { property: scale,    to: (1.6, 1.6), duration: 1.2, easing: easeOut }
+      }
+      physics {
+        gravity: (0, 700)
+        bounce: 0.45
+        collideBounds: true
+        duration: 4
+      }
+    }
+  }
+}
+```
+
+### handOff
+
+`handOff: true` is a property of `animate` on `property: position`. Setting
+it carries the animation's exit velocity into the physics simulation, so an
+object that slides and then falls keeps its momentum and arcs, instead of
+stopping dead and dropping straight down.
+
+The exit velocity is derived from the animation's average speed — the
+displacement from its starting value to `to`, divided by `duration` — scaled
+by the slope of the easing curve at the instant the animation ends. That
+slope multiplier is `2.0` for `easeIn`, `0.5` for `easeOut`, `0.5` for
+`easeInOut`, and `1.0` for `linear`.
+
+Four rules govern `handOff: true`, each a compile error when broken:
+
+- It is only valid on `property: position`; on any other property it is a
+  compile error (`TYPE_HANDOFF_PROP`).
+- It cannot coexist with `loop: true` on the same `animate` block, since a
+  looping animation never ends and so never hands off (`TYPE_HANDOFF_LOOP`).
+- It requires a sibling `physics` block on the same object
+  (`TYPE_HANDOFF_PHYSICS`).
+- That sibling `physics` block may not also declare `velocity` — the
+  animation's exit velocity would overwrite it (`TYPE_HANDOFF_AMBIGUITY`).
+
+```declare
+scene {
+  size: (800, 600)
+
+  circle launcher {
+    position: (130, 400)
+    radius: 11
+    color: yellow
+    animate {
+      property: position
+      to: (350, 220)
+      duration: 1.1
+      easing: easeOut
+      handOff: true
+    }
+    physics {
+      gravity: (0, 900)
+      airDrag: 0.006
+      bounce: 0.55
+      collideBounds: true
+      duration: indefinitely
+    }
+  }
+}
+```
