@@ -33,12 +33,27 @@ This design specifies `docs/LANGUAGE.md` to close that gap.
 ### 1.1 What this is not
 
 Not a tutorial, not a guide, not examples-with-narration. Those belong on a documentation
-website later, structured roughly as Matter.js's is. `docs/LANGUAGE.md` is the **formal
-reference for the language** — the precise, checkable statement of what each construct
-does. Its primary reader is a machine author or an experienced developer who wants an
-exact answer, not a ramp.
+website later. `docs/LANGUAGE.md` is the **formal reference for the language** — the
+precise, checkable statement of what each construct does. Its primary reader is a machine
+author or an experienced developer who wants an exact answer, not a ramp.
 
 No product change is in scope. The playground gains no docs panel, no link, and no new UI.
+
+### 1.2 The later docs site
+
+Recorded here so this reference's scope is understood as deliberate rather than partial.
+
+The Declare website — today only the playground IDE — is intended to become a full
+documentation site carrying tutorials, guides, examples and supporting content, structured
+along the lines of the Matter.js site:
+
+**https://brm.io/matter-js/**
+
+That work is deferred with no date set and is not part of this slot. It is what the
+narrative and onboarding material is being reserved *for*, which is why §6 rules a README,
+a docs panel and any in-app tutorial out of scope here rather than treating them as gaps.
+`docs/LANGUAGE.md` is expected to survive that transition as the reference layer beneath
+it, so it is written to be correct rather than welcoming.
 
 ---
 
@@ -184,7 +199,7 @@ and is why §4 keeps claims short and concrete rather than discursive.
 |---|---|---|
 | Per-property type tables | Phase 3, generated | L1. Would be a fifth hand-synced list. |
 | README | Not now | The reference is the deliverable asked for. A README is an entry-point question that belongs with the docs site. |
-| Docs site, tutorials, guides, examples | Later, own work | Explicitly deferred. Matter.js's site is the model. |
+| Docs site, tutorials, guides, examples | Later, own work | Explicitly deferred; see §1.2. https://brm.io/matter-js/ is the model. |
 | Any playground UI change | Not now | No docs panel, no link. Keeps this a docs slot. |
 | Fixing the `yoyo` completion defect | Phase 3 | L7. |
 | Fixing the four drifted property lists | Phase 3 | Already that phase's stated purpose. |
