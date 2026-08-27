@@ -243,7 +243,14 @@ describe("LANGUAGE.md · Animation · loop and yoyo", () => {
   it("yoyo without loop never completes — see the warning in that section", () => {
     const t = mkAnimTime({ yoyo: true, loop: false });
     expect(completesAtTick(t, 500)).toBe(-1);
-    expect(t).toMatchObject({ elapsedTicks: 0, direction: -1, completed: false });
+    expect(t).toEqual({
+      elapsedTicks: 0,
+      durationTicks: 10,
+      direction: -1,
+      completed: false,
+      loop: false,
+      yoyo: true,
+    });
   });
 
   it("yoyo without loop rests at its start value rather than drifting", () => {
