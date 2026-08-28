@@ -3759,4 +3759,178 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ## Execution notes
 
-*(To be filled in during Task 12.)*
+Phase 2 shipped what §7 promised — a multi-part logo tumbles as one coherent
+object — and found four live defects on the way, none of which §7 anticipated.
+Three of the four were in the tick/paint seam, which is the same place all three
+of Phase 1's review bugs lived.
+
+Final state: **187 tests** (from 121), `tsc -b` clean, `npm run build` clean,
+both `.eval` corpora reproducing their committed baselines byte for byte.
+
+### Defects found in the code, beyond the plan's scope
+
+Listed in the order they surfaced, because the order is the point: each was
+found by the tests written for the previous one.
+
+**1. A `rotation` animation permanently locked a physics object's angle.** Found
+while writing Task 2's tests. `tickAnim` released the angle override on the
+completion tick and `pushAnimToWorld` re-armed it on that same tick, over the
+same not-yet-spliced list; the runner was then spliced in the paint phase and
+nothing ever cleared it, so `step()` forced `Body.setAngle` to the animation's
+final value for the rest of the scene. Measured on a square dropped off-centre
+onto a ledge: 20.00° after impact — the animation's own `to`, i.e. no rotation
+at all — against −269.19° with the fix. This is the **fourth** instance of the
+rotation-override family; Phase 1's notes record the third.
+
+**2. A completed `position` animation kept pushing for the rest of a catch-up
+burst.** Found by the code-quality review of Task 1. `LiveDriver` advances up to
+12 ticks per frame, and a runner is not spliced until paint, so a 6-tick
+animation inside a 12-tick burst produced **12 `setPosition` calls** — the last
+six writing the endpoint after the body had been unpinned. How many stale pushes
+occur depends on how many ticks the frame absorbed.
+
+**3. An animation's start value was read from paint-phase state.** Found by
+mutation-testing Task 3. `spawnAnim` seeds `startVal` from `getCurrentVal`,
+which reads `currentPos`, `rotation` and `alpha` — all last written by the paint
+phase at the driver's wall-clock alpha — and that value flows straight into
+`world.setPosition`. Measured on a two-step position sequence over an identical
+40 ticks: at 1-tick frames the second animation continues from 120, at 7-tick
+frames it restarts from 8, dragging the body ~110px backwards.
+
+**4. Pin reasons collapsed duplicate holds.** Found by the same review.
+`pinReasons` was a `Set`, so two `animate position` blocks on one object took one
+hold and the first to finish handed the body back to the solver while the second
+was still driving it. Now a `Map<PinReason, number>`. This also turned up
+`__kinematicPosAnimCount`, built to count exactly this, read nowhere in `src/`,
+and by now looking live — deleted, all four sites.
+
+**The pattern worth carrying forward.** Defects 2 and 3 are both "a wall-clock-
+derived value reached the physics world", and **neither has `driver.alpha`
+anywhere in its call chain**. Invariant 3 as written in `AGENTS.md` names alpha
+specifically, so reading it literally prevented neither. It has been restated as
+*nothing fed into the physics world may derive from the wall clock*, of which
+alpha is one instance, burst length another, and paint-phase state a third.
+
+The test shape that catches this class is a **frame-pacing harness**: run the
+same scene for an identical number of ticks at 1, 7 and 12 ticks per frame and
+require the world to see identical calls. It exists now
+(`sceneRuntime.test.ts`, "frame pacing must not reach the world") and would have
+caught defects 2 and 3 both.
+
+**5. `docs/LANGUAGE.md` had a second false claim the plan did not list.** Task 10
+was scoped to the collision-shape sentence. Its implementer read the whole
+document and found the Physics preamble's **iff** also falsified: *"An object
+gets a collision body if, and only if, it declares a `physics` block… An object
+with only `animate` blocks is not a collider: nothing rests on it, and things
+pass through it."* A child of a physics group declares no `physics` of its own —
+and after Task 9 *cannot* — yet it becomes a part of the group's compound and is
+therefore solid. It is also the first sentence a reader meets in that section.
+Qualified in place.
+
+### Defects in this plan
+
+**Task 9's rule would have banned the entire feature.** Its ancestor loop started
+at `ancestors.length - 1`, but for a `physics` block that is a direct child of a
+group the innermost ancestor *is that group* — so a group's own `physics` block
+matched `anc.children.some(c => c.type === "physics")` and flagged itself.
+`TYPE_PHYSICS_IN_PHYSICS_GROUP` fired on every compound group, and both rejection
+tests double-reported. Fixed during execution by walking back past any
+`sequence`/`parallel` wrapper to the owning renderable object and scanning
+strictly above it, which also correctly permits a group whose own `physics` sits
+inside a `sequence` (legal per D13).
+
+**This was caught only because the plan carried "this must still be allowed"
+tests beside the rejections.** A plan with rejection tests alone would have
+shipped a validator that rejected the phase's own headline feature, with a green
+suite. Write the permission cases.
+
+**Task 3 Step 6's premise was false, and the false claim is now in the history.**
+It asserted the fix would make the default scene's `stepper` start tumbling,
+citing physics spec §6.11. `stepper` is released from a completed `easeInOut`
+position animation with no exit velocity onto a flat floor: symmetric contact, no
+torque, no rotation, override bug or not. The card's own header comment has said
+so since `91172b1`; §6.11 was never reconciled and has now been corrected in
+place. Because the step said to use the Step 7 commit message verbatim,
+**commit `25c655b`'s message asserts "The default scene changes: stepper now
+tumbles", which is untrue.** It cannot be rewritten without rewriting history, so
+this note is the only correction anyone will find. A stale prediction in a spec
+is not an oracle.
+
+**Task 10's rotation assertion could not fail.** The plan's version exercised
+`MatterWorld.overrideAngle` — a primitive that was never broken and is already
+covered elsewhere — rather than the `pushAnimToWorld` re-arm that was the actual
+defect. It documented the mechanism and guarded nothing. Reported honestly by its
+implementer rather than left to rot, and rewritten to drive the whole pipeline;
+confirmed by mutation that removing the `completedThisTick` guard now fails it.
+
+**Task 6's `deltaTime` test used `VACUUM`, which has `collideBounds: true`.** At
+600 px/s from x=400 the body reached the right wall well inside the one-second
+window and stopped dead against it at x=780 — which reads exactly like a broken
+velocity conversion and is not one. The assertion was wrong, not the code.
+
+**The browser steps originally omitted `--strictPort`.** Vite walks forward to
+5200, 5201… when the port is taken and prints what it bound, while `check.mjs`
+still defaults to 5199 — so a stale server from an earlier run absorbs every
+capture and the check reports a confident pass without exercising the new code.
+This bit Task 1 and then bit Task 3 again, with two stale servers by then. Now
+documented in the skill itself, not just the plan.
+
+Smaller ones: `--at 300` samples before the renderer initialises (~900–1100 ms),
+so that frame is not a reproducible oracle even on unmodified code; Task 5's
+predicted failure text was vitest 3's wording, not vitest 4's; and Task 10's
+"insert immediately after" would have orphaned an existing paragraph under the
+new subsection.
+
+### Gaps left open deliberately
+
+**The polygon rotation observation was investigated and dismissed.** Task 3's
+browser check reported a polygon appearing to draw ~90° off from its `points`.
+Probed by reading vertex world positions through PixiJS's own transform at 0°,
+35° and 90°: all three are correct for a y-down space, and there is no offset.
+What is real nearby is that a polygon's pivot is its **bounding-box centre**, not
+its centroid — about 10px apart for that triangle — so it spins about a point
+above its centre of area and the apex swings on a wider arc. That is the same
+bbox-vs-centroid distinction D15 exists to correct in the physics layer, it is
+already documented as intended, and changing it would alter every existing
+rotating-polygon scene. No decision needed; recorded so it is not re-investigated.
+
+**`adapter.ts` still has no tests of its own**, but the reason has changed. It is
+now ~137 lines holding the PixiJS `Application`, the canvas, `sceneFit` layout
+and the ticker — which genuinely does need a DOM. Everything that was worth
+testing moved to `SceneRuntime` and has 15 tests. Phase 1's notes blamed the DOM
+for the whole file being untestable; that was false, and the real blocker was the
+closure.
+
+**The D17 precondition guard has no test.** `bindPhysicsBodies` logs if it ever
+places a body under a group that moves. Task 9's validator rules make that
+unreachable, which is the intent — but it means a guard against the phase's own
+central assumption is itself uncovered.
+
+**Three approximations ship as designed**, all recorded in the spec: a rotated
+child beneath a nested group carrying non-uniform scale collides unsheared; a
+non-uniformly scaled circle child collides at its mean radius, since Matter has
+no ellipse; and `body.circleRadius` is handled only on a compound's parent, so
+non-uniform scale leaves a circle *part*'s radius stale — harmless, because
+Matter 0.20's `Collision.collides` is SAT over vertices.
+
+**Two pre-existing Matter interactions were left alone.** `Body.scale` while a
+body is pinned fights `setStatic`'s `_original` mass snapshot, which is taken
+before the scale and restored after it. And `transform.ts`'s `IDENTITY` is
+compile-time immutable but not `Object.freeze`d, unlike the IR values elsewhere
+in this codebase.
+
+**The `.eval` harness writes both corpora to the same file.** `compile.test.ts`
+computes its output path as `${DIR}/../report.json`, so running with
+`EVAL_DIR=eval/scenes-r2` silently overwrites `eval/report.json` — the R1
+baseline — rather than `report-r2.json`. Both corpora were verified against their
+committed baselines by restoring the file between runs. Worth fixing whenever
+`.eval` is next touched; it makes a re-run look like a regression.
+
+### What the next phase should read first
+
+Phase 3 opens the parser and collapses the four property tables. Two things here
+bear on it directly: `RESERVED_PROPS` still reserves `anchor`, `width` and
+`height`, none of which exist, and the `PROP_TYPES` table now has two more error
+codes to stay in sync with. Phase 3 also inherits the `.eval` path bug above and
+the `adapter.ts` DOM-testing question, which is now much smaller than it was.
+
