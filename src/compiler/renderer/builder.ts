@@ -1,6 +1,7 @@
 import { Container, Graphics, Text, TextStyle } from "pixi.js";
 import type { IRObjectNode, IRObjectProps, IRAnimation, IRPhysics, IRSequence } from "../sceneIR";
-import type { BodyGeometry } from "./physicsWorld";
+import type { BodyGeometry, BodyPart } from "./physicsWorld";
+import { compose, IDENTITY, type LocalTransform } from "./transform";
 
 declare module "pixi.js" {
   interface Container {
@@ -61,6 +62,69 @@ function applyAnchorAndPivot(
   wrapper.__updateLayout();
   wrapper.rotation = props.rotation * (Math.PI / 180);
   wrapper.alpha = props.alpha;
+}
+
+/**
+ * One placed part for a leaf shape, with the child's scale baked into its
+ * dimensions and its accumulated rotation carried as `angle`.
+ *
+ * A group's own scale is deliberately NOT baked in here — it goes through
+ * `world.setScale` and `Body.scale`, which scales vertices on each axis
+ * independently about a point, exactly as PixiJS does. Baking it here as well
+ * would apply it twice.
+ */
+function placePart(shape: BodyGeometry, t: LocalTransform): BodyPart | null {
+  if (shape.kind === "circle") {
+    // Matter has no ellipse. A non-uniformly scaled circle collides as a
+    // circle of the mean radius; the common uniform case is exact.
+    const meanScale = (Math.abs(t.sx) + Math.abs(t.sy)) / 2;
+    return { kind: "circle", radius: shape.radius * meanScale, x: t.x, y: t.y };
+  }
+  if (shape.kind === "rectangle") {
+    return {
+      kind: "rectangle",
+      width: shape.width * Math.abs(t.sx),
+      height: shape.height * Math.abs(t.sy),
+      x: t.x, y: t.y, angle: t.rot,
+    };
+  }
+  if (shape.kind === "polygon") {
+    return {
+      kind: "polygon",
+      points: shape.points.map((p) => ({ x: p.x * t.sx, y: p.y * t.sy })),
+      x: t.x, y: t.y, angle: t.rot,
+    };
+  }
+  // A nested compound is flattened by the caller, never placed whole.
+  return null;
+}
+
+/**
+ * Walk a group's built children and flatten every leaf shape into one part
+ * list, in the group's own local space (spec D18).
+ *
+ * Reads the children's already-computed `__bodyShape`, so there is no second
+ * copy of the per-kind geometry mapping to drift out of sync with the switch
+ * in `buildNode`. A nested group recurses rather than contributing its own
+ * compound, which is what makes nesting need no special case.
+ */
+function collectBodyParts(container: Container, t: LocalTransform, out: BodyPart[]): void {
+  for (const raw of container.children) {
+    const child = raw as Container;
+    const shape = child.__bodyShape;
+    const layout = child.__declareLayout;
+    // A `Graphics` or `Text` leaf inside a shape's wrapper has neither.
+    if (!shape || !layout) continue;
+
+    const childT = compose(t, layout.currentPos, child.rotation, layout.currentScale);
+
+    if (shape.kind === "compound") {
+      collectBodyParts(child, childT, out);
+    } else {
+      const part = placePart(shape, childT);
+      if (part) out.push(part);
+    }
+  }
 }
 
 export function buildNode(node: IRObjectNode): Container {
@@ -208,11 +272,18 @@ export function buildNode(node: IRObjectNode): Container {
       );
       const groupBounds = wrapper.getLocalBounds();
       wrapper.__baseSize = { w: groupBounds.width, h: groupBounds.height };
-      wrapper.__bodyShape = {
-        kind: "rectangle",
-        width: Math.max(groupBounds.width, 1),
-        height: Math.max(groupBounds.height, 1),
-      };
+
+      // A group welds its children into one compound body (spec 7). The parts
+      // are expressed in the group's own local space, so the body's reference
+      // point is the group's origin — the same point its pivot sits at, and
+      // the same point `position` places (spec D16).
+      //
+      // What this replaces: a single rectangle SIZED from getLocalBounds() but
+      // POSITIONED at the origin. The two disagreed for any group whose
+      // children sat asymmetrically around it.
+      const parts: BodyPart[] = [];
+      collectBodyParts(wrapper, IDENTITY, parts);
+      wrapper.__bodyShape = { kind: "compound", parts };
       break;
     }
     default: {
