@@ -35,6 +35,8 @@ import { typeCheck } from "./typeChecker";
 import { advanceAnimTime, type AnimTime } from "./renderer/timeline";
 import { buildNode } from "./renderer/builder";
 import { MatterWorld } from "./renderer/physicsWorld";
+import { SceneRuntime } from "./renderer/sceneRuntime";
+import { Container } from "pixi.js";
 
 interface Example {
   /** 1-indexed line in LANGUAGE.md where the fence opens. */
@@ -380,27 +382,49 @@ describe("LANGUAGE.md · Physics · Animation and physics together", () => {
   it("a finished rotation animation hands the angle back to the solver", () => {
     // The reference says "When an animation finishes, the object returns to
     // full physics control on whichever property the animation was driving."
-    // That was false until Phase 2 (see Task 3): the override was re-armed on
-    // the completion tick and never cleared, locking the angle for good.
-    const VACUUM = {
-      gravityX: 0, gravityY: 0, airDrag: 0, bounce: 0, collideBounds: true,
-    };
+    //
+    // That was false until this phase: `tickAnim` released the angle override
+    // on the completion tick and `pushAnimToWorld` re-armed it on that same
+    // tick, after which the runner was spliced and nothing ever cleared it.
+    // `step()` then forced Body.setAngle to the animation's final value for the
+    // rest of the scene.
+    //
+    // This drives the whole pipeline — compiler, builder, SceneRuntime, real
+    // MatterWorld — because the defect lived in the seam between them and is
+    // invisible to `MatterWorld.overrideAngle` on its own. A triangle is used
+    // deliberately: it lands off-centre and so has real torque to apply, where
+    // a square settling at 0 or 90 degrees would look identical either way.
+    const ir = irFor(`
+      scene {
+        size: (800, 600)
+        polygon shard {
+          position: (400, 80)
+          points: [(0, -40), (34, 22), (-34, 22)]
+          rotation: 0
+          animate { property: rotation, to: 35, duration: 0.2, easing: linear }
+          physics {
+            gravity: (0, 900)
+            bounce: 0.2
+            collideBounds: true
+            duration: indefinitely
+          }
+        }
+      }
+    `);
+
+    const root = new Container();
+    root.addChild(buildNode(ir.registry["scene.shard"]));
     const world = new MatterWorld(800, 600);
-    world.addBody("a", { kind: "rectangle", width: 40, height: 40 }, 400, 300, 0, VACUUM);
+    const runtime = new SceneRuntime(world, root);
 
-    // Held: the override wins over the solver.
-    world.overrideAngle("a", Math.PI);
-    world.step();
-    expect(world.readState("a", 1)!.angle).toBeCloseTo(Math.PI, 6);
+    // The animation ends at tick 24; run well past it, through the landing.
+    for (let i = 0; i < 600; i++) runtime.advanceOneTick();
 
-    // Released: nothing forces the angle any more, so a spin is not undone.
-    world.overrideAngle("a", null);
-    world.setVelocity("a", 0, 0);
-    world.step();
-    const free = world.readState("a", 1)!.angle;
-    world.step();
-    expect(world.readState("a", 1)!.angle).toBeCloseTo(free, 6);
-    world.destroy();
+    const finalDeg = (world.readState(root.children[0].__body!, 1)!.angle * 180) / Math.PI;
+
+    // Latched, the angle would still be exactly the animation's `to`.
+    expect(Math.abs(finalDeg - 35)).toBeGreaterThan(1);
+    runtime.destroy();
   });
 });
 
