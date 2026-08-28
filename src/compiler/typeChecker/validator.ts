@@ -182,6 +182,53 @@ export function collectErrors(ast: AstNode): CompilerError[] {
       if (parentType === "scene") {
         errors.push({ phase: "TYPE", message: "A 'physics' block must be placed inside a renderable object, not at the root of the scene.", line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol });
       }
+      // D17: a body inside a group needs its ancestor chain composed in at
+      // bind time, which is only sound while that chain is constant. A group
+      // that declares physics welds its children into its own body instead, and
+      // a group that animates would make the composed transform stale.
+      //
+      // `ancestors` is every enclosing object, so a physics block reached
+      // through a `sequence` or `parallel` is covered by the same walk.
+      //
+      // The owner is exempt: this block *is* the group's own physics, and a
+      // group is allowed — indeed required — to declare physics on itself.
+      // Per D13 a `sequence`/`parallel` wrapper is not an owner, so skip past
+      // those to find the renderable object the block actually belongs to.
+      let ownerIdx = ancestors.length - 1;
+      while (
+        ownerIdx >= 0 &&
+        (ancestors[ownerIdx].type === "sequence" || ancestors[ownerIdx].type === "parallel")
+      ) {
+        ownerIdx--;
+      }
+
+      for (let i = ownerIdx - 1; i >= 0; i--) {
+        const anc = ancestors[i];
+        if (anc.type !== "group") continue;
+
+        const ancHasPhysics = anc.children.some((c) => c.type === "physics");
+        const ancAnimates = anc.children.some(
+          (c) => c.type === "animate" || c.type === "sequence"
+        );
+
+        if (ancHasPhysics) {
+          errors.push({
+            phase: "TYPE",
+            message: `[TYPE_PHYSICS_IN_PHYSICS_GROUP] Group '${anc.name}' already declares physics, so its children are welded into its body and cannot simulate separately. Remove this 'physics' block.`,
+            line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol,
+          });
+          break;
+        }
+        if (ancAnimates) {
+          errors.push({
+            phase: "TYPE",
+            message: `[TYPE_PHYSICS_IN_ANIMATED_GROUP] Group '${anc.name}' is animated, so a physics body inside it cannot be placed deterministically. Move the 'physics' block onto '${anc.name}', or remove its animation.`,
+            line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol,
+          });
+          break;
+        }
+      }
+
       const durVal = node.props["duration"];
       if (durVal?.kind === "indefinitely") {
         if (parentNode && parentNode.children.some(c => c.type === "sequence")) {
