@@ -377,6 +377,10 @@ block — either directly, or in any step of its `sequence`.** An object with
 only `animate` blocks is not a collider: nothing rests on it, and things pass
 through it.
 
+The one thing that is solid without declaring `physics` is an object inside a
+`group` that declares it. Such an object gets no body of its own; it becomes
+part of the group's, and is therefore solid. See "Physics and groups" below.
+
 **A collision body is created when the scene starts, not when the object's
 physics step begins.** For an object whose `sequence` opens with `animate`
 and reaches `physics` later, the body already exists during that opening
@@ -424,11 +428,23 @@ The collision shape a body gets depends on the object's kind: `circle` gets a
 circle at its declared radius; `rectangle` gets a rectangle at its declared
 size; `text` gets a rectangle sized to the rendered text's bounding box;
 `line` gets a rectangle spanning its points' bounding box, widened to at
-least its `thickness`; `group` gets a single rectangle spanning the bounding
-box of everything inside it (only meaningful if the `physics` block sits on
-the group itself, giving the whole group one shared body). **`polygon` gets
-the convex hull of its points, not its exact outline** — a concave polygon
-collides as its hull, even though it is drawn with its true, concave shape.
+least its `thickness`. **`polygon` gets the convex hull of its points, not its
+exact outline** — a concave polygon collides as its hull, even though it is
+drawn with its true, concave shape.
+
+**A `group` with a `physics` block is welded into a single body made of one
+shape per object inside it**, each at its own offset and angle within the
+group. A multi-part logo therefore tumbles as one rigid object rather than
+colliding as a single rectangle around everything. Because the parts are
+separate, a concave arrangement collides concavely: a ball dropped into the
+notch of an L-shaped group falls into the notch rather than resting on top of
+it.
+
+**The group's own origin is the point the body is placed at** — the same point
+`position` sets and the same point `rotation` turns about. That holds even
+when the group's contents sit entirely to one side of it, so a group whose
+children are all offset still rotates about its declared origin rather than
+about the middle of its contents.
 
 **Bodies that start overlapping — for instance, two objects placed at the
 same `position` — are separated within a single tick.** The engine pushes
@@ -436,6 +452,82 @@ them apart along the contact axis as soon as the simulation starts; the
 correction is a direct position change, not an added velocity, so it does
 not launch either object. Once separated, both proceed under gravity and
 collision as normal.
+
+### Physics and groups
+
+`physics` may be declared on a `group`, or on an object inside a group, but
+not both — and not inside a group that moves.
+
+- A `physics` block on an object whose enclosing `group` also declares
+  `physics` is a compile error (`TYPE_PHYSICS_IN_PHYSICS_GROUP`). The group's
+  children are already welded into its body; they cannot also simulate
+  separately.
+- A `physics` block on an object inside a group that has an `animate` or
+  `sequence` block is a compile error (`TYPE_PHYSICS_IN_ANIMATED_GROUP`). The
+  object's position in the scene would depend on where its moving parent
+  happens to be, which cannot be resolved to a fixed simulation coordinate.
+
+Inside a **static** group — one with no `animate`, `sequence` or `physics` of
+its own — `physics` on a child works normally, and the child's position is
+interpreted relative to the group as everywhere else. This includes the group
+that a `use` expansion wraps around a template, so a template may carry a
+`physics` block:
+
+```declare
+template Ball(tone) {
+  circle b {
+    position: (0, 0)
+    radius: 12
+    color: tone
+    physics {
+      gravity: (0, 900)
+      bounce: 0.5
+      collideBounds: true
+      duration: indefinitely
+    }
+  }
+}
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate i from 0 to 4 {
+    use Ball(cyan) ball { position: (160 + i * 120, 80) }
+  }
+}
+```
+
+**An `animate` block on an object inside a physics group moves only the
+drawing, not the collision shape.** The welded body is built once from where
+the group's contents sit at the start, so an element that pulses or spins
+inside a tumbling logo keeps its original part in the body. This is intended —
+it allows a logo to tumble as one rigid object while something inside it
+animates — but it means a large animation inside a physics group will drift
+visibly away from what the object actually collides with.
+
+```declare
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  group logo {
+    position: (400, 120)
+    rotation: 15
+
+    rectangle stem  { position: (0, 0),    size: (24, 120), color: cyan }
+    rectangle armTop{ position: (34, -40), size: (48, 24),  color: magenta }
+    rectangle armMid{ position: (28, 10),  size: (36, 24),  color: magenta }
+
+    physics {
+      gravity: (0, 900)
+      bounce: 0.35
+      collideBounds: true
+      duration: indefinitely
+    }
+  }
+}
+```
 
 ### When duration expires
 

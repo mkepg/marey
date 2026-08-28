@@ -33,6 +33,8 @@ import { lex } from "./lexer";
 import { parse } from "./parser";
 import { typeCheck } from "./typeChecker";
 import { advanceAnimTime, type AnimTime } from "./renderer/timeline";
+import { buildNode } from "./renderer/builder";
+import { MatterWorld } from "./renderer/physicsWorld";
 
 interface Example {
   /** 1-indexed line in LANGUAGE.md where the fence opens. */
@@ -312,5 +314,152 @@ describe("LANGUAGE.md · Physics · collideBounds", () => {
     // Top-level registry keys are scope paths ("scene.<name>"), not the bare
     // name (builder.ts:288).
     expect(ir!.registry["scene.a"].props.physics?.collideBounds).toBe(true);
+  });
+});
+
+/** Build the IR for a source string, failing loudly on any compile error. */
+function irFor(source: string) {
+  const { ast, errors } = parse(lex(source));
+  expect(errors).toEqual([]);
+  const { errors: typeErrors, ir } = typeCheck(ast!);
+  expect(typeErrors).toEqual([]);
+  return ir!;
+}
+
+describe("LANGUAGE.md · Physics · the collision shape a group gets", () => {
+  it("welds one part per object inside the group, not a single rectangle", () => {
+    const ir = irFor(`
+      scene {
+        size: (800, 600)
+        group logo {
+          position: (400, 120)
+          rectangle stem   { position: (0, 0),    size: (24, 120) }
+          rectangle armTop { position: (34, -40), size: (48, 24) }
+          physics { gravity: (0, 900), duration: 2 }
+        }
+      }
+    `);
+    const shape = buildNode(ir.registry["scene.logo"]).__bodyShape;
+    expect(shape).toEqual({
+      kind: "compound",
+      parts: [
+        { kind: "rectangle", width: 24, height: 120, x: 0, y: 0, angle: 0 },
+        { kind: "rectangle", width: 48, height: 24, x: 34, y: -40, angle: 0 },
+      ],
+    });
+  });
+
+  it("places the body at the group's own origin, not at the middle of its contents", () => {
+    // Every child sits to the right of the origin, so the two differ. The
+    // reference point must be the origin: that is what `position` sets and
+    // what `rotation` turns about.
+    const ir = irFor(`
+      scene {
+        size: (800, 600)
+        group off {
+          position: (200, 300)
+          rectangle a { position: (100, 0), size: (20, 20) }
+          rectangle b { position: (200, 0), size: (20, 20) }
+          physics { gravity: (0, 0), duration: 2 }
+        }
+      }
+    `);
+    const shape = buildNode(ir.registry["scene.off"]).__bodyShape!;
+    const world = new MatterWorld(800, 600);
+    world.addBody("g", shape, 200, 300, 0, {
+      gravityX: 0, gravityY: 0, airDrag: 0, bounce: 0, collideBounds: true,
+    });
+    const state = world.readState("g", 1)!;
+    expect(state.x).toBeCloseTo(200, 6);
+    expect(state.y).toBeCloseTo(300, 6);
+    world.destroy();
+  });
+});
+
+describe("LANGUAGE.md · Physics · Animation and physics together", () => {
+  it("a finished rotation animation hands the angle back to the solver", () => {
+    // The reference says "When an animation finishes, the object returns to
+    // full physics control on whichever property the animation was driving."
+    // That was false until Phase 2 (see Task 3): the override was re-armed on
+    // the completion tick and never cleared, locking the angle for good.
+    const VACUUM = {
+      gravityX: 0, gravityY: 0, airDrag: 0, bounce: 0, collideBounds: true,
+    };
+    const world = new MatterWorld(800, 600);
+    world.addBody("a", { kind: "rectangle", width: 40, height: 40 }, 400, 300, 0, VACUUM);
+
+    // Held: the override wins over the solver.
+    world.overrideAngle("a", Math.PI);
+    world.step();
+    expect(world.readState("a", 1)!.angle).toBeCloseTo(Math.PI, 6);
+
+    // Released: nothing forces the angle any more, so a spin is not undone.
+    world.overrideAngle("a", null);
+    world.setVelocity("a", 0, 0);
+    world.step();
+    const free = world.readState("a", 1)!.angle;
+    world.step();
+    expect(world.readState("a", 1)!.angle).toBeCloseTo(free, 6);
+    world.destroy();
+  });
+});
+
+describe("LANGUAGE.md · Physics · Physics and groups", () => {
+  function typeErrorsFor(source: string): string[] {
+    const { ast, errors } = parse(lex(source));
+    expect(errors).toEqual([]);
+    return typeCheck(ast!).errors.map((e) => e.message);
+  }
+
+  it("TYPE_PHYSICS_IN_PHYSICS_GROUP fires on a child of a physics group", () => {
+    const out = typeErrorsFor(`
+      scene {
+        size: (800, 600)
+        group logo {
+          position: (400, 300)
+          physics { gravity: (0, 900), duration: 2 }
+          circle dot { position: (0, 0), radius: 10, physics { duration: 2 } }
+        }
+      }
+    `);
+    expect(out.join("\n")).toContain("TYPE_PHYSICS_IN_PHYSICS_GROUP");
+  });
+
+  it("TYPE_PHYSICS_IN_ANIMATED_GROUP fires on a child of an animated group", () => {
+    const out = typeErrorsFor(`
+      scene {
+        size: (800, 600)
+        group row {
+          position: (100, 100)
+          animate { property: position, to: (400, 100), duration: 1 }
+          circle dot { position: (0, 0), radius: 10, physics { duration: 2 } }
+        }
+      }
+    `);
+    expect(out.join("\n")).toContain("TYPE_PHYSICS_IN_ANIMATED_GROUP");
+  });
+
+  it("a child's animate inside a physics group is allowed, and is visual-only", () => {
+    // D18. The welded body is built from the group's layout at build time, so
+    // the animating child's part is fixed where it started.
+    const ir = irFor(`
+      scene {
+        size: (800, 600)
+        group logo {
+          position: (400, 300)
+          physics { gravity: (0, 900), duration: 2 }
+          circle dot {
+            position: (40, 0)
+            radius: 10
+            animate { property: position, to: (200, 0), duration: 1, loop: true, yoyo: true }
+          }
+        }
+      }
+    `);
+    const shape = buildNode(ir.registry["scene.logo"]).__bodyShape;
+    expect(shape).toEqual({
+      kind: "compound",
+      parts: [{ kind: "circle", radius: 10, x: 40, y: 0 }],
+    });
   });
 });
