@@ -1,0 +1,36 @@
+// Phase 2: a multi-part group welded into one compound body.
+// The three bars must stay rigidly attached as the logo tumbles and lands.
+// Before compound groups this collided as one rectangle around all of them,
+// positioned at the group's origin rather than around its content.
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  rectangle ledge {
+    position: (400, 520)
+    size: (420, 24)
+    color: #334155
+    physics {
+      gravity: (0, 0)
+      duration: 12
+      collideBounds: true
+    }
+  }
+
+  group logo {
+    position: (360, 90)
+    rotation: 18
+
+    rectangle stem   { position: (0, 0),    size: (26, 130), color: cyan }
+    rectangle armTop { position: (38, -46), size: (52, 26),  color: magenta }
+    rectangle armMid { position: (30, 12),  size: (40, 26),  color: magenta }
+
+    physics {
+      gravity: (0, 900)
+      bounce: 0.3
+      airDrag: 0.004
+      collideBounds: true
+      duration: indefinitely
+    }
+  }
+}

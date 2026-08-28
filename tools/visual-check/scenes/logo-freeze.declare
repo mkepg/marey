@@ -1,0 +1,24 @@
+// Phase 2 determinism, checked mid-tumble rather than at rest.
+// A settled pile converges on the same fixed point even when the trajectory
+// diverged, so at-rest equality hides real non-determinism — that is how the
+// f9de4a9 bug survived four clean settling scenes in Phase 1.
+// `duration: 0.9` freezes this logo in mid-air, part-way through a rotation.
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  group logo {
+    position: (300, 80)
+    rotation: 10
+
+    rectangle stem   { position: (0, 0),    size: (26, 130), color: cyan }
+    rectangle armTop { position: (38, -46), size: (52, 26),  color: magenta }
+
+    physics {
+      gravity: (0, 900)
+      velocity: (140, 0)
+      collideBounds: false
+      duration: 0.9
+    }
+  }
+}

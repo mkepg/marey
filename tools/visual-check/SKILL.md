@@ -23,8 +23,15 @@ where the simulation stopped it, differently on each page load. Fixed in `f9de4a
 The dev server must already be running:
 
 ```bash
-npx vite --port 5199          # leave this running
+npx vite --port 5199 --strictPort   # leave this running
 ```
+
+**Use `--strictPort`.** Without it vite walks forward to 5200, 5201… when the
+port is taken and prints the one it bound, while `check.mjs` still defaults to
+`http://localhost:5199`. A stale server from an earlier run then absorbs every
+capture and the check reports a confident pass without exercising your code at
+all. This has happened twice. If you must use another port, pass
+`--url http://localhost:<port>` to every `check.mjs` call.
 
 Then:
 
@@ -97,6 +104,8 @@ for determinism.
 | `tumble.declare` | A polygon rotates on impact, and its drawn shape stays on its collision shape (D15) |
 | `freeze.declare` | `duration` expiry freezes a settling pile mid-motion, reproducibly |
 | `freeze-midair.declare` | Minimal repro of the `f9de4a9` bug: one box, no contacts, frozen in free fall. The tightest determinism check here — nothing else can absorb a divergence. |
+| `logo.declare` | A three-bar group welds into one compound body and tumbles rigidly, settling on its own arms (Phase 2, D16). If the bars ever separate, the welding has stopped happening. |
+| `logo-freeze.declare` | The same idea frozen mid-tumble in free air — determinism on a transient state rather than at rest. |
 
 Add a scene rather than editing one when checking something new — these are
 regression checks, and their expected images are their value.
