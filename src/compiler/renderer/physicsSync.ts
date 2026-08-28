@@ -1,6 +1,7 @@
 import type { Container } from "pixi.js";
 import type { IRPhysics, IRSequenceStep } from "../sceneIR";
 import type { IPhysicsWorld, PhysicsParams, PinReason } from "./physicsWorld";
+import { compose, IDENTITY, toWorld, toLocal, rotateScaleVector, type LocalTransform } from "./transform";
 
 /** A container and the id of the body that represents it. */
 export interface PhysicsBinding {
@@ -10,6 +11,16 @@ export interface PhysicsBinding {
 
 /** How far outside the scene a body may drift before it is culled. */
 export const CULL_MARGIN = 800;
+
+/**
+ * The transform from a container's local space to the scene's.
+ *
+ * Identity for a top-level object, which is every object in every scene
+ * written before Phase 2.
+ */
+export function bodyTransformOf(container: Container): LocalTransform {
+  return container.__bodyTransform ?? IDENTITY;
+}
 
 function stepHasPhysics(step: IRSequenceStep): boolean {
   if ("type" in step && step.type === "parallel") {
@@ -67,35 +78,70 @@ export function bindPhysicsBodies(root: Container, world: IPhysicsWorld): Physic
   const bindings: PhysicsBinding[] = [];
   let nextId = 0;
 
-  const visit = (container: Container): void => {
-    if (hasPhysicsAnywhere(container) && container.__bodyShape && container.__declareLayout) {
+  const visit = (container: Container, t: LocalTransform, movingAncestor: boolean): void => {
+    const layout = container.__declareLayout;
+
+    if (hasPhysicsAnywhere(container) && container.__bodyShape && layout) {
       const id = `b${nextId++}`;
-      const layout = container.__declareLayout;
       const params = container.__physics
         ? physicsParamsFromIR(container.__physics)
         : RESTING_PARAMS;
 
+      if (movingAncestor) {
+        // Unreachable via the compiler: TYPE_PHYSICS_IN_PHYSICS_GROUP and
+        // TYPE_PHYSICS_IN_ANIMATED_GROUP reject exactly this shape (D17). If it
+        // is ever reached, `t` was captured once at bind time and is already
+        // stale, so the body simulates somewhere the object is not.
+        //
+        // Logged rather than thrown: a throw here would blank the preview of a
+        // scene that compiled cleanly, and runtime errors have nowhere to go
+        // yet (physics spec 12, open risks).
+        console.error(
+          `[physicsSync] body ${id} sits under a group that moves; its ancestor ` +
+          `transform is stale. This should have been a compile error (D17).`
+        );
+      }
+
+      // A body lives in scene space. A container's currentPos is relative to
+      // its parent, so an object inside a group needs its ancestor chain
+      // composed in — without which a template's every instance simulates at
+      // its LOCAL coordinates (spec D17).
+      container.__bodyTransform = t;
+      const worldPos = toWorld(t, layout.currentPos.x, layout.currentPos.y);
+
       world.addBody(
         id,
         container.__bodyShape,
-        layout.currentPos.x,
-        layout.currentPos.y,
-        container.rotation,
+        worldPos.x,
+        worldPos.y,
+        t.rot + container.rotation,
         params
       );
-      world.setScale(id, layout.currentScale.x, layout.currentScale.y);
+      world.setScale(id, t.sx * layout.currentScale.x, t.sy * layout.currentScale.y);
       world.pin(id, "NO_RUNNER");
 
       container.__body = id;
       bindings.push({ id, container });
     }
 
+    // Computed from the container being *descended through*, so a top-level
+    // animated object does not flag itself — only its descendants.
+    const childMoves = movingAncestor
+      || (container.__animations?.length ?? 0) > 0
+      || (container.__sequences?.length ?? 0) > 0
+      || container.__physics !== undefined;
+
+    // The scene root is a bare `Container` with no layout, so an absent layout
+    // must not stop the walk — it contributes identity instead.
+    const childT = layout
+      ? compose(t, layout.currentPos, container.rotation, layout.currentScale)
+      : t;
     for (const child of container.children) {
-      visit(child as Container);
+      visit(child as Container, childT, childMoves);
     }
   };
 
-  visit(root);
+  visit(root, IDENTITY, false);
   return bindings;
 }
 
@@ -114,7 +160,10 @@ export function flushPendingVelocity(container: Container, world: IPhysicsWorld)
   const id = container.__body;
   const pending = container.__pendingVelocity;
   if (!id || !pending || world.isPinned(id)) return;
-  world.setVelocity(id, pending.x, pending.y);
+  // A velocity is a direction and a magnitude, so it takes the ancestor's
+  // rotation and scale but never its translation.
+  const v = rotateScaleVector(bodyTransformOf(container), pending.x, pending.y);
+  world.setVelocity(id, v.x, v.y);
   container.__pendingVelocity = undefined;
 }
 
@@ -145,9 +194,11 @@ export function syncWorldToContainers(
     if (!state) continue;
     const layout = container.__declareLayout;
     if (!layout) continue;
-    layout.currentPos.x = state.x;
-    layout.currentPos.y = state.y;
-    container.rotation = state.angle;
+    const t = bodyTransformOf(container);
+    const local = toLocal(t, state.x, state.y);
+    layout.currentPos.x = local.x;
+    layout.currentPos.y = local.y;
+    container.rotation = state.angle - t.rot;
     container.__updateLayout?.();
   }
 }
@@ -173,9 +224,11 @@ export function snapContainerToBody(container: Container, world: IPhysicsWorld):
   const state = world.readState(id, 1);
   const layout = container.__declareLayout;
   if (!state || !layout) return;
-  layout.currentPos.x = state.x;
-  layout.currentPos.y = state.y;
-  container.rotation = state.angle;
+  const t = bodyTransformOf(container);
+  const local = toLocal(t, state.x, state.y);
+  layout.currentPos.x = local.x;
+  layout.currentPos.y = local.y;
+  container.rotation = state.angle - t.rot;
   container.__updateLayout?.();
 }
 

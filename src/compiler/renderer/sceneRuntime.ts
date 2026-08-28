@@ -11,6 +11,7 @@ import {
 import type { IPhysicsWorld } from "./physicsWorld";
 import {
   bindPhysicsBodies,
+  bodyTransformOf,
   cullEscapedBodies,
   pinBody,
   physicsParamsFromIR,
@@ -20,6 +21,7 @@ import {
   CULL_MARGIN,
   type PhysicsBinding,
 } from "./physicsSync";
+import { toWorld } from "./transform";
 
 export interface RunningAnim {
   container: Container;
@@ -229,7 +231,14 @@ export class SceneRuntime {
     if (ra.anim.property === "position") {
       const startPt = ra.startVal as IRPoint;
       const targetPt = ra.targetVal as IRPoint;
-      this.world.setPosition(id, lerp(startPt.x, targetPt.x, e), lerp(startPt.y, targetPt.y, e));
+      // The animation's endpoints are in the container's local space; the world
+      // wants scene space (spec D17).
+      const p = toWorld(
+        bodyTransformOf(ra.container),
+        lerp(startPt.x, targetPt.x, e),
+        lerp(startPt.y, targetPt.y, e)
+      );
+      this.world.setPosition(id, p.x, p.y);
     } else if (ra.anim.property === "rotation") {
       // Unlike position and scale, the angle override is a LATCH: step()
       // re-applies it every tick until something clears it. `tickAnim` cleared
@@ -238,11 +247,16 @@ export class SceneRuntime {
       // in the paint phase and nothing would ever clear it again.
       if (completedThisTick) return;
       const deg = lerp(ra.startVal as number, ra.targetVal as number, e);
-      this.world.overrideAngle(id, deg * (Math.PI / 180));
+      this.world.overrideAngle(id, bodyTransformOf(ra.container).rot + deg * (Math.PI / 180));
     } else if (ra.anim.property === "scale") {
       const startPt = ra.startVal as IRPoint;
       const targetPt = ra.targetVal as IRPoint;
-      this.world.setScale(id, lerp(startPt.x, targetPt.x, e), lerp(startPt.y, targetPt.y, e));
+      const t = bodyTransformOf(ra.container);
+      this.world.setScale(
+        id,
+        t.sx * lerp(startPt.x, targetPt.x, e),
+        t.sy * lerp(startPt.y, targetPt.y, e)
+      );
     }
   }
 

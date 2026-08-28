@@ -22,6 +22,15 @@ declare module "pixi.js" {
     __physics?: IRPhysics;
     /** Id of this container's body in the shared world, if it has one. */
     __body?: string;
+    /**
+     * The constant transform from this container's local space to the scene's.
+     *
+     * Set by `bindPhysicsBodies` on any container that owns a body. It is
+     * constant for the scene's life because D17's validator rules reject
+     * `physics` under a group that animates — which is what keeps it free of
+     * `driver.alpha` and so keeps the simulation independent of frame rate.
+     */
+    __bodyTransform?: LocalTransform;
     /** Exit velocity written by a `handOff` animation, in px/s. */
     __pendingVelocity?: { x: number; y: number };
     /** Collision shape, in local space with the origin at the bbox centre. */

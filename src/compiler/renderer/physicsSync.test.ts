@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { Container } from "pixi.js";
 import type { IRPhysics, IRSequence, IRAnimation } from "../sceneIR";
 import type { BodyGeometry, BodyState, IPhysicsWorld, PhysicsParams, PinReason } from "./physicsWorld";
+import type { LocalTransform } from "./transform";
 import {
   bindPhysicsBodies,
   cullEscapedBodies,
@@ -153,6 +154,7 @@ interface MockContainer {
     currentScale: { x: number; y: number };
   };
   __body?: string;
+  __bodyTransform?: LocalTransform;
   __pendingVelocity?: { x: number; y: number };
   __updateLayout?: () => void;
   rotation: number;
@@ -176,6 +178,48 @@ function makeContainer(overrides: Partial<MockContainer> = {}): MockContainer {
     };
   }
   return c;
+}
+
+/** A static group: no physics, no animations, so it owns no body itself. */
+function staticGroup(over: {
+  x: number;
+  y: number;
+  rotation?: number;
+  scale?: { x: number; y: number };
+  children: MockContainer[];
+}): MockContainer {
+  return makeContainer({
+    rotation: over.rotation ?? 0,
+    children: over.children,
+    __bodyShape: { kind: "compound", parts: [] },
+    __declareLayout: {
+      localPivotX: 0,
+      localPivotY: 0,
+      currentPos: { x: over.x, y: over.y },
+      currentScale: { x: over.scale?.x ?? 1, y: over.scale?.y ?? 1 },
+    },
+  });
+}
+
+/** A leaf that declares physics, so it does own a body. */
+function physicsChild(pos: { x: number; y: number }): MockContainer {
+  return makeContainer({
+    __bodyShape: { kind: "circle", radius: 10 },
+    __physics: {
+      velocity: { x: 0, y: 0 },
+      gravity: { x: 0, y: 980 },
+      airDrag: 0,
+      bounce: 0.65,
+      collideBounds: true,
+      duration: 1,
+    },
+    __declareLayout: {
+      localPivotX: 0,
+      localPivotY: 0,
+      currentPos: { x: pos.x, y: pos.y },
+      currentScale: { x: 1, y: 1 },
+    },
+  });
 }
 
 const SHAPE: BodyGeometry = { kind: "circle", radius: 10 };
@@ -556,5 +600,113 @@ describe("snapContainerToBody", () => {
     const c = makeContainer({ __declareLayout: layoutAt(0, 0), __body: "gone" });
     expect(() => snapContainerToBody(asContainer(c), world)).not.toThrow();
     expect(c.updateLayoutCalls).toBe(0);
+  });
+});
+
+describe("ancestor transforms (spec D17)", () => {
+  it("places a body inside a translated group at its world position", () => {
+    // The defect this fixes: a template carrying physics produced one body per
+    // instance, all at (0, 0), because the child's LOCAL position was passed
+    // through as a scene coordinate.
+    const child = physicsChild({ x: 10, y: 20 });
+    const g = staticGroup({ x: 400, y: 300, children: [child] });
+
+    const world = new FakeWorld();
+    bindPhysicsBodies(asContainer(g), world);
+
+    expect(world.addCalls).toHaveLength(1);
+    expect(world.addCalls[0].x).toBeCloseTo(410, 8);
+    expect(world.addCalls[0].y).toBeCloseTo(320, 8);
+  });
+
+  it("rotates and scales a child's position into the group's frame", () => {
+    const child = physicsChild({ x: 10, y: 0 });
+    const g = staticGroup({
+      x: 100, y: 100, rotation: Math.PI / 2, scale: { x: 2, y: 2 },
+      children: [child],
+    });
+
+    const world = new FakeWorld();
+    bindPhysicsBodies(asContainer(g), world);
+
+    expect(world.addCalls[0].x).toBeCloseTo(100, 8);
+    expect(world.addCalls[0].y).toBeCloseTo(120, 8);
+    // The body's scale is the composed one, not the child's own.
+    expect(world.scaleCalls).toEqual([{ id: "b0", sx: 2, sy: 2 }]);
+  });
+
+  it("converts a body's world position back into the child's local space", () => {
+    const child = physicsChild({ x: 10, y: 20 });
+    const g = staticGroup({ x: 400, y: 300, children: [child] });
+
+    const world = new FakeWorld();
+    const bindings = bindPhysicsBodies(asContainer(g), world);
+    world.unpin("b0", "NO_RUNNER");
+    world.setState("b0", { x: 500, y: 400, angle: 0 });
+
+    syncWorldToContainers(bindings, world, 1);
+
+    expect(child.__declareLayout!.currentPos.x).toBeCloseTo(100, 8);
+    expect(child.__declareLayout!.currentPos.y).toBeCloseTo(100, 8);
+  });
+
+  it("subtracts the ancestor rotation on write-back", () => {
+    const child = physicsChild({ x: 0, y: 0 });
+    const g = staticGroup({ x: 0, y: 0, rotation: Math.PI / 2, children: [child] });
+
+    const world = new FakeWorld();
+    const bindings = bindPhysicsBodies(asContainer(g), world);
+    world.unpin("b0", "NO_RUNNER");
+    world.setState("b0", { x: 0, y: 0, angle: Math.PI });
+
+    syncWorldToContainers(bindings, world, 1);
+
+    expect(child.rotation).toBeCloseTo(Math.PI / 2, 8);
+  });
+
+  it("snapContainerToBody converts through the same transform", () => {
+    const child = physicsChild({ x: 0, y: 0 });
+    const g = staticGroup({ x: 400, y: 300, children: [child] });
+
+    const world = new FakeWorld();
+    bindPhysicsBodies(asContainer(g), world);
+    world.setState("b0", { x: 450, y: 360, angle: 0 });
+
+    snapContainerToBody(asContainer(child), world);
+
+    expect(child.__declareLayout!.currentPos.x).toBeCloseTo(50, 8);
+    expect(child.__declareLayout!.currentPos.y).toBeCloseTo(60, 8);
+  });
+
+  it("rotates a parked handoff velocity into world space but does not translate it", () => {
+    // A velocity is a direction and a magnitude, so it takes the ancestor's
+    // rotation and scale but never its position.
+    const child = physicsChild({ x: 0, y: 0 });
+    const g = staticGroup({ x: 1000, y: 1000, rotation: Math.PI / 2, children: [child] });
+
+    const world = new FakeWorld();
+    bindPhysicsBodies(asContainer(g), world);
+    world.unpin("b0", "NO_RUNNER");
+    child.__pendingVelocity = { x: 60, y: 0 };
+
+    flushPendingVelocity(asContainer(child), world);
+
+    expect(world.velocityCalls).toHaveLength(1);
+    expect(world.velocityCalls[0].vx).toBeCloseTo(0, 8);
+    expect(world.velocityCalls[0].vy).toBeCloseTo(60, 8);
+  });
+
+  it("leaves a top-level object's placement untouched", () => {
+    // Identity transform — which is every object in every scene written before
+    // Phase 2, so this is the no-regression case.
+    const child = physicsChild({ x: 250, y: 175 });
+    const root = makeContainer({ children: [child] });
+
+    const world = new FakeWorld();
+    bindPhysicsBodies(asContainer(root), world);
+
+    expect(world.addCalls[0].x).toBe(250);
+    expect(world.addCalls[0].y).toBe(175);
+    expect(world.scaleCalls).toEqual([{ id: "b0", sx: 1, sy: 1 }]);
   });
 });
