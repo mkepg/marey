@@ -60,6 +60,7 @@ class RecordingWorld implements IPhysicsWorld {
   }
   idsOutsideBounds(_margin: number): string[] { return []; }
   isIdle(): boolean { return this.idle; }
+  boundsOf(_id: string): null { return null; }
   isAsleep(_id: string): boolean { return false; }
   destroy(): void { this.calls.push("destroy"); }
 }
@@ -124,7 +125,6 @@ function makeContainer(over: {
   c.__animations = over.animations ?? [];
   c.__sequences = over.sequence ? [over.sequence] : [];
   c.__physics = over.physics;
-  c.__kinematicPosAnimCount = 0;
   c.__bodyShape = { kind: "circle", radius: 10 };
   return c;
 }

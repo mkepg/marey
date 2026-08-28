@@ -176,11 +176,9 @@ export class SceneRuntime {
     if (justCompleted) applyAnim(ra, 0);
 
     // Completion side effects are state, not paint, so they must happen on the
-    // tick they occur — not once per rendered frame. Deferring them would let
-    // physics skip ticks while a stale kinematic count is still set.
+    // tick they occur — not once per rendered frame. Deferring them would fire
+    // them once per rendered frame instead, silently dropping physics ticks.
     if (justCompleted && ra.isPosAnim && ra.container.__declareLayout) {
-      ra.container.__kinematicPosAnimCount = Math.max(0, (ra.container.__kinematicPosAnimCount || 1) - 1);
-
       if (ra.anim.handOff && ra.anim.duration > 0) {
         const startPt = ra.startVal as IRPoint;
         const targetPt = ra.targetVal as IRPoint;
@@ -250,11 +248,12 @@ export class SceneRuntime {
 
   private spawnAnim(container: Container, anim: IRAnimation, localList: AnimOrPhysics[]): void {
     const isPos = anim.property === "position";
-    if (isPos) {
-      container.__kinematicPosAnimCount = (container.__kinematicPosAnimCount || 0) + 1;
-    }
 
     // A new runner attaching to this container thaws it (spec 6.7).
+    // The POS_ANIM hold below is reason-counted in the world, so two position
+    // animations on one object take two holds and two releases. An earlier
+    // `__kinematicPosAnimCount` on the container tracked the same thing and was
+    // read nowhere; the count lives in `MatterWorld.pinReasons` now.
     unpinBody(container, this.world, "FROZEN");
     if (isPos) pinBody(container, this.world, "POS_ANIM");
 

@@ -383,6 +383,21 @@ describe("MatterWorld pinning", () => {
     w.destroy();
   });
 
+  it("takes two releases when two reasons of the same kind hold the pin", () => {
+    // Two `animate position` blocks on one object take two holds. A Set
+    // collapsed them, so the first to finish handed the body back to the
+    // solver while the second was still driving it.
+    const w = new MatterWorld(800, 600);
+    w.addBody("a", { kind: "circle", radius: 10 }, 100, 100, 0, VACUUM);
+    w.pin("a", "POS_ANIM");
+    w.pin("a", "POS_ANIM");
+    w.unpin("a", "POS_ANIM");
+    expect(w.isPinned("a")).toBe(true);
+    w.unpin("a", "POS_ANIM");
+    expect(w.isPinned("a")).toBe(false);
+    w.destroy();
+  });
+
   it("ignores an unpin for a reason that was never applied", () => {
     const w = new MatterWorld(800, 600);
     w.addBody("a", { kind: "circle", radius: 10 }, 400, 100,
@@ -464,5 +479,140 @@ describe("MatterWorld culling", () => {
     const w = new MatterWorld(800, 600);
     expect(w.idsOutsideBounds(800)).toEqual([]);
     w.destroy();
+  });
+});
+
+describe("compound bodies (spec D16, D18)", () => {
+  it("welds parts into one body whose reference point is the local origin", () => {
+    // Two squares either side of the group origin, the right one heavier, so
+    // the centre of mass is NOT the origin. That is the whole point of D16:
+    // a group's reference point is its origin, not its content's centre.
+    const world = new MatterWorld(800, 600);
+    world.addBody("g", {
+      kind: "compound",
+      parts: [
+        { kind: "rectangle", width: 20, height: 20, x: -50, y: 0, angle: 0 },
+        { kind: "rectangle", width: 60, height: 60, x: 50, y: 0, angle: 0 },
+      ],
+    }, 400, 100, 0, VACUUM);
+
+    const state = world.readState("g", 1)!;
+    expect(state.x).toBeCloseTo(400, 6);
+    expect(state.y).toBeCloseTo(100, 6);
+    world.destroy();
+  });
+
+  it("keeps the reference point on the origin through a rotation", () => {
+    const world = new MatterWorld(800, 600);
+    world.addBody("g", {
+      kind: "compound",
+      parts: [
+        { kind: "rectangle", width: 20, height: 20, x: -50, y: 0, angle: 0 },
+        { kind: "rectangle", width: 60, height: 60, x: 50, y: 0, angle: 0 },
+      ],
+    }, 400, 100, Math.PI / 2, VACUUM);
+
+    // Rotating 90deg about the centre of mass at (440, 100) carries the origin
+    // from (400, 100) to (440, 60). Measured against Matter 0.20.0.
+    const state = world.readState("g", 1)!;
+    expect(state.x).toBeCloseTo(440, 4);
+    expect(state.y).toBeCloseTo(60, 4);
+    world.destroy();
+  });
+
+  it("collides using the real parts, not the parent's convex hull", () => {
+    // An L: the notch must let a small body through. If Matter collided on the
+    // auto-hull the notch would be solid.
+    const world = new MatterWorld(800, 600);
+    world.addBody("L", {
+      kind: "compound",
+      parts: [
+        { kind: "rectangle", width: 200, height: 20, x: 0, y: 90, angle: 0 },
+        { kind: "rectangle", width: 20, height: 200, x: -90, y: 0, angle: 0 },
+      ],
+    }, 400, 400, 0, VACUUM);
+    world.pin("L", "NO_RUNNER");
+
+    // Dropped into the notch — clear of both arms.
+    world.addBody("ball", { kind: "circle", radius: 6 }, 440, 330, 0, {
+      ...VACUUM, gravityY: 980,
+    });
+
+    for (let i = 0; i < TICK_HZ; i++) world.step();
+
+    // It rests on the horizontal arm at y ~= 400 + 90 - 10 - 6, not on the hull
+    // top at y ~= 400 - 100 - 6.
+    const y = world.readState("ball", 1)!.y;
+    expect(y).toBeGreaterThan(400);
+    world.destroy();
+  });
+
+  it("falls back to a unit rectangle for a compound with no parts", () => {
+    // An empty group. Body.create({parts: []}) would silently return Matter's
+    // default 40x40 body.
+    const world = new MatterWorld(800, 600);
+    world.addBody("empty", { kind: "compound", parts: [] }, 400, 100, 0, VACUUM);
+    const state = world.readState("empty", 1)!;
+    expect(state.x).toBeCloseTo(400, 6);
+    expect(state.y).toBeCloseTo(100, 6);
+    world.destroy();
+  });
+
+  it("sets deltaTime on the parent, which is the only one Matter reads", () => {
+    // Body.create defaults deltaTime to 1000/60 on the parent AND every part.
+    // Body.update and setVelocity/getVelocity read only the parent's, so the
+    // parent is the correct place — but this is exactly the class of unstated
+    // normalisation the 6.3 conversions got wrong once.
+    const world = new MatterWorld(800, 600);
+    world.addBody("g", {
+      kind: "compound",
+      parts: [{ kind: "rectangle", width: 40, height: 40, x: 0, y: 0, angle: 0 }],
+    }, 400, 100, 0, { ...VACUUM, collideBounds: false });
+
+    // A vacuum body given 600 px/s must travel 600px in one second, exactly as
+    // the single-body assertion in this file requires.
+    //
+    // collideBounds must be off: at 600 px/s from x=400 the body reaches the
+    // right wall in well under a second and stops dead against it at x=780,
+    // which looks like a velocity-conversion bug and is not one.
+    world.setVelocity("g", 600, 0);
+    for (let i = 0; i < TICK_HZ; i++) world.step();
+    expect(world.readState("g", 1)!.x).toBeCloseTo(1000, 0);
+    world.destroy();
+  });
+
+  it("scales a compound about its centre of mass, keeping visual and body aligned (D7)", () => {
+    const world = new MatterWorld(800, 600);
+    world.addBody("g", {
+      kind: "compound",
+      parts: [
+        { kind: "rectangle", width: 20, height: 20, x: -50, y: 0, angle: 0 },
+        { kind: "rectangle", width: 60, height: 60, x: 50, y: 0, angle: 0 },
+      ],
+    }, 400, 100, 0, VACUUM);
+
+    world.setScale("g", 2, 2);
+
+    // The centre of mass holds at (440, 100); the origin is offset (-40, 0)
+    // from it at scale 1, so at scale 2 it reads 80px to its left.
+    const state = world.readState("g", 1)!;
+    expect(state.x).toBeCloseTo(360, 4);
+    expect(state.y).toBeCloseTo(100, 4);
+    world.destroy();
+  });
+
+  it("bakes a part's own angle into a rotated rectangle part", () => {
+    const world = new MatterWorld(800, 600);
+    world.addBody("g", {
+      kind: "compound",
+      parts: [
+        { kind: "rectangle", width: 100, height: 10, x: 0, y: 0, angle: Math.PI / 2 },
+      ],
+    }, 400, 100, 0, VACUUM);
+    // A 100x10 bar rotated 90deg is 10 wide and 100 tall.
+    const b = world.boundsOf("g")!;
+    expect(b.max.x - b.min.x).toBeCloseTo(10, 4);
+    expect(b.max.y - b.min.y).toBeCloseTo(100, 4);
+    world.destroy();
   });
 });

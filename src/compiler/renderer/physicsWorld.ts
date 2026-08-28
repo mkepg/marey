@@ -79,21 +79,59 @@ export function gravityToTickDelta(pxPerSecSq: number): number {
 export type PinReason = "NO_RUNNER" | "POS_ANIM" | "FROZEN";
 
 /**
+ * A point in a body's own local space. Spelled inline rather than imported,
+ * because this module must not depend on `pixi.js` (D9) and does not depend on
+ * the IR either.
+ */
+export interface LocalPoint {
+  readonly x: number;
+  readonly y: number;
+}
+
+/**
+ * One shape inside a compound, placed in the group's local space.
+ *
+ * `x`/`y` locate the shape's own pivot — its centre for a circle or rectangle,
+ * its bounding-box centre for a polygon — which is the same point `builder.ts`
+ * pivots the drawn shape about. `angle` is radians.
+ */
+export type BodyPart =
+  | { readonly kind: "circle"; readonly radius: number; readonly x: number; readonly y: number }
+  | {
+      readonly kind: "rectangle";
+      readonly width: number; readonly height: number;
+      readonly x: number; readonly y: number; readonly angle: number;
+    }
+  | {
+      readonly kind: "polygon";
+      readonly points: ReadonlyArray<LocalPoint>;
+      readonly x: number; readonly y: number; readonly angle: number;
+    };
+
+/**
  * Plain geometry, in the container's own local space. Deliberately free of
  * any PixiJS type (spec D9).
  *
- * `addBody` places the geometry's bounding-box centre — not necessarily its
- * centre of mass, and not necessarily the local origin — at the (x, y) it is
- * given (spec D15). That is what keeps the drawn shape aligned with its
- * collision shape as a body rotates.
+ * `addBody` places the geometry's **reference point** at the (x, y) it is
+ * given. Each kind defines its own, and the stored offset is always
+ * `referencePoint − centreOfMass` (spec D16, which generalises D15):
+ *
+ * | kind        | reference point            | offset            |
+ * |-------------|----------------------------|-------------------|
+ * | `circle`    | shape centre               | zero              |
+ * | `rectangle` | shape centre               | zero              |
+ * | `polygon`   | bounding-box centre        | bbox − centroid   |
+ * | `compound`  | the group's local origin   | origin − centre   |
+ *
+ * That is what keeps the drawn shape aligned with its collision shape as a
+ * body rotates, and what makes a group rotate about its declared origin
+ * rather than about its content's centre of mass.
  */
 export type BodyGeometry =
   | { readonly kind: "circle"; readonly radius: number }
   | { readonly kind: "rectangle"; readonly width: number; readonly height: number }
-  | {
-      readonly kind: "polygon";
-      readonly points: ReadonlyArray<{ readonly x: number; readonly y: number }>;
-    };
+  | { readonly kind: "polygon"; readonly points: ReadonlyArray<LocalPoint> }
+  | { readonly kind: "compound"; readonly parts: ReadonlyArray<BodyPart> };
 
 /** Declare's physics properties, in Declare's units. px/s, px/s^2, 0..1. */
 export interface PhysicsParams {
@@ -139,6 +177,8 @@ export interface IPhysicsWorld {
   isIdle(): boolean;
   /** Whether a body is currently dormant. A sleeping body still collides. */
   isAsleep(id: string): boolean;
+  /** A body's world-space AABB. Test-facing; the renderer does not need it. */
+  boundsOf(id: string): Matter.Bounds | null;
   destroy(): void;
 }
 
@@ -152,16 +192,88 @@ interface BodyRecord {
   readonly body: Matter.Body;
   gravityX: number;
   gravityY: number;
-  /** Local vector from centre of mass to bounding-box centre, at scale 1. */
+  /** Local vector from centre of mass to the geometry's reference point, at scale 1. */
   readonly offsetX: number;
   readonly offsetY: number;
   scaleX: number;
   scaleY: number;
-  readonly pinReasons: Set<PinReason>;
+  /** Why this body is pinned, and how many holds each reason has. */
+  readonly pinReasons: Map<PinReason, number>;
   angleOverride: number | null;
   prevX: number;
   prevY: number;
   prevAngle: number;
+}
+
+/**
+ * Matter's `Vertices.hull` is typed as taking `Matter.Vertex[]`
+ * (index/body/isInternal), but the real implementation
+ * (`../matter-js-master/src/geometry/Vertices.js`) only ever reads `.x`/`.y`
+ * off each entry, so plain points are safe at runtime.
+ *
+ * Hulling up front rather than letting Matter fall back internally also avoids
+ * its `warnOnce` about the `poly-decomp` we deliberately do not ship (spec 3).
+ */
+function hullOf(points: ReadonlyArray<LocalPoint>): Matter.Vertex[] {
+  return Matter.Vertices.hull(
+    points.map((p) => ({ x: p.x, y: p.y })) as Matter.Vertex[]
+  );
+}
+
+/** Rotate points about the local origin. */
+function rotatePoints(points: ReadonlyArray<LocalPoint>, angle: number): LocalPoint[] {
+  if (angle === 0) return points.map((p) => ({ x: p.x, y: p.y }));
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  return points.map((p) => ({ x: p.x * c - p.y * s, y: p.x * s + p.y * c }));
+}
+
+/**
+ * A polygon body whose *bounding-box centre* lands at (x, y).
+ *
+ * `Bodies.fromVertices` places the centre of MASS at the point it is given, and
+ * for an asymmetric polygon those are different points — 7.5px apart for the
+ * default scene's own triangle. This is D15.
+ */
+function polygonBodyAtBboxCentre(
+  points: ReadonlyArray<LocalPoint>,
+  x: number,
+  y: number
+): Matter.Body {
+  // Matter.Vertex extends Vector, so the hull passes straight to fromVertices.
+  const hull = hullOf(points);
+  const centroid = Matter.Vertices.centre(hull);
+  const bounds = Matter.Bounds.create(hull);
+  const offX = (bounds.min.x + bounds.max.x) / 2 - centroid.x;
+  const offY = (bounds.min.y + bounds.max.y) / 2 - centroid.y;
+  return Matter.Bodies.fromVertices(x - offX, y - offY, [hull]);
+}
+
+/**
+ * One Matter body for a part, with the part's own pivot placed at
+ * (originX + p.x, originY + p.y).
+ *
+ * A rotated rectangle takes `angle` as an option, because a rectangle's pivot
+ * is its centre and `Bodies.rectangle` rotates about that. A rotated polygon
+ * instead has its *points* rotated first, because its pivot is the bounding-box
+ * centre and `Body.setAngle` would rotate it about the centre of mass.
+ */
+function createPartBody(p: BodyPart, originX: number, originY: number): Matter.Body {
+  const x = originX + p.x;
+  const y = originY + p.y;
+
+  if (p.kind === "circle") {
+    return Matter.Bodies.circle(x, y, Math.max(p.radius, 0.5));
+  }
+  if (p.kind === "rectangle") {
+    return Matter.Bodies.rectangle(
+      x, y,
+      Math.max(p.width, 1),
+      Math.max(p.height, 1),
+      { angle: p.angle }
+    );
+  }
+  return polygonBodyAtBboxCentre(rotatePoints(p.points, p.angle), x, y);
 }
 
 export class MatterWorld implements IPhysicsWorld {
@@ -211,9 +323,10 @@ export class MatterWorld implements IPhysicsWorld {
     angle: number,
     params: PhysicsParams
   ): void {
+    // Every branch places the geometry's REFERENCE POINT at (x, y); the offset
+    // then falls out as `(x, y) − centreOfMass` uniformly. See BodyGeometry's
+    // table and spec D16.
     let body: Matter.Body;
-    let offsetX = 0;
-    let offsetY = 0;
 
     if (geometry.kind === "circle") {
       body = Matter.Bodies.circle(x, y, Math.max(geometry.radius, 0.5));
@@ -223,34 +336,28 @@ export class MatterWorld implements IPhysicsWorld {
         Math.max(geometry.width, 1),
         Math.max(geometry.height, 1)
       );
+    } else if (geometry.kind === "polygon") {
+      body = polygonBodyAtBboxCentre(geometry.points, x, y);
+    } else if (geometry.parts.length === 0) {
+      // An empty group. Body.create({parts: []}) would silently hand back
+      // Matter's default 40x40 body; a unit rectangle preserves what a
+      // zero-area group did before compounds existed.
+      body = Matter.Bodies.rectangle(x, y, 1, 1);
     } else {
-      // Hull up front rather than letting Matter fall back internally: it warns
-      // once per concave input about the poly-decomp we deliberately do not ship.
-      // Vertices.hull is typed as taking Matter.Vertex[] (index/body/isInternal),
-      // but the real implementation (../matter-js-master/src/geometry/Vertices.js)
-      // only ever reads .x/.y off each entry, so plain points are safe at runtime.
-      const hull = Matter.Vertices.hull(
-        geometry.points.map((p) => ({ x: p.x, y: p.y })) as Matter.Vertex[]
-      );
-      const centroid = Matter.Vertices.centre(hull);
-      // The caller's (x, y) designates the shape's bounding-box centre, not
-      // its centre of mass — those coincide only when the raw points happen
-      // to straddle their own bbox centre at the local origin. Compute the
-      // actual bbox centre (min/max) rather than assuming that, so a polygon
-      // whose local origin isn't its bbox centre (as this triangle deliberately
-      // isn't) still reports readState at the bbox centre the caller asked for.
-      const bounds = Matter.Bounds.create(hull);
-      const bboxCentreX = (bounds.min.x + bounds.max.x) / 2;
-      const bboxCentreY = (bounds.min.y + bounds.max.y) / 2;
-      offsetX = bboxCentreX - centroid.x;
-      offsetY = bboxCentreY - centroid.y;
-      // fromVertices puts the centre of MASS at the point given, so place it
-      // where it belongs relative to the bbox centre we were handed.
-      body = Matter.Bodies.fromVertices(x - offsetX, y - offsetY, [hull]);
+      body = Matter.Body.create({
+        parts: geometry.parts.map((p) => createPartBody(p, x, y)),
+      });
     }
 
+    // Captured before setAngle, so it is a body-LOCAL vector: at angle 0 the
+    // body's local axes and the world's coincide.
+    const offsetX = x - body.position.x;
+    const offsetY = y - body.position.y;
+
     // Body.create defaults deltaTime to 1000/60. Left alone, the first tick
-    // would run with Matter's time correction at 0.5.
+    // would run with Matter's time correction at 0.5. Parts inherit the same
+    // default, but Body.update and setVelocity/getVelocity read only the
+    // parent's, so the parent is the only one that needs it.
     body.deltaTime = MATTER_DELTA_MS;
     Matter.Body.setAngle(body, angle);
 
@@ -262,7 +369,7 @@ export class MatterWorld implements IPhysicsWorld {
       offsetY,
       scaleX: 1,
       scaleY: 1,
-      pinReasons: new Set(),
+      pinReasons: new Map(),
       angleOverride: null,
       prevX: body.position.x,
       prevY: body.position.y,
@@ -333,14 +440,24 @@ export class MatterWorld implements IPhysicsWorld {
     const rec = this.records.get(id);
     if (!rec) return;
     const wasPinned = rec.pinReasons.size > 0;
-    rec.pinReasons.add(reason);
+    // Counted, not a set: two position animations on one object take two holds
+    // and must take two releases. A Set silently collapsed them, so the first
+    // animation to finish handed the body back to the solver while the second
+    // was still driving it.
+    rec.pinReasons.set(reason, (rec.pinReasons.get(reason) ?? 0) + 1);
     if (!wasPinned) Matter.Body.setStatic(rec.body, true);
   }
 
   unpin(id: string, reason: PinReason): void {
     const rec = this.records.get(id);
     if (!rec) return;
-    if (!rec.pinReasons.delete(reason)) return;
+    const held = rec.pinReasons.get(reason);
+    if (held === undefined) return;
+    if (held > 1) {
+      rec.pinReasons.set(reason, held - 1);
+      return;
+    }
+    rec.pinReasons.delete(reason);
     if (rec.pinReasons.size > 0) return;
     // setStatic collapses positionPrev onto position, so the body resumes from
     // rest. Callers that want momentum carried across call setVelocity after.
@@ -454,6 +571,12 @@ export class MatterWorld implements IPhysicsWorld {
   isAsleep(id: string): boolean {
     const rec = this.records.get(id);
     return rec ? rec.body.isSleeping : false;
+  }
+
+  /** A body's world-space AABB. Test-facing; the renderer does not need it. */
+  boundsOf(id: string): Matter.Bounds | null {
+    const rec = this.records.get(id);
+    return rec ? rec.body.bounds : null;
   }
 
   destroy(): void {

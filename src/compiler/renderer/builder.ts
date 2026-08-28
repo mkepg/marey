@@ -27,7 +27,6 @@ declare module "pixi.js" {
     __bodyShape?: BodyGeometry;
     __sequences?: ReadonlyArray<IRSequence>;
     __baseSize?: { w: number; h: number };
-    __kinematicPosAnimCount?: number;
   }
 }
 
@@ -224,7 +223,6 @@ export function buildNode(node: IRObjectNode): Container {
 
   wrapper.__animations = props.animations;
   wrapper.__sequences  = props.sequences;
-  wrapper.__kinematicPosAnimCount = 0;
 
   let startPos   = { x: 0, y: 0 };
   let startScale = { x: 1, y: 1 };

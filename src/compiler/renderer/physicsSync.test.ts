@@ -112,6 +112,11 @@ class FakeWorld implements IPhysicsWorld {
     return true;
   }
 
+  boundsOf(_id: string): null {
+    // Not exercised by physicsSync.
+    return null;
+  }
+
   isAsleep(_id: string): boolean {
     return false;
   }
