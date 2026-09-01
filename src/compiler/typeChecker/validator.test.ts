@@ -10,6 +10,17 @@ function errorsFor(source: string): string[] {
   return typeErrors.map((e) => e.message);
 }
 
+describe("released property names", () => {
+  it.each(["anchor", "width", "height"])("allows %s as an object and binding name", (name) => {
+    expect(errorsFor(`def ${name} = 12\nscene { size: (100, 100) circle ${name} { position: (50, 50), radius: ${name} } }`)).toEqual([]);
+  });
+
+  it("keeps removed reservations invalid as properties", () => {
+    const out = errorsFor(`scene { size: (100,100) circle c { position:(50,50), radius:10, anchor: 0 } }`);
+    expect(out.join("\n")).toContain("unknown property 'anchor'");
+  });
+});
+
 describe("physics inside a group (spec D17)", () => {
   it("rejects physics on a child of a physics group", () => {
     const out = errorsFor(`

@@ -1,5 +1,50 @@
 import type { AstValue, NumberValue, PointValue, StringValue, PointListValue, ColorValue, BooleanValue, EasingValue, AnimPropertyValue } from "../types";
 import type { IRColor, IRPoint, IRPointList, IRSceneFit, IREasing } from "../sceneIR";
+import { EASING_VALUES as CONTRACT_EASING_VALUES, FIT_VALUES, propertyDefault } from "../languageContract";
+import type { ContractDefault } from "../languageContract";
+
+function requireContractDefault(block: string, key: string): ContractDefault {
+  const value = propertyDefault(block, key);
+  if (value === undefined) {
+    throw new Error(`[IR] No default configured for contract property '${block}.${key}'.`);
+  }
+  return value;
+}
+
+function invalidContractDefault(block: string, key: string, expected: string): never {
+  throw new Error(`[IR] Contract default '${block}.${key}' must be ${expected}.`);
+}
+
+export function contractNumberDefault(block: string, key: string): number {
+  const value = requireContractDefault(block, key);
+  return typeof value === "number" ? value : invalidContractDefault(block, key, "a number");
+}
+
+export function contractBooleanDefault(block: string, key: string): boolean {
+  const value = requireContractDefault(block, key);
+  return typeof value === "boolean" ? value : invalidContractDefault(block, key, "a boolean");
+}
+
+export function contractPointDefault(block: string, key: string): IRPoint {
+  const value = requireContractDefault(block, key);
+  return typeof value === "object"
+    ? { x: value.x, y: value.y }
+    : invalidContractDefault(block, key, "a point");
+}
+
+export function contractStringDefault(block: string, key: string): string {
+  const value = requireContractDefault(block, key);
+  return typeof value === "string" ? value : invalidContractDefault(block, key, "a string");
+}
+
+function isSceneFit(value: string): value is IRSceneFit {
+  return (FIT_VALUES as readonly string[]).includes(value);
+}
+
+function isEasing(value: string): value is IREasing {
+  return (CONTRACT_EASING_VALUES as readonly string[]).includes(value);
+}
+
 function normaliseColor(raw: string): IRColor {
   const hex = raw.startsWith("#") ? raw.slice(1) : raw;
   if (hex.length === 3) {
@@ -33,20 +78,32 @@ export function resolveScale(props: Record<string, AstValue>, key: string, fallb
   }
   return fallback;
 }
-export function resolveSceneFit(props: Record<string, AstValue>): IRSceneFit {
+export function resolveSceneFit(
+  props: Record<string, AstValue>,
+  fallback: string = contractStringDefault("scene", "sceneFit"),
+): IRSceneFit {
   const v = props["sceneFit"];
-  if (v?.kind === "sceneFit") return v.value as IRSceneFit;
-  return "contain";
+  if (v?.kind === "sceneFit" && isSceneFit(v.value)) return v.value;
+  if (isSceneFit(fallback)) return fallback;
+  throw new Error(`[IR] Invalid sceneFit fallback '${fallback}'.`);
 }
 export function resolveBoolean(props: Record<string, AstValue>, key: string, fallback: boolean): boolean {
   const v = props[key];
   if (v?.kind === "boolean") return (v as BooleanValue).value;
   return fallback;
 }
-export function resolveEasing(props: Record<string, AstValue>, key: string, fallback: IREasing): IREasing {
+export function resolveEasing(
+  props: Record<string, AstValue>,
+  key: string,
+  fallback: string = contractStringDefault("animate", "easing"),
+): IREasing {
   const v = props[key];
-  if (v?.kind === "easing") return (v as EasingValue).value as IREasing;
-  return fallback;
+  if (v?.kind === "easing") {
+    const easing = (v as EasingValue).value;
+    if (isEasing(easing)) return easing;
+  }
+  if (isEasing(fallback)) return fallback;
+  throw new Error(`[IR] Invalid easing fallback '${fallback}'.`);
 }
 export function getReqAnimProperty(props: Record<string, AstValue>, key: string): string {
   return (props[key] as AnimPropertyValue).value;
@@ -55,7 +112,7 @@ export function resolveAnimToValue(props: Record<string, AstValue>, key: string)
   const v = props[key];
   if (v.kind === "number") return v.value;
   if (v.kind === "point") return { x: v.x, y: v.y };
-  if (v.kind === "color") return resolveColor(props, key, "#000");
+  if (v.kind === "color") return resolveColor(props, key, contractStringDefault("circle", "color"));
   return 0;
 }
 export function getReqNumber(props: Record<string, AstValue>, key: string): number {

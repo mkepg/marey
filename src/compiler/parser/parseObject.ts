@@ -1,18 +1,11 @@
 import type { ObjectNode, ObjectType, AstValue } from "../types";
 import { KEYWORDS } from "../lexer";
+import { RESERVED_PROPERTY_NAMES } from "../languageContract";
 import { ParserState, describeToken, ParseException } from "./state";
 import { parseValue } from "./parseValue";
 import { parseDef } from "./parseDef";
 import { parseGenerate } from "./parseGenerate";
 import { parseUse } from "./parseUse";
-
-const RESERVED_PROPS = new Set<string>([
-  "background", "size", "sceneFit", "position", "radius", "color",
-  "alpha", "rotation", "scale", "anchor", "z", "width", "height",
-  "points", "content", "fontSize", "thickness", "property", "to",
-  "duration", "easing", "loop", "yoyo", "velocity", "gravity",
-  "airDrag", "bounce", "collideBounds", "handOff"
-]);
 
 function parseParallelBlock(state: ParserState, parentContext: string): ObjectNode {
   const parTok = state.consume("KEYWORD");
@@ -179,7 +172,7 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
     if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(objName)) {
       state.throwError(`In ${state.currentContext}: Invalid object name '${objName}'. Must start with a letter and contain only alphanumeric chars or underscores.`, nameTok);
     }
-    if (RESERVED_PROPS.has(objName) || KEYWORDS.has(objName)) {
+    if (RESERVED_PROPERTY_NAMES.has(objName) || KEYWORDS.has(objName)) {
       state.throwError(`In ${state.currentContext}: '${objName}' is a reserved word and cannot be used as an object name.`, nameTok);
     }
   }

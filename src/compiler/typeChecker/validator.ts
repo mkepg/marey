@@ -1,48 +1,97 @@
 import type { AstNode, ObjectNode, AstValue, CompilerError } from "../types";
+import {
+  ANIMATABLE_PROPERTIES,
+  KIND_LABEL,
+  LANGUAGE_CONTRACT,
+  PROP_TYPES,
+  REQUIRED_PROPS,
+} from "../languageContract";
+import type { PropertySpec } from "../languageContract";
 
 type PropKind = AstValue["kind"];
 type PropContract = PropKind | readonly PropKind[];
 
-export const REQUIRED_PROPS: Readonly<Record<string, readonly string[]>> = {
-  scene:     ["size"],
-  circle:    ["position", "radius"],
-  rectangle: ["position", "size"],
-  polygon:   ["points"],
-  line:      ["position", "points", "thickness"],
-  text:      ["position", "content"],
-  animate:   ["property", "to", "duration"],
-  physics:   ["duration"],
-  group:     [],
-  sequence:  [],
-  parallel:  [],
-};
+export { KIND_LABEL, PROP_TYPES, REQUIRED_PROPS } from "../languageContract";
 
-export const PROP_TYPES: Readonly<Record<string, Readonly<Record<string, PropContract>>>> = {
-  scene:     { background: "color", size: "point", sceneFit: "sceneFit" },
-  circle:    { position: "point", radius: "number", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], z: "number" },
-  rectangle: { position: "point", size: "point",   color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], z: "number" },
-  polygon:   { position: "point", points: "pointList", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], z: "number" },
-  line:      { position: "point", points: "pointList", thickness: "number", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], z: "number" },
-  text:      { position: "point", content: "string", fontSize: "number", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], z: "number" },
-  animate:   { property: "animProperty", to: ["number", "point"], duration: "number", easing: "easing", loop: "boolean", yoyo: "boolean", handOff: "boolean" },
-  physics:   { velocity: "point", gravity: "point", airDrag: "number", bounce: "number", collideBounds: "boolean", duration: ["number", "indefinitely"] },
-  group:     { position: "point", rotation: "number", scale: ["number", "point"], alpha: "number", z: "number" },
-  sequence:  {},
-  parallel:  {},
-};
+function formatConstraintNumber(value: number): string {
+  return Number.isInteger(value) ? `${value}.0` : `${value}`;
+}
 
-export const KIND_LABEL: Readonly<Record<PropKind, string>> = {
-  number:       "a number",
-  color:        "a color (hex code or named color keyword)",
-  string:       "a quoted string",
-  point:        "a point (x, y)",
-  pointList:    "a point list [(x,y), ...]",
-  sceneFit:     "a sceneFit keyword (contain, cover, fill, or none)",
-  boolean:      "a boolean (true or false)",
-  easing:       "an easing keyword (e.g. easeInOut, linear)",
-  animProperty: "an animatable property name (e.g. position, rotation, scale, alpha)",
-  indefinitely: "the keyword 'indefinitely'",
-};
+function formatPointCount(value: number): string {
+  return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+function validateLocalConstraint(
+  label: string,
+  typeName: string,
+  key: string,
+  val: AstValue,
+  spec: PropertySpec,
+): CompilerError | undefined {
+  const constraint = spec.constraint;
+  if (!constraint) return undefined;
+
+  const errPos = {
+    line: val.line,
+    col: val.col,
+    endLine: val.endLine,
+    endCol: val.endCol,
+  };
+  const error = (message: string): CompilerError => ({ phase: "TYPE", message, ...errPos });
+
+  switch (constraint.kind) {
+    case "range":
+      if (val.kind === "number" && (val.value < constraint.min || val.value > constraint.max)) {
+        return error(`${label}: '${key}' must be between ${formatConstraintNumber(constraint.min)} and ${formatConstraintNumber(constraint.max)} inclusive, but got ${val.value}.`);
+      }
+      return undefined;
+
+    case "positive":
+      if (val.kind === "number" && val.value <= 0) {
+        if (key === "duration") {
+          return error(`${label}: 'duration' must be strictly greater than 0, but got ${val.value}.`);
+        }
+        return error(`${label}: '${key}' must be greater than 0, but got ${val.value}.`);
+      }
+      return undefined;
+
+    case "positivePoint":
+      if (val.kind === "point") {
+        if (val.x <= 0 && val.y <= 0) {
+          return error(`${label}: '${key}' width and height must both be greater than 0.`);
+        }
+        if (val.x <= 0) {
+          return error(`${label}: '${key}' width must be greater than 0, but got ${val.x}.`);
+        }
+        if (val.y <= 0) {
+          return error(`${label}: '${key}' height must be greater than 0, but got ${val.y}.`);
+        }
+      }
+      return undefined;
+
+    case "maxLength":
+      if (val.kind === "string" && val.value.length > constraint.max) {
+        return error(`[TYPE_TEXT_TOO_LONG] ${label}: '${key}' string is too long (${val.value.length} chars). Maximum allowed is ${constraint.max} characters to prevent rendering crashes.`);
+      }
+      return undefined;
+
+    case "pointCount":
+      if (val.kind === "pointList") {
+        if (val.value.length < constraint.min) {
+          return error(`${label}: '${typeName}' requires at least ${constraint.min} points.`);
+        }
+        if (val.value.length > constraint.max) {
+          return error(`[TYPE_POLYGON_TOO_LARGE] ${label}: '${typeName}' exceeds the maximum safe limit of ${formatPointCount(constraint.max)} points.`);
+        }
+      }
+      return undefined;
+
+    default: {
+      const _never: never = constraint;
+      return _never;
+    }
+  }
+}
 
 export function collectErrors(ast: AstNode): CompilerError[] {
   const errors: CompilerError[] = [];
@@ -251,8 +300,8 @@ export function collectErrors(ast: AstNode): CompilerError[] {
 
       if (propVal && toVal && propVal.kind === "animProperty") {
         const p = propVal.value as string;
-        if (!["position", "rotation", "scale", "alpha"].includes(p)) {
-          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_PROP] Cannot animate property '${p}'. Supported properties are: position, rotation, scale, alpha.`, line: propVal.line, col: propVal.col, endLine: propVal.endLine, endCol: propVal.endCol });
+        if (!(ANIMATABLE_PROPERTIES as readonly string[]).includes(p)) {
+          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_PROP] Cannot animate property '${p}'. Supported properties are: ${ANIMATABLE_PROPERTIES.join(", ")}.`, line: propVal.line, col: propVal.col, endLine: propVal.endLine, endCol: propVal.endCol });
         }
         if (p === "position" && toVal.kind !== "point") {
           errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property 'position' expects a point for 'to' (e.g., to: (100, 100)).`, line: toVal.line, col: toVal.col, endLine: toVal.endLine, endCol: toVal.endCol });
@@ -303,9 +352,7 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         continue;
       }
 
-      const effectiveExpected = (typeName === "physics" && key === "duration")
-        ? (["number", "indefinitely"] as readonly PropKind[])
-        : expected;
+      const effectiveExpected: PropContract = expected;
 
       const isExpected = Array.isArray(effectiveExpected)
         ? (effectiveExpected as readonly string[]).includes(val.kind)
@@ -328,45 +375,18 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         continue;
       }
 
-      if (key === "duration" && val.kind === "number") {
-        if (val.value <= 0) errors.push({ phase: "TYPE", message: `${label}: 'duration' must be strictly greater than 0, but got ${val.value}.`, ...errPos });
-      }
-      if (key === "alpha" && val.kind === "number") {
-        if (val.value < 0 || val.value > 1) errors.push({ phase: "TYPE", message: `${label}: 'alpha' must be between 0.0 and 1.0 inclusive, but got ${val.value}.`, ...errPos });
-      }
-      if ((key === "airDrag" || key === "bounce") && val.kind === "number") {
-        if (val.value < 0 || val.value > 1) errors.push({ phase: "TYPE", message: `${label}: '${key}' must be between 0.0 and 1.0 inclusive, but got ${val.value}.`, ...errPos });
-      }
-      if (key === "radius" && val.kind === "number") {
-        if (val.value <= 0) errors.push({ phase: "TYPE", message: `${label}: 'radius' must be greater than 0, but got ${val.value}.`, ...errPos });
-      }
-      if (key === "thickness" && val.kind === "number") {
-        if (val.value <= 0) errors.push({ phase: "TYPE", message: `${label}: 'thickness' must be greater than 0, but got ${val.value}.`, ...errPos });
-      }
-      if (key === "fontSize" && val.kind === "number") {
-        if (val.value <= 0) errors.push({ phase: "TYPE", message: `${label}: 'fontSize' must be greater than 0, but got ${val.value}.`, ...errPos });
-      }
-      if (key === "content" && val.kind === "string") {
-        if (val.value.length > 500) {
-          errors.push({ phase: "TYPE", message: `[TYPE_TEXT_TOO_LONG] ${label}: 'content' string is too long (${val.value.length} chars). Maximum allowed is 500 characters to prevent rendering crashes.`, ...errPos });
-        }
-      }
       if (key === "scale") {
         if (val.kind === "number" && val.value <= 0) {
           errors.push({ phase: "TYPE", message: `[TYPE_INVALID_SCALE] ${label}: 'scale' must be greater than zero.`, ...errPos });
         } else if (val.kind === "point" && (val.x <= 0 || val.y <= 0)) {
           errors.push({ phase: "TYPE", message: `[TYPE_INVALID_SCALE] ${label}: 'scale' components must be greater than zero, but got (${val.x}, ${val.y}).`, ...errPos });
         }
-      }
-      if (key === "size" && val.kind === "point") {
-        if (val.x <= 0 && val.y <= 0) errors.push({ phase: "TYPE", message: `${label}: 'size' width and height must both be greater than 0.`, ...errPos });
-        else if (val.x <= 0) errors.push({ phase: "TYPE", message: `${label}: 'size' width must be greater than 0, but got ${val.x}.`, ...errPos });
-        else if (val.y <= 0) errors.push({ phase: "TYPE", message: `${label}: 'size' height must be greater than 0, but got ${val.y}.`, ...errPos });
-      }
-      if (key === "points" && val.kind === "pointList") {
-        if (typeName === "polygon" && val.value.length < 3) errors.push({ phase: "TYPE", message: `${label}: 'polygon' requires at least 3 points.`, ...errPos });
-        else if (typeName === "line" && val.value.length < 2) errors.push({ phase: "TYPE", message: `${label}: 'line' requires at least 2 points.`, ...errPos });
-        else if (val.value.length > 10000) errors.push({ phase: "TYPE", message: `[TYPE_POLYGON_TOO_LARGE] ${label}: '${typeName}' exceeds the maximum safe limit of 10,000 points.`, ...errPos });
+      } else {
+        const spec = LANGUAGE_CONTRACT[typeName as keyof typeof LANGUAGE_CONTRACT]?.properties[key];
+        const localError = spec
+          ? validateLocalConstraint(label, typeName, key, val, spec)
+          : undefined;
+        if (localError) errors.push(localError);
       }
     }
 
