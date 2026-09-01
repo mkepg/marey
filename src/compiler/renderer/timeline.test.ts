@@ -55,10 +55,38 @@ describe("advanceAnimTime", () => {
     expect(t.completed).toBe(false);
   });
 
-  it("rests at zero when a yoyo without loop returns to the start", () => {
+  it("completes a non-looping yoyo once on the return tick", () => {
     const t = makeAnim({ durationTicks: 2, yoyo: true });
-    for (let i = 0; i < 10; i++) advanceAnimTime(t);
-    expect(t.elapsedTicks).toBe(0);
+    expect([1, 2, 3].map(() => advanceAnimTime(t))).toEqual([false, false, false]);
+    expect(advanceAnimTime(t)).toBe(true);
+    expect(t).toMatchObject({ elapsedTicks: 0, direction: -1, completed: true });
+    expect(advanceAnimTime(t)).toBe(false);
+  });
+
+  it("completes a non-looping yoyo at exactly 2x durationTicks", () => {
+    // The off-by-one guard: the return leg is the same length as the outbound
+    // one, so completion lands on tick 2n, never 2n±1.
+    for (const durationTicks of [1, 2, 3, 10]) {
+      const t = makeAnim({ durationTicks, yoyo: true });
+      let completedAt = -1;
+      for (let i = 1; i <= durationTicks * 4; i++) {
+        if (advanceAnimTime(t)) { completedAt = i; break; }
+      }
+      expect(completedAt).toBe(durationTicks * 2);
+      expect(t.elapsedTicks).toBe(0);
+    }
+  });
+
+  it("keeps ping-ponging forever when a yoyo also loops", () => {
+    // The permission case beside the completion above: `loop: true` is still
+    // the way to ask for endless there-and-back motion, and must not complete.
+    const t = makeAnim({ durationTicks: 2, loop: true, yoyo: true });
+    const seen: number[] = [];
+    for (let i = 0; i < 12; i++) {
+      expect(advanceAnimTime(t)).toBe(false);
+      seen.push(t.elapsedTicks);
+    }
+    expect(seen).toEqual([1, 2, 1, 0, 1, 2, 1, 0, 1, 2, 1, 0]);
     expect(t.completed).toBe(false);
   });
 
@@ -98,6 +126,14 @@ describe("animProgress", () => {
   it("ignores alpha once completed so the end state is exact", () => {
     const t = makeAnim({ durationTicks: 10, elapsedTicks: 10, completed: true });
     expect(animProgress(t, 0.9)).toBe(1);
+  });
+
+  it("reports exactly the start value for a completed yoyo, ignoring alpha", () => {
+    // A non-looping yoyo completes back at elapsed 0, so its final painted and
+    // pushed value must be progress 0 — the animation's starting value — with
+    // no sub-tick reverse interpolation carrying it past.
+    const t = makeAnim({ durationTicks: 10, elapsedTicks: 0, direction: -1, completed: true, yoyo: true });
+    expect(animProgress(t, 0.9)).toBe(0);
   });
 
   it("clamps to the 0..1 range", () => {

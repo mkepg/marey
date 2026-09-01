@@ -212,22 +212,20 @@ progress 0 --------→ 1  ---------→ 0  ---------→ 1
          └──────── one full cycle ─────────┘
 ```
 
-**Pair `yoyo` with `loop`.** `yoyo: true` without `loop: true` plays out to
-`to`, plays back to its starting value, and then never finishes: on the tick
-it returns to the start it does not complete, it simply holds — the internal
-direction stays reversed and the elapsed position stays pinned at the start,
-tick after tick. The object rests at its original value, which usually looks
-correct, but the animation is still considered running. This has two
-consequences. The renderer's idle check never passes, so the ticker never
-stops. And if the same object also has a `physics` block, the position
-animation's hold on the object's body is never released, so the body stays
-pinned in place and never falls under gravity or responds to collisions.
-Every `yoyo: true` in the shipped default scene is paired with `loop: true`
-for exactly this reason.
+**`yoyo: true` without `loop: true` is a there-and-back that runs once.** It
+plays out to `to`, plays back, and finishes on the tick it arrives at its
+starting value — exactly `2 × duration` after it began. The value it finishes
+on is the value it started from, not `to`.
 
-Inside a `sequence` or `parallel` block, `loop: true` and `yoyo: true` are
-both compile errors (`TYPE_SEQ_LOOP`, `TYPE_SEQ_YOYO`) — a step that never
-finishes would stall the rest of the timeline.
+Finishing is what makes it a complete animation rather than a permanent one.
+On that tick the object stops being animated: the renderer's idle check can
+pass, so the ticker stops once nothing else is moving, and if the same object
+also has a `physics` block, the hold that a position animation keeps on the
+object's body is released — the body falls under gravity and takes collisions
+from then on, from the position it started at.
+
+Pairing the two gives the continuous form — a shape that breathes for as long
+as the scene runs:
 
 ```declare
 scene {
@@ -244,6 +242,29 @@ scene {
       easing: easeInOut
       loop: true
       yoyo: true
+    }
+  }
+}
+```
+
+Inside a `sequence` or `parallel` block, `loop: true` and `yoyo: true` are
+both compile errors (`TYPE_SEQ_LOOP`, `TYPE_SEQ_YOYO`). `loop: true` never
+finishes at all, so it would stall the timeline. `yoyo: true` does finish, but
+it would occupy the timeline for twice the `duration` written beside it, so a
+reader could not see when the following step starts. Write the return leg as
+its own step instead:
+
+```declare
+scene {
+  size: (800, 600)
+
+  rectangle nudge {
+    position: (100, 300)
+    size: (40, 40)
+    color: magenta
+    sequence {
+      animate { property: position, to: (400, 300), duration: 1.0 }
+      animate { property: position, to: (100, 300), duration: 1.0 }
     }
   }
 }
@@ -275,8 +296,9 @@ Omitting `duration` there is a compile error (`TYPE_SEQ_PHYSICS_DUR`), and
 because a simulation that never ends would prevent the timeline from ever
 advancing past it. `loop: true` and `yoyo: true` are likewise compile errors
 on any `animate` step inside a `sequence` or `parallel` (`TYPE_SEQ_LOOP`,
-`TYPE_SEQ_YOYO`; see above), for the same reason: a step that never finishes
-stalls the rest of the timeline.
+`TYPE_SEQ_YOYO`; see above) — a looping step never finishes at all, and a
+yoyo step would run for twice its written `duration`, hiding when the next
+step begins.
 
 The reverse rule applies to an object's own top-level `physics` block: if it
 sets `duration: indefinitely`, that object may not also have a `sequence`
@@ -330,7 +352,13 @@ twice that speed, and `easeOut` and `easeInOut` at half of it. `easeOut` and
 literally would hand off no momentum at all; the `0.5` is a deliberate
 choice, not a measurement of the curve.
 
-Four rules govern `handoff: true`, each a compile error when broken:
+**With `yoyo: true` the exit direction reverses.** A non-looping yoyo finishes
+at the end of its return leg, travelling from `to` back toward its starting
+value, so it hands off along that direction rather than the outbound one — the
+same speed, the opposite way. Its runtime is `2 × duration`, and that is the
+figure the duration rule below compares against.
+
+Five rules govern `handoff: true`, each a compile error when broken:
 
 - It is only valid on `property: position`; on any other property it is a
   compile error (`TYPE_HANDOFF_PROP`).
@@ -340,6 +368,11 @@ Four rules govern `handoff: true`, each a compile error when broken:
   (`TYPE_HANDOFF_PHYSICS`).
 - That sibling `physics` block may not also declare `velocity` — the
   animation's exit velocity would overwrite it (`TYPE_HANDOFF_AMBIGUITY`).
+- When that `physics` block runs alongside the animation rather than after it
+  in a `sequence`, and gives a numeric `duration`, that duration must be
+  strictly greater than the animation's runtime — otherwise the simulation is
+  already over by the time the momentum arrives (`TYPE_HANDOFF_DURATION`).
+  The runtime compared against is `2 × duration` for a `yoyo` animation.
 
 ```declare
 scene {

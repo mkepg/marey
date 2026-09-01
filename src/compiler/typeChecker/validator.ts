@@ -201,11 +201,17 @@ export function collectErrors(ast: AstNode): CompilerError[] {
               line: loopVal.line, col: loopVal.col, endLine: loopVal.endLine, endCol: loopVal.endCol,
             });
           }
+          // Unlike TYPE_SEQ_LOOP above, this rule no longer rests on a yoyo
+          // never finishing — a top-level non-looping yoyo completes after its
+          // return leg (P3A-10). It stays because a step is one leg of a
+          // timeline: a step whose runtime silently doubles is a step whose
+          // schedule the reader cannot see, and the two-step form is both
+          // explicit and already supported.
           const yoyoVal = child.props["yoyo"];
           if (yoyoVal?.kind === "boolean" && yoyoVal.value === true) {
             errors.push({
               phase: "TYPE",
-              message: `[TYPE_SEQ_YOYO] 'yoyo: true' is not allowed inside a '${typeName}' block — a yoyo animation never fully finishes and would prevent the timeline from advancing.`,
+              message: "[TYPE_SEQ_YOYO] 'yoyo: true' is not supported inside a sequence or parallel step. Express the return leg as a second explicit animation step.",
               line: yoyoVal.line, col: yoyoVal.col, endLine: yoyoVal.endLine, endCol: yoyoVal.endCol,
             });
           }

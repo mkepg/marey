@@ -173,8 +173,10 @@ export class SceneRuntime {
     // This is a state snap in the tick phase, not a side effect moved into
     // paint, so it does not conflict with invariant 2 — it is the same move
     // `snapContainerToBody` already makes for the freeze transition, and for
-    // the same reason. `animProgress` returns 1 for a completed runner, so
-    // evaluating at alpha 0 gives exactly the final value.
+    // the same reason. `animProgress` drops the sub-tick term once a runner is
+    // completed, so evaluating at alpha 0 gives exactly the final value: `to`
+    // for a plain animation, and the starting value for a non-looping yoyo,
+    // which finishes back where it began (P3A-10).
     if (justCompleted) applyAnim(ra, 0);
 
     // Completion side effects are state, not paint, so they must happen on the
@@ -187,9 +189,24 @@ export class SceneRuntime {
         const deriv = getEasingDerivativeAtEnd(ra.anim.easing);
         const durSec = Math.max(ra.anim.duration, 0.001);
 
+        // A non-looping yoyo finishes at the end of its RETURN leg, travelling
+        // from `to` back toward where it started, so it exits along the reverse
+        // of the outbound displacement (P3A-10). `duration` is still the
+        // half-cycle, so the speed is unchanged — only the direction flips.
+        //
+        // Expressed by swapping the endpoints rather than negating, so a zero
+        // component stays +0 and the two legs read as the same formula.
+        //
+        // A looping animation never completes and so never reaches this line;
+        // the `loop` term is here so the rule states itself rather than relying
+        // on that.
+        const reversing = ra.anim.yoyo && !ra.anim.loop;
+        const from = reversing ? targetPt : startPt;
+        const to = reversing ? startPt : targetPt;
+
         ra.container.__pendingVelocity = {
-          x: ((targetPt.x - startPt.x) / durSec) * deriv,
-          y: ((targetPt.y - startPt.y) / durSec) * deriv,
+          x: ((to.x - from.x) / durSec) * deriv,
+          y: ((to.y - from.y) / durSec) * deriv,
         };
       }
 
