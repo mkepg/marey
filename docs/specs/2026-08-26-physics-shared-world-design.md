@@ -1,8 +1,11 @@
 # Rigid-Body Physics and the Deterministic Clock
 
 **Date:** 2026-08-26
-**Status:** Approved design. Phase 0 implemented and merged; Phase 1 in progress.
+**Status:** Approved physics design. Phases 0–2 implemented. Sections 8–12 are
+historical and superseded.
 **Supersedes:** `physics-upgrade-plan-custom.txt`, `physics-upgrade-plan-matter.txt`
+**Current roadmap:** `2026-09-01-declare-product-roadmap-design.md` supersedes
+Sections 8–12 while preserving Decisions D1–D18 and Sections 1–7.
 
 ---
 
@@ -513,7 +516,15 @@ itself touches `adapter.ts` not at all — `__bodyShape` has exactly one consume
 
 ---
 
-## 8. Phase 3 — Foundations and renames
+## 8. Historical roadmap — superseded
+
+> **Superseded on 2026-09-01.** The remainder of this document records the
+> roadmap that originally followed Phase 2. It is retained as decision history,
+> not current sequencing. See
+> `2026-09-01-declare-product-roadmap-design.md` for the authoritative Phase 3+
+> roadmap. Decisions D1–D18 and Sections 1–7 above remain authoritative.
+
+### 8.1 Historical Phase 3 — Foundations and renames
 
 **Compiler and editor. No new capability.**
 
@@ -551,7 +562,7 @@ which are real properties (`sceneIR.ts:57` records anchor's removal; rectangles 
   `handoff` will break the build until the reference is updated. That is the
   intended mechanism, not an obstacle.
 
-### 8.1 Phase 3b — Macro-layer expressiveness
+### 8.2 Historical Phase 3b — Macro-layer expressiveness
 
 *Added 2026-08-27. Placed here rather than given its own number because it needs
 the parser already open, which is what §8 does. Like §10.1, it is recorded
@@ -591,7 +602,7 @@ finding 1, and unlike compile rate it is not already at ceiling.
 
 ---
 
-## 9. Phase 4 — Physics syntax
+## 9. Historical Phase 4 — Physics syntax
 
 **Full pipeline. First breaking syntax change.**
 
@@ -610,7 +621,7 @@ finding 1, and unlike compile rate it is not already at ceiling.
 
 ---
 
-## 10. Phase 5 — Export
+## 10. Historical Phase 5 — Export
 
 **New subsystem. The adoption unlock.**
 
@@ -640,7 +651,7 @@ No wall clock. Frame-accurate by construction, given Phase 0.
 
 GIF is easy and looks poor. SVG/SMIL cannot carry baked per-frame data at reasonable size.
 
-### 10.1 Phase 5b — Documentation site
+### 10.1 Historical Phase 5b — Documentation site
 
 *Added 2026-08-27. Placed here rather than given its own number because it is the same
 push as §10: this roadmap had no documentation or adoption track at all, which is the
@@ -672,7 +683,7 @@ site supplies the narrative material that reference deliberately excludes.
 
 ---
 
-## 11. Phase 6+ — Motion-graphics core and editor payoff
+## 11. Historical Phase 6+ — Motion-graphics core and editor payoff
 
 **Language:** finish color animation — currently half-built across three layers
 (`IRAnimation.to` admits `IRColor` and `resolveAnimToValue` handles it, but `PROP_TYPES`
@@ -690,7 +701,7 @@ has no color branch). Then `stagger`/`delay` and spring easing.
 
 ---
 
-## 12. Shape and risks
+## 12. Historical shape and risks
 
 | Phase | Size | Visible | Compiler | Verifiable |
 |---|---|---|---|---|

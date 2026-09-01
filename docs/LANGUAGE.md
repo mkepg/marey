@@ -4,8 +4,9 @@ A reference for Declare, a declarative scene format that compiles to a PixiJS
 scene graph. This document describes **behaviour**: what each construct does,
 in what units, and what happens at its edges.
 
-It is not a tutorial. Tutorials, guides and examples are Phase 5b, on the
-documentation site.
+It is not a tutorial. Minimal getting-started and export guides ship with the
+capabilities they describe; the full tutorial and gallery site is Phase 8 in
+the current product roadmap.
 
 Every example below is compiled by the test suite, so nothing here can silently
 stop being true.
@@ -843,5 +844,6 @@ Colour animation is not supported. `animate`'s `property` accepts only
 (`typeChecker/validator.ts:207`); naming any other property, including a
 colour, is a compile error.
 
-For the design rationale behind these decisions, and what later phases plan
-to change, see `docs/specs/`.
+For the design rationale behind these decisions, see
+`docs/specs/`. The authoritative future sequence is
+`docs/specs/2026-09-01-declare-product-roadmap-design.md`.

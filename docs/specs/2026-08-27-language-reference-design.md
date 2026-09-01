@@ -1,9 +1,10 @@
 # A User-Facing Language Reference
 
 **Date:** 2026-08-27
-**Status:** Approved design. Not yet implemented.
+**Status:** Approved and implemented.
 **Slot:** A small piece of work before Phase 2. Not a roadmap phase.
 **Related:** `2026-08-26-physics-shared-world-design.md` (§4 naming, D4/D5/D6/D8/D13),
+`2026-09-01-declare-product-roadmap-design.md` (current Phase 3+ roadmap),
 `eval/RESULTS.md` (the measurement that motivates this)
 
 ---
@@ -39,7 +40,7 @@ author or an experienced developer who wants an exact answer, not a ramp.
 
 No product change is in scope. The playground gains no docs panel, no link, and no new UI.
 
-### 1.2 The later docs site — Phase 5b
+### 1.2 The later docs site — now Phase 8
 
 Recorded here so this reference's scope is understood as deliberate rather than partial.
 
@@ -49,12 +50,11 @@ lines of the Matter.js site:
 
 **https://brm.io/matter-js/**
 
-That work is **Phase 5b**, paired with export. It was unphased when this spec was first
-written; it is now recorded in the physics design's §10.1, which is the authoritative phase
-list. The short reason it pairs with export: those two are the only items on the roadmap
-whose purpose is adoption rather than capability, and neither converts a visitor alone. The
-longer reason, including why it cannot land before Phase 3's and Phase 4's renames, is in
-§10.1.
+This design originally placed that work in **Phase 5b**, paired with export. The
+2026-09-01 product roadmap supersedes that sequencing: minimal getting-started,
+export, and integration guides ship beside their capabilities, while the full
+site is **Phase 8**, after syntax, portable export, distribution, and external
+workflow attempts stabilize. See the current roadmap's Sections 11 and 14.
 
 It is what the narrative and onboarding material is being reserved *for*, which is why §6
 rules a README, a docs panel and any in-app tutorial out of scope here rather than treating
