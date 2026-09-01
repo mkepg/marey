@@ -25,6 +25,8 @@ dist-ssr
 
 # Others
 .repomix
+.worktrees/
+.superpowers/
 # Output from the visual-check skill (PNGs and reports)
 .visual-check/
 
