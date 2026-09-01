@@ -2,12 +2,19 @@ import { describe, it, expect } from "vitest";
 import { lex } from "../lexer";
 import { parse } from "../parser";
 import { typeCheck } from "../typeChecker";
+import type { CompilerError } from "../types";
 
 function errorsFor(source: string): string[] {
   const { ast, errors } = parse(lex(source));
   if (errors.length > 0) return errors.map((e) => e.message);
   const { errors: typeErrors } = typeCheck(ast!);
   return typeErrors.map((e) => e.message);
+}
+
+function diagnosticsFor(source: string): CompilerError[] {
+  const { ast, errors } = parse(lex(source));
+  if (errors.length > 0) return errors;
+  return typeCheck(ast!).errors;
 }
 
 describe("released property names", () => {
@@ -171,5 +178,102 @@ describe("physics inside a group (spec D17)", () => {
         }
       }
     `)).toEqual([]);
+  });
+});
+
+describe("physical line permissions", () => {
+  it("rejects a line with direct physics at the line position", () => {
+    const errors = diagnosticsFor(`scene {
+  size: (100, 100)
+  line wire {
+    position: (10, 10)
+    points: [(0, 0), (20, 20)]
+    thickness: 1
+    physics { duration: 1 }
+  }
+}`);
+    const error = errors.find((entry) => entry.message.includes("TYPE_LINE_PHYSICS"));
+    expect(error).toBeDefined();
+    expect(error).toMatchObject({ line: 3, col: 3 });
+  });
+
+  it("rejects a line whose sequence creates physics at the line position", () => {
+    const errors = diagnosticsFor(`scene {
+  size: (100, 100)
+  line wire {
+    position: (10, 10)
+    points: [(0, 0), (20, 20)]
+    thickness: 1
+    sequence {
+      physics { duration: 1 }
+    }
+  }
+}`);
+    const error = errors.find((entry) => entry.message.includes("TYPE_LINE_PHYSICS"));
+    expect(error).toBeDefined();
+    expect(error).toMatchObject({ line: 3, col: 3 });
+  });
+
+  it("rejects a line directly inside a physical group", () => {
+    const errors = diagnosticsFor(`scene {
+  size: (100, 100)
+  group logo {
+    position: (50, 50)
+    physics { duration: 1 }
+    line wire {
+      position: (0, 0)
+      points: [(0, 0), (20, 20)]
+      thickness: 1
+    }
+  }
+}`);
+    const error = errors.find((entry) => entry.message.includes("TYPE_LINE_PHYSICS"));
+    expect(error).toBeDefined();
+    expect(error).toMatchObject({ line: 6, col: 5 });
+  });
+
+  it("rejects a line inside a nested visual group below a physical group", () => {
+    const errors = diagnosticsFor(`scene {
+  size: (100, 100)
+  group logo {
+    position: (50, 50)
+    physics { duration: 1 }
+    group detail {
+      position: (0, 0)
+      line wire {
+        position: (0, 0)
+        points: [(0, 0), (20, 20)]
+        thickness: 1
+      }
+    }
+  }
+}`);
+    const error = errors.find((entry) => entry.message.includes("TYPE_LINE_PHYSICS"));
+    expect(error).toBeDefined();
+    expect(error).toMatchObject({ line: 8, col: 7 });
+  });
+
+  it("allows a nonphysical line and legal physical primitive kinds", () => {
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  line wire {
+    position: (10, 10)
+    points: [(0, 0), (20, 20)]
+    thickness: 1
+  }
+}`)).toEqual([]);
+
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  circle c { position: (10, 10), radius: 1, physics { duration: 1 } }
+  rectangle r { position: (20, 20), size: (2, 2), physics { duration: 1 } }
+  polygon p { position: (30, 30), points: [(0, 0), (2, 0), (1, 2)], physics { duration: 1 } }
+  text label { position: (40, 40), content: "ok", physics { duration: 1 } }
+  group g {
+    position: (50, 50)
+    physics { duration: 1 }
+    circle dot { position: (0, 0), radius: 1 }
+  }
+}`)).toEqual([]);
   });
 });

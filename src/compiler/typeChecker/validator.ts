@@ -7,6 +7,12 @@ import {
   REQUIRED_PROPS,
 } from "../languageContract";
 import type { PropertySpec } from "../languageContract";
+import {
+  countPhysicsCost,
+  MAX_PHYSICS_BODIES,
+  MAX_PHYSICS_PARTS,
+  ownsPhysics,
+} from "./physicsCost";
 
 type PropKind = AstValue["kind"];
 type PropContract = PropKind | readonly PropKind[];
@@ -336,6 +342,22 @@ export function collectErrors(ast: AstNode): CompilerError[] {
       }
     }
 
+    if (typeName === "line") {
+      const hasPhysicalGroupAncestor = ancestors.some(
+        (ancestor) => ancestor.type === "group" && ownsPhysics(ancestor)
+      );
+      if (ownsPhysics(node as ObjectNode) || hasPhysicalGroupAncestor) {
+        errors.push({
+          phase: "TYPE",
+          message: `[TYPE_LINE_PHYSICS] Line '${nodeName}' cannot have physics because lines do not produce collision geometry.`,
+          line: node.line,
+          col: node.col,
+          endLine: node.endLine,
+          endCol: node.endCol,
+        });
+      }
+    }
+
     for (const prop of required) {
       if (!(prop in node.props)) {
         errors.push({ phase: "TYPE", message: `${label} is missing the required property '${prop}'.`, line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol });
@@ -409,5 +431,28 @@ export function collectErrors(ast: AstNode): CompilerError[] {
   }
 
   checkNode(ast);
+
+  const physicsCost = countPhysicsCost(ast);
+  if (physicsCost.bodyLimitNode !== null && errors.length < 50) {
+    errors.push({
+      phase: "TYPE",
+      message: `[TYPE_PHYSICS_BODY_LIMIT] Scene contains too many physics bodies (${formatPointCount(physicsCost.bodies)}). Maximum allowed is ${formatPointCount(MAX_PHYSICS_BODIES)}.`,
+      line: physicsCost.bodyLimitNode.line,
+      col: physicsCost.bodyLimitNode.col,
+      endLine: physicsCost.bodyLimitNode.endLine,
+      endCol: physicsCost.bodyLimitNode.endCol,
+    });
+  }
+  if (physicsCost.partLimitNode !== null && errors.length < 50) {
+    errors.push({
+      phase: "TYPE",
+      message: `[TYPE_PHYSICS_PART_LIMIT] Scene contains too many physics collision parts (${formatPointCount(physicsCost.parts)}). Maximum allowed is ${formatPointCount(MAX_PHYSICS_PARTS)}.`,
+      line: physicsCost.partLimitNode.line,
+      col: physicsCost.partLimitNode.col,
+      endLine: physicsCost.partLimitNode.endLine,
+      endCol: physicsCost.partLimitNode.endCol,
+    });
+  }
+
   return errors;
 }
