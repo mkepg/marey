@@ -237,9 +237,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
       }
       case "group": {
         const transform: IRTransform = {
-          // `position` has no contract default because it is required on most
-          // visuals; groups retain their historical origin fallback.
-          position: resolvePoint(p, "position", { x: 0, y: 0 }),
+          position: resolvePoint(p, "position", contractPointDefault("group", "position")),
           rotation: resolveNumber(p, "rotation", contractNumberDefault("group", "rotation")),
           scale:    resolveScale(p, "scale", contractPointDefault("group", "scale")),
         };

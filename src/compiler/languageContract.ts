@@ -302,8 +302,16 @@ const physicsProperties = Object.freeze({
   ),
 });
 
+const groupPosition = property(
+  position.kinds,
+  position.description,
+  position.example,
+  position.placeholder,
+  { default: point(0, 0) },
+);
+
 const groupProperties = Object.freeze({
-  position,
+  position: groupPosition,
   rotation,
   scale,
   alpha,

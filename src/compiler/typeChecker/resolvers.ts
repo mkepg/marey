@@ -110,10 +110,12 @@ export function getReqAnimProperty(props: Record<string, AstValue>, key: string)
 }
 export function resolveAnimToValue(props: Record<string, AstValue>, key: string): number | IRPoint | IRColor {
   const v = props[key];
+  if (v === undefined) {
+    throw new Error(`[IR] Required animation property '${key}' is missing.`);
+  }
   if (v.kind === "number") return v.value;
   if (v.kind === "point") return { x: v.x, y: v.y };
-  if (v.kind === "color") return resolveColor(props, key, contractStringDefault("circle", "color"));
-  return 0;
+  throw new Error(`[IR] Animation property '${key}' must be a number or point.`);
 }
 export function getReqNumber(props: Record<string, AstValue>, key: string): number {
   return (props[key] as NumberValue).value;

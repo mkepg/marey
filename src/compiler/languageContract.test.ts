@@ -9,6 +9,7 @@ import {
 import { lex } from "./lexer";
 import { parse } from "./parser";
 import { typeCheck } from "./typeChecker";
+import { buildIR } from "./typeChecker/builder";
 import {
   contractBooleanDefault,
   contractNumberDefault,
@@ -80,5 +81,48 @@ describe("language contract", () => {
     });
     expect(result.ir!.background).toBe(propertyDefault("scene", "background"));
     expect(result.ir!.sceneFit).toBe(propertyDefault("scene", "sceneFit"));
+  });
+
+  it("uses the contract's group origin default", () => {
+    const { ast, errors } = parse(lex(`scene {
+      size: (100, 100)
+      group g {
+        circle c { position: (0, 0), radius: 10 }
+      }
+    }`));
+    expect(errors).toEqual([]);
+    const result = typeCheck(ast!);
+    expect(result.errors).toEqual([]);
+    expect(propertyDefault("group", "position")).toEqual({ x: 0, y: 0 });
+
+    const group = result.ir!.children[0].props;
+    if (group.kind !== "group") throw new Error("Expected a group IR node");
+    expect(group.transform.position).toEqual(contractPointDefault("group", "position"));
+  });
+
+  it("rejects a missing required animation target when building IR directly", () => {
+    const { ast, errors } = parse(lex(`scene {
+      size: (100, 100)
+      circle c {
+        position: (50, 50)
+        radius: 10
+        animate { property: rotation, duration: 1 }
+      }
+    }`));
+    expect(errors).toEqual([]);
+    expect(() => buildIR(ast!)).toThrow("Required animation property 'to' is missing");
+  });
+
+  it("rejects an invalid animation target when building IR directly", () => {
+    const { ast, errors } = parse(lex(`scene {
+      size: (100, 100)
+      circle c {
+        position: (50, 50)
+        radius: 10
+        animate { property: rotation, to: "bad", duration: 1 }
+      }
+    }`));
+    expect(errors).toEqual([]);
+    expect(() => buildIR(ast!)).toThrow("Animation property 'to' must be a number or point");
   });
 });
