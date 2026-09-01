@@ -447,10 +447,8 @@ bouncy object makes every collision it takes part in bouncy, and a low
 
 **`airDrag` is inverted: `0.0` is a vacuum and `1.0` is maximum resistance.**
 It ranges from `0.0` to `1.0` inclusive, defaulting to `0.0`. Useful values
-are small — the shipped default scene uses `0.006`. Some editor snippets in
-`language.ts` still insert `airDrag: 0.99` as a placeholder value, left over
-from before the inversion; under the current semantics that is near-total
-drag, not a light touch.
+are small — the shipped default scene uses `0.006`, and the Monaco `physics`
+snippet suggests the same `0.006` as its placeholder.
 
 `collideBounds` governs collision with the scene's four edges only, and
 defaults to `true`. It has no bearing on collision between objects — that is
@@ -466,13 +464,13 @@ size; `text` gets a rectangle sized to the rendered text's bounding box.
 concave polygon collides as its hull, even though it is drawn with its true,
 concave shape.
 
-**`line` cannot have `physics`, directly or as part of a physics `group`.**
-A `line` has zero thickness as geometry — its drawn `thickness` is a stroke
-width, not a collidable body — so it produces no collision shape to give it.
-Declaring `physics` on a `line`, or placing one inside a `group` that
-declares `physics`, is a compile error (`TYPE_LINE_PHYSICS`). A `line` can
-still be a purely visual sibling of physics objects, as the floor markings in
-several examples on this page are.
+**`line` cannot have `physics`, directly, in a `sequence` step, or as part of
+a physics `group`.** A `line` has zero thickness as geometry — its drawn
+`thickness` is a stroke width, not a collidable body — so it produces no
+collision shape to give it. Declaring `physics` on a `line` (including
+inside its own `sequence`, or a `parallel` step within one), or placing a
+`line` inside a `group` that declares `physics`, is a compile error
+(`TYPE_LINE_PHYSICS`).
 
 **A `group` with a `physics` block is welded into a single body made of one
 shape per object inside it**, each at its own offset and angle within the
@@ -846,7 +844,7 @@ runtime warning or a silent clamp.
   exceeding 10,000 points. Each of these is declared once, per property, as
   a `constraint` on that property's entry in `languageContract.ts`, and
   enforced by one generic function, `validateLocalConstraint`
-  (`typeChecker/validator.ts:31-100`), rather than by a separate hand-written
+  (`typeChecker/validator.ts:31-101`), rather than by a separate hand-written
   check for each property.
 - `text` content is capped at 500 characters (the same generic constraint
   mechanism, `[TYPE_TEXT_TOO_LONG]`), and a scene may contain at most 500
