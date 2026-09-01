@@ -47,6 +47,7 @@ scene {
       duration: 1
       handoff: true
     }
+    physics { gravity: (0, 10), duration: 0.5 }
     sequence {
       animate { property: rotation, to: 90, duration: 0.5 }
       parallel {
@@ -147,7 +148,13 @@ describe("compiler determinism", () => {
     for (const result of parses) expect(result.errors).toEqual([]);
     for (const result of parses.slice(1)) expect(result).toEqual(parses[0]);
 
-    const payloads = parses.map(({ ast }) => JSON.stringify(typeCheck(ast!).ir));
+    const checked = parses.map(({ ast }) => {
+      const result = typeCheck(ast!);
+      expect(result.errors).toEqual([]);
+      expect(result.ir).not.toBeNull();
+      return result.ir!;
+    });
+    const payloads = checked.map((ir) => JSON.stringify(ir));
     expect(new Set(payloads).size).toBe(1);
   });
 
