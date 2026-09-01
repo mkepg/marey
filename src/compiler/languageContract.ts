@@ -281,7 +281,7 @@ const physicsProperties = Object.freeze({
   ),
   bounce: property(
     "number",
-    "The restitution coefficient for object and boundary collisions. Matter combines two objects' restitution using the higher value.",
+    "The restitution coefficient for collisions with other objects and scene boundaries. Matter combines two objects' restitution using the higher value.",
     "bounce: 0.65",
     "0.65",
     { default: 0.65, constraint: { kind: "range", min: 0, max: 1 } },

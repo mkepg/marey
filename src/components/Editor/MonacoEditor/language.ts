@@ -1,7 +1,29 @@
 import type { languages as MonacoLanguagesNS } from "monaco-editor";
-import { REQUIRED_PROPS, PROP_TYPES, KIND_LABEL } from "../../../compiler/typeChecker/validator";
-import { KEYWORD_DOCS, PROPERTY_DOCS, namedColors, VALUE_DOCS } from "./constants";
+import {
+  ANIMATABLE_PROPERTIES,
+  BOOLEAN_VALUES,
+  DURATION_VALUES,
+  EASING_VALUES,
+  FIT_VALUES,
+  KIND_LABEL,
+  LANGUAGE_CONTRACT,
+  NAMED_COLORS,
+  PROP_TYPES,
+  REQUIRED_PROPS,
+} from "../../../compiler/languageContract";
+import { KEYWORD_DOCS, physicsSnippet, propertyHoverMarkdown, VALUE_DOCS } from "./constants";
 import { analyzeContext } from "./scanner";
+
+const namedColors = Object.keys(NAMED_COLORS);
+
+const propertyPlaceholder = (
+  blockName: keyof typeof LANGUAGE_CONTRACT,
+  property: string,
+): string => LANGUAGE_CONTRACT[blockName].properties[property]?.placeholder ?? "value";
+
+const animationSnippet = (): string => `animate {\n\tproperty: \${1:${propertyPlaceholder("animate", "property")}}\n\tto: \${2:${propertyPlaceholder("animate", "to")}}\n\tduration: \${3:${propertyPlaceholder("animate", "duration")}}\n\t$0\n}`;
+
+const sequenceSnippet = (): string => `sequence {\n\t\${1:animate {\n\t\tproperty: ${propertyPlaceholder("animate", "property")}\n\t\tto: ${propertyPlaceholder("animate", "to")}\n\t\tduration: ${propertyPlaceholder("animate", "duration")}\n\t\teasing: ${propertyPlaceholder("animate", "easing")}\n\t}}\n}`;
 
 export function registerLanguage(monaco: typeof import("monaco-editor")): void {
   if (monaco.languages.getLanguages().some((l) => l.id === "Declare")) return;
@@ -11,10 +33,10 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
   monaco.languages.setMonarchTokensProvider("Declare", {
     keywords:    ["scene", "circle", "rectangle", "polygon", "line", "text", "group", "generate", "template", "use", "animate", "physics", "sequence", "parallel"],
     defKeyword:  ["def"],
-    booleanValues: ["true", "false"],
-    easingValues:  ["linear", "easeIn", "easeOut", "easeInOut"],
-    durationKeywords: ["indefinitely"],
-    sceneFitValues: ["contain", "cover", "fill", "none"],
+    booleanValues: [...BOOLEAN_VALUES],
+    easingValues:  [...EASING_VALUES],
+    durationKeywords: [...DURATION_VALUES],
+    sceneFitValues: [...FIT_VALUES],
     namedColors,
 
     tokenizer: {
@@ -108,10 +130,14 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
         if (optional.length > 0) {
           md += `**Optional Properties:**\n- \`${optional.join("`\n- `")}\`\n`;
         }
-      } else if (token in PROPERTY_DOCS) {
-        md = PROPERTY_DOCS[token];
-      } else if (token in VALUE_DOCS) {
-        md = VALUE_DOCS[token];
+      } else {
+        const propertyDoc = propertyHoverMarkdown(token);
+        if (propertyDoc !== undefined) {
+          md = propertyDoc;
+        } else {
+          const valueDoc = VALUE_DOCS[token];
+          if (valueDoc !== undefined) md = valueDoc;
+        }
       }
 
       if (md) {
@@ -192,29 +218,6 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
 
       const needsLeadingSpace = /([a-zA-Z][a-zA-Z0-9_]*)\s*:$/.test(lineUntilCursor);
 
-      const getPlaceholderForProp = (prop: string, propType: unknown, isScene: boolean = false): string => {
-        if (prop === "size")      return isScene ? "(600, 400)" : "(100, 100)";
-        if (prop === "radius")    return "50";
-        if (prop === "thickness") return "4";
-        if (prop === "content")   return '"Text"';
-        if (prop === "duration")  return "1.0";
-
-        const primaryType = Array.isArray(propType) ? propType[0] : propType;
-
-        switch (primaryType) {
-          case "point":        return "(0, 0)";
-          case "number":       return "10";
-          case "color":        return "black";
-          case "string":       return '"text"';
-          case "pointList":    return "[(50,0), (100,100), (0,100)]";
-          case "sceneFit":     return "contain";
-          case "boolean":      return "true";
-          case "easing":       return "easeInOut";
-          case "animProperty": return "position";
-          default:             return "value";
-        }
-      };
-
       const isTypingValueMatch = lineUntilCursor.match(/([a-zA-Z][a-zA-Z0-9_]*)\s*:\s*(.*)$/);
 
       const suggestions: MonacoLanguagesNS.CompletionItem[] = [];
@@ -239,22 +242,28 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
             }
           }
           if (expectedTypes.includes("boolean")) {
-            suggestions.push({ label: "true",  kind: monaco.languages.CompletionItemKind.Keyword, insertText: needsLeadingSpace ? " true"  : "true",  detail: "boolean", range });
-            suggestions.push({ label: "false", kind: monaco.languages.CompletionItemKind.Keyword, insertText: needsLeadingSpace ? " false" : "false", detail: "boolean", range });
+            for (const value of BOOLEAN_VALUES) {
+              suggestions.push({
+                label: value,
+                kind: monaco.languages.CompletionItemKind.Keyword,
+                insertText: needsLeadingSpace ? ` ${value}` : value,
+                detail: "boolean",
+                range,
+              });
+            }
           }
           if (expectedTypes.includes("easing")) {
-            for (const e of ["linear", "easeIn", "easeOut", "easeInOut"]) {
+            for (const e of EASING_VALUES) {
               suggestions.push({ label: e, kind: monaco.languages.CompletionItemKind.Keyword, insertText: needsLeadingSpace ? ` ${e}` : e, detail: "easing", range });
             }
           }
           if (expectedTypes.includes("animProperty")) {
-            for (const p of ["position", "rotation", "scale", "alpha"]) {
+            for (const p of ANIMATABLE_PROPERTIES) {
               suggestions.push({ label: p, kind: monaco.languages.CompletionItemKind.Property, insertText: needsLeadingSpace ? ` ${p}` : p, detail: "animatable property", range });
             }
           }
           if (expectedTypes.includes("sceneFit")) {
-            const values = ["contain", "cover", "fill", "none"];
-            for (const val of values) {
+            for (const val of FIT_VALUES) {
               suggestions.push({
                 label: val,
                 kind: monaco.languages.CompletionItemKind.Enum,
@@ -265,14 +274,16 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
             }
           }
 
-          if (propName === "duration" && (currentBlock === "physics")) {
-            suggestions.push({
-              label: "indefinitely",
-              kind: monaco.languages.CompletionItemKind.Keyword,
-              insertText: needsLeadingSpace ? " indefinitely" : "indefinitely",
-              detail: "Run physics simulation forever (not valid inside a sequence)",
-              range,
-            });
+          if (propName === "duration" && currentBlock === "physics") {
+            for (const duration of DURATION_VALUES) {
+              suggestions.push({
+                label: duration,
+                kind: monaco.languages.CompletionItemKind.Keyword,
+                insertText: needsLeadingSpace ? ` ${duration}` : duration,
+                detail: "Run physics simulation forever (not valid inside a sequence)",
+                range,
+              });
+            }
           }
 
           for (const [sym, type] of Object.entries(reachableVars)) {
@@ -317,13 +328,11 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
           const objects = ["circle", "rectangle", "polygon", "line", "text", "group"];
           for (const obj of objects) {
             const reqProps  = REQUIRED_PROPS[obj as keyof typeof REQUIRED_PROPS] || [];
-            const propsDef  = PROP_TYPES[obj as keyof typeof PROP_TYPES];
 
             let insertText  = `${obj} \${1:name} {\n`;
             let tabIndex    = 2;
             for (const prop of reqProps) {
-              const propType    = propsDef ? propsDef[prop as keyof typeof propsDef] : "unknown";
-              const placeholder = getPlaceholderForProp(prop, propType, false);
+              const placeholder = propertyPlaceholder(obj as keyof typeof LANGUAGE_CONTRACT, prop);
               insertText += `\t${prop}: \${${tabIndex}:${placeholder}}\n`;
               tabIndex++;
             }
@@ -372,7 +381,7 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
           suggestions.push({
             label: "animate",
             kind: monaco.languages.CompletionItemKind.Class,
-            insertText: `animate {\n\tproperty: \${1:position}\n\tto: \${2:(0, 0)}\n\tduration: \${3:1.0}\n\t$0\n}`,
+            insertText: animationSnippet(),
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             detail: "Create an animation block",
             range,
@@ -380,7 +389,7 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
           suggestions.push({
             label: "physics",
             kind: monaco.languages.CompletionItemKind.Class,
-            insertText: `physics {\n\tduration: \${1:indefinitely}\n\tvelocity: \${2:(0, 0)}\n\tgravity: \${3:(0, 980)}\n\tairDrag: \${4:0.99}\n\tbounce: \${5:0.65}\n\t$0\n}`,
+            insertText: physicsSnippet(false),
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             detail: "Create a physics simulation block",
             range,
@@ -388,7 +397,7 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
           suggestions.push({
             label: "sequence",
             kind: monaco.languages.CompletionItemKind.Class,
-            insertText: `sequence {\n\t\${1:animate {\n\t\tproperty: alpha\n\t\tto: 0.0\n\t\tduration: \${2:0.5}\n\t\teasing: easeIn\n\t}}\n}`,
+            insertText: sequenceSnippet(),
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             detail: "Chain a motion step — runs after all peer animate/physics complete",
             range,
@@ -412,7 +421,7 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
           suggestions.push({
             label: "animate",
             kind: monaco.languages.CompletionItemKind.Class,
-            insertText: `animate {\n\tproperty: \${1:position}\n\tto: \${2:(0, 0)}\n\tduration: \${3:1.0}\n\t$0\n}`,
+            insertText: animationSnippet(),
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             detail: `Create an animation step inside a ${currentBlock}`,
             range,
@@ -420,7 +429,7 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
           suggestions.push({
             label: "physics",
             kind: monaco.languages.CompletionItemKind.Class,
-            insertText: `physics {\n\tduration: \${1:1.5}\n\tgravity: \${2:(0, 980)}\n\tairDrag: \${3:0.99}\n\tbounce: \${4:0.65}\n\t$0\n}`,
+            insertText: physicsSnippet(true),
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             detail: `Create a physics step inside a ${currentBlock} (must use numeric duration)`,
             range,
@@ -438,13 +447,11 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
           });
 
           const sceneReqProps = REQUIRED_PROPS["scene"] || [];
-          const scenePropsDef = PROP_TYPES["scene"];
           let sceneInsertText = `scene {\n`;
           let sceneTabIndex   = 1;
 
           for (const prop of sceneReqProps) {
-            const propType    = scenePropsDef ? scenePropsDef[prop as keyof typeof scenePropsDef] : "unknown";
-            const placeholder = getPlaceholderForProp(prop, propType, true);
+            const placeholder = propertyPlaceholder("scene", prop);
             sceneInsertText += `\t${prop}: \${${sceneTabIndex}:${placeholder}}\n`;
             sceneTabIndex++;
           }

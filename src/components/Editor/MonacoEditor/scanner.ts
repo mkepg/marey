@@ -1,4 +1,13 @@
-import { namedColors } from "./constants";
+import {
+  BOOLEAN_VALUES,
+  DURATION_VALUES,
+  EASING_VALUES,
+  FIT_VALUES,
+  LANGUAGE_CONTRACT,
+  NAMED_COLORS,
+} from "../../../compiler/languageContract";
+
+const namedColorKeys = Object.keys(NAMED_COLORS);
 
 export interface ScopeNode {
   blockType: string | null;
@@ -16,10 +25,7 @@ export function analyzeContext(textUntilCursor: string): ScopeNode[] {
 
   // All block types that open a new scope when followed by `{`.
   // "sequence" and "parallel" are included so the scanner tracks we're inside them
-  const validBlocks = new Set([
-    "scene", "circle", "rectangle", "polygon", "line", "text",
-    "group", "generate", "template", "use", "animate", "physics", "sequence", "parallel"
-  ]);
+  const validBlocks = new Set(Object.keys(LANGUAGE_CONTRACT));
 
   while (i < textUntilCursor.length) {
     const char = textUntilCursor[i];
@@ -87,16 +93,16 @@ export function analyzeContext(textUntilCursor: string): ScopeNode[] {
         }
 
         if (expectingDefVal && currentDefName) {
-          if (["contain", "cover", "fill", "none"].includes(word)) {
+          if (FIT_VALUES.includes(word as (typeof FIT_VALUES)[number])) {
             scopes[scopes.length - 1].vars[currentDefName] = "sceneFit";
-          } else if (namedColors.includes(word)) {
+          } else if (namedColorKeys.includes(word)) {
             scopes[scopes.length - 1].vars[currentDefName] = "color";
-          } else if (["true", "false"].includes(word)) {
+          } else if (BOOLEAN_VALUES.includes(word as (typeof BOOLEAN_VALUES)[number])) {
             scopes[scopes.length - 1].vars[currentDefName] = "boolean";
-          } else if (["linear", "easeIn", "easeOut", "easeInOut"].includes(word)) {
+          } else if (EASING_VALUES.includes(word as (typeof EASING_VALUES)[number])) {
             scopes[scopes.length - 1].vars[currentDefName] = "easing";
-          } else if (word === "indefinitely") {
-            scopes[scopes.length - 1].vars[currentDefName] = "number";
+          } else if (DURATION_VALUES.includes(word as (typeof DURATION_VALUES)[number])) {
+            scopes[scopes.length - 1].vars[currentDefName] = "indefinitely";
           } else {
             let inheritedType = "number";
             for (let s = scopes.length - 1; s >= 0; s--) {
