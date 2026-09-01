@@ -23,7 +23,7 @@ const propertyPlaceholder = (
 
 const animationSnippet = (): string => `animate {\n\tproperty: \${1:${propertyPlaceholder("animate", "property")}}\n\tto: \${2:${propertyPlaceholder("animate", "to")}}\n\tduration: \${3:${propertyPlaceholder("animate", "duration")}}\n\t$0\n}`;
 
-const sequenceSnippet = (): string => `sequence {\n\t\${1:animate {\n\t\tproperty: ${propertyPlaceholder("animate", "property")}\n\t\tto: ${propertyPlaceholder("animate", "to")}\n\t\tduration: ${propertyPlaceholder("animate", "duration")}\n\t\teasing: ${propertyPlaceholder("animate", "easing")}\n\t}}\n}`;
+export const sequenceSnippet = (): string => `sequence {\n\t\${1:animate {\n\t\tproperty: ${propertyPlaceholder("animate", "property")}\n\t\tto: ${propertyPlaceholder("animate", "to")}\n\t\tduration: \${2:${propertyPlaceholder("animate", "duration")}}\n\t\teasing: ${propertyPlaceholder("animate", "easing")}\n\t}}\n}`;
 
 export function registerLanguage(monaco: typeof import("monaco-editor")): void {
   if (monaco.languages.getLanguages().some((l) => l.id === "Declare")) return;

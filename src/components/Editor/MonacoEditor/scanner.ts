@@ -25,7 +25,8 @@ export function analyzeContext(textUntilCursor: string): ScopeNode[] {
 
   // All block types that open a new scope when followed by `{`.
   // "sequence" and "parallel" are included so the scanner tracks we're inside them
-  const validBlocks = new Set(Object.keys(LANGUAGE_CONTRACT));
+  const grammarOnlyBlocks = ["generate", "template", "use"];
+  const validBlocks = new Set([...Object.keys(LANGUAGE_CONTRACT), ...grammarOnlyBlocks]);
 
   while (i < textUntilCursor.length) {
     const char = textUntilCursor[i];
