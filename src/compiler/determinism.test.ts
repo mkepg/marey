@@ -47,7 +47,7 @@ scene {
       duration: 1
       handoff: true
     }
-    physics { gravity: (0, 10), duration: 0.5 }
+    physics { gravity: (0, 10), duration: 2 }
     sequence {
       animate { property: rotation, to: 90, duration: 0.5 }
       parallel {
@@ -65,7 +65,7 @@ scene {
 }
 `;
 
-const COMPACT_SOURCE = `scene { size:(100,100) fit:contain circle dot { position:(20,20) radius:5 layer:2 animate { property:position to:(40,20) duration:1 handoff:true } physics { duration:1 } } }`;
+const COMPACT_SOURCE = `scene { size:(100,100) fit:contain circle dot { position:(20,20) radius:5 layer:2 animate { property:position to:(40,20) duration:1 handoff:true } physics { duration:2 } } }`;
 
 const EXPANDED_SOURCE = `
 scene {
@@ -81,7 +81,7 @@ scene {
       duration: 1
       handoff: true
     }
-    physics { duration: 1 }
+    physics { duration: 2 }
   }
 }
 `;
@@ -111,7 +111,7 @@ template Token(tone) {
       duration: 1
       handoff: true
     }
-    physics { duration: 1 }
+    physics { duration: 2 }
   }
 }
 

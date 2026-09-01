@@ -277,3 +277,212 @@ describe("physical line permissions", () => {
 }`)).toEqual([]);
   });
 });
+
+describe("handoff targets and duration ordering (P3A-8)", () => {
+  it("allows an object-level handoff into a longer finite physics runner", () => {
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    animate { property: position, to: (50, 50), duration: 1, handoff: true }
+    physics { duration: 2 }
+  }
+}`)).toEqual([]);
+  });
+
+  it("rejects an object-level handoff into an equal-duration physics runner", () => {
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    animate { property: position, to: (50, 50), duration: 1, handoff: true }
+    physics { duration: 1 }
+  }
+}`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("TYPE_HANDOFF_DURATION");
+    expect(out[0]).toContain("1s");
+  });
+
+  it("rejects an object-level handoff into a shorter physics runner", () => {
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    animate { property: position, to: (50, 50), duration: 1, handoff: true }
+    physics { duration: 0.5 }
+  }
+}`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("TYPE_HANDOFF_DURATION");
+  });
+
+  it("allows an object-level handoff into duration: indefinitely", () => {
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    animate { property: position, to: (50, 50), duration: 1, handoff: true }
+    physics { duration: indefinitely }
+  }
+}`)).toEqual([]);
+  });
+
+  it("allows a parallel handoff into a longer finite physics runner", () => {
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    sequence {
+      parallel {
+        animate { property: position, to: (50, 50), duration: 1, handoff: true }
+        physics { duration: 2 }
+      }
+    }
+  }
+}`)).toEqual([]);
+  });
+
+  it("rejects a parallel handoff into a shorter or equal physics runner", () => {
+    const shorter = errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    sequence {
+      parallel {
+        animate { property: position, to: (50, 50), duration: 1, handoff: true }
+        physics { duration: 0.5 }
+      }
+    }
+  }
+}`);
+    expect(shorter.some((m) => m.includes("TYPE_HANDOFF_DURATION"))).toBe(true);
+
+    const equal = errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    sequence {
+      parallel {
+        animate { property: position, to: (50, 50), duration: 1, handoff: true }
+        physics { duration: 1 }
+      }
+    }
+  }
+}`);
+    expect(equal.some((m) => m.includes("TYPE_HANDOFF_DURATION"))).toBe(true);
+  });
+
+  it("allows a sequence handoff into a shorter, later physics step", () => {
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    sequence {
+      animate { property: position, to: (50, 50), duration: 1, handoff: true }
+      physics { duration: 0.2 }
+    }
+  }
+}`)).toEqual([]);
+  });
+
+  it("rejects a sequence handoff whose only physics step precedes the animation", () => {
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    sequence {
+      physics { duration: 0.5 }
+      animate { property: position, to: (50, 50), duration: 1, handoff: true }
+    }
+  }
+}`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("TYPE_HANDOFF_PHYSICS");
+  });
+
+  it("picks the first later physics step when a sequence has several after the animation", () => {
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    sequence {
+      animate { property: position, to: (50, 50), duration: 1, handoff: true }
+      physics { duration: 0.4 }
+      physics { duration: 0.4, velocity: (5, 5) }
+    }
+  }
+}`)).toEqual([]);
+  });
+
+  it("resolves the correctly-ordered later physics step, not an earlier one, when checking for ambiguity", () => {
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    sequence {
+      physics { duration: 0.3 }
+      animate { property: position, to: (50, 50), duration: 1, handoff: true }
+      physics { duration: 0.3, velocity: (5, 5) }
+    }
+  }
+}`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("TYPE_HANDOFF_AMBIGUITY");
+  });
+
+  it("doubles the effective duration for a concurrent yoyo handoff", () => {
+    // animation duration 1s, yoyo:true -> effective runtime 2s.
+    // A physics duration of 1.5s is longer than the raw duration but
+    // shorter than the doubled effective runtime, so it must be rejected.
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    animate { property: position, to: (50, 50), duration: 1, yoyo: true, handoff: true }
+    physics { duration: 1.5 }
+  }
+}`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("TYPE_HANDOFF_DURATION");
+    expect(out[0]).toContain("2s");
+  });
+
+  it("allows a concurrent yoyo handoff once physics duration clears the doubled runtime", () => {
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    animate { property: position, to: (50, 50), duration: 1, yoyo: true, handoff: true }
+    physics { duration: 2.5 }
+  }
+}`)).toEqual([]);
+  });
+
+  it("still rejects a resolved handoff target that carries an initial velocity", () => {
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    animate { property: position, to: (50, 50), duration: 1, handoff: true }
+    physics { duration: 2, velocity: (10, 10) }
+  }
+}`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("TYPE_HANDOFF_AMBIGUITY");
+  });
+});

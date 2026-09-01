@@ -13,6 +13,7 @@ import {
   MAX_PHYSICS_PARTS,
   ownsPhysics,
 } from "./physicsCost";
+import { resolveHandoffTarget, yoyoIsTrue } from "./handoff";
 
 type PropKind = AstValue["kind"];
 type PropContract = PropKind | readonly PropKind[];
@@ -329,14 +330,31 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         if (loopVal?.kind === "boolean" && loopVal.value === true) {
           errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_LOOP] 'loop: true' and 'handoff: true' cannot coexist. A looping animation never ends.`, line: handoffVal.line, col: handoffVal.col, endLine: handoffVal.endLine, endCol: handoffVal.endCol });
         }
-        
-        if (parentNode) {
-          const physicsNode = parentNode.children.find(c => c.type === "physics");
-          if (!physicsNode) {
-            errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_PHYSICS] 'handoff: true' requires a sibling 'physics' block on the same object.`, line: handoffVal.line, col: handoffVal.col, endLine: handoffVal.endLine, endCol: handoffVal.endCol });
-          } else if (physicsNode.props["velocity"] !== undefined) {
-            const velNode = physicsNode.props["velocity"];
+
+        const target = resolveHandoffTarget(node as ObjectNode, parentNode, ancestors);
+        if (!target) {
+          errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_PHYSICS] 'handoff: true' requires a sibling 'physics' block on the same object.`, line: handoffVal.line, col: handoffVal.col, endLine: handoffVal.endLine, endCol: handoffVal.endCol });
+        } else {
+          const velNode = target.physics.props["velocity"];
+          if (velNode !== undefined) {
             errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_AMBIGUITY] When 'handoff: true' is used, the 'physics' block cannot define an initial 'velocity' because the animation's exit momentum will completely overwrite it. Remove 'velocity' from the physics block.`, line: velNode.line, col: velNode.col, endLine: velNode.endLine, endCol: velNode.endCol });
+          }
+
+          const animDuration = node.props["duration"];
+          const physicsDuration = target.physics.props["duration"];
+          if (
+            target.scheduling === "concurrent" &&
+            animDuration?.kind === "number" &&
+            physicsDuration?.kind === "number"
+          ) {
+            const effectiveAnimDuration = animDuration.value * (yoyoIsTrue(node as ObjectNode) ? 2 : 1);
+            if (physicsDuration.value <= effectiveAnimDuration) {
+              errors.push({
+                phase: "TYPE",
+                message: `[TYPE_HANDOFF_DURATION] The receiving physics duration (${physicsDuration.value}s) must be greater than the handoff animation runtime (${effectiveAnimDuration}s).`,
+                line: physicsDuration.line, col: physicsDuration.col, endLine: physicsDuration.endLine, endCol: physicsDuration.endCol,
+              });
+            }
           }
         }
       }
