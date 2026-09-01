@@ -1,0 +1,799 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR stable 1`] = `
+{
+  "background": "#000000",
+  "children": [
+    {
+      "children": [
+        {
+          "children": [],
+          "id": "scene.token_0.dot",
+          "props": {
+            "alpha": 1,
+            "animations": [
+              {
+                "duration": 1,
+                "easing": "easeInOut",
+                "handoff": true,
+                "loop": false,
+                "property": "position",
+                "to": {
+                  "x": 20,
+                  "y": 0,
+                },
+                "yoyo": false,
+              },
+            ],
+            "color": "#00ffff",
+            "kind": "circle",
+            "layer": 0,
+            "physics": {
+              "airDrag": 0,
+              "bounce": 0.65,
+              "collideBounds": true,
+              "duration": 1,
+              "gravity": {
+                "x": 0,
+                "y": 980,
+              },
+              "velocity": {
+                "x": 0,
+                "y": 0,
+              },
+            },
+            "position": {
+              "x": 0,
+              "y": 0,
+            },
+            "radius": 5,
+            "rotation": 0,
+            "scale": {
+              "x": 1,
+              "y": 1,
+            },
+            "sequences": [],
+          },
+        },
+      ],
+      "id": "scene.token_0",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "kind": "group",
+        "layer": 0,
+        "physics": undefined,
+        "sequences": [],
+        "transform": {
+          "position": {
+            "x": 40,
+            "y": 30,
+          },
+          "rotation": 0,
+          "scale": {
+            "x": 1,
+            "y": 1,
+          },
+        },
+      },
+    },
+    {
+      "children": [],
+      "id": "scene.floorBall",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "color": "#ffffff",
+        "kind": "circle",
+        "layer": 0,
+        "physics": {
+          "airDrag": 0,
+          "bounce": 0.65,
+          "collideBounds": true,
+          "duration": "indefinitely",
+          "gravity": {
+            "x": 0,
+            "y": 20,
+          },
+          "velocity": {
+            "x": 0,
+            "y": 0,
+          },
+        },
+        "position": {
+          "x": 200,
+          "y": 110,
+        },
+        "radius": 8,
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+      },
+    },
+    {
+      "children": [
+        {
+          "children": [],
+          "id": "scene.token_1.dot",
+          "props": {
+            "alpha": 1,
+            "animations": [
+              {
+                "duration": 1,
+                "easing": "easeInOut",
+                "handoff": true,
+                "loop": false,
+                "property": "position",
+                "to": {
+                  "x": 20,
+                  "y": 0,
+                },
+                "yoyo": false,
+              },
+            ],
+            "color": "#00ffff",
+            "kind": "circle",
+            "layer": 0,
+            "physics": {
+              "airDrag": 0,
+              "bounce": 0.65,
+              "collideBounds": true,
+              "duration": 1,
+              "gravity": {
+                "x": 0,
+                "y": 980,
+              },
+              "velocity": {
+                "x": 0,
+                "y": 0,
+              },
+            },
+            "position": {
+              "x": 0,
+              "y": 0,
+            },
+            "radius": 5,
+            "rotation": 0,
+            "scale": {
+              "x": 1,
+              "y": 1,
+            },
+            "sequences": [],
+          },
+        },
+      ],
+      "id": "scene.token_1",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "kind": "group",
+        "layer": 1,
+        "physics": undefined,
+        "sequences": [],
+        "transform": {
+          "position": {
+            "x": 110,
+            "y": 30,
+          },
+          "rotation": 0,
+          "scale": {
+            "x": 1,
+            "y": 1,
+          },
+        },
+      },
+    },
+    {
+      "children": [],
+      "id": "scene.staged",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "color": "#ffffff",
+        "height": 20,
+        "kind": "rectangle",
+        "layer": 3,
+        "physics": undefined,
+        "position": {
+          "x": 120,
+          "y": 80,
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [
+          {
+            "steps": [
+              {
+                "duration": 0.25,
+                "easing": "easeInOut",
+                "handoff": false,
+                "loop": false,
+                "property": "rotation",
+                "to": 90,
+                "yoyo": false,
+              },
+              {
+                "steps": [
+                  {
+                    "duration": 0.5,
+                    "easing": "easeInOut",
+                    "handoff": false,
+                    "loop": false,
+                    "property": "position",
+                    "to": {
+                      "x": 130,
+                      "y": 80,
+                    },
+                    "yoyo": false,
+                  },
+                  {
+                    "airDrag": 0,
+                    "bounce": 0.65,
+                    "collideBounds": true,
+                    "duration": 0.5,
+                    "gravity": {
+                      "x": 0,
+                      "y": 20,
+                    },
+                    "velocity": {
+                      "x": 0,
+                      "y": 0,
+                    },
+                  },
+                ],
+                "type": "parallel",
+              },
+              {
+                "airDrag": 0,
+                "bounce": 0.65,
+                "collideBounds": true,
+                "duration": 0.5,
+                "gravity": {
+                  "x": 0,
+                  "y": 20,
+                },
+                "velocity": {
+                  "x": 0,
+                  "y": 0,
+                },
+              },
+            ],
+          },
+        ],
+        "width": 20,
+      },
+    },
+  ],
+  "fit": "fill",
+  "height": 140,
+  "kind": "scene",
+  "registry": {
+    "scene.floorBall": {
+      "children": [],
+      "id": "scene.floorBall",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "color": "#ffffff",
+        "kind": "circle",
+        "layer": 0,
+        "physics": {
+          "airDrag": 0,
+          "bounce": 0.65,
+          "collideBounds": true,
+          "duration": "indefinitely",
+          "gravity": {
+            "x": 0,
+            "y": 20,
+          },
+          "velocity": {
+            "x": 0,
+            "y": 0,
+          },
+        },
+        "position": {
+          "x": 200,
+          "y": 110,
+        },
+        "radius": 8,
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+      },
+    },
+    "scene.staged": {
+      "children": [],
+      "id": "scene.staged",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "color": "#ffffff",
+        "height": 20,
+        "kind": "rectangle",
+        "layer": 3,
+        "physics": undefined,
+        "position": {
+          "x": 120,
+          "y": 80,
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [
+          {
+            "steps": [
+              {
+                "duration": 0.25,
+                "easing": "easeInOut",
+                "handoff": false,
+                "loop": false,
+                "property": "rotation",
+                "to": 90,
+                "yoyo": false,
+              },
+              {
+                "steps": [
+                  {
+                    "duration": 0.5,
+                    "easing": "easeInOut",
+                    "handoff": false,
+                    "loop": false,
+                    "property": "position",
+                    "to": {
+                      "x": 130,
+                      "y": 80,
+                    },
+                    "yoyo": false,
+                  },
+                  {
+                    "airDrag": 0,
+                    "bounce": 0.65,
+                    "collideBounds": true,
+                    "duration": 0.5,
+                    "gravity": {
+                      "x": 0,
+                      "y": 20,
+                    },
+                    "velocity": {
+                      "x": 0,
+                      "y": 0,
+                    },
+                  },
+                ],
+                "type": "parallel",
+              },
+              {
+                "airDrag": 0,
+                "bounce": 0.65,
+                "collideBounds": true,
+                "duration": 0.5,
+                "gravity": {
+                  "x": 0,
+                  "y": 20,
+                },
+                "velocity": {
+                  "x": 0,
+                  "y": 0,
+                },
+              },
+            ],
+          },
+        ],
+        "width": 20,
+      },
+    },
+    "scene.token_0": {
+      "children": [
+        {
+          "children": [],
+          "id": "scene.token_0.dot",
+          "props": {
+            "alpha": 1,
+            "animations": [
+              {
+                "duration": 1,
+                "easing": "easeInOut",
+                "handoff": true,
+                "loop": false,
+                "property": "position",
+                "to": {
+                  "x": 20,
+                  "y": 0,
+                },
+                "yoyo": false,
+              },
+            ],
+            "color": "#00ffff",
+            "kind": "circle",
+            "layer": 0,
+            "physics": {
+              "airDrag": 0,
+              "bounce": 0.65,
+              "collideBounds": true,
+              "duration": 1,
+              "gravity": {
+                "x": 0,
+                "y": 980,
+              },
+              "velocity": {
+                "x": 0,
+                "y": 0,
+              },
+            },
+            "position": {
+              "x": 0,
+              "y": 0,
+            },
+            "radius": 5,
+            "rotation": 0,
+            "scale": {
+              "x": 1,
+              "y": 1,
+            },
+            "sequences": [],
+          },
+        },
+      ],
+      "id": "scene.token_0",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "kind": "group",
+        "layer": 0,
+        "physics": undefined,
+        "sequences": [],
+        "transform": {
+          "position": {
+            "x": 40,
+            "y": 30,
+          },
+          "rotation": 0,
+          "scale": {
+            "x": 1,
+            "y": 1,
+          },
+        },
+      },
+    },
+    "scene.token_0.dot": {
+      "children": [],
+      "id": "scene.token_0.dot",
+      "props": {
+        "alpha": 1,
+        "animations": [
+          {
+            "duration": 1,
+            "easing": "easeInOut",
+            "handoff": true,
+            "loop": false,
+            "property": "position",
+            "to": {
+              "x": 20,
+              "y": 0,
+            },
+            "yoyo": false,
+          },
+        ],
+        "color": "#00ffff",
+        "kind": "circle",
+        "layer": 0,
+        "physics": {
+          "airDrag": 0,
+          "bounce": 0.65,
+          "collideBounds": true,
+          "duration": 1,
+          "gravity": {
+            "x": 0,
+            "y": 980,
+          },
+          "velocity": {
+            "x": 0,
+            "y": 0,
+          },
+        },
+        "position": {
+          "x": 0,
+          "y": 0,
+        },
+        "radius": 5,
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+      },
+    },
+    "scene.token_1": {
+      "children": [
+        {
+          "children": [],
+          "id": "scene.token_1.dot",
+          "props": {
+            "alpha": 1,
+            "animations": [
+              {
+                "duration": 1,
+                "easing": "easeInOut",
+                "handoff": true,
+                "loop": false,
+                "property": "position",
+                "to": {
+                  "x": 20,
+                  "y": 0,
+                },
+                "yoyo": false,
+              },
+            ],
+            "color": "#00ffff",
+            "kind": "circle",
+            "layer": 0,
+            "physics": {
+              "airDrag": 0,
+              "bounce": 0.65,
+              "collideBounds": true,
+              "duration": 1,
+              "gravity": {
+                "x": 0,
+                "y": 980,
+              },
+              "velocity": {
+                "x": 0,
+                "y": 0,
+              },
+            },
+            "position": {
+              "x": 0,
+              "y": 0,
+            },
+            "radius": 5,
+            "rotation": 0,
+            "scale": {
+              "x": 1,
+              "y": 1,
+            },
+            "sequences": [],
+          },
+        },
+      ],
+      "id": "scene.token_1",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "kind": "group",
+        "layer": 1,
+        "physics": undefined,
+        "sequences": [],
+        "transform": {
+          "position": {
+            "x": 110,
+            "y": 30,
+          },
+          "rotation": 0,
+          "scale": {
+            "x": 1,
+            "y": 1,
+          },
+        },
+      },
+    },
+    "scene.token_1.dot": {
+      "children": [],
+      "id": "scene.token_1.dot",
+      "props": {
+        "alpha": 1,
+        "animations": [
+          {
+            "duration": 1,
+            "easing": "easeInOut",
+            "handoff": true,
+            "loop": false,
+            "property": "position",
+            "to": {
+              "x": 20,
+              "y": 0,
+            },
+            "yoyo": false,
+          },
+        ],
+        "color": "#00ffff",
+        "kind": "circle",
+        "layer": 0,
+        "physics": {
+          "airDrag": 0,
+          "bounce": 0.65,
+          "collideBounds": true,
+          "duration": 1,
+          "gravity": {
+            "x": 0,
+            "y": 980,
+          },
+          "velocity": {
+            "x": 0,
+            "y": 0,
+          },
+        },
+        "position": {
+          "x": 0,
+          "y": 0,
+        },
+        "radius": 5,
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+      },
+    },
+  },
+  "width": 240,
+}
+`;
+
+exports[`compiler determinism > keeps primitive defaults and layer order in the Scene IR 1`] = `
+{
+  "background": "#101820",
+  "children": [
+    {
+      "children": [],
+      "id": "scene.back",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "color": "#00ffff",
+        "kind": "circle",
+        "layer": -1,
+        "physics": undefined,
+        "position": {
+          "x": 80,
+          "y": 60,
+        },
+        "radius": 30,
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+      },
+    },
+    {
+      "children": [],
+      "id": "scene.front",
+      "props": {
+        "alpha": 0.5,
+        "animations": [],
+        "color": "#ff00ff",
+        "height": 20,
+        "kind": "rectangle",
+        "layer": 1,
+        "physics": undefined,
+        "position": {
+          "x": 80,
+          "y": 60,
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+        "width": 40,
+      },
+    },
+    {
+      "children": [],
+      "id": "scene.label",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "color": "#ffffff",
+        "content": "stable",
+        "fontSize": 12,
+        "kind": "text",
+        "layer": 2,
+        "physics": undefined,
+        "position": {
+          "x": 80,
+          "y": 100,
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+      },
+    },
+  ],
+  "fit": "cover",
+  "height": 120,
+  "kind": "scene",
+  "registry": {
+    "scene.back": {
+      "children": [],
+      "id": "scene.back",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "color": "#00ffff",
+        "kind": "circle",
+        "layer": -1,
+        "physics": undefined,
+        "position": {
+          "x": 80,
+          "y": 60,
+        },
+        "radius": 30,
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+      },
+    },
+    "scene.front": {
+      "children": [],
+      "id": "scene.front",
+      "props": {
+        "alpha": 0.5,
+        "animations": [],
+        "color": "#ff00ff",
+        "height": 20,
+        "kind": "rectangle",
+        "layer": 1,
+        "physics": undefined,
+        "position": {
+          "x": 80,
+          "y": 60,
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+        "width": 40,
+      },
+    },
+    "scene.label": {
+      "children": [],
+      "id": "scene.label",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "color": "#ffffff",
+        "content": "stable",
+        "fontSize": 12,
+        "kind": "text",
+        "layer": 2,
+        "physics": undefined,
+        "position": {
+          "x": 80,
+          "y": 100,
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+      },
+    },
+  },
+  "width": 160,
+}
+`;

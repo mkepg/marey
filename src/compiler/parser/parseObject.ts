@@ -155,7 +155,7 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
 
   let objName = "";
   if (objType === "animate" || objType === "physics") {
-    objName = `${objType}_${Math.random().toString(36).slice(2, 8)}`;
+    objName = `${objType}_${typeTok.line}_${typeTok.col}`;
   } else {
     if (state.peek().type !== "IDENT") {
       const bad = state.peek();
