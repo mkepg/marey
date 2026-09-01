@@ -1,9 +1,10 @@
 import type { ObjectNode } from "../types";
 import { ParserState, describeToken, ParseException } from "./state";
 import { parseObject } from "./parseObject";
-import { parseDef } from "./parseDef";
+import { parseBinding } from "./parseBinding";
 import { parseValue } from "./parseValue";
 import { parseUse } from "./parseUse";
+import { rejectLegacyBinding } from "./parseProperty";
 
 export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
   state.consume("KEYWORD");
@@ -100,13 +101,14 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
 
     while (state.peek().type !== "RBRACE" && state.peek().type !== "EOF") {
       try {
+        rejectLegacyBinding(state);
         const t = state.peek();
         if (t.type === "KEYWORD") {
           if (state.peek().value === "template") {
             state.throwError(`In ${state.currentContext}: Unexpected keyword 'template'. Templates must be defined at the top level of the file, outside of the scene block.`, state.peek());
           }
-          if (t.value === "def") {
-            parseDef(state);
+          if (t.value === "let") {
+            parseBinding(state);
             continue;
           }
           if (t.value === "generate") {
@@ -131,7 +133,7 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
         }
 
         const bad = state.consume();
-        state.throwError(`In 'generate' block: Expected an object definition, 'def', 'use', or 'generate', but found ${describeToken(bad)}.`, bad);
+        state.throwError(`In 'generate' block: Expected an object definition, 'let', 'use', or 'generate', but found ${describeToken(bad)}.`, bad);
 
       } catch (e) {
         if (e instanceof ParseException) {

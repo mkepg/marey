@@ -1,12 +1,12 @@
 import type { ParserState } from "./state";
 import { parseValue } from "./parseValue";
 
-export function parseDef(state: ParserState): void {
+export function parseBinding(state: ParserState): void {
   state.consume("KEYWORD");
 
   if (state.peek().type !== "IDENT") {
     const bad = state.peek();
-    state.throwError(`In ${state.currentContext}: Expected a variable name after 'def', but found ${bad.value}.`, bad);
+    state.throwError(`In ${state.currentContext}: Expected a variable name after 'let', but found ${bad.value}.`, bad);
   }
 
   const nameTok = state.consume("IDENT");

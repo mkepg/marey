@@ -1,7 +1,7 @@
 /** The value categories understood by the Declare type checker. */
 export type ValueKind =
   | "number" | "color" | "string" | "point" | "pointList"
-  | "sceneFit" | "boolean" | "easing" | "animProperty" | "indefinitely";
+  | "fit" | "boolean" | "easing" | "animProperty" | "indefinitely";
 
 export type ContractDefault = number | string | boolean | Readonly<{ x: number; y: number }>;
 
@@ -93,8 +93,8 @@ const scale = property(
 );
 const layer = property(
   "number",
-  "Z-index for rendering order. Objects with higher z values are drawn on top.",
-  "z: 10",
+  "Layer for rendering order. Objects with higher layer values are drawn on top.",
+  "layer: 10",
   "0",
   { default: 0 },
 );
@@ -104,7 +104,7 @@ const visualProperties = Object.freeze({
   alpha,
   rotation,
   scale,
-  z: layer,
+  layer,
 });
 
 const sceneProperties = Object.freeze({
@@ -122,10 +122,10 @@ const sceneProperties = Object.freeze({
     "(600, 400)",
     { required: true, constraint: { kind: "positivePoint" } },
   ),
-  sceneFit: property(
-    "sceneFit",
+  fit: property(
+    "fit",
     "How the scene scales to the preview window.",
-    "sceneFit: contain",
+    "fit: contain",
     "contain",
     { default: "contain" },
   ),
@@ -248,10 +248,10 @@ const animateProperties = Object.freeze({
     "false",
     { default: false },
   ),
-  handOff: property(
+  handoff: property(
     "boolean",
     "Allows an animation to transfer its final momentum to the physics engine once completed. Requires a sibling physics block.",
-    "handOff: true",
+    "handoff: true",
     "false",
     { default: false },
   ),
@@ -315,7 +315,7 @@ const groupProperties = Object.freeze({
   rotation,
   scale,
   alpha,
-  z: layer,
+  layer,
 });
 
 const emptyProperties = Object.freeze({});
@@ -344,7 +344,7 @@ export const KIND_LABEL: Readonly<Record<ValueKind, string>> = {
   string: "a quoted string",
   point: "a point (x, y)",
   pointList: "a point list [(x,y), ...]",
-  sceneFit: "a sceneFit keyword (contain, cover, fill, or none)",
+  fit: "a fit keyword (contain, cover, fill, or none)",
   boolean: "a boolean (true or false)",
   easing: "an easing keyword (e.g. easeInOut, linear)",
   animProperty: "an animatable property name (e.g. position, rotation, scale, alpha)",

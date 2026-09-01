@@ -18,9 +18,9 @@ export function analyzeContext(textUntilCursor: string): ScopeNode[] {
   const scopes: ScopeNode[] = [{ blockType: null, vars: {} }];
   let i = 0;
   let lastKeyword: string | null = null;
-  let expectingDefName = false;
-  let currentDefName   = "";
-  let expectingDefVal  = false;
+  let expectingBindingName = false;
+  let currentBindingName   = "";
+  let expectingBindingVal  = false;
   let expectingGenName = false;
 
   // All block types that open a new scope when followed by `{`.
@@ -43,10 +43,10 @@ export function analyzeContext(textUntilCursor: string): ScopeNode[] {
         else if (textUntilCursor[i] === '"') { i++; break; }
         else i++;
       }
-      if (expectingDefVal && currentDefName) {
-        scopes[scopes.length - 1].vars[currentDefName] = "string";
-        expectingDefVal  = false;
-        currentDefName   = "";
+      if (expectingBindingVal && currentBindingName) {
+        scopes[scopes.length - 1].vars[currentBindingName] = "string";
+        expectingBindingVal  = false;
+        currentBindingName   = "";
       }
       continue;
     }
@@ -76,12 +76,12 @@ export function analyzeContext(textUntilCursor: string): ScopeNode[] {
       while (i < textUntilCursor.length && /[a-zA-Z0-9_]/.test(textUntilCursor[i])) i++;
       const word = textUntilCursor.slice(start, i);
 
-      if (word === "def") {
-        expectingDefName = true;
-      } else if (expectingDefName) {
-        currentDefName   = word;
-        expectingDefName = false;
-        expectingDefVal  = true;
+      if (word === "let") {
+        expectingBindingName = true;
+      } else if (expectingBindingName) {
+        currentBindingName   = word;
+        expectingBindingName = false;
+        expectingBindingVal  = true;
       } else if (word === "generate") {
         expectingGenName = true;
         lastKeyword      = word;
@@ -93,17 +93,17 @@ export function analyzeContext(textUntilCursor: string): ScopeNode[] {
           lastKeyword = word;
         }
 
-        if (expectingDefVal && currentDefName) {
+        if (expectingBindingVal && currentBindingName) {
           if (FIT_VALUES.includes(word as (typeof FIT_VALUES)[number])) {
-            scopes[scopes.length - 1].vars[currentDefName] = "sceneFit";
+            scopes[scopes.length - 1].vars[currentBindingName] = "fit";
           } else if (namedColorKeys.includes(word)) {
-            scopes[scopes.length - 1].vars[currentDefName] = "color";
+            scopes[scopes.length - 1].vars[currentBindingName] = "color";
           } else if (BOOLEAN_VALUES.includes(word as (typeof BOOLEAN_VALUES)[number])) {
-            scopes[scopes.length - 1].vars[currentDefName] = "boolean";
+            scopes[scopes.length - 1].vars[currentBindingName] = "boolean";
           } else if (EASING_VALUES.includes(word as (typeof EASING_VALUES)[number])) {
-            scopes[scopes.length - 1].vars[currentDefName] = "easing";
+            scopes[scopes.length - 1].vars[currentBindingName] = "easing";
           } else if (DURATION_VALUES.includes(word as (typeof DURATION_VALUES)[number])) {
-            scopes[scopes.length - 1].vars[currentDefName] = "indefinitely";
+            scopes[scopes.length - 1].vars[currentBindingName] = "indefinitely";
           } else {
             let inheritedType = "number";
             for (let s = scopes.length - 1; s >= 0; s--) {
@@ -112,10 +112,10 @@ export function analyzeContext(textUntilCursor: string): ScopeNode[] {
                 break;
               }
             }
-            scopes[scopes.length - 1].vars[currentDefName] = inheritedType;
+            scopes[scopes.length - 1].vars[currentBindingName] = inheritedType;
           }
-          expectingDefVal = false;
-          currentDefName  = "";
+          expectingBindingVal = false;
+          currentBindingName  = "";
         }
       }
       continue;
@@ -124,15 +124,15 @@ export function analyzeContext(textUntilCursor: string): ScopeNode[] {
     // ── equals sign ──────────────────────────────────────────────────
     if (char === "=") { i++; continue; }
 
-    // ── first character of a def value (non-word) ────────────────────
-    if (expectingDefVal && currentDefName) {
-      if (char === "#")      scopes[scopes.length - 1].vars[currentDefName] = "color";
-      else if (char === "[") scopes[scopes.length - 1].vars[currentDefName] = "pointList";
-      else if (char === "(") scopes[scopes.length - 1].vars[currentDefName] = "point";
-      else if (/[0-9\-]/.test(char)) scopes[scopes.length - 1].vars[currentDefName] = "number";
+    // ── first character of a let value (non-word) ────────────────────
+    if (expectingBindingVal && currentBindingName) {
+      if (char === "#")      scopes[scopes.length - 1].vars[currentBindingName] = "color";
+      else if (char === "[") scopes[scopes.length - 1].vars[currentBindingName] = "pointList";
+      else if (char === "(") scopes[scopes.length - 1].vars[currentBindingName] = "point";
+      else if (/[0-9\-]/.test(char)) scopes[scopes.length - 1].vars[currentBindingName] = "number";
 
-      expectingDefVal = false;
-      currentDefName  = "";
+      expectingBindingVal = false;
+      currentBindingName  = "";
     }
     i++;
   }

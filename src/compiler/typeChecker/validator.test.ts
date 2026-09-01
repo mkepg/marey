@@ -12,7 +12,7 @@ function errorsFor(source: string): string[] {
 
 describe("released property names", () => {
   it.each(["anchor", "width", "height"])("allows %s as an object and binding name", (name) => {
-    expect(errorsFor(`def ${name} = 12\nscene { size: (100, 100) circle ${name} { position: (50, 50), radius: ${name} } }`)).toEqual([]);
+    expect(errorsFor(`let ${name} = 12\nscene { size: (100, 100) circle ${name} { position: (50, 50), radius: ${name} } }`)).toEqual([]);
   });
 
   it("keeps removed reservations invalid as properties", () => {

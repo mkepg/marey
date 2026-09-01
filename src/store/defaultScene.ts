@@ -32,15 +32,15 @@ export const DEFAULT_CODE = `// ══ DECLARE · MOTION TEST CARD ════�
 // Note: only objects with a physics block are solid. The labels, rings
 // and bars have none, so falling objects pass straight through them.
 
-def ink    = #e2e8f0
-def dim    = #64748b
-def sky    = #38bdf8
-def violet = #a78bfa
-def rose   = #fb7185
-def amber  = #fbbf24
+let ink    = #e2e8f0
+let dim    = #64748b
+let sky    = #38bdf8
+let violet = #a78bfa
+let rose   = #fb7185
+let amber  = #fbbf24
 
-def travel = 250   // shared distance for the easing race
-def beat   = 2.0   // shared duration for the easing race
+let travel = 250   // shared distance for the easing race
+let beat   = 2.0   // shared duration for the easing race
 
 // One row of the easing race. The curve itself is a template
 // argument, so all four rows share a single definition.
@@ -69,7 +69,7 @@ template Racer(curve) {
 scene {
   size: (800, 600)
   background: #0a0e1a
-  sceneFit: contain
+  fit: contain
 
   // ── Title ───────────────────────────────────────────────────
   text title {
@@ -77,7 +77,7 @@ scene {
     content: "DECLARE"
     fontSize: 26
     color: ink
-    z: 2
+    layer: 2
   }
 
   text subtitle {
@@ -85,7 +85,7 @@ scene {
     content: "motion test card"
     fontSize: 11
     color: dim
-    z: 2
+    layer: 2
   }
 
   // ── 1 · EASING ──────────────────────────────────────────────
@@ -106,7 +106,7 @@ scene {
   // so the ball arcs. Without handoff it would halt, then drop.
   text lblHandoff {
     position: (74, 236)
-    content: "handOff"
+    content: "handoff"
     fontSize: 10
     color: dim
   }
@@ -120,7 +120,7 @@ scene {
       to: (350, 220)
       duration: 1.1
       easing: easeOut
-      handOff: true
+      handoff: true
     }
     physics {
       gravity: (0, 900)
@@ -167,13 +167,13 @@ scene {
 
   // ── 4 · LOOP ────────────────────────────────────────────────
   // Two rings breathing on different periods, drawn behind
-  // everything else via a negative z.
+  // everything else via a negative layer.
   circle auraOuter {
     position: (610, 250)
     radius: 96
     color: violet
     alpha: 0.10
-    z: -1
+    layer: -1
     animate {
       property: scale
       to: (1.18, 1.18)
@@ -189,7 +189,7 @@ scene {
     radius: 52
     color: sky
     alpha: 0.16
-    z: -1
+    layer: -1
     animate {
       property: scale
       to: (0.78, 0.78)

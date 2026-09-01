@@ -181,7 +181,7 @@ export class SceneRuntime {
     // tick they occur — not once per rendered frame. Deferring them would fire
     // them once per rendered frame instead, silently dropping physics ticks.
     if (justCompleted && ra.isPosAnim && ra.container.__declareLayout) {
-      if (ra.anim.handOff && ra.anim.duration > 0) {
+      if (ra.anim.handoff && ra.anim.duration > 0) {
         const startPt = ra.startVal as IRPoint;
         const targetPt = ra.targetVal as IRPoint;
         const deriv = getEasingDerivativeAtEnd(ra.anim.easing);

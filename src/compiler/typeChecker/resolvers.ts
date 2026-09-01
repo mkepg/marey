@@ -1,5 +1,5 @@
 import type { AstValue, NumberValue, PointValue, StringValue, PointListValue, ColorValue, BooleanValue, EasingValue, AnimPropertyValue } from "../types";
-import type { IRColor, IRPoint, IRPointList, IRSceneFit, IREasing } from "../sceneIR";
+import type { IRColor, IRPoint, IRPointList, IRFit, IREasing } from "../sceneIR";
 import { EASING_VALUES as CONTRACT_EASING_VALUES, FIT_VALUES, propertyDefault } from "../languageContract";
 import type { ContractDefault } from "../languageContract";
 
@@ -37,7 +37,7 @@ export function contractStringDefault(block: string, key: string): string {
   return typeof value === "string" ? value : invalidContractDefault(block, key, "a string");
 }
 
-function isSceneFit(value: string): value is IRSceneFit {
+function isFit(value: string): value is IRFit {
   return (FIT_VALUES as readonly string[]).includes(value);
 }
 
@@ -78,14 +78,14 @@ export function resolveScale(props: Record<string, AstValue>, key: string, fallb
   }
   return fallback;
 }
-export function resolveSceneFit(
+export function resolveFit(
   props: Record<string, AstValue>,
-  fallback: string = contractStringDefault("scene", "sceneFit"),
-): IRSceneFit {
-  const v = props["sceneFit"];
-  if (v?.kind === "sceneFit" && isSceneFit(v.value)) return v.value;
-  if (isSceneFit(fallback)) return fallback;
-  throw new Error(`[IR] Invalid sceneFit fallback '${fallback}'.`);
+  fallback: string = contractStringDefault("scene", "fit"),
+): IRFit {
+  const v = props["fit"];
+  if (v?.kind === "fit" && isFit(v.value)) return v.value;
+  if (isFit(fallback)) return fallback;
+  throw new Error(`[IR] Invalid fit fallback '${fallback}'.`);
 }
 export function resolveBoolean(props: Record<string, AstValue>, key: string, fallback: boolean): boolean {
   const v = props[key];

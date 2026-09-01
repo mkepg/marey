@@ -26,22 +26,22 @@ scene {
 
 ## Scene model
 
-A file holds any number of `def` and `template` declarations, followed by
+A file holds any number of `let` and `template` declarations, followed by
 exactly one `scene` block. A second top-level keyword after the scene block
-closes is a parse error ("Only one scene block is allowed per file"). `def`
-and `template` may not appear after the scene block starts scoping — `def`
+closes is a parse error ("Only one scene block is allowed per file"). `let`
+and `template` may not appear after the scene block starts scoping — `let`
 may still appear inside the scene body itself, but `template` may not.
 
 `scene` requires a `size: (width, height)` property. `background` takes a
-colour and is optional. `sceneFit` is optional and takes one of four unquoted
+colour and is optional. `fit` is optional and takes one of four unquoted
 keywords; passing it as a quoted string is a compile error.
 
-`size` declares the scene's *logical* dimensions. `sceneFit` decides how those
+`size` declares the scene's *logical* dimensions. `fit` decides how those
 logical dimensions are mapped onto the preview area, which may be any size:
 
 - `contain` — scale to fit entirely inside the preview, preserving aspect
   ratio, and centre. The whole scene is visible; there may be letterboxing.
-  **This is the default when `sceneFit` is omitted.**
+  **This is the default when `fit` is omitted.**
 - `cover` — scale to fill the preview, preserving aspect ratio, and centre.
   Nothing is letterboxed; the scene may be cropped.
 - `fill` — scale each axis independently so the scene exactly fills the
@@ -49,7 +49,7 @@ logical dimensions are mapped onto the preview area, which may be any size:
 - `none` — no scaling. The scene is drawn at its logical size and anchored at
   the preview's top-left corner, not centred.
 
-`sceneFit` affects presentation only. It does not change any coordinate you
+`fit` affects presentation only. It does not change any coordinate you
 write, and physics is simulated in logical units regardless of it.
 
 Coordinates are in pixels. X increases rightward and **y increases
@@ -72,9 +72,9 @@ A child object's `position` is relative to its parent `group`'s local space,
 not to the scene origin — moving or rotating the group moves and rotates its
 children with it.
 
-`z` controls drawing order among siblings. Objects with a higher `z` draw in
-front of (on top of) objects with a lower `z`. It defaults to `0` and may be
-negative. Siblings with equal `z` draw in source order.
+`layer` controls drawing order among siblings. Objects with a higher `layer` draw in
+front of (on top of) objects with a lower `layer`. It defaults to `0` and may be
+negative. Siblings with equal `layer` draw in source order.
 
 `rotation` is written in **degrees** in source; the renderer converts to
 radians internally (multiplying by `Math.PI / 180`) when applying it to the
@@ -88,7 +88,7 @@ compile error. It defaults to `1.0` — fully opaque.
 Colours are written as a hex code after `#` — 3 digits (`#f00`) or 6 digits
 (`#ff0000`) — or as one of nine named-colour keywords: `red`, `green`,
 `blue`, `white`, `black`, `yellow`, `cyan`, `magenta`, `orange`. Named colours
-lex as their own token type, so they cannot be reused as identifiers (`def
+lex as their own token type, so they cannot be reused as identifiers (`let
 cyan = ...` is a parse error). `color` defaults to `#ffffff` (white) on every
 shape that accepts it.
 
@@ -113,7 +113,7 @@ relative to `position`. It must have at least 3 points.
 and `thickness`, which must be greater than 0.
 
 Each coordinate inside a point list follows the same rules as any other
-numeric value: it may be a number literal, a `def`-bound name, or an
+numeric value: it may be a number literal, a `let`-bound name, or an
 arithmetic expression combining them. See the worked example under
 "Reuse" for a `polygon` whose points are computed this way.
 
@@ -145,8 +145,8 @@ scene {
 ## Animation
 
 `animate` is a child block of a shape or `group`. It requires `property`,
-`to`, and `duration`. `easing`, `loop`, `yoyo`, and `handOff` are optional.
-`handOff` only matters inside a `sequence` and is covered there.
+`to`, and `duration`. `easing`, `loop`, `yoyo`, and `handoff` are optional.
+`handoff` only matters inside a `sequence` and is covered there.
 
 `duration` is a number of seconds and must be strictly greater than 0.
 
@@ -313,9 +313,9 @@ scene {
 }
 ```
 
-### handOff
+### handoff
 
-`handOff: true` is a property of `animate` on `property: position`. Setting
+`handoff: true` is a property of `animate` on `property: position`. Setting
 it carries the animation's exit velocity into the physics simulation, so an
 object that slides and then falls keeps its momentum and arcs, instead of
 stopping dead and dropping straight down.
@@ -330,7 +330,7 @@ twice that speed, and `easeOut` and `easeInOut` at half of it. `easeOut` and
 literally would hand off no momentum at all; the `0.5` is a deliberate
 choice, not a measurement of the curve.
 
-Four rules govern `handOff: true`, each a compile error when broken:
+Four rules govern `handoff: true`, each a compile error when broken:
 
 - It is only valid on `property: position`; on any other property it is a
   compile error (`TYPE_HANDOFF_PROP`).
@@ -354,7 +354,7 @@ scene {
       to: (350, 220)
       duration: 1.1
       easing: easeOut
-      handOff: true
+      handoff: true
     }
     physics {
       gravity: (0, 900)
@@ -608,16 +608,16 @@ scene {
 
 ## Reuse
 
-`def`, `generate`, `template` and `use` are the language's metaprogramming
+`let`, `generate`, `template` and `use` are the language's metaprogramming
 layer. All four are resolved by the parser, before type checking runs — by
-the time an error is reported, `def` names have been substituted and
+the time an error is reported, `let` names have been substituted and
 `generate`/`use` have been expanded into plain objects.
 
-### `def`
+### `let`
 
-`def name = value` binds `name` to a single value in the current scope. The
+`let name = value` binds `name` to a single value in the current scope. The
 right-hand side accepts any value kind the parser produces: number, color,
-string, point, point list, boolean, easing, or `sceneFit`.
+string, point, point list, boolean, easing, or `fit`.
 
 A binding is immutable: redefining the same name in the same scope is a
 compile error ("already defined in this immediate scope"). Shadowing an
@@ -626,7 +626,7 @@ group bodies, and template expansions each open a new scope. A name is
 visible only in the scope that defined it and scopes nested inside it; a
 name defined inside a `generate` block does not exist outside it.
 
-`def` may appear before the `scene` block, inside the `scene` body, and
+`let` may appear before the `scene` block, inside the `scene` body, and
 inside any object, group, `generate`, `animate`, `physics`, or template
 body. It may not appear directly inside a `sequence` block, which accepts
 only `animate`, `physics`, and `parallel`.
@@ -634,9 +634,9 @@ only `animate`, `physics`, and `parallel`.
 Names follow the same rule as object names: they must start with a letter
 and contain only letters, digits, and underscores.
 
-**A named colour cannot be a `def` name.** `red`, `green`, `blue`, `white`,
+**A named colour cannot be a `let` name.** `red`, `green`, `blue`, `white`,
 `black`, `yellow`, `cyan`, `magenta`, and `orange` lex as their own token
-type, not as identifiers, so `def cyan = #00ffff` is a parse error before it
+type, not as identifiers, so `let cyan = #00ffff` is a parse error before it
 ever reaches scope checking — the parser is looking for a variable name and
 finds a colour literal instead.
 
@@ -646,17 +646,17 @@ Numeric value positions accept `+`, `-`, `*`, and `/`, with conventional
 precedence: `*` and `/` bind tighter than `+` and `-`. Unary `-` is
 supported. Parentheses group and may nest. Division by zero is a compile
 error, not `Infinity`. There is no modulo operator, no exponent, and no
-comparison operator. An operand may be a number literal or a `def`-bound
+comparison operator. An operand may be a number literal or a `let`-bound
 name; a name bound to a non-number value used in a math expression is a
 compile error.
 
-**The right-hand side of a `def` is a full value expression, not only a
-literal.** It may be arithmetic, and it may reference an earlier `def` in
+**The right-hand side of a `let` is a full value expression, not only a
+literal.** It may be arithmetic, and it may reference an earlier `let` in
 scope:
 
 ```declare
-def base    = 20
-def spacing = base * 2 + 10
+let base    = 20
+let spacing = base * 2 + 10
 
 scene {
   size: (800, 600)
@@ -673,7 +673,7 @@ scene {
 `generate i from A to B { ... }` repeats its body once for each integer `i`
 from `A` to `B`, **inclusive of both ends** — `from 0 to 4` runs five times,
 for `i` = 0, 1, 2, 3, 4. `A` and `B` must be integer literals or
-integer-valued `def` names; a non-integer bound is a compile error. A single
+integer-valued `let` names; a non-integer bound is a compile error. A single
 `generate`'s span from `A` to `B` cannot exceed 10,000 — since both ends are
 inclusive, that allows up to 10,001 iterations. A file-wide counter shared by
 every object, `use` expansion, and `generate` iteration is capped at 15,000;
@@ -705,9 +705,9 @@ argument may be **any** value kind the parser produces, including a keyword
 arguments must match the number of declared parameters exactly.
 
 The instance name must be unique among its siblings and follows the same
-naming rule as `def`. The expansion is wrapped as a `group` object named after
+naming rule as a binding. The expansion is wrapped as a `group` object named after
 the instance; the `{ ... }` block after the instance name sets group-level
-properties on that wrapper — `position`, `rotation`, `scale`, `alpha`, `z` —
+properties on that wrapper — `position`, `rotation`, `scale`, `alpha`, `layer` —
 exactly as it would on any other `group`.
 
 Recursive templates are rejected: expanding a template that is already being
@@ -715,11 +715,11 @@ expanded, either directly or through a cycle of other templates, is a
 compile error.
 
 ```declare
-def ink      = #e2e8f0
-def gap      = 120
-def beat     = 1.5
-def apex     = -30
-def halfBase = gap / 5
+let ink      = #e2e8f0
+let gap      = 120
+let beat     = 1.5
+let apex     = -30
+let halfBase = gap / 5
 
 template Badge(tone) {
   circle disc {
@@ -762,7 +762,7 @@ scene {
 }
 ```
 
-`marker`'s `points` show a point list built entirely from `def` names and
+`marker`'s `points` show a point list built entirely from `let` names and
 arithmetic (`halfBase` is itself `gap / 5`) — the same rule as any other
 numeric value, stated under "Shapes" above.
 
@@ -774,7 +774,7 @@ This section is expected to shrink as later phases close them.
 **No arrays or indexing.** There is no way to write a list of values and
 loop over it. A point list such as `[(0, -30), (26, 15), (-26, 15)]` exists,
 but only as a literal property value for `polygon` and `line`. It can be
-bound to a name with `def` and passed around as a whole — but its elements
+bound to a name with `let` and passed around as a whole — but its elements
 cannot be read individually, indexed, or iterated. It is not a
 general-purpose array. A chart driven by seven data values must still be
 written as seven separate `rectangle` blocks.

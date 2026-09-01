@@ -22,10 +22,10 @@ describe("language contract", () => {
     expect(REQUIRED_PROPS.circle).toEqual(["position", "radius"]);
     expect(PROP_TYPES.animate).toEqual({
       property: "animProperty", to: ["number", "point"], duration: "number",
-      easing: "easing", loop: "boolean", yoyo: "boolean", handOff: "boolean",
+      easing: "easing", loop: "boolean", yoyo: "boolean", handoff: "boolean",
     });
     expect(Object.keys(LANGUAGE_CONTRACT.scene.properties)).toEqual([
-      "background", "size", "sceneFit",
+      "background", "size", "fit",
     ]);
   });
 
@@ -47,7 +47,7 @@ describe("language contract", () => {
     expect(contractNumberDefault("physics", "airDrag")).toBe(propertyDefault("physics", "airDrag"));
     expect(contractBooleanDefault("physics", "collideBounds")).toBe(propertyDefault("physics", "collideBounds"));
     expect(contractPointDefault("physics", "gravity")).toEqual(propertyDefault("physics", "gravity"));
-    expect(contractStringDefault("scene", "sceneFit")).toBe(propertyDefault("scene", "sceneFit"));
+    expect(contractStringDefault("scene", "fit")).toBe(propertyDefault("scene", "fit"));
   });
 
   it("builds optional IR values from contract defaults", () => {
@@ -70,7 +70,7 @@ describe("language contract", () => {
       alpha: propertyDefault("circle", "alpha"),
       rotation: propertyDefault("circle", "rotation"),
       scale: propertyDefault("circle", "scale"),
-      z: propertyDefault("circle", "z"),
+      layer: propertyDefault("circle", "layer"),
       physics: {
         velocity: propertyDefault("physics", "velocity"),
         gravity: propertyDefault("physics", "gravity"),
@@ -80,7 +80,7 @@ describe("language contract", () => {
       },
     });
     expect(result.ir!.background).toBe(propertyDefault("scene", "background"));
-    expect(result.ir!.sceneFit).toBe(propertyDefault("scene", "sceneFit"));
+    expect(result.ir!.fit).toBe(propertyDefault("scene", "fit"));
   });
 
   it("uses the contract's group origin default", () => {

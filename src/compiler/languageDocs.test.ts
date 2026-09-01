@@ -4,7 +4,7 @@
  * The document is the only copy of its examples — there is no parallel fixture
  * directory to fall out of sync with it. This is the mechanism that stops the
  * reference becoming a fifth hand-synced list (spec 2026-08-27, L2/§5): when
- * Phase 3 renames `def` to `let`, every example here stops compiling and the
+ * final vocabulary changes, every example here stops compiling and the
  * build goes red, rather than the document quietly going stale.
  *
  * Fences tagged ```declare are compiled. Fences tagged ```text are prose

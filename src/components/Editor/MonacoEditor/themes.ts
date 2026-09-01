@@ -5,7 +5,7 @@ export function defineThemes(monaco: typeof import("monaco-editor")): void {
     rules: [
       { token: "comment",     foreground: "3a3a55", fontStyle: "italic" },
       { token: "keyword",     foreground: "c792ea", fontStyle: "bold" },
-      { token: "keyword.def", foreground: "ff79c6", fontStyle: "bold" },
+      { token: "keyword.let", foreground: "ff79c6", fontStyle: "bold" },
       { token: "color",       foreground: "f78c6c" },
       { token: "string",      foreground: "c3e88d" },
       { token: "number",      foreground: "f07178" },
@@ -34,7 +34,7 @@ export function defineThemes(monaco: typeof import("monaco-editor")): void {
     rules: [
       { token: "comment",     foreground: "9090a8", fontStyle: "italic" },
       { token: "keyword",     foreground: "7c3aed", fontStyle: "bold" },
-      { token: "keyword.def", foreground: "d5358f", fontStyle: "bold" },
+      { token: "keyword.let", foreground: "d5358f", fontStyle: "bold" },
       { token: "color",       foreground: "c2410c" },
       { token: "string",      foreground: "166534" },
       { token: "number",      foreground: "be185d" },

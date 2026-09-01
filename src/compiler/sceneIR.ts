@@ -7,7 +7,7 @@ export interface IRPoint {
 
 export type IRPointList = ReadonlyArray<IRPoint>;
 
-export type IRSceneFit = "contain" | "cover" | "fill" | "none";
+export type IRFit = "contain" | "cover" | "fill" | "none";
 export type IREasing = "linear" | "easeIn" | "easeOut" | "easeInOut";
 
 export interface IRTransform {
@@ -23,7 +23,7 @@ export interface IRAnimation {
   readonly easing: IREasing;
   readonly loop: boolean;
   readonly yoyo: boolean;
-  readonly handOff: boolean;
+  readonly handoff: boolean;
 }
 
 export type IRPhysicsDuration = number | "indefinitely";
@@ -55,7 +55,7 @@ export interface IRVisualBase {
   readonly rotation: number;
   readonly scale: IRPoint;
   // anchor removed
-  readonly z: number;
+  readonly layer: number;
   readonly animations: ReadonlyArray<IRAnimation>;
   readonly physics?: IRPhysics;
   readonly sequences: ReadonlyArray<IRSequence>;
@@ -93,7 +93,7 @@ export interface IRGroupProps {
   readonly kind: "group";
   readonly transform: IRTransform;
   readonly alpha: number;
-  readonly z: number;
+  readonly layer: number;
   readonly animations: ReadonlyArray<IRAnimation>;
   readonly physics?: IRPhysics;
   readonly sequences: ReadonlyArray<IRSequence>;
@@ -120,7 +120,7 @@ export interface IRSceneNode {
   readonly width: number;
   readonly height: number;
   readonly background: IRColor;
-  readonly sceneFit: IRSceneFit;
+  readonly fit: IRFit;
   readonly children: ReadonlyArray<IRObjectNode>;
   readonly registry: Readonly<Record<IRObjectId, IRObjectNode>>;
 }

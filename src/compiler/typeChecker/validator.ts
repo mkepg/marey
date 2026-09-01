@@ -314,23 +314,23 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         }
       }
 
-      const handOffVal = node.props["handOff"];
-      if (handOffVal?.kind === "boolean" && handOffVal.value === true) {
+      const handoffVal = node.props["handoff"];
+      if (handoffVal?.kind === "boolean" && handoffVal.value === true) {
         if (propVal?.kind === "animProperty" && propVal.value !== "position") {
-          errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_PROP] 'handOff: true' is only valid on 'property: position' animations.`, line: handOffVal.line, col: handOffVal.col, endLine: handOffVal.endLine, endCol: handOffVal.endCol });
+          errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_PROP] 'handoff: true' is only valid on 'property: position' animations.`, line: handoffVal.line, col: handoffVal.col, endLine: handoffVal.endLine, endCol: handoffVal.endCol });
         }
         const loopVal = node.props["loop"];
         if (loopVal?.kind === "boolean" && loopVal.value === true) {
-          errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_LOOP] 'loop: true' and 'handOff: true' cannot coexist. A looping animation never ends.`, line: handOffVal.line, col: handOffVal.col, endLine: handOffVal.endLine, endCol: handOffVal.endCol });
+          errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_LOOP] 'loop: true' and 'handoff: true' cannot coexist. A looping animation never ends.`, line: handoffVal.line, col: handoffVal.col, endLine: handoffVal.endLine, endCol: handoffVal.endCol });
         }
         
         if (parentNode) {
           const physicsNode = parentNode.children.find(c => c.type === "physics");
           if (!physicsNode) {
-            errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_PHYSICS] 'handOff: true' requires a sibling 'physics' block on the same object.`, line: handOffVal.line, col: handOffVal.col, endLine: handOffVal.endLine, endCol: handOffVal.endCol });
+            errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_PHYSICS] 'handoff: true' requires a sibling 'physics' block on the same object.`, line: handoffVal.line, col: handoffVal.col, endLine: handoffVal.endLine, endCol: handoffVal.endCol });
           } else if (physicsNode.props["velocity"] !== undefined) {
             const velNode = physicsNode.props["velocity"];
-            errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_AMBIGUITY] When 'handOff: true' is used, the 'physics' block cannot define an initial 'velocity' because the animation's exit momentum will completely overwrite it. Remove 'velocity' from the physics block.`, line: velNode.line, col: velNode.col, endLine: velNode.endLine, endCol: velNode.endCol });
+            errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_AMBIGUITY] When 'handoff: true' is used, the 'physics' block cannot define an initial 'velocity' because the animation's exit momentum will completely overwrite it. Remove 'velocity' from the physics block.`, line: velNode.line, col: velNode.col, endLine: velNode.endLine, endCol: velNode.endCol });
           }
         }
       }
@@ -359,8 +359,8 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         : effectiveExpected === val.kind;
 
       if (!isExpected) {
-        if (key === "sceneFit" && val.kind === "string") {
-          errors.push({ phase: "TYPE", message: `${label}: 'sceneFit' must be an unquoted keyword. Remove the quotes around the value.`, ...errPos });
+        if (key === "fit" && val.kind === "string") {
+          errors.push({ phase: "TYPE", message: `${label}: 'fit' must be an unquoted keyword. Remove the quotes around the value.`, ...errPos });
         } else if (val.kind === "string" && (!Array.isArray(effectiveExpected) && effectiveExpected !== "string")) {
           const expStr = Array.isArray(effectiveExpected)
             ? (effectiveExpected as readonly PropKind[]).map(e => KIND_LABEL[e] ?? e).join(" or ")

@@ -23,7 +23,7 @@ import {
   resolveNumber,
   resolvePoint,
   resolveScale,
-  resolveSceneFit,
+  resolveFit,
   resolveBoolean,
   resolveEasing,
   getReqAnimProperty,
@@ -46,7 +46,7 @@ function buildAnimationFromNode(an: ObjectNode): IRAnimation {
     easing:   resolveEasing(an.props, "easing", contractStringDefault("animate", "easing")),
     loop:     resolveBoolean(an.props, "loop", contractBooleanDefault("animate", "loop")),
     yoyo:     resolveBoolean(an.props, "yoyo", contractBooleanDefault("animate", "yoyo")),
-    handOff:  resolveBoolean(an.props, "handOff", contractBooleanDefault("animate", "handOff")),
+    handoff:  resolveBoolean(an.props, "handoff", contractBooleanDefault("animate", "handoff")),
   };
 }
 
@@ -142,7 +142,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
           alpha:     resolveNumber(p, "alpha", contractNumberDefault("circle", "alpha")),
           rotation:  resolveNumber(p, "rotation", contractNumberDefault("circle", "rotation")),
           scale:     resolveScale(p, "scale", contractPointDefault("circle", "scale")),
-          z:         resolveNumber(p, "z", contractNumberDefault("circle", "z")),
+          layer:     resolveNumber(p, "layer", contractNumberDefault("circle", "layer")),
           animations,
           physics,
           sequences,
@@ -161,7 +161,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
           alpha:     resolveNumber(p, "alpha", contractNumberDefault("rectangle", "alpha")),
           rotation:  resolveNumber(p, "rotation", contractNumberDefault("rectangle", "rotation")),
           scale:     resolveScale(p, "scale", contractPointDefault("rectangle", "scale")),
-          z:         resolveNumber(p, "z", contractNumberDefault("rectangle", "z")),
+          layer:     resolveNumber(p, "layer", contractNumberDefault("rectangle", "layer")),
           animations,
           physics,
           sequences,
@@ -190,7 +190,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
           position:  resolvePoint(p, "position", { x: defaultX, y: defaultY }),
           rotation:  resolveNumber(p, "rotation", contractNumberDefault("polygon", "rotation")),
           scale:     resolveScale(p, "scale", contractPointDefault("polygon", "scale")),
-          z:         resolveNumber(p, "z", contractNumberDefault("polygon", "z")),
+          layer:     resolveNumber(p, "layer", contractNumberDefault("polygon", "layer")),
           animations,
           physics,
           sequences,
@@ -209,7 +209,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
           position:  getReqPoint(p, "position"),
           rotation:  resolveNumber(p, "rotation", contractNumberDefault("line", "rotation")),
           scale:     resolveScale(p, "scale", contractPointDefault("line", "scale")),
-          z:         resolveNumber(p, "z", contractNumberDefault("line", "z")),
+          layer:     resolveNumber(p, "layer", contractNumberDefault("line", "layer")),
           animations,
           physics,
           sequences,
@@ -227,7 +227,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
           alpha:     resolveNumber(p, "alpha", contractNumberDefault("text", "alpha")),
           rotation:  resolveNumber(p, "rotation", contractNumberDefault("text", "rotation")),
           scale:     resolveScale(p, "scale", contractPointDefault("text", "scale")),
-          z:         resolveNumber(p, "z", contractNumberDefault("text", "z")),
+          layer:     resolveNumber(p, "layer", contractNumberDefault("text", "layer")),
           animations,
           physics,
           sequences,
@@ -246,7 +246,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
           kind:      "group",
           transform,
           alpha:     resolveNumber(p, "alpha", contractNumberDefault("group", "alpha")),
-          z:         resolveNumber(p, "z", contractNumberDefault("group", "z")),
+          layer:     resolveNumber(p, "layer", contractNumberDefault("group", "layer")),
           animations,
           physics,
           sequences,
@@ -266,7 +266,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
     }));
 
     childrenNodes.sort((a, b) => {
-      const diff = a.node.props.z - b.node.props.z;
+      const diff = a.node.props.layer - b.node.props.layer;
       if (diff !== 0) return diff;
       return a.index - b.index;
     });
@@ -294,7 +294,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
   }));
 
   topLevelChildrenNodes.sort((a, b) => {
-    const diff = a.node.props.z - b.node.props.z;
+    const diff = a.node.props.layer - b.node.props.layer;
     if (diff !== 0) return diff;
     return a.index - b.index;
   });
@@ -304,7 +304,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
     width:      sizeVal.x,
     height:     sizeVal.y,
     background: resolveColor(sceneAst.props, "background", contractStringDefault("scene", "background")),
-    sceneFit:   resolveSceneFit(sceneAst.props, contractStringDefault("scene", "sceneFit")),
+    fit:        resolveFit(sceneAst.props, contractStringDefault("scene", "fit")),
     children:   Object.freeze(topLevelChildrenNodes.map(x => x.node)) as ReadonlyArray<IRObjectNode>,
     registry:   Object.freeze(registry) as Readonly<Record<IRObjectId, IRObjectNode>>,
   });

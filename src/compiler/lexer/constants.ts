@@ -10,7 +10,7 @@ import {
 
 export const KEYWORDS = new Set<string>([
   ...Object.keys(LANGUAGE_CONTRACT),
-  "def",
+  "let",
   "generate",
   "template",
   "use",
@@ -18,7 +18,7 @@ export const KEYWORDS = new Set<string>([
 
 export const NAMED_COLORS: Readonly<Record<string, string>> = CONTRACT_NAMED_COLORS;
 
-export const SCENE_FIT_VALUES = new Set<string>(FIT_VALUES);
+export const FIT_VALUE_WORDS = new Set<string>(FIT_VALUES);
 
 export const BOOLEAN_VALUES = new Set<string>(CONTRACT_BOOLEAN_VALUES);
 export const EASING_VALUES = new Set<string>(CONTRACT_EASING_VALUES);

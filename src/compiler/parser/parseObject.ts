@@ -3,9 +3,10 @@ import { KEYWORDS } from "../lexer";
 import { RESERVED_PROPERTY_NAMES } from "../languageContract";
 import { ParserState, describeToken, ParseException } from "./state";
 import { parseValue } from "./parseValue";
-import { parseDef } from "./parseDef";
+import { parseBinding } from "./parseBinding";
 import { parseGenerate } from "./parseGenerate";
 import { parseUse } from "./parseUse";
+import { consumePropertyName, rejectLegacyBinding } from "./parseProperty";
 
 function parseParallelBlock(state: ParserState, parentContext: string): ObjectNode {
   const parTok = state.consume("KEYWORD");
@@ -161,7 +162,7 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
       let hint = "";
       if (bad.type === "KEYWORD") hint = ` '${bad.value}' is a reserved object keyword.`;
       else if (bad.type === "NAMED_COLOR") hint = ` '${bad.value}' is a reserved color keyword.`;
-      else if (bad.type === "SCENE_FIT") hint = ` '${bad.value}' is a reserved sceneFit keyword.`;
+      else if (bad.type === "FIT") hint = ` '${bad.value}' is a reserved fit keyword.`;
       else if (bad.type === "LBRACE") hint = ` Every object must have a name before its '{'.`;
       
       state.throwError(`In ${state.currentContext}: Expected a valid, unique name for the '${objType}' object, but found ${describeToken(bad)}.${hint}`, bad);
@@ -192,12 +193,13 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
 
   while (state.peek().type !== "RBRACE" && state.peek().type !== "EOF") {
     try {
+      rejectLegacyBinding(state);
       if (state.peek().type === "KEYWORD") {
         if (state.peek().value === "template") {
           state.throwError(`In ${state.currentContext}: Unexpected keyword 'template'. Templates must be defined at the top level of the file, outside of the scene block.`, state.peek());
         }
-        if (state.peek().value === "def") {
-          parseDef(state);
+        if (state.peek().value === "let") {
+          parseBinding(state);
           continue;
         }
         if (objType === "animate" || objType === "physics") {
@@ -276,8 +278,8 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
       }
 
       const peekType = state.peek().type;
-      if (peekType === "IDENT" || peekType === "SCENE_FIT" || peekType === "NAMED_COLOR" || peekType === "BOOLEAN" || peekType === "EASING") {
-        const key = state.consume();
+      if (peekType === "IDENT" || peekType === "FIT" || peekType === "NAMED_COLOR" || peekType === "BOOLEAN" || peekType === "EASING") {
+        const key = consumePropertyName(state);
         const keyName = key.value as string;
 
         if (seenProps.has(keyName)) {

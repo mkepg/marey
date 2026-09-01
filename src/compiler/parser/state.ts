@@ -7,7 +7,7 @@ export function describeToken(t: Token): string {
     case "NUMBER":      return `number ${t.value as number}`;
     case "HEX_COLOR":   return `color '${t.value as string}'`;
     case "NAMED_COLOR": return `color keyword '${t.value as string}'`;
-    case "SCENE_FIT":   return `sceneFit value '${t.value as string}'`;
+    case "FIT":        return `fit value '${t.value as string}'`;
     case "STRING":      return `string "${t.value as string}"`;
     case "LBRACE":      return "'{'";
     case "RBRACE":      return "'}'";

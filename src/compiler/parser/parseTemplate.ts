@@ -1,9 +1,10 @@
 // Updated src/compiler/parser/parseTemplate.ts
 import { ParserState, describeToken, ParseException } from "./state";
 import { parseObject } from "./parseObject";
-import { parseDef } from "./parseDef";
+import { parseBinding } from "./parseBinding";
 import { parseGenerate } from "./parseGenerate";
 import { parseUse } from "./parseUse";
+import { rejectLegacyBinding } from "./parseProperty";
 
 export function parseTemplate(state: ParserState): void {
   state.consume("KEYWORD");
@@ -51,6 +52,7 @@ export function parseTemplate(state: ParserState): void {
   while (state.pos < state.tokens.length) {
     const t = state.peek();
     try {
+      rejectLegacyBinding(state);
       if (t.type === "LBRACE") nesting++;
       if (t.type === "RBRACE") {
         nesting--;
@@ -58,7 +60,7 @@ export function parseTemplate(state: ParserState): void {
       }
       // Briefly validate tokens without committing nodes to the scene
       if (t.type === "KEYWORD") {
-        if (t.value === "def") parseDef(state);
+        if (t.value === "let") parseBinding(state);
         else if (t.value === "generate") parseGenerate(state, 1);
         else if (t.value === "use") parseUse(state, 1);
         else parseObject(state, 1);

@@ -4,7 +4,7 @@ export type TokenType =
   | "NUMBER"
   | "HEX_COLOR"
   | "NAMED_COLOR"
-  | "SCENE_FIT"
+  | "FIT"
   | "STRING"
   | "BOOLEAN"
   | "EASING"
@@ -78,11 +78,11 @@ export interface PointListValue {
   readonly endCol: number;
 }
 
-export type SceneFit = "contain" | "cover" | "fill" | "none";
+export type FitMode = "contain" | "cover" | "fill" | "none";
 
-export interface SceneFitValue {
-  readonly kind: "sceneFit";
-  readonly value: SceneFit;
+export interface FitValue {
+  readonly kind: "fit";
+  readonly value: FitMode;
   readonly line: number;
   readonly col: number;
   readonly endLine: number;
@@ -130,7 +130,7 @@ export type AstValue =
   | StringValue
   | PointValue
   | PointListValue
-  | SceneFitValue
+  | FitValue
   | BooleanValue
   | EasingValue
   | AnimPropertyValue

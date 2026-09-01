@@ -82,7 +82,7 @@ function anim(over: Partial<IRAnimation> = {}): IRAnimation {
     easing: "linear",
     loop: false,
     yoyo: false,
-    handOff: false,
+    handoff: false,
     ...over,
   };
 }
@@ -214,9 +214,9 @@ describe("SceneRuntime · tick phase", () => {
     expect(c.__declareLayout!.currentPos.x).toBeCloseTo((200 * 1.75) / TICK_HZ, 6);
   });
 
-  it("parks a handOff velocity on the completion tick and flushes it when the last pin lifts", () => {
+  it("parks a handoff velocity on the completion tick and flushes it when the last pin lifts", () => {
     const c = makeContainer({
-      animations: [anim({ handOff: true, easing: "linear" })],
+      animations: [anim({ handoff: true, easing: "linear" })],
       physics: PHYSICS,
     });
     const world = new RecordingWorld();

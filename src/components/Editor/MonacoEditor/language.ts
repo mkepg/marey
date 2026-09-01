@@ -32,11 +32,11 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
 
   monaco.languages.setMonarchTokensProvider("Declare", {
     keywords:    ["scene", "circle", "rectangle", "polygon", "line", "text", "group", "generate", "template", "use", "animate", "physics", "sequence", "parallel"],
-    defKeyword:  ["def"],
+    letKeyword:  ["let"],
     booleanValues: [...BOOLEAN_VALUES],
     easingValues:  [...EASING_VALUES],
     durationKeywords: [...DURATION_VALUES],
-    sceneFitValues: [...FIT_VALUES],
+    fitValues: [...FIT_VALUES],
     namedColors,
 
     tokenizer: {
@@ -51,12 +51,12 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
           /[a-zA-Z_][a-zA-Z0-9_]*/,
           {
             cases: {
-              "@defKeyword":       "keyword.def",
+              "@letKeyword":       "keyword.let",
               "@keywords":         "keyword",
               "@booleanValues":    "value",
               "@easingValues":     "value",
               "@durationKeywords": "value",
-              "@sceneFitValues":   "value",
+              "@fitValues":        "value",
               "@namedColors":      "color",
               "@default":          "identifier",
             },
@@ -174,7 +174,7 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
         endColumn:       word.endColumn,
       };
 
-      if (/^\s*def\s+[a-zA-Z0-9_]*$/.test(lineUntilCursor)) {
+      if (/^\s*let\s+[a-zA-Z0-9_]*$/.test(lineUntilCursor)) {
         return { suggestions: [] };
       }
 
@@ -189,10 +189,10 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
         }
       }
 
-      const isTypingDefValue = /^\s*def\s+[a-zA-Z0-9_]*\s*=\s*(.*)$/.exec(lineUntilCursor);
+      const isTypingBindingValue = /^\s*let\s+[a-zA-Z0-9_]*\s*=\s*(.*)$/.exec(lineUntilCursor);
       const isTypingGenerate = /^\s*generate\s+(.*)$/.exec(lineUntilCursor);
 
-      if (isTypingDefValue || isTypingGenerate) {
+      if (isTypingBindingValue || isTypingGenerate) {
         const suggestions: MonacoLanguagesNS.CompletionItem[] = [];
 
         for (const [sym, type] of Object.entries(reachableVars)) {
@@ -262,13 +262,13 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
               suggestions.push({ label: p, kind: monaco.languages.CompletionItemKind.Property, insertText: needsLeadingSpace ? ` ${p}` : p, detail: "animatable property", range });
             }
           }
-          if (expectedTypes.includes("sceneFit")) {
+          if (expectedTypes.includes("fit")) {
             for (const val of FIT_VALUES) {
               suggestions.push({
                 label: val,
                 kind: monaco.languages.CompletionItemKind.Enum,
                 insertText: needsLeadingSpace ? ` ${val}` : val,
-                detail: "sceneFit mode",
+                detail: "fit mode",
                 range,
               });
             }
@@ -349,9 +349,9 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
           }
 
           suggestions.push({
-            label: "def",
+            label: "let",
             kind: monaco.languages.CompletionItemKind.Keyword,
-            insertText: `def \${1:varName} = \${2:value}`,
+            insertText: `let \${1:varName} = \${2:value}`,
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             detail: "Declare a constant variable",
             range,
