@@ -2,24 +2,24 @@
 // tick (indices 0, 5, 10) is drawn longer, in a second generate
 // loop stepping by 5 ticks at a time (j * 5 * tickSpacing).
 
-def ink   = #e2e8f0
-def dim   = #64748b
-def sky   = #38bdf8
-def amber = #fbbf24
+let ink   = #e2e8f0
+let dim   = #64748b
+let sky   = #38bdf8
+let amber = #fbbf24
 
-def axisY       = 300
-def startX      = 100
-def tickSpacing = 60
+let axisY       = 300
+let startX      = 100
+let tickSpacing = 60
 
-def shortHalf    = 6
-def shortHalfNeg = -6
-def longHalf     = 14
-def longHalfNeg  = -14
+let shortHalf    = 6
+let shortHalfNeg = -6
+let longHalf     = 14
+let longHalfNeg  = -14
 
 scene {
   size: (800, 600)
   background: #0a0e1a
-  sceneFit: contain
+  fit: contain
 
   text title {
     position: (400, 40)
@@ -50,7 +50,7 @@ scene {
       points: [(0, longHalfNeg), (0, longHalf)]
       thickness: 3
       color: amber
-      z: 1
+      layer: 1
     }
   }
 }

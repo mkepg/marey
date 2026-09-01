@@ -4,10 +4,10 @@
 // Duration grows with the loop index (0.6 + k / 10), so bars further right
 // (higher k) complete each cycle more slowly than the ones to their left.
 
-def barW   = 24
-def barH   = 60
-def gapX   = 70
-def startX = 90
+let barW   = 24
+let barH   = 60
+let gapX   = 70
+let startX = 90
 
 scene {
   size: (800, 600)

@@ -2,10 +2,10 @@
 // with a different easing curve, so they can be compared. A single
 // reusable definition (template) parameterised by the easing curve.
 
-def travel     = 300
-def beat       = 1.5
-def dotColor   = #38bdf8
-def trackColor = #64748b
+let travel     = 300
+let beat       = 1.5
+let dotColor   = #38bdf8
+let trackColor = #64748b
 
 template Row(curve) {
   line track {
@@ -33,7 +33,7 @@ template Row(curve) {
 scene {
   size: (800, 600)
   background: #0a0e1a
-  sceneFit: contain
+  fit: contain
 
   use Row(linear)    rowLinear { position: (150, 150) }
   use Row(easeIn)    rowIn     { position: (150, 250) }

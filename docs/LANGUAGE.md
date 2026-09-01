@@ -194,8 +194,9 @@ scene {
 
 `loop: true` restarts the animation from the beginning every time it
 completes, forever. `yoyo: true` reverses direction at the end instead of
-restarting, and reverses again on returning to the start — so `loop` and
-`yoyo` together produce a continuous there-and-back motion.
+restarting, playing back to the starting value and then finishing there —
+combined with `loop: true`, that reversal repeats every time the animation
+completes, producing a continuous there-and-back motion.
 
 **`duration` is the length of one direction, not of a full cycle.** With
 `yoyo: true`, one complete there-and-back cycle takes `2 × duration`. An
@@ -460,11 +461,18 @@ simulation entirely and its visual is hidden.
 
 The collision shape a body gets depends on the object's kind: `circle` gets a
 circle at its declared radius; `rectangle` gets a rectangle at its declared
-size; `text` gets a rectangle sized to the rendered text's bounding box;
-`line` gets a rectangle spanning its points' bounding box, widened to at
-least its `thickness`. **`polygon` gets the convex hull of its points, not its
-exact outline** — a concave polygon collides as its hull, even though it is
-drawn with its true, concave shape.
+size; `text` gets a rectangle sized to the rendered text's bounding box.
+**`polygon` gets the convex hull of its points, not its exact outline** — a
+concave polygon collides as its hull, even though it is drawn with its true,
+concave shape.
+
+**`line` cannot have `physics`, directly or as part of a physics `group`.**
+A `line` has zero thickness as geometry — its drawn `thickness` is a stroke
+width, not a collidable body — so it produces no collision shape to give it.
+Declaring `physics` on a `line`, or placing one inside a `group` that
+declares `physics`, is a compile error (`TYPE_LINE_PHYSICS`). A `line` can
+still be a purely visual sibling of physics objects, as the floor markings in
+several examples on this page are.
 
 **A `group` with a `physics` block is welded into a single body made of one
 shape per object inside it**, each at its own offset and angle within the
@@ -830,21 +838,29 @@ variable." It does not handle data.
 A short list of hard walls. Crossing any of these is a compile error, not a
 runtime warning or a silent clamp.
 
-- `duration` (on `animate` or `physics`) must be strictly greater than 0
-  (`typeChecker/validator.ts:284-285`).
-- `radius`, `thickness`, and `fontSize` must be greater than 0
-  (`typeChecker/validator.ts:293-294`, `296-297`, `299-300`).
-- `size`'s width and height must each be greater than 0
-  (`typeChecker/validator.ts:314-318`).
-- `alpha`, `airDrag`, and `bounce` must fall between `0.0` and `1.0` inclusive
-  (`typeChecker/validator.ts:287-288`, `290-291`).
-- `polygon` requires at least 3 points, `line` at least 2, and no shape's
-  point list may exceed 10,000 points (`typeChecker/validator.ts:320-322`).
-- `text` content is capped at 500 characters
-  (`typeChecker/validator.ts:302-305`), and a scene may contain at most 500
-  `text` objects in total (`typeChecker/validator.ts:49`, `76`).
+- `duration` (on `animate` or `physics`) must be strictly greater than 0;
+  `radius`, `thickness`, and `fontSize` must be greater than 0; `size`'s
+  width and height must each be greater than 0; `alpha`, `airDrag`, and
+  `bounce` must fall between `0.0` and `1.0` inclusive; and `polygon`
+  requires at least 3 points, `line` at least 2, with no shape's point list
+  exceeding 10,000 points. Each of these is declared once, per property, as
+  a `constraint` on that property's entry in `languageContract.ts`, and
+  enforced by one generic function, `validateLocalConstraint`
+  (`typeChecker/validator.ts:31-100`), rather than by a separate hand-written
+  check for each property.
+- `text` content is capped at 500 characters (the same generic constraint
+  mechanism, `[TYPE_TEXT_TOO_LONG]`), and a scene may contain at most 500
+  `text` objects in total (`typeChecker/validator.ts:105`, `130-140`).
+- A scene's physics cost is capped at 500 bodies and 2,000 collision parts
+  (`MAX_PHYSICS_BODIES`, `MAX_PHYSICS_PARTS` in
+  `typeChecker/physicsCost.ts:3-4`). A "body" is any object or group that
+  declares `physics`, directly or through a `sequence`; a "part" is each
+  collision primitive that body is built from — one for a single shape, one
+  per welded child for a compound `group`. Crossing either ceiling is
+  `[TYPE_PHYSICS_BODY_LIMIT]` or `[TYPE_PHYSICS_PART_LIMIT]`
+  (`typeChecker/validator.ts:459-479`).
 - Type checking stops reporting once 50 errors have accumulated
-  (`typeChecker/validator.ts:58`). Parsing enforces the same 50-error ceiling
+  (`typeChecker/validator.ts:114`). Parsing enforces the same 50-error ceiling
   but aborts outright on reaching it rather than continuing
   (`parser/state.ts:99-101`), so a badly malformed file can report fewer than
   50 errors in total.
@@ -866,16 +882,19 @@ runtime warning or a silent clamp.
 ## Not covered here
 
 This document deliberately has no exhaustive per-property type table. A
-later phase generates that table directly from the compiler's own property
-contracts (`PROP_TYPES`, `REQUIRED_PROPS` in `typeChecker/validator.ts`), so
-it cannot drift out of sync with the source the way hand-written prose can.
-Until that phase lands, the editor's own completions and hovers are the
-authority on which properties a given object accepts.
+later phase generates that table directly from the compiler's single property
+contract, `LANGUAGE_CONTRACT` in `src/compiler/languageContract.ts` — the
+type checker, the Monaco hovers, and the completions all read their property
+kinds, required lists, defaults, and constraints from it, so it cannot drift
+out of sync with the source the way hand-written prose can. Until that phase
+lands, the editor's own completions and hovers are the authority on which
+properties a given object accepts.
 
-Colour animation is not supported. `animate`'s `property` accepts only
-`position`, `rotation`, `scale`, and `alpha`
-(`typeChecker/validator.ts:207`); naming any other property, including a
-colour, is a compile error.
+Colour animation is not supported. `animate`'s `property` accepts only the
+four names in `ANIMATABLE_PROPERTIES` (`languageContract.ts:33`) —
+`position`, `rotation`, `scale`, and `alpha` — checked at
+`typeChecker/validator.ts:316`; naming any other property, including a
+colour, is a compile error (`[TYPE_ANIM_PROP]`).
 
 For the design rationale behind these decisions, see
 `docs/specs/`. The authoritative future sequence is

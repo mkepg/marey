@@ -8,15 +8,15 @@
 // index, so I could not drive this from a single `generate` loop the way
 // the grid or bars could be. Instead I precomputed the 12 positions
 // (radius 180 around the centre, 30 degrees apart) by hand and placed them
-// as individual circles sharing one colour def.
+// as individual circles sharing one colour let.
 
-def dotColor = #fbbf24
-def dotRadius = 9
+let dotColor = #fbbf24
+let dotRadius = 9
 
 scene {
   size: (800, 600)
   background: #0a0e1a
-  sceneFit: contain
+  fit: contain
 
   circle center {
     position: (400, 300)

@@ -4,6 +4,13 @@
 **Protocol:** see `BRIEFS.md`. Four fresh authors, no access to the compiler, the spec,
 the plans or `AGENTS.md`. Round 1 written blind, nothing compiled until all 20 existed.
 
+> **Phase 3A note:** this record predates the Phase 3A vocabulary renames. Any
+> `def`, `handOff`, `sceneFit`, or `z` quoted below reflects the language as it
+> was authored against at the time — the pre-3A spelling. The source fixtures
+> in `eval/scenes/` have since been migrated to the final vocabulary (`let`,
+> `handoff`, `fit`, `layer`); the quotes, findings, and conclusions below are
+> untouched and their conclusions are unchanged by the rename.
+
 Re-run with:
 
 ```bash

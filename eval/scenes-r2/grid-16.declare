@@ -2,10 +2,10 @@
 // Nested `generate` loops handle both axes: outer i = row, inner j = column,
 // with each object's position computed from the loop variables by arithmetic.
 
-def colGap  = 160
-def rowGap  = 130
-def startX  = 160
-def startY  = 150
+let colGap  = 160
+let rowGap  = 130
+let startX  = 160
+let startY  = 150
 
 scene {
   size: (800, 600)

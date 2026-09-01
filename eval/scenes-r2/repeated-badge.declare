@@ -6,7 +6,7 @@
 // example in LANGUAGE.md's Reuse section, which is the only worked example
 // of this exact pattern (circle + smaller square, template + use + generate).
 
-def ink = #e2e8f0
+let ink = #e2e8f0
 
 template Badge(tone) {
   circle disc {
