@@ -1,18 +1,12 @@
 import type { ObjectNode, ObjectType, AstValue } from "../types";
 import { KEYWORDS } from "../lexer";
+import { RESERVED_PROPERTY_NAMES } from "../languageContract";
 import { ParserState, describeToken, ParseException } from "./state";
 import { parseValue } from "./parseValue";
-import { parseDef } from "./parseDef";
+import { parseBinding } from "./parseBinding";
 import { parseGenerate } from "./parseGenerate";
 import { parseUse } from "./parseUse";
-
-const RESERVED_PROPS = new Set<string>([
-  "background", "size", "sceneFit", "position", "radius", "color",
-  "alpha", "rotation", "scale", "anchor", "z", "width", "height",
-  "points", "content", "fontSize", "thickness", "property", "to",
-  "duration", "easing", "loop", "yoyo", "velocity", "gravity",
-  "airDrag", "bounce", "collideBounds", "handOff"
-]);
+import { consumePropertyName, rejectLegacyBinding } from "./parseProperty";
 
 function parseParallelBlock(state: ParserState, parentContext: string): ObjectNode {
   const parTok = state.consume("KEYWORD");
@@ -161,14 +155,14 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
 
   let objName = "";
   if (objType === "animate" || objType === "physics") {
-    objName = `${objType}_${Math.random().toString(36).slice(2, 8)}`;
+    objName = `${objType}_${typeTok.line}_${typeTok.col}`;
   } else {
     if (state.peek().type !== "IDENT") {
       const bad = state.peek();
       let hint = "";
       if (bad.type === "KEYWORD") hint = ` '${bad.value}' is a reserved object keyword.`;
       else if (bad.type === "NAMED_COLOR") hint = ` '${bad.value}' is a reserved color keyword.`;
-      else if (bad.type === "SCENE_FIT") hint = ` '${bad.value}' is a reserved sceneFit keyword.`;
+      else if (bad.type === "FIT") hint = ` '${bad.value}' is a reserved fit keyword.`;
       else if (bad.type === "LBRACE") hint = ` Every object must have a name before its '{'.`;
       
       state.throwError(`In ${state.currentContext}: Expected a valid, unique name for the '${objType}' object, but found ${describeToken(bad)}.${hint}`, bad);
@@ -179,7 +173,7 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
     if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(objName)) {
       state.throwError(`In ${state.currentContext}: Invalid object name '${objName}'. Must start with a letter and contain only alphanumeric chars or underscores.`, nameTok);
     }
-    if (RESERVED_PROPS.has(objName) || KEYWORDS.has(objName)) {
+    if (RESERVED_PROPERTY_NAMES.has(objName) || KEYWORDS.has(objName)) {
       state.throwError(`In ${state.currentContext}: '${objName}' is a reserved word and cannot be used as an object name.`, nameTok);
     }
   }
@@ -199,12 +193,13 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
 
   while (state.peek().type !== "RBRACE" && state.peek().type !== "EOF") {
     try {
+      rejectLegacyBinding(state);
       if (state.peek().type === "KEYWORD") {
         if (state.peek().value === "template") {
           state.throwError(`In ${state.currentContext}: Unexpected keyword 'template'. Templates must be defined at the top level of the file, outside of the scene block.`, state.peek());
         }
-        if (state.peek().value === "def") {
-          parseDef(state);
+        if (state.peek().value === "let") {
+          parseBinding(state);
           continue;
         }
         if (objType === "animate" || objType === "physics") {
@@ -283,8 +278,8 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
       }
 
       const peekType = state.peek().type;
-      if (peekType === "IDENT" || peekType === "SCENE_FIT" || peekType === "NAMED_COLOR" || peekType === "BOOLEAN" || peekType === "EASING") {
-        const key = state.consume();
+      if (peekType === "IDENT" || peekType === "FIT" || peekType === "NAMED_COLOR" || peekType === "BOOLEAN" || peekType === "EASING") {
+        const key = consumePropertyName(state);
         const keyName = key.value as string;
 
         if (seenProps.has(keyName)) {

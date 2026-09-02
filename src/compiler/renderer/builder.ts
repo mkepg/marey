@@ -31,7 +31,7 @@ declare module "pixi.js" {
      * `driver.alpha` and so keeps the simulation independent of frame rate.
      */
     __bodyTransform?: LocalTransform;
-    /** Exit velocity written by a `handOff` animation, in px/s. */
+    /** Exit velocity written by a `handoff` animation, in px/s. */
     __pendingVelocity?: { x: number; y: number };
     /** Collision shape, in local space with the origin at the bbox centre. */
     __bodyShape?: BodyGeometry;

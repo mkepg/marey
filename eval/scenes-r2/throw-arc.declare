@@ -11,7 +11,7 @@ scene {
       to: (400, 300)
       duration: 1.0
       easing: easeOut
-      handOff: true
+      handoff: true
     }
     physics {
       gravity: (0, 900)

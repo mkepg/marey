@@ -4,7 +4,7 @@
 scene {
   size: (800, 600)
   background: #0a0e1a
-  sceneFit: contain
+  fit: contain
 
   line floor {
     position: (400, 596)

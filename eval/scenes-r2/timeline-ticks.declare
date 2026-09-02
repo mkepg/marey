@@ -8,11 +8,11 @@
 // first. That is what's used below — the second loop's index j stands for
 // the real tick index i = j * 5, so it only visits 0, 5, 10.
 
-def axisY  = 300
-def startX = 100
-def spacing = 60
-def shortHalf = 5
-def longHalf  = 12
+let axisY  = 300
+let startX = 100
+let spacing = 60
+let shortHalf = 5
+let longHalf  = 12
 
 scene {
   size: (800, 600)

@@ -19,7 +19,7 @@ function circle(name: string, x: number, y: number, radius: number, over: Partia
     id: name,
     props: {
       kind: "circle", position: { x, y }, radius, color: "#ff0000",
-      rotation: 0, scale: { x: 1, y: 1 }, alpha: 1, z: 0,
+      rotation: 0, scale: { x: 1, y: 1 }, alpha: 1, layer: 0,
       animations: [], sequences: [],
       ...over,
     } as IRObjectProps,
@@ -32,7 +32,7 @@ function rect(name: string, x: number, y: number, w: number, h: number, over: Pa
     id: name,
     props: {
       kind: "rectangle", position: { x, y }, width: w, height: h, color: "#ff0000",
-      rotation: 0, scale: { x: 1, y: 1 }, alpha: 1, z: 0,
+      rotation: 0, scale: { x: 1, y: 1 }, alpha: 1, layer: 0,
       animations: [], sequences: [],
       ...over,
     } as IRObjectProps,
@@ -46,7 +46,7 @@ function group(name: string, children: IRObjectNode[], over: Partial<IRObjectPro
     props: {
       kind: "group",
       transform: { position: { x: 0, y: 0 }, rotation: 0, scale: { x: 1, y: 1 } },
-      alpha: 1, z: 0, animations: [], sequences: [],
+      alpha: 1, layer: 0, animations: [], sequences: [],
       ...over,
     } as IRObjectProps,
     children,
@@ -147,7 +147,7 @@ describe("builder · group compound geometry", () => {
       props: {
         kind: "polygon", position: { x: 40, y: 0 },
         points: [{ x: 0, y: -30 }, { x: 26, y: 15 }, { x: -26, y: 15 }],
-        color: "#ff0000", rotation: 0, scale: { x: 1, y: 1 }, alpha: 1, z: 0,
+        color: "#ff0000", rotation: 0, scale: { x: 1, y: 1 }, alpha: 1, layer: 0,
         animations: [], sequences: [],
       } as IRObjectProps,
       children: [],

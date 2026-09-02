@@ -2,19 +2,19 @@
 // on the right. Both position and radius are derived from the loop
 // index i via simple arithmetic (i * spacingX, i * radiusStep).
 
-def ink  = #e2e8f0
-def sky  = #38bdf8
+let ink  = #e2e8f0
+let sky  = #38bdf8
 
-def startX     = 100
-def spacingX   = 75
-def rowY       = 300
-def baseRadius = 15
-def radiusStep = 8
+let startX     = 100
+let spacingX   = 75
+let rowY       = 300
+let baseRadius = 15
+let radiusStep = 8
 
 scene {
   size: (800, 600)
   background: #0a0e1a
-  sceneFit: contain
+  fit: contain
 
   text title {
     position: (400, 40)

@@ -74,7 +74,7 @@ export function toLocal(t: LocalTransform, x: number, y: number): { x: number; y
  * Rotate and scale a vector, without translating it.
  *
  * A velocity is a direction and a magnitude, not a position, so it must not
- * pick up the parent's offset. `handOff` needs this.
+ * pick up the parent's offset. `handoff` needs this.
  */
 export function rotateScaleVector(
   t: LocalTransform,

@@ -616,3 +616,141 @@ describe("compound bodies (spec D16, D18)", () => {
     world.destroy();
   });
 });
+
+describe("single concave polygon: no concave decomposition / roadmap cut", () => {
+  // spec 3 / roadmap section 4 deliberately do not ship poly-decomp, so a
+  // *single* polygon (unlike a compound — see "collides using the real
+  // parts, not the parent's convex hull" above, which keeps concavity via
+  // separate parts) is never decomposed. `polygonBodyAtBboxCentre` in
+  // physicsWorld.ts hulls it (`hullOf(points)`, line 244) before handing it
+  // to Matter at all.
+  //
+  // A "U": an outer 200x200 square with a rectangular notch cut out of the
+  // top-centre. Its convex hull drops the two notch-bottom vertices and the
+  // two points colinear with the top edge, leaving the plain square — so the
+  // notch is filled in completely, and filled *flat*, which matters below.
+  const CONCAVE_U = [
+    { x: -100, y: -100 },
+    { x: -30, y: -100 },
+    { x: -30, y: -40 },
+    { x: 30, y: -40 },
+    { x: 30, y: -100 },
+    { x: 100, y: -100 },
+    { x: 100, y: 100 },
+    { x: -100, y: 100 },
+  ] as const;
+
+  // A concave L: two arms sharing one reflex vertex at (-80, 80). Unlike the
+  // U above, its hull is asymmetric, so the L is what exposes the offset
+  // difference the second test below depends on.
+  const CONCAVE_L = [
+    { x: -100, y: -100 },
+    { x: -80, y: -100 },
+    { x: -80, y: 80 },
+    { x: 100, y: 80 },
+    { x: 100, y: 100 },
+    { x: -100, y: 100 },
+  ] as const;
+
+  it("rests a dropped body on the notch the hull fills in, instead of letting it fall through", () => {
+    // This is the cut's directly observable effect: verified with
+    // Matter.Vertices.isConvex(CONCAVE_U) === false and
+    // Matter.Vertices.hull(CONCAVE_U) reducing to the plain 200x200 square
+    // (no decomposition). If the concave outline governed collision instead,
+    // a ball dropped straight down the notch would fall past the hulled
+    // resting point and hit the U's solid base ~60px lower.
+    //
+    // Note this assertion alone does not pin `hullOf` at physicsWorld.ts:244
+    // specifically: Matter.Bodies.fromVertices falls back to Vertices.hull
+    // internally whenever it receives concave vertices and no decomp library
+    // is registered (matter-js src/factory/Bodies.js: `isConcave && !canDecomp`
+    // -> `vertices = Vertices.hull(vertices)`), and this project does not ship
+    // poly-decomp (next test). So the resulting collision shape is identical
+    // whether physicsWorld.ts hulls up front or not — this test pins the
+    // roadmap cut's behaviour, not that one call site. The next test is the
+    // one that fails if `hullOf` is removed from that line specifically.
+    const world = new MatterWorld(800, 800);
+    world.addBody("U", { kind: "polygon", points: CONCAVE_U }, 400, 400, 0, VACUUM);
+    world.pin("U", "NO_RUNNER");
+
+    // Directly above the notch's centre. The hull's top edge sits at world
+    // y = 300 (local y = -100); the concave outline's solid base starts at
+    // world y = 360 (local y = -40).
+    world.addBody("ball", { kind: "circle", radius: 6 }, 400, 260, 0, {
+      ...VACUUM, gravityY: 980,
+    });
+
+    for (let i = 0; i < TICK_HZ; i++) world.step();
+
+    const y = world.readState("ball", 1)!.y;
+    // Resting on the filled hull settles at y ~= 294 (300 - radius). Falling
+    // into an open concave notch would settle at y ~= 354 (360 - radius), and
+    // an entirely unobstructed fall would be far further still. Both alternatives
+    // clear this band by a wide margin.
+    expect(y).toBeGreaterThan(285);
+    expect(y).toBeLessThan(305);
+    world.destroy();
+  });
+
+  it("computes the bbox-centre reference offset from the hulled vertices, not the concave outline's own centroid", () => {
+    // This is the assertion that actually regresses if `hullOf` is removed
+    // from physicsWorld.ts:244. `polygonBodyAtBboxCentre` computes the D15/D16
+    // reference-point offset as `bboxCentre(hull) - Vertices.centre(hull)`.
+    // A concave polygon's own centroid sits at a different point than its
+    // hull's centroid, because hulling adds the notch's area (and so its
+    // mass) back in, pulling the centroid toward it — even though, per the
+    // previous test's note, Matter's own vertices end up hulled either way.
+    // Rotating the body exposes that offset vector in the reported position;
+    // at angle 0 the two calculations coincide (both report the origin back
+    // unchanged), so the rotation is required to observe the difference.
+    //
+    // Verified concretely (not via a committed mutation) by reimplementing
+    // `polygonBodyAtBboxCentre` with the `hullOf` call deleted — i.e. computing
+    // `Vertices.centre`/`Bounds.create` from CONCAVE_L directly — against the
+    // same matter-js in node_modules: it predicts (400, 485.263) at 90 degrees
+    // instead of the (400, 454.454) asserted below, because the concave
+    // centroid (-42.632, 42.632 relative to the shape's local origin) differs
+    // from the hulled one (-27.227, 27.227).
+    const world = new MatterWorld(2000, 2000);
+    world.addBody("L", { kind: "polygon", points: CONCAVE_L }, 400, 400, 0, VACUUM);
+
+    const s0 = world.readState("L", 0)!;
+    expect(s0.x).toBeCloseTo(400, 6);
+    expect(s0.y).toBeCloseTo(400, 6);
+
+    world.overrideAngle("L", Math.PI / 2);
+    world.step();
+    const s1 = world.readState("L", 1)!;
+
+    // Measured against Matter 0.20.0.
+    expect(s1.x).toBeCloseTo(400, 4);
+    expect(s1.y).toBeCloseTo(454.453782, 4);
+    world.destroy();
+  });
+});
+
+describe("roadmap cut: poly-decomp is not a dependency", () => {
+  it("is absent from package.json (spec 3 / roadmap section 4)", async () => {
+    // Cheap, direct pin on the *packaging* half of the cut, separate from the
+    // behavioural half proven above: a future implementer could `npm install
+    // poly-decomp` and wire it up via `Common.setDecomp` without changing
+    // any observable collision geometry this file already checks (a
+    // single convex-hull-shaped notch and a concave decomposition produce
+    // different shapes only when poly-decomp is actually registered).
+    const pkg = (await import("../../../package.json")) as {
+      default: {
+        dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+        optionalDependencies?: Record<string, string>;
+        peerDependencies?: Record<string, string>;
+      };
+    };
+    const allDeps = {
+      ...pkg.default.dependencies,
+      ...pkg.default.devDependencies,
+      ...pkg.default.optionalDependencies,
+      ...pkg.default.peerDependencies,
+    };
+    expect(Object.keys(allDeps)).not.toContain("poly-decomp");
+  });
+});

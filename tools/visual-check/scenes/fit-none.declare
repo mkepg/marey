@@ -1,0 +1,21 @@
+// fit: none — no scaling and no centring. Expect the 400x400 scene drawn 1:1
+// in the top-left corner of the preview, with the rest of the panel empty.
+// The disc is round and smaller than under every other mode.
+//
+// Same geometry as fit-contain.declare; only `fit` differs.
+scene {
+  size: (400, 400)
+  background: #101827
+  fit: none
+
+  circle disc {
+    position: (200, 200)
+    radius: 150
+    color: #38bdf8
+  }
+
+  rectangle cornerTL { position: (30, 30),  size: (44, 44), color: #fb7185 }
+  rectangle cornerTR { position: (370, 30), size: (44, 44), color: #4ade80 }
+  rectangle cornerBL { position: (30, 370), size: (44, 44), color: #fbbf24 }
+  rectangle cornerBR { position: (370, 370), size: (44, 44), color: #a78bfa }
+}

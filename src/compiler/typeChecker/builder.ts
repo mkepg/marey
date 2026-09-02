@@ -23,7 +23,7 @@ import {
   resolveNumber,
   resolvePoint,
   resolveScale,
-  resolveSceneFit,
+  resolveFit,
   resolveBoolean,
   resolveEasing,
   getReqAnimProperty,
@@ -32,6 +32,11 @@ import {
   getReqPoint,
   getReqString,
   getReqPointList,
+  contractBooleanDefault,
+  contractNumberDefault,
+  contractPointDefault,
+  contractStringDefault,
+  contractDerivedPositionDefault,
 } from "./resolvers";
 
 function buildAnimationFromNode(an: ObjectNode): IRAnimation {
@@ -39,10 +44,10 @@ function buildAnimationFromNode(an: ObjectNode): IRAnimation {
     property: getReqAnimProperty(an.props, "property"),
     to:       resolveAnimToValue(an.props, "to"),
     duration: getReqNumber(an.props, "duration"),
-    easing:   resolveEasing(an.props, "easing", "easeInOut"),
-    loop:     resolveBoolean(an.props, "loop", false),
-    yoyo:     resolveBoolean(an.props, "yoyo", false),
-    handOff:  resolveBoolean(an.props, "handOff", false),
+    easing:   resolveEasing(an.props, "easing", contractStringDefault("animate", "easing")),
+    loop:     resolveBoolean(an.props, "loop", contractBooleanDefault("animate", "loop")),
+    yoyo:     resolveBoolean(an.props, "yoyo", contractBooleanDefault("animate", "yoyo")),
+    handoff:  resolveBoolean(an.props, "handoff", contractBooleanDefault("animate", "handoff")),
   };
 }
 
@@ -54,15 +59,15 @@ function buildPhysicsFromNode(physicsNode: ObjectNode): IRPhysics {
   if (durVal?.kind === "indefinitely") {
     duration = "indefinitely";
   } else {
-    duration = resolveNumber(pp, "duration", 0);
+    duration = getReqNumber(pp, "duration");
   }
 
   return {
-    velocity:      resolvePoint(pp, "velocity", { x: 0, y: 0 }),
-    gravity:       resolvePoint(pp, "gravity", { x: 0, y: 980 }),
-    airDrag:       resolveNumber(pp, "airDrag", 0.0), // INVERTED DRAG FIX: Default is 0.0 (vacuum)
-    bounce:        resolveNumber(pp, "bounce", 0.65),
-    collideBounds: resolveBoolean(pp, "collideBounds", true),
+    velocity:      resolvePoint(pp, "velocity", contractPointDefault("physics", "velocity")),
+    gravity:       resolvePoint(pp, "gravity", contractPointDefault("physics", "gravity")),
+    airDrag:       resolveNumber(pp, "airDrag", contractNumberDefault("physics", "airDrag")),
+    bounce:        resolveNumber(pp, "bounce", contractNumberDefault("physics", "bounce")),
+    collideBounds: resolveBoolean(pp, "collideBounds", contractBooleanDefault("physics", "collideBounds")),
     duration,
   };
 }
@@ -134,11 +139,11 @@ export function buildIR(ast: AstNode): IRSceneNode {
           kind:      "circle",
           position:  getReqPoint(p, "position"),
           radius:    getReqNumber(p, "radius"),
-          color:     resolveColor(p, "color", "#ffffff"),
-          alpha:     resolveNumber(p, "alpha", 1.0),
-          rotation:  resolveNumber(p, "rotation", 0),
-          scale:     resolveScale(p, "scale", { x: 1, y: 1 }),
-          z:         resolveNumber(p, "z", 0),
+          color:     resolveColor(p, "color", contractStringDefault("circle", "color")),
+          alpha:     resolveNumber(p, "alpha", contractNumberDefault("circle", "alpha")),
+          rotation:  resolveNumber(p, "rotation", contractNumberDefault("circle", "rotation")),
+          scale:     resolveScale(p, "scale", contractPointDefault("circle", "scale")),
+          layer:     resolveNumber(p, "layer", contractNumberDefault("circle", "layer")),
           animations,
           physics,
           sequences,
@@ -153,11 +158,11 @@ export function buildIR(ast: AstNode): IRSceneNode {
           position:  getReqPoint(p, "position"),
           width:     sizeVal.x,
           height:    sizeVal.y,
-          color:     resolveColor(p, "color", "#ffffff"),
-          alpha:     resolveNumber(p, "alpha", 1.0),
-          rotation:  resolveNumber(p, "rotation", 0),
-          scale:     resolveScale(p, "scale", { x: 1, y: 1 }),
-          z:         resolveNumber(p, "z", 0),
+          color:     resolveColor(p, "color", contractStringDefault("rectangle", "color")),
+          alpha:     resolveNumber(p, "alpha", contractNumberDefault("rectangle", "alpha")),
+          rotation:  resolveNumber(p, "rotation", contractNumberDefault("rectangle", "rotation")),
+          scale:     resolveScale(p, "scale", contractPointDefault("rectangle", "scale")),
+          layer:     resolveNumber(p, "layer", contractNumberDefault("rectangle", "layer")),
           animations,
           physics,
           sequences,
@@ -167,26 +172,15 @@ export function buildIR(ast: AstNode): IRSceneNode {
       }
       case "polygon": {
         const pts = getReqPointList(p, "points");
-        let defaultX = 0, defaultY = 0;
-        if (pts.length > 0) {
-          let minX = Infinity, minY = Infinity;
-          for (const pt of pts) {
-            if (pt.x < minX) minX = pt.x;
-            if (pt.y < minY) minY = pt.y;
-          }
-          defaultX = minX;
-          defaultY = minY;
-        }
-
         const polyProps: IRPolygonProps = {
           kind:      "polygon",
           points:    pts,
-          color:     resolveColor(p, "color", "#ffffff"),
-          alpha:     resolveNumber(p, "alpha", 1.0),
-          position:  resolvePoint(p, "position", { x: defaultX, y: defaultY }),
-          rotation:  resolveNumber(p, "rotation", 0),
-          scale:     resolveScale(p, "scale", { x: 1, y: 1 }),
-          z:         resolveNumber(p, "z", 0),
+          color:     resolveColor(p, "color", contractStringDefault("polygon", "color")),
+          alpha:     resolveNumber(p, "alpha", contractNumberDefault("polygon", "alpha")),
+          position:  resolvePoint(p, "position", contractDerivedPositionDefault("polygon", "position", pts)),
+          rotation:  resolveNumber(p, "rotation", contractNumberDefault("polygon", "rotation")),
+          scale:     resolveScale(p, "scale", contractPointDefault("polygon", "scale")),
+          layer:     resolveNumber(p, "layer", contractNumberDefault("polygon", "layer")),
           animations,
           physics,
           sequences,
@@ -200,12 +194,12 @@ export function buildIR(ast: AstNode): IRSceneNode {
           kind:      "line",
           points:    linePts,
           thickness: getReqNumber(p, "thickness"),
-          color:     resolveColor(p, "color", "#ffffff"),
-          alpha:     resolveNumber(p, "alpha", 1.0),
-          position:  resolvePoint(p, "position", { x: 0, y: 0 }),
-          rotation:  resolveNumber(p, "rotation", 0),
-          scale:     resolveScale(p, "scale", { x: 1, y: 1 }),
-          z:         resolveNumber(p, "z", 0),
+          color:     resolveColor(p, "color", contractStringDefault("line", "color")),
+          alpha:     resolveNumber(p, "alpha", contractNumberDefault("line", "alpha")),
+          position:  getReqPoint(p, "position"),
+          rotation:  resolveNumber(p, "rotation", contractNumberDefault("line", "rotation")),
+          scale:     resolveScale(p, "scale", contractPointDefault("line", "scale")),
+          layer:     resolveNumber(p, "layer", contractNumberDefault("line", "layer")),
           animations,
           physics,
           sequences,
@@ -218,12 +212,12 @@ export function buildIR(ast: AstNode): IRSceneNode {
           kind:      "text",
           position:  getReqPoint(p, "position"),
           content:   getReqString(p, "content"),
-          fontSize:  resolveNumber(p, "fontSize", 16),
-          color:     resolveColor(p, "color", "#ffffff"),
-          alpha:     resolveNumber(p, "alpha", 1.0),
-          rotation:  resolveNumber(p, "rotation", 0),
-          scale:     resolveScale(p, "scale", { x: 1, y: 1 }),
-          z:         resolveNumber(p, "z", 0),
+          fontSize:  resolveNumber(p, "fontSize", contractNumberDefault("text", "fontSize")),
+          color:     resolveColor(p, "color", contractStringDefault("text", "color")),
+          alpha:     resolveNumber(p, "alpha", contractNumberDefault("text", "alpha")),
+          rotation:  resolveNumber(p, "rotation", contractNumberDefault("text", "rotation")),
+          scale:     resolveScale(p, "scale", contractPointDefault("text", "scale")),
+          layer:     resolveNumber(p, "layer", contractNumberDefault("text", "layer")),
           animations,
           physics,
           sequences,
@@ -233,16 +227,16 @@ export function buildIR(ast: AstNode): IRSceneNode {
       }
       case "group": {
         const transform: IRTransform = {
-          position: resolvePoint(p, "position", { x: 0, y: 0 }),
-          rotation: resolveNumber(p, "rotation", 0),
-          scale:    resolveScale(p, "scale", { x: 1, y: 1 }),
+          position: resolvePoint(p, "position", contractPointDefault("group", "position")),
+          rotation: resolveNumber(p, "rotation", contractNumberDefault("group", "rotation")),
+          scale:    resolveScale(p, "scale", contractPointDefault("group", "scale")),
         };
 
         const groupProps: IRGroupProps = {
           kind:      "group",
           transform,
-          alpha:     resolveNumber(p, "alpha", 1.0),
-          z:         resolveNumber(p, "z", 0),
+          alpha:     resolveNumber(p, "alpha", contractNumberDefault("group", "alpha")),
+          layer:     resolveNumber(p, "layer", contractNumberDefault("group", "layer")),
           animations,
           physics,
           sequences,
@@ -262,7 +256,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
     }));
 
     childrenNodes.sort((a, b) => {
-      const diff = a.node.props.z - b.node.props.z;
+      const diff = a.node.props.layer - b.node.props.layer;
       if (diff !== 0) return diff;
       return a.index - b.index;
     });
@@ -290,7 +284,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
   }));
 
   topLevelChildrenNodes.sort((a, b) => {
-    const diff = a.node.props.z - b.node.props.z;
+    const diff = a.node.props.layer - b.node.props.layer;
     if (diff !== 0) return diff;
     return a.index - b.index;
   });
@@ -299,8 +293,8 @@ export function buildIR(ast: AstNode): IRSceneNode {
     kind:       "scene",
     width:      sizeVal.x,
     height:     sizeVal.y,
-    background: resolveColor(sceneAst.props, "background", "#000000"),
-    sceneFit:   resolveSceneFit(sceneAst.props),
+    background: resolveColor(sceneAst.props, "background", contractStringDefault("scene", "background")),
+    fit:        resolveFit(sceneAst.props, contractStringDefault("scene", "fit")),
     children:   Object.freeze(topLevelChildrenNodes.map(x => x.node)) as ReadonlyArray<IRObjectNode>,
     registry:   Object.freeze(registry) as Readonly<Record<IRObjectId, IRObjectNode>>,
   });

@@ -7,20 +7,20 @@
 // row sits at topY (smallest y, highest on screen), and grows toward
 // the ends, pushing them down toward the baseline.
 
-def ink = #e2e8f0
-def sky = #38bdf8
+let ink = #e2e8f0
+let sky = #38bdf8
 
-def startX     = 60
-def spacingX   = 38
-def topY       = 230
-def riseScale  = 1.33
-def midIndex   = 9.5
-def squareSize = 18
+let startX     = 60
+let spacingX   = 38
+let topY       = 230
+let riseScale  = 1.33
+let midIndex   = 9.5
+let squareSize = 18
 
 scene {
   size: (800, 600)
   background: #0a0e1a
-  sceneFit: contain
+  fit: contain
 
   text title {
     position: (400, 40)

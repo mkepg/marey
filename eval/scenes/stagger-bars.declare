@@ -2,12 +2,12 @@
 // each is slightly slower than the one to its left, so the row ripples
 // instead of pulsing in unison.
 
-def barColor = #38bdf8
+let barColor = #38bdf8
 
 scene {
   size: (800, 600)
   background: #0a0e1a
-  sceneFit: contain
+  fit: contain
 
   generate k from 0 to 9 {
     rectangle bar {

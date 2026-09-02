@@ -5,6 +5,13 @@
 **Protocol:** `BRIEFS.md`, identical to the baseline except that `docs/LANGUAGE.md` joins the
 readable set. Same 20 briefs, same batching, four fresh authors, round 1 blind.
 
+> **Phase 3A note:** this record predates the Phase 3A vocabulary renames. Any
+> `def`, `handOff`, `sceneFit`, or `z` quoted below reflects the language as it
+> was authored against at the time — the pre-3A spelling. The source fixtures
+> in `eval/scenes-r2/` have since been migrated to the final vocabulary
+> (`let`, `handoff`, `fit`, `layer`); the quotes, findings, and conclusions
+> below are untouched and their conclusions are unchanged by the rename.
+
 Re-run with:
 
 ```bash

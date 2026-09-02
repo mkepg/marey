@@ -249,7 +249,7 @@ const ANIMATION: IRAnimation = {
   easing: "linear",
   loop: false,
   yoyo: false,
-  handOff: false,
+  handoff: false,
 };
 
 /** The single documented boundary crossing into the real `Container` type. */

@@ -1,4 +1,4 @@
-import type { AstValue, SceneFit } from "../types";
+import type { AstValue, FitMode } from "../types";
 import { NAMED_COLORS } from "../lexer";
 import { ParserState, describeToken } from "./state";
 
@@ -101,9 +101,9 @@ export function parseValue(state: ParserState, currentKey?: string): AstValue {
     }
     return { kind: "string", value: strTok.value as string, line, col, endLine: line, endCol: strTok.endCol };
   }
-  if (t.type === "SCENE_FIT") {
+  if (t.type === "FIT") {
     const tok = state.consume();
-    return { kind: "sceneFit", value: tok.value as SceneFit, line, col, endLine: line, endCol: tok.endCol };
+    return { kind: "fit", value: tok.value as FitMode, line, col, endLine: line, endCol: tok.endCol };
   }
   if (t.type === "DURATION_INDEFINITELY") {
     const tok = state.consume();
@@ -202,15 +202,11 @@ export function parseValue(state: ParserState, currentKey?: string): AstValue {
       return { ...envVal, line, col, endLine: line, endCol: tok.endCol };
     }
 
-    state.throwError(`In ${state.currentContext}: Undefined variable '${varName}'. Bare names cannot be used as values unless they are declared with 'def'. Variables defined inside 'generate' blocks are strictly block-scoped and cannot be accessed outside of them.`, t);
+    state.throwError(`In ${state.currentContext}: Undefined variable '${varName}'. Bare names cannot be used as values unless they are declared with 'let'. Variables defined inside 'generate' blocks are strictly block-scoped and cannot be accessed outside of them.`, t);
   }
 
   if (t.type === "KEYWORD") {
     state.throwError(`In ${state.currentContext}: '${t.value as string}' is an object keyword and cannot be used as a property value.`, t);
-  }
-
-  if (t.type === "RBRACE" || t.type === "RBRACKET" || t.type === "RPAREN" || t.type === "EOF") {
-    state.throwError(`In ${state.currentContext}: Unexpected ${describeToken(t)} where a property value was expected.`, t);
   }
 
   state.throwError(`In ${state.currentContext}: Unexpected ${describeToken(t)} where a property value was expected.`, t);

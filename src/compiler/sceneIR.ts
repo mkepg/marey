@@ -1,3 +1,23 @@
+/**
+ * The fixed simulation rate. 120Hz is chosen so that common export frame
+ * rates divide evenly into it (24 → 5 ticks, 30 → 4, 60 → 2), which keeps
+ * exported frames on exact simulation states rather than interpolations.
+ *
+ * This lives here rather than in `renderer/clock.ts` because it — and
+ * `secondsToTicks` below — are needed by both pipeline stages: the renderer
+ * for the simulation clock itself, and the typeChecker's validator for
+ * comparing durations in the same unit the runtime does (`TYPE_HANDOFF_DURATION`).
+ * `sceneIR.ts` already sits at the pipeline-neutral level both import, so
+ * this is the one implementation; `clock.ts` re-exports it rather than
+ * keeping its own copy.
+ */
+export const TICK_HZ = 120;
+
+/** Convert a duration in seconds to whole simulation ticks. */
+export function secondsToTicks(seconds: number): number {
+  return Math.max(1, Math.round(seconds * TICK_HZ));
+}
+
 export type IRColor = string;
 
 export interface IRPoint {
@@ -7,7 +27,7 @@ export interface IRPoint {
 
 export type IRPointList = ReadonlyArray<IRPoint>;
 
-export type IRSceneFit = "contain" | "cover" | "fill" | "none";
+export type IRFit = "contain" | "cover" | "fill" | "none";
 export type IREasing = "linear" | "easeIn" | "easeOut" | "easeInOut";
 
 export interface IRTransform {
@@ -23,7 +43,7 @@ export interface IRAnimation {
   readonly easing: IREasing;
   readonly loop: boolean;
   readonly yoyo: boolean;
-  readonly handOff: boolean;
+  readonly handoff: boolean;
 }
 
 export type IRPhysicsDuration = number | "indefinitely";
@@ -55,7 +75,7 @@ export interface IRVisualBase {
   readonly rotation: number;
   readonly scale: IRPoint;
   // anchor removed
-  readonly z: number;
+  readonly layer: number;
   readonly animations: ReadonlyArray<IRAnimation>;
   readonly physics?: IRPhysics;
   readonly sequences: ReadonlyArray<IRSequence>;
@@ -93,7 +113,7 @@ export interface IRGroupProps {
   readonly kind: "group";
   readonly transform: IRTransform;
   readonly alpha: number;
-  readonly z: number;
+  readonly layer: number;
   readonly animations: ReadonlyArray<IRAnimation>;
   readonly physics?: IRPhysics;
   readonly sequences: ReadonlyArray<IRSequence>;
@@ -120,7 +140,7 @@ export interface IRSceneNode {
   readonly width: number;
   readonly height: number;
   readonly background: IRColor;
-  readonly sceneFit: IRSceneFit;
+  readonly fit: IRFit;
   readonly children: ReadonlyArray<IRObjectNode>;
   readonly registry: Readonly<Record<IRObjectId, IRObjectNode>>;
 }

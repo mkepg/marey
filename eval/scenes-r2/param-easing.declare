@@ -4,8 +4,8 @@
 // different easing keyword each time, mirroring the `Racer(curve)` template
 // in the shipped default scene, which does exactly this for its easing race.
 
-def travel = 500
-def beat   = 2.0
+let travel = 500
+let beat   = 2.0
 
 template Racer(curve) {
   circle dot {

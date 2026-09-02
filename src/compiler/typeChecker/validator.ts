@@ -1,48 +1,128 @@
 import type { AstNode, ObjectNode, AstValue, CompilerError } from "../types";
+import {
+  ANIMATABLE_PROPERTIES,
+  KIND_LABEL,
+  LANGUAGE_CONTRACT,
+  PROP_TYPES,
+  REQUIRED_PROPS,
+} from "../languageContract";
+import type { PropertySpec } from "../languageContract";
+import {
+  countPhysicsCost,
+  MAX_PHYSICS_BODIES,
+  MAX_PHYSICS_PARTS,
+  ownsPhysics,
+} from "./physicsCost";
+import { resolveHandoffTarget, yoyoIsTrue } from "./handoff";
+// `secondsToTicks` lives in `../sceneIR.ts`, the pipeline-neutral module both
+// the typeChecker and the renderer already import — not `renderer/clock.ts`,
+// which would make the type-check stage reach into the render stage (Fix 4,
+// Phase 3A review). It exists specifically so this comparison and the
+// runtime's own (`sceneRuntime.ts`'s `spawnAnim`/`spawnPhysics`, via
+// `clock.ts`'s re-export of the same function) share one implementation
+// instead of a second `Math.round(seconds * 120)` drifting out of step.
+import { secondsToTicks } from "../sceneIR";
 
 type PropKind = AstValue["kind"];
 type PropContract = PropKind | readonly PropKind[];
 
-export const REQUIRED_PROPS: Readonly<Record<string, readonly string[]>> = {
-  scene:     ["size"],
-  circle:    ["position", "radius"],
-  rectangle: ["position", "size"],
-  polygon:   ["points"],
-  line:      ["position", "points", "thickness"],
-  text:      ["position", "content"],
-  animate:   ["property", "to", "duration"],
-  physics:   ["duration"],
-  group:     [],
-  sequence:  [],
-  parallel:  [],
-};
+export { KIND_LABEL, PROP_TYPES, REQUIRED_PROPS } from "../languageContract";
 
-export const PROP_TYPES: Readonly<Record<string, Readonly<Record<string, PropContract>>>> = {
-  scene:     { background: "color", size: "point", sceneFit: "sceneFit" },
-  circle:    { position: "point", radius: "number", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], z: "number" },
-  rectangle: { position: "point", size: "point",   color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], z: "number" },
-  polygon:   { position: "point", points: "pointList", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], z: "number" },
-  line:      { position: "point", points: "pointList", thickness: "number", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], z: "number" },
-  text:      { position: "point", content: "string", fontSize: "number", color: "color", alpha: "number", rotation: "number", scale: ["number", "point"], z: "number" },
-  animate:   { property: "animProperty", to: ["number", "point"], duration: "number", easing: "easing", loop: "boolean", yoyo: "boolean", handOff: "boolean" },
-  physics:   { velocity: "point", gravity: "point", airDrag: "number", bounce: "number", collideBounds: "boolean", duration: ["number", "indefinitely"] },
-  group:     { position: "point", rotation: "number", scale: ["number", "point"], alpha: "number", z: "number" },
-  sequence:  {},
-  parallel:  {},
-};
+function formatConstraintNumber(value: number): string {
+  return Number.isInteger(value) ? `${value}.0` : `${value}`;
+}
 
-export const KIND_LABEL: Readonly<Record<PropKind, string>> = {
-  number:       "a number",
-  color:        "a color (hex code or named color keyword)",
-  string:       "a quoted string",
-  point:        "a point (x, y)",
-  pointList:    "a point list [(x,y), ...]",
-  sceneFit:     "a sceneFit keyword (contain, cover, fill, or none)",
-  boolean:      "a boolean (true or false)",
-  easing:       "an easing keyword (e.g. easeInOut, linear)",
-  animProperty: "an animatable property name (e.g. position, rotation, scale, alpha)",
-  indefinitely: "the keyword 'indefinitely'",
-};
+function formatPointCount(value: number): string {
+  return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+function validateLocalConstraint(
+  label: string,
+  typeName: string,
+  key: string,
+  val: AstValue,
+  spec: PropertySpec,
+): CompilerError | undefined {
+  const constraint = spec.constraint;
+  if (!constraint) return undefined;
+
+  const errPos = {
+    line: val.line,
+    col: val.col,
+    endLine: val.endLine,
+    endCol: val.endCol,
+  };
+  const error = (message: string): CompilerError => ({ phase: "TYPE", message, ...errPos });
+
+  switch (constraint.kind) {
+    case "range":
+      if (val.kind === "number" && (val.value < constraint.min || val.value > constraint.max)) {
+        return error(`${label}: '${key}' must be between ${formatConstraintNumber(constraint.min)} and ${formatConstraintNumber(constraint.max)} inclusive, but got ${val.value}.`);
+      }
+      return undefined;
+
+    case "positive":
+      if (val.kind === "number" && val.value <= 0) {
+        if (key === "duration") {
+          return error(`${label}: 'duration' must be strictly greater than 0, but got ${val.value}.`);
+        }
+        return error(`${label}: '${key}' must be greater than 0, but got ${val.value}.`);
+      }
+      return undefined;
+
+    case "positivePoint":
+      if (val.kind === "point") {
+        if (val.x <= 0 && val.y <= 0) {
+          return error(`${label}: '${key}' width and height must both be greater than 0.`);
+        }
+        if (val.x <= 0) {
+          return error(`${label}: '${key}' width must be greater than 0, but got ${val.x}.`);
+        }
+        if (val.y <= 0) {
+          return error(`${label}: '${key}' height must be greater than 0, but got ${val.y}.`);
+        }
+      }
+      return undefined;
+
+    // `scale` is the only property whose kind is `["number", "point"]` and
+    // whose positivity check differs by which of those two the value is —
+    // a plain number gets one message, a point gets another, both carrying
+    // TYPE_INVALID_SCALE. This used to be a bespoke `key === "scale"` branch
+    // in `collectErrors` that short-circuited before ever reaching this
+    // function, leaving `scale`'s `positivePoint` contract entry dead data
+    // no consumer read. Folded in here, preserving both messages exactly.
+    case "positiveScale":
+      if (val.kind === "number" && val.value <= 0) {
+        return error(`[TYPE_INVALID_SCALE] ${label}: 'scale' must be greater than zero.`);
+      }
+      if (val.kind === "point" && (val.x <= 0 || val.y <= 0)) {
+        return error(`[TYPE_INVALID_SCALE] ${label}: 'scale' components must be greater than zero, but got (${val.x}, ${val.y}).`);
+      }
+      return undefined;
+
+    case "maxLength":
+      if (val.kind === "string" && val.value.length > constraint.max) {
+        return error(`[TYPE_TEXT_TOO_LONG] ${label}: '${key}' string is too long (${val.value.length} chars). Maximum allowed is ${constraint.max} characters to prevent rendering crashes.`);
+      }
+      return undefined;
+
+    case "pointCount":
+      if (val.kind === "pointList") {
+        if (val.value.length < constraint.min) {
+          return error(`${label}: '${typeName}' requires at least ${constraint.min} points.`);
+        }
+        if (val.value.length > constraint.max) {
+          return error(`[TYPE_POLYGON_TOO_LARGE] ${label}: '${typeName}' exceeds the maximum safe limit of ${formatPointCount(constraint.max)} points.`);
+        }
+      }
+      return undefined;
+
+    default: {
+      const _never: never = constraint;
+      return _never;
+    }
+  }
+}
 
 export function collectErrors(ast: AstNode): CompilerError[] {
   const errors: CompilerError[] = [];
@@ -145,11 +225,17 @@ export function collectErrors(ast: AstNode): CompilerError[] {
               line: loopVal.line, col: loopVal.col, endLine: loopVal.endLine, endCol: loopVal.endCol,
             });
           }
+          // Unlike TYPE_SEQ_LOOP above, this rule no longer rests on a yoyo
+          // never finishing — a top-level non-looping yoyo completes after its
+          // return leg (P3A-10). It stays because a step is one leg of a
+          // timeline: a step whose runtime silently doubles is a step whose
+          // schedule the reader cannot see, and the two-step form is both
+          // explicit and already supported.
           const yoyoVal = child.props["yoyo"];
           if (yoyoVal?.kind === "boolean" && yoyoVal.value === true) {
             errors.push({
               phase: "TYPE",
-              message: `[TYPE_SEQ_YOYO] 'yoyo: true' is not allowed inside a '${typeName}' block — a yoyo animation never fully finishes and would prevent the timeline from advancing.`,
+              message: "[TYPE_SEQ_YOYO] 'yoyo: true' is not supported inside a sequence or parallel step. Express the return leg as a second explicit animation step.",
               line: yoyoVal.line, col: yoyoVal.col, endLine: yoyoVal.endLine, endCol: yoyoVal.endCol,
             });
           }
@@ -251,8 +337,8 @@ export function collectErrors(ast: AstNode): CompilerError[] {
 
       if (propVal && toVal && propVal.kind === "animProperty") {
         const p = propVal.value as string;
-        if (!["position", "rotation", "scale", "alpha"].includes(p)) {
-          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_PROP] Cannot animate property '${p}'. Supported properties are: position, rotation, scale, alpha.`, line: propVal.line, col: propVal.col, endLine: propVal.endLine, endCol: propVal.endCol });
+        if (!(ANIMATABLE_PROPERTIES as readonly string[]).includes(p)) {
+          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_PROP] Cannot animate property '${p}'. Supported properties are: ${ANIMATABLE_PROPERTIES.join(", ")}.`, line: propVal.line, col: propVal.col, endLine: propVal.endLine, endCol: propVal.endCol });
         }
         if (p === "position" && toVal.kind !== "point") {
           errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property 'position' expects a point for 'to' (e.g., to: (100, 100)).`, line: toVal.line, col: toVal.col, endLine: toVal.endLine, endCol: toVal.endCol });
@@ -265,25 +351,96 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         }
       }
 
-      const handOffVal = node.props["handOff"];
-      if (handOffVal?.kind === "boolean" && handOffVal.value === true) {
+      const handoffVal = node.props["handoff"];
+      if (handoffVal?.kind === "boolean" && handoffVal.value === true) {
         if (propVal?.kind === "animProperty" && propVal.value !== "position") {
-          errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_PROP] 'handOff: true' is only valid on 'property: position' animations.`, line: handOffVal.line, col: handOffVal.col, endLine: handOffVal.endLine, endCol: handOffVal.endCol });
+          errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_PROP] 'handoff: true' is only valid on 'property: position' animations.`, line: handoffVal.line, col: handoffVal.col, endLine: handoffVal.endLine, endCol: handoffVal.endCol });
         }
         const loopVal = node.props["loop"];
         if (loopVal?.kind === "boolean" && loopVal.value === true) {
-          errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_LOOP] 'loop: true' and 'handOff: true' cannot coexist. A looping animation never ends.`, line: handOffVal.line, col: handOffVal.col, endLine: handOffVal.endLine, endCol: handOffVal.endCol });
+          errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_LOOP] 'loop: true' and 'handoff: true' cannot coexist. A looping animation never ends.`, line: handoffVal.line, col: handoffVal.col, endLine: handoffVal.endLine, endCol: handoffVal.endCol });
         }
-        
-        if (parentNode) {
-          const physicsNode = parentNode.children.find(c => c.type === "physics");
-          if (!physicsNode) {
-            errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_PHYSICS] 'handOff: true' requires a sibling 'physics' block on the same object.`, line: handOffVal.line, col: handOffVal.col, endLine: handOffVal.endLine, endCol: handOffVal.endCol });
-          } else if (physicsNode.props["velocity"] !== undefined) {
-            const velNode = physicsNode.props["velocity"];
-            errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_AMBIGUITY] When 'handOff: true' is used, the 'physics' block cannot define an initial 'velocity' because the animation's exit momentum will completely overwrite it. Remove 'velocity' from the physics block.`, line: velNode.line, col: velNode.col, endLine: velNode.endLine, endCol: velNode.endCol });
+
+        const target = resolveHandoffTarget(node as ObjectNode, parentNode, ancestors);
+        if (!target) {
+          errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_PHYSICS] 'handoff: true' requires a sibling 'physics' block on the same object.`, line: handoffVal.line, col: handoffVal.col, endLine: handoffVal.endLine, endCol: handoffVal.endCol });
+        } else if (target.ambiguousPhysics) {
+          // More than one 'physics' block starts alongside this handoff.
+          // Each spawns its own PhysicsRunner against the same body, and
+          // whichever freezes first is the one that matters — checking a
+          // duration relationship against only the first one `find` happens
+          // to return would validate the wrong runner. Reject rather than
+          // pick a runner to model, matching this validator's existing
+          // conservative posture (D13's explicit-body rule).
+          errors.push({
+            phase: "TYPE",
+            message: `[TYPE_HANDOFF_SCHEDULE_AMBIGUOUS] This object starts more than one 'physics' block at the same time as the handoff animation, so it is not clear which one determines when the body freezes. 'handoff: true' requires exactly one concurrent 'physics' block.`,
+            line: handoffVal.line, col: handoffVal.col, endLine: handoffVal.endLine, endCol: handoffVal.endCol,
+          });
+        } else if (target.ambiguousPosAnim) {
+          // More than one position animation starts alongside this handoff.
+          // Every position animation holds the body's POS_ANIM pin reason for
+          // its own duration, reason-counted — two holds need two releases.
+          // If the other one is still running when this handoff completes,
+          // the body stays pinned, and if the physics runner freezes in that
+          // window the parked velocity is never flushed. This is the exact
+          // defect confirmed live in Phase 3A's review.
+          errors.push({
+            phase: "TYPE",
+            message: `[TYPE_HANDOFF_SCHEDULE_AMBIGUOUS] This object starts more than one 'property: position' animation at the same time as the handoff, so it is not clear which one releases the body last. 'handoff: true' requires the handoff animation to be the only concurrent position animation.`,
+            line: handoffVal.line, col: handoffVal.col, endLine: handoffVal.endLine, endCol: handoffVal.endCol,
+          });
+        } else {
+          const velNode = target.physics.props["velocity"];
+          if (velNode !== undefined) {
+            errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_AMBIGUITY] When 'handoff: true' is used, the 'physics' block cannot define an initial 'velocity' because the animation's exit momentum will completely overwrite it. Remove 'velocity' from the physics block.`, line: velNode.line, col: velNode.col, endLine: velNode.endLine, endCol: velNode.endCol });
+          }
+
+          const animDuration = node.props["duration"];
+          const physicsDuration = target.physics.props["duration"];
+          if (
+            target.scheduling === "concurrent" &&
+            animDuration?.kind === "number" &&
+            physicsDuration?.kind === "number"
+          ) {
+            const yoyoMultiplier = yoyoIsTrue(node as ObjectNode) ? 2 : 1;
+            // Seconds, for the human-readable message only.
+            const effectiveAnimDuration = animDuration.value * yoyoMultiplier;
+            // Ticks, for the actual pass/fail decision — the runtime never
+            // compares seconds. `secondsToTicks` is the same function
+            // `spawnAnim`/`spawnPhysics` (sceneRuntime.ts) convert with, so a
+            // physics duration whose *tick count* does not clear the
+            // animation's cannot slip through just because it is larger in
+            // seconds: Math.round(1 * 120) === Math.round(1.001 * 120), and
+            // the runtime writes the pending velocity and freezes the body on
+            // that same tick.
+            const effectiveAnimDurationTicks = secondsToTicks(animDuration.value) * yoyoMultiplier;
+            const physicsDurationTicks = secondsToTicks(physicsDuration.value);
+            if (physicsDurationTicks <= effectiveAnimDurationTicks) {
+              errors.push({
+                phase: "TYPE",
+                message: `[TYPE_HANDOFF_DURATION] The receiving physics duration (${physicsDuration.value}s) must be greater than the handoff animation runtime (${effectiveAnimDuration}s).`,
+                line: physicsDuration.line, col: physicsDuration.col, endLine: physicsDuration.endLine, endCol: physicsDuration.endCol,
+              });
+            }
           }
         }
+      }
+    }
+
+    if (typeName === "line") {
+      const hasPhysicalGroupAncestor = ancestors.some(
+        (ancestor) => ancestor.type === "group" && ownsPhysics(ancestor)
+      );
+      if (ownsPhysics(node as ObjectNode) || hasPhysicalGroupAncestor) {
+        errors.push({
+          phase: "TYPE",
+          message: `[TYPE_LINE_PHYSICS] Line '${nodeName}' cannot have physics because lines do not produce collision geometry.`,
+          line: node.line,
+          col: node.col,
+          endLine: node.endLine,
+          endCol: node.endCol,
+        });
       }
     }
 
@@ -303,17 +460,15 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         continue;
       }
 
-      const effectiveExpected = (typeName === "physics" && key === "duration")
-        ? (["number", "indefinitely"] as readonly PropKind[])
-        : expected;
+      const effectiveExpected: PropContract = expected;
 
       const isExpected = Array.isArray(effectiveExpected)
         ? (effectiveExpected as readonly string[]).includes(val.kind)
         : effectiveExpected === val.kind;
 
       if (!isExpected) {
-        if (key === "sceneFit" && val.kind === "string") {
-          errors.push({ phase: "TYPE", message: `${label}: 'sceneFit' must be an unquoted keyword. Remove the quotes around the value.`, ...errPos });
+        if (key === "fit" && val.kind === "string") {
+          errors.push({ phase: "TYPE", message: `${label}: 'fit' must be an unquoted keyword. Remove the quotes around the value.`, ...errPos });
         } else if (val.kind === "string" && (!Array.isArray(effectiveExpected) && effectiveExpected !== "string")) {
           const expStr = Array.isArray(effectiveExpected)
             ? (effectiveExpected as readonly PropKind[]).map(e => KIND_LABEL[e] ?? e).join(" or ")
@@ -328,46 +483,14 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         continue;
       }
 
-      if (key === "duration" && val.kind === "number") {
-        if (val.value <= 0) errors.push({ phase: "TYPE", message: `${label}: 'duration' must be strictly greater than 0, but got ${val.value}.`, ...errPos });
-      }
-      if (key === "alpha" && val.kind === "number") {
-        if (val.value < 0 || val.value > 1) errors.push({ phase: "TYPE", message: `${label}: 'alpha' must be between 0.0 and 1.0 inclusive, but got ${val.value}.`, ...errPos });
-      }
-      if ((key === "airDrag" || key === "bounce") && val.kind === "number") {
-        if (val.value < 0 || val.value > 1) errors.push({ phase: "TYPE", message: `${label}: '${key}' must be between 0.0 and 1.0 inclusive, but got ${val.value}.`, ...errPos });
-      }
-      if (key === "radius" && val.kind === "number") {
-        if (val.value <= 0) errors.push({ phase: "TYPE", message: `${label}: 'radius' must be greater than 0, but got ${val.value}.`, ...errPos });
-      }
-      if (key === "thickness" && val.kind === "number") {
-        if (val.value <= 0) errors.push({ phase: "TYPE", message: `${label}: 'thickness' must be greater than 0, but got ${val.value}.`, ...errPos });
-      }
-      if (key === "fontSize" && val.kind === "number") {
-        if (val.value <= 0) errors.push({ phase: "TYPE", message: `${label}: 'fontSize' must be greater than 0, but got ${val.value}.`, ...errPos });
-      }
-      if (key === "content" && val.kind === "string") {
-        if (val.value.length > 500) {
-          errors.push({ phase: "TYPE", message: `[TYPE_TEXT_TOO_LONG] ${label}: 'content' string is too long (${val.value.length} chars). Maximum allowed is 500 characters to prevent rendering crashes.`, ...errPos });
-        }
-      }
-      if (key === "scale") {
-        if (val.kind === "number" && val.value <= 0) {
-          errors.push({ phase: "TYPE", message: `[TYPE_INVALID_SCALE] ${label}: 'scale' must be greater than zero.`, ...errPos });
-        } else if (val.kind === "point" && (val.x <= 0 || val.y <= 0)) {
-          errors.push({ phase: "TYPE", message: `[TYPE_INVALID_SCALE] ${label}: 'scale' components must be greater than zero, but got (${val.x}, ${val.y}).`, ...errPos });
-        }
-      }
-      if (key === "size" && val.kind === "point") {
-        if (val.x <= 0 && val.y <= 0) errors.push({ phase: "TYPE", message: `${label}: 'size' width and height must both be greater than 0.`, ...errPos });
-        else if (val.x <= 0) errors.push({ phase: "TYPE", message: `${label}: 'size' width must be greater than 0, but got ${val.x}.`, ...errPos });
-        else if (val.y <= 0) errors.push({ phase: "TYPE", message: `${label}: 'size' height must be greater than 0, but got ${val.y}.`, ...errPos });
-      }
-      if (key === "points" && val.kind === "pointList") {
-        if (typeName === "polygon" && val.value.length < 3) errors.push({ phase: "TYPE", message: `${label}: 'polygon' requires at least 3 points.`, ...errPos });
-        else if (typeName === "line" && val.value.length < 2) errors.push({ phase: "TYPE", message: `${label}: 'line' requires at least 2 points.`, ...errPos });
-        else if (val.value.length > 10000) errors.push({ phase: "TYPE", message: `[TYPE_POLYGON_TOO_LARGE] ${label}: '${typeName}' exceeds the maximum safe limit of 10,000 points.`, ...errPos });
-      }
+      // `scale`'s positivity check (TYPE_INVALID_SCALE) is a `positiveScale`
+      // constraint like any other property's — see validateLocalConstraint —
+      // rather than a bespoke branch here that never consulted the contract.
+      const spec = LANGUAGE_CONTRACT[typeName as keyof typeof LANGUAGE_CONTRACT]?.properties[key];
+      const localError = spec
+        ? validateLocalConstraint(label, typeName, key, val, spec)
+        : undefined;
+      if (localError) errors.push(localError);
     }
 
     const hasVisualChildren = node.children.some(
@@ -389,5 +512,28 @@ export function collectErrors(ast: AstNode): CompilerError[] {
   }
 
   checkNode(ast);
+
+  const physicsCost = countPhysicsCost(ast);
+  if (physicsCost.bodyLimitNode !== null && errors.length < 50) {
+    errors.push({
+      phase: "TYPE",
+      message: `[TYPE_PHYSICS_BODY_LIMIT] Scene contains too many physics bodies (${formatPointCount(physicsCost.bodies)}). Maximum allowed is ${formatPointCount(MAX_PHYSICS_BODIES)}.`,
+      line: physicsCost.bodyLimitNode.line,
+      col: physicsCost.bodyLimitNode.col,
+      endLine: physicsCost.bodyLimitNode.endLine,
+      endCol: physicsCost.bodyLimitNode.endCol,
+    });
+  }
+  if (physicsCost.partLimitNode !== null && errors.length < 50) {
+    errors.push({
+      phase: "TYPE",
+      message: `[TYPE_PHYSICS_PART_LIMIT] Scene contains too many physics collision parts (${formatPointCount(physicsCost.parts)}). Maximum allowed is ${formatPointCount(MAX_PHYSICS_PARTS)}.`,
+      line: physicsCost.partLimitNode.line,
+      col: physicsCost.partLimitNode.col,
+      endLine: physicsCost.partLimitNode.endLine,
+      endCol: physicsCost.partLimitNode.endCol,
+    });
+  }
+
   return errors;
 }

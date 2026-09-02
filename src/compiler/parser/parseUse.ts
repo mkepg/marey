@@ -3,7 +3,8 @@ import { ParserState, describeToken, ParseException } from "./state";
 import { parseValue } from "./parseValue";
 import { parseObject } from "./parseObject";
 import { parseGenerate } from "./parseGenerate";
-import { parseDef } from "./parseDef";
+import { parseBinding } from "./parseBinding";
+import { consumePropertyName, rejectLegacyBinding } from "./parseProperty";
 
 export function parseUse(state: ParserState, depth: number): ObjectNode {
   if (depth > 50) {
@@ -67,9 +68,10 @@ export function parseUse(state: ParserState, depth: number): ObjectNode {
     const seenProps = new Set<string>();
 
     while (state.peek().type !== "RBRACE" && state.peek().type !== "EOF") {
+      rejectLegacyBinding(state);
       const peekType = state.peek().type;
-      if (peekType === "IDENT" || peekType === "SCENE_FIT" || peekType === "NAMED_COLOR" || peekType === "BOOLEAN" || peekType === "EASING") {
-          const key = state.consume();
+      if (peekType === "IDENT" || peekType === "FIT" || peekType === "NAMED_COLOR" || peekType === "BOOLEAN" || peekType === "EASING") {
+          const key = consumePropertyName(state);
           const keyName = key.value as string;
 
           if (seenProps.has(keyName)) {
@@ -109,13 +111,14 @@ export function parseUse(state: ParserState, depth: number): ObjectNode {
   try {
     while (state.pos < template.endPos) {
       try {
+        rejectLegacyBinding(state);
         const t = state.peek();
         if (t.type === "KEYWORD") {
           if (state.peek().value === "template") {
             state.throwError(`In ${state.currentContext}: Unexpected keyword 'template'. Templates must be defined at the top level of the file, outside of the scene block.`, state.peek());
           }
-          if (t.value === "def") {
-            parseDef(state);
+          if (t.value === "let") {
+            parseBinding(state);
             continue;
           }
           if (t.value === "generate") {
@@ -151,7 +154,7 @@ export function parseUse(state: ParserState, depth: number): ObjectNode {
         }
 
         const bad = state.consume();
-        state.throwError(`In ${state.currentContext}: Expected an object definition, 'def', 'generate', or 'use', but found ${describeToken(bad)}.`, bad);
+        state.throwError(`In ${state.currentContext}: Expected an object definition, 'let', 'generate', or 'use', but found ${describeToken(bad)}.`, bad);
       } catch (e) {
         if (e instanceof ParseException) {
           state.errors.push(e.error);

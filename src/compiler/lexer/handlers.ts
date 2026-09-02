@@ -1,5 +1,5 @@
-import type { SceneFit } from "../types";
-import { KEYWORDS, NAMED_COLORS, SCENE_FIT_VALUES, BOOLEAN_VALUES, EASING_VALUES, DURATION_INDEFINITELY_VALUES } from "./constants";
+import type { FitMode } from "../types";
+import { KEYWORDS, NAMED_COLORS, FIT_VALUE_WORDS, BOOLEAN_VALUES, EASING_VALUES, DURATION_INDEFINITELY_VALUES } from "./constants";
 import type { LexerState } from "./state";
 
 export function handleColor(state: LexerState): void {
@@ -87,8 +87,8 @@ export function handleWord(state: LexerState): void {
     state.push("KEYWORD", word, length);
   } else if (word in NAMED_COLORS) {
     state.push("NAMED_COLOR", word, length);
-  } else if (SCENE_FIT_VALUES.has(word)) {
-    state.push("SCENE_FIT", word as SceneFit, length);
+  } else if (FIT_VALUE_WORDS.has(word)) {
+    state.push("FIT", word as FitMode, length);
   } else if (BOOLEAN_VALUES.has(word)) {
     state.push("BOOLEAN", word === "true", length);
   } else if (EASING_VALUES.has(word)) {

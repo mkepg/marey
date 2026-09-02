@@ -1,7 +1,7 @@
 scene {
   size: (800, 600)
   background: #111827
-  sceneFit: contain
+  fit: contain
 
   rectangle card {
     position: (-60, 300)

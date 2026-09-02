@@ -40,7 +40,7 @@ describe("DEFAULT_CODE", () => {
 
     expect(anims.some((a) => a.loop)).toBe(true);
     expect(anims.some((a) => a.yoyo)).toBe(true);
-    expect(anims.some((a) => a.handOff)).toBe(true);
+    expect(anims.some((a) => a.handoff)).toBe(true);
 
     const easings = new Set(anims.map((a) => a.easing));
     expect(easings).toContain("linear");

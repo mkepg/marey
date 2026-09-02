@@ -3,26 +3,26 @@
 // (value * scale), and its center is placed so it rises from
 // a shared baseline (baseline - height / 2).
 
-def ink    = #e2e8f0
-def dim    = #64748b
-def sky    = #38bdf8
+let ink    = #e2e8f0
+let dim    = #64748b
+let sky    = #38bdf8
 
-def scale    = 30
-def baseline = 500
-def barWidth = 70
+let scale    = 30
+let baseline = 500
+let barWidth = 70
 
-def v0 = 3
-def v1 = 7
-def v2 = 2
-def v3 = 9
-def v4 = 5
-def v5 = 8
-def v6 = 4
+let v0 = 3
+let v1 = 7
+let v2 = 2
+let v3 = 9
+let v4 = 5
+let v5 = 8
+let v6 = 4
 
 scene {
   size: (800, 600)
   background: #0a0e1a
-  sceneFit: contain
+  fit: contain
 
   text title {
     position: (400, 40)

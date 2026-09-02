@@ -62,22 +62,22 @@ export const pixiRendererAdapter: IRendererAdapter = {
 
     const logicalWidth  = scene.width;
     const logicalHeight = scene.height;
-    const sceneFit      = scene.sceneFit;
+    const fit           = scene.fit;
 
     function updateLayout(): void {
       if (!sharedApp?.canvas) return;
       const sw = hostElement.clientWidth;
       const sh = hostElement.clientHeight;
 
-      if (sceneFit === "contain") {
+      if (fit === "contain") {
         const s = Math.min(sw / logicalWidth, sh / logicalHeight);
         sceneRoot.scale.set(s);
         sceneRoot.position.set((sw - logicalWidth  * s) / 2, (sh - logicalHeight * s) / 2);
-      } else if (sceneFit === "cover") {
+      } else if (fit === "cover") {
         const s = Math.max(sw / logicalWidth, sh / logicalHeight);
         sceneRoot.scale.set(s);
         sceneRoot.position.set((sw - logicalWidth  * s) / 2, (sh - logicalHeight * s) / 2);
-      } else if (sceneFit === "fill") {
+      } else if (fit === "fill") {
         sceneRoot.scale.set(sw / logicalWidth, sh / logicalHeight);
         sceneRoot.position.set(0, 0);
       } else {

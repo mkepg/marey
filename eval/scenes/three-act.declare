@@ -5,7 +5,7 @@
 scene {
   size: (800, 600)
   background: #0a0e1a
-  sceneFit: contain
+  fit: contain
 
   rectangle actor {
     position: (150, 300)

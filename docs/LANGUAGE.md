@@ -26,22 +26,22 @@ scene {
 
 ## Scene model
 
-A file holds any number of `def` and `template` declarations, followed by
+A file holds any number of `let` and `template` declarations, followed by
 exactly one `scene` block. A second top-level keyword after the scene block
-closes is a parse error ("Only one scene block is allowed per file"). `def`
-and `template` may not appear after the scene block starts scoping — `def`
+closes is a parse error ("Only one scene block is allowed per file"). `let`
+and `template` may not appear after the scene block starts scoping — `let`
 may still appear inside the scene body itself, but `template` may not.
 
 `scene` requires a `size: (width, height)` property. `background` takes a
-colour and is optional. `sceneFit` is optional and takes one of four unquoted
+colour and is optional. `fit` is optional and takes one of four unquoted
 keywords; passing it as a quoted string is a compile error.
 
-`size` declares the scene's *logical* dimensions. `sceneFit` decides how those
+`size` declares the scene's *logical* dimensions. `fit` decides how those
 logical dimensions are mapped onto the preview area, which may be any size:
 
 - `contain` — scale to fit entirely inside the preview, preserving aspect
   ratio, and centre. The whole scene is visible; there may be letterboxing.
-  **This is the default when `sceneFit` is omitted.**
+  **This is the default when `fit` is omitted.**
 - `cover` — scale to fill the preview, preserving aspect ratio, and centre.
   Nothing is letterboxed; the scene may be cropped.
 - `fill` — scale each axis independently so the scene exactly fills the
@@ -49,7 +49,7 @@ logical dimensions are mapped onto the preview area, which may be any size:
 - `none` — no scaling. The scene is drawn at its logical size and anchored at
   the preview's top-left corner, not centred.
 
-`sceneFit` affects presentation only. It does not change any coordinate you
+`fit` affects presentation only. It does not change any coordinate you
 write, and physics is simulated in logical units regardless of it.
 
 Coordinates are in pixels. X increases rightward and **y increases
@@ -72,9 +72,9 @@ A child object's `position` is relative to its parent `group`'s local space,
 not to the scene origin — moving or rotating the group moves and rotates its
 children with it.
 
-`z` controls drawing order among siblings. Objects with a higher `z` draw in
-front of (on top of) objects with a lower `z`. It defaults to `0` and may be
-negative. Siblings with equal `z` draw in source order.
+`layer` controls drawing order among siblings. Objects with a higher `layer` draw in
+front of (on top of) objects with a lower `layer`. It defaults to `0` and may be
+negative. Siblings with equal `layer` draw in source order.
 
 `rotation` is written in **degrees** in source; the renderer converts to
 radians internally (multiplying by `Math.PI / 180`) when applying it to the
@@ -88,7 +88,7 @@ compile error. It defaults to `1.0` — fully opaque.
 Colours are written as a hex code after `#` — 3 digits (`#f00`) or 6 digits
 (`#ff0000`) — or as one of nine named-colour keywords: `red`, `green`,
 `blue`, `white`, `black`, `yellow`, `cyan`, `magenta`, `orange`. Named colours
-lex as their own token type, so they cannot be reused as identifiers (`def
+lex as their own token type, so they cannot be reused as identifiers (`let
 cyan = ...` is a parse error). `color` defaults to `#ffffff` (white) on every
 shape that accepts it.
 
@@ -113,7 +113,7 @@ relative to `position`. It must have at least 3 points.
 and `thickness`, which must be greater than 0.
 
 Each coordinate inside a point list follows the same rules as any other
-numeric value: it may be a number literal, a `def`-bound name, or an
+numeric value: it may be a number literal, a `let`-bound name, or an
 arithmetic expression combining them. See the worked example under
 "Reuse" for a `polygon` whose points are computed this way.
 
@@ -145,8 +145,10 @@ scene {
 ## Animation
 
 `animate` is a child block of a shape or `group`. It requires `property`,
-`to`, and `duration`. `easing`, `loop`, `yoyo`, and `handOff` are optional.
-`handOff` only matters inside a `sequence` and is covered there.
+`to`, and `duration`. `easing`, `loop`, `yoyo`, and `handoff` are optional.
+`handoff` applies to an `animate` with a `physics` sibling that can receive
+its exit velocity — directly on the same object, inside one `parallel`, or
+as a later `sequence` step — and is covered under Sequencing.
 
 `duration` is a number of seconds and must be strictly greater than 0.
 
@@ -194,8 +196,9 @@ scene {
 
 `loop: true` restarts the animation from the beginning every time it
 completes, forever. `yoyo: true` reverses direction at the end instead of
-restarting, and reverses again on returning to the start — so `loop` and
-`yoyo` together produce a continuous there-and-back motion.
+restarting, playing back to the starting value and then finishing there —
+combined with `loop: true`, that reversal repeats every time the animation
+completes, producing a continuous there-and-back motion.
 
 **`duration` is the length of one direction, not of a full cycle.** With
 `yoyo: true`, one complete there-and-back cycle takes `2 × duration`. An
@@ -212,22 +215,20 @@ progress 0 --------→ 1  ---------→ 0  ---------→ 1
          └──────── one full cycle ─────────┘
 ```
 
-**Pair `yoyo` with `loop`.** `yoyo: true` without `loop: true` plays out to
-`to`, plays back to its starting value, and then never finishes: on the tick
-it returns to the start it does not complete, it simply holds — the internal
-direction stays reversed and the elapsed position stays pinned at the start,
-tick after tick. The object rests at its original value, which usually looks
-correct, but the animation is still considered running. This has two
-consequences. The renderer's idle check never passes, so the ticker never
-stops. And if the same object also has a `physics` block, the position
-animation's hold on the object's body is never released, so the body stays
-pinned in place and never falls under gravity or responds to collisions.
-Every `yoyo: true` in the shipped default scene is paired with `loop: true`
-for exactly this reason.
+**`yoyo: true` without `loop: true` is a there-and-back that runs once.** It
+plays out to `to`, plays back, and finishes on the tick it arrives at its
+starting value — exactly `2 × duration` after it began. The value it finishes
+on is the value it started from, not `to`.
 
-Inside a `sequence` or `parallel` block, `loop: true` and `yoyo: true` are
-both compile errors (`TYPE_SEQ_LOOP`, `TYPE_SEQ_YOYO`) — a step that never
-finishes would stall the rest of the timeline.
+Finishing is what makes it a complete animation rather than a permanent one.
+On that tick the object stops being animated: the renderer's idle check can
+pass, so the ticker stops once nothing else is moving, and if the same object
+also has a `physics` block, the hold that a position animation keeps on the
+object's body is released — the body falls under gravity and takes collisions
+from then on, from the position it started at.
+
+Pairing the two gives the continuous form — a shape that breathes for as long
+as the scene runs:
 
 ```declare
 scene {
@@ -244,6 +245,29 @@ scene {
       easing: easeInOut
       loop: true
       yoyo: true
+    }
+  }
+}
+```
+
+Inside a `sequence` or `parallel` block, `loop: true` and `yoyo: true` are
+both compile errors (`TYPE_SEQ_LOOP`, `TYPE_SEQ_YOYO`). `loop: true` never
+finishes at all, so it would stall the timeline. `yoyo: true` does finish, but
+it would occupy the timeline for twice the `duration` written beside it, so a
+reader could not see when the following step starts. Write the return leg as
+its own step instead:
+
+```declare
+scene {
+  size: (800, 600)
+
+  rectangle nudge {
+    position: (100, 300)
+    size: (40, 40)
+    color: magenta
+    sequence {
+      animate { property: position, to: (400, 300), duration: 1.0 }
+      animate { property: position, to: (100, 300), duration: 1.0 }
     }
   }
 }
@@ -275,8 +299,9 @@ Omitting `duration` there is a compile error (`TYPE_SEQ_PHYSICS_DUR`), and
 because a simulation that never ends would prevent the timeline from ever
 advancing past it. `loop: true` and `yoyo: true` are likewise compile errors
 on any `animate` step inside a `sequence` or `parallel` (`TYPE_SEQ_LOOP`,
-`TYPE_SEQ_YOYO`; see above), for the same reason: a step that never finishes
-stalls the rest of the timeline.
+`TYPE_SEQ_YOYO`; see above) — a looping step never finishes at all, and a
+yoyo step would run for twice its written `duration`, hiding when the next
+step begins.
 
 The reverse rule applies to an object's own top-level `physics` block: if it
 sets `duration: indefinitely`, that object may not also have a `sequence`
@@ -313,9 +338,9 @@ scene {
 }
 ```
 
-### handOff
+### handoff
 
-`handOff: true` is a property of `animate` on `property: position`. Setting
+`handoff: true` is a property of `animate` on `property: position`. Setting
 it carries the animation's exit velocity into the physics simulation, so an
 object that slides and then falls keeps its momentum and arcs, instead of
 stopping dead and dropping straight down.
@@ -330,7 +355,13 @@ twice that speed, and `easeOut` and `easeInOut` at half of it. `easeOut` and
 literally would hand off no momentum at all; the `0.5` is a deliberate
 choice, not a measurement of the curve.
 
-Four rules govern `handOff: true`, each a compile error when broken:
+**With `yoyo: true` the exit direction reverses.** A non-looping yoyo finishes
+at the end of its return leg, travelling from `to` back toward its starting
+value, so it hands off along that direction rather than the outbound one — the
+same speed, the opposite way. Its runtime is `2 × duration`, and that is the
+figure the duration rule below compares against.
+
+Six rules govern `handoff: true`, each a compile error when broken:
 
 - It is only valid on `property: position`; on any other property it is a
   compile error (`TYPE_HANDOFF_PROP`).
@@ -338,8 +369,19 @@ Four rules govern `handOff: true`, each a compile error when broken:
   looping animation never ends and so never hands off (`TYPE_HANDOFF_LOOP`).
 - It requires a sibling `physics` block on the same object
   (`TYPE_HANDOFF_PHYSICS`).
+- The object may not start more than one `physics` block, nor more than one
+  `property: position` animation, concurrently with the handoff. The runtime
+  pins the body once per concurrent runner, reason-counted, so with two of
+  either kind it is not clear which one determines when the body freezes or
+  releases it last — rejected as `TYPE_HANDOFF_SCHEDULE_AMBIGUOUS` rather than
+  guessed at.
 - That sibling `physics` block may not also declare `velocity` — the
   animation's exit velocity would overwrite it (`TYPE_HANDOFF_AMBIGUITY`).
+- When that `physics` block runs alongside the animation rather than after it
+  in a `sequence`, and gives a numeric `duration`, that duration must be
+  strictly greater than the animation's runtime — otherwise the simulation is
+  already over by the time the momentum arrives (`TYPE_HANDOFF_DURATION`).
+  The runtime compared against is `2 × duration` for a `yoyo` animation.
 
 ```declare
 scene {
@@ -354,7 +396,7 @@ scene {
       to: (350, 220)
       duration: 1.1
       easing: easeOut
-      handOff: true
+      handoff: true
     }
     physics {
       gravity: (0, 900)
@@ -413,10 +455,8 @@ bouncy object makes every collision it takes part in bouncy, and a low
 
 **`airDrag` is inverted: `0.0` is a vacuum and `1.0` is maximum resistance.**
 It ranges from `0.0` to `1.0` inclusive, defaulting to `0.0`. Useful values
-are small — the shipped default scene uses `0.006`. Some editor snippets in
-`language.ts` still insert `airDrag: 0.99` as a placeholder value, left over
-from before the inversion; under the current semantics that is near-total
-drag, not a light touch.
+are small — the shipped default scene uses `0.006`, and the Monaco `physics`
+snippet suggests the same `0.006` as its placeholder.
 
 `collideBounds` governs collision with the scene's four edges only, and
 defaults to `true`. It has no bearing on collision between objects — that is
@@ -427,11 +467,18 @@ simulation entirely and its visual is hidden.
 
 The collision shape a body gets depends on the object's kind: `circle` gets a
 circle at its declared radius; `rectangle` gets a rectangle at its declared
-size; `text` gets a rectangle sized to the rendered text's bounding box;
-`line` gets a rectangle spanning its points' bounding box, widened to at
-least its `thickness`. **`polygon` gets the convex hull of its points, not its
-exact outline** — a concave polygon collides as its hull, even though it is
-drawn with its true, concave shape.
+size; `text` gets a rectangle sized to the rendered text's bounding box.
+**`polygon` gets the convex hull of its points, not its exact outline** — a
+concave polygon collides as its hull, even though it is drawn with its true,
+concave shape.
+
+**`line` cannot have `physics`, directly, in a `sequence` step, or as part of
+a physics `group`.** A `line` has zero thickness as geometry — its drawn
+`thickness` is a stroke width, not a collidable body — so it produces no
+collision shape to give it. Declaring `physics` on a `line` (including
+inside its own `sequence`, or a `parallel` step within one), or placing a
+`line` inside a `group` that declares `physics`, is a compile error
+(`TYPE_LINE_PHYSICS`).
 
 **A `group` with a `physics` block is welded into a single body made of one
 shape per object inside it**, each at its own offset and angle within the
@@ -608,16 +655,16 @@ scene {
 
 ## Reuse
 
-`def`, `generate`, `template` and `use` are the language's metaprogramming
+`let`, `generate`, `template` and `use` are the language's metaprogramming
 layer. All four are resolved by the parser, before type checking runs — by
-the time an error is reported, `def` names have been substituted and
+the time an error is reported, `let` names have been substituted and
 `generate`/`use` have been expanded into plain objects.
 
-### `def`
+### `let`
 
-`def name = value` binds `name` to a single value in the current scope. The
+`let name = value` binds `name` to a single value in the current scope. The
 right-hand side accepts any value kind the parser produces: number, color,
-string, point, point list, boolean, easing, or `sceneFit`.
+string, point, point list, boolean, easing, or `fit`.
 
 A binding is immutable: redefining the same name in the same scope is a
 compile error ("already defined in this immediate scope"). Shadowing an
@@ -626,7 +673,7 @@ group bodies, and template expansions each open a new scope. A name is
 visible only in the scope that defined it and scopes nested inside it; a
 name defined inside a `generate` block does not exist outside it.
 
-`def` may appear before the `scene` block, inside the `scene` body, and
+`let` may appear before the `scene` block, inside the `scene` body, and
 inside any object, group, `generate`, `animate`, `physics`, or template
 body. It may not appear directly inside a `sequence` block, which accepts
 only `animate`, `physics`, and `parallel`.
@@ -634,9 +681,9 @@ only `animate`, `physics`, and `parallel`.
 Names follow the same rule as object names: they must start with a letter
 and contain only letters, digits, and underscores.
 
-**A named colour cannot be a `def` name.** `red`, `green`, `blue`, `white`,
+**A named colour cannot be a `let` name.** `red`, `green`, `blue`, `white`,
 `black`, `yellow`, `cyan`, `magenta`, and `orange` lex as their own token
-type, not as identifiers, so `def cyan = #00ffff` is a parse error before it
+type, not as identifiers, so `let cyan = #00ffff` is a parse error before it
 ever reaches scope checking — the parser is looking for a variable name and
 finds a colour literal instead.
 
@@ -646,17 +693,17 @@ Numeric value positions accept `+`, `-`, `*`, and `/`, with conventional
 precedence: `*` and `/` bind tighter than `+` and `-`. Unary `-` is
 supported. Parentheses group and may nest. Division by zero is a compile
 error, not `Infinity`. There is no modulo operator, no exponent, and no
-comparison operator. An operand may be a number literal or a `def`-bound
+comparison operator. An operand may be a number literal or a `let`-bound
 name; a name bound to a non-number value used in a math expression is a
 compile error.
 
-**The right-hand side of a `def` is a full value expression, not only a
-literal.** It may be arithmetic, and it may reference an earlier `def` in
+**The right-hand side of a `let` is a full value expression, not only a
+literal.** It may be arithmetic, and it may reference an earlier `let` in
 scope:
 
 ```declare
-def base    = 20
-def spacing = base * 2 + 10
+let base    = 20
+let spacing = base * 2 + 10
 
 scene {
   size: (800, 600)
@@ -673,7 +720,7 @@ scene {
 `generate i from A to B { ... }` repeats its body once for each integer `i`
 from `A` to `B`, **inclusive of both ends** — `from 0 to 4` runs five times,
 for `i` = 0, 1, 2, 3, 4. `A` and `B` must be integer literals or
-integer-valued `def` names; a non-integer bound is a compile error. A single
+integer-valued `let` names; a non-integer bound is a compile error. A single
 `generate`'s span from `A` to `B` cannot exceed 10,000 — since both ends are
 inclusive, that allows up to 10,001 iterations. A file-wide counter shared by
 every object, `use` expansion, and `generate` iteration is capped at 15,000;
@@ -705,9 +752,9 @@ argument may be **any** value kind the parser produces, including a keyword
 arguments must match the number of declared parameters exactly.
 
 The instance name must be unique among its siblings and follows the same
-naming rule as `def`. The expansion is wrapped as a `group` object named after
+naming rule as a binding. The expansion is wrapped as a `group` object named after
 the instance; the `{ ... }` block after the instance name sets group-level
-properties on that wrapper — `position`, `rotation`, `scale`, `alpha`, `z` —
+properties on that wrapper — `position`, `rotation`, `scale`, `alpha`, `layer` —
 exactly as it would on any other `group`.
 
 Recursive templates are rejected: expanding a template that is already being
@@ -715,11 +762,11 @@ expanded, either directly or through a cycle of other templates, is a
 compile error.
 
 ```declare
-def ink      = #e2e8f0
-def gap      = 120
-def beat     = 1.5
-def apex     = -30
-def halfBase = gap / 5
+let ink      = #e2e8f0
+let gap      = 120
+let beat     = 1.5
+let apex     = -30
+let halfBase = gap / 5
 
 template Badge(tone) {
   circle disc {
@@ -762,7 +809,7 @@ scene {
 }
 ```
 
-`marker`'s `points` show a point list built entirely from `def` names and
+`marker`'s `points` show a point list built entirely from `let` names and
 arithmetic (`halfBase` is itself `gap / 5`) — the same rule as any other
 numeric value, stated under "Shapes" above.
 
@@ -774,7 +821,7 @@ This section is expected to shrink as later phases close them.
 **No arrays or indexing.** There is no way to write a list of values and
 loop over it. A point list such as `[(0, -30), (26, 15), (-26, 15)]` exists,
 but only as a literal property value for `polygon` and `line`. It can be
-bound to a name with `def` and passed around as a whole — but its elements
+bound to a name with `let` and passed around as a whole — but its elements
 cannot be read individually, indexed, or iterated. It is not a
 general-purpose array. A chart driven by seven data values must still be
 written as seven separate `rectangle` blocks.
@@ -797,31 +844,39 @@ variable." It does not handle data.
 A short list of hard walls. Crossing any of these is a compile error, not a
 runtime warning or a silent clamp.
 
-- `duration` (on `animate` or `physics`) must be strictly greater than 0
-  (`typeChecker/validator.ts:284-285`).
-- `radius`, `thickness`, and `fontSize` must be greater than 0
-  (`typeChecker/validator.ts:293-294`, `296-297`, `299-300`).
-- `size`'s width and height must each be greater than 0
-  (`typeChecker/validator.ts:314-318`).
-- `alpha`, `airDrag`, and `bounce` must fall between `0.0` and `1.0` inclusive
-  (`typeChecker/validator.ts:287-288`, `290-291`).
-- `polygon` requires at least 3 points, `line` at least 2, and no shape's
-  point list may exceed 10,000 points (`typeChecker/validator.ts:320-322`).
-- `text` content is capped at 500 characters
-  (`typeChecker/validator.ts:302-305`), and a scene may contain at most 500
-  `text` objects in total (`typeChecker/validator.ts:49`, `76`).
+- `duration` (on `animate` or `physics`) must be strictly greater than 0;
+  `radius`, `thickness`, and `fontSize` must be greater than 0; `size`'s
+  width and height must each be greater than 0; `alpha`, `airDrag`, and
+  `bounce` must fall between `0.0` and `1.0` inclusive; and `polygon`
+  requires at least 3 points, `line` at least 2, with no shape's point list
+  exceeding 10,000 points. Each of these is declared once, per property, as
+  a `constraint` on that property's entry in `languageContract.ts`, and
+  enforced by one generic function, `validateLocalConstraint`
+  (`typeChecker/validator.ts:31-101`), rather than by a separate hand-written
+  check for each property.
+- `text` content is capped at 500 characters (the same generic constraint
+  mechanism, `[TYPE_TEXT_TOO_LONG]`), and a scene may contain at most 500
+  `text` objects in total (`typeChecker/validator.ts:105`, `130-140`).
+- A scene's physics cost is capped at 500 bodies and 2,000 collision parts
+  (`MAX_PHYSICS_BODIES`, `MAX_PHYSICS_PARTS` in
+  `typeChecker/physicsCost.ts:3-4`). A "body" is any object or group that
+  declares `physics`, directly or through a `sequence`; a "part" is each
+  collision primitive that body is built from — one for a single shape, one
+  per welded child for a compound `group`. Crossing either ceiling is
+  `[TYPE_PHYSICS_BODY_LIMIT]` or `[TYPE_PHYSICS_PART_LIMIT]`
+  (`typeChecker/validator.ts:459-479`).
 - Type checking stops reporting once 50 errors have accumulated
-  (`typeChecker/validator.ts:58`). Parsing enforces the same 50-error ceiling
+  (`typeChecker/validator.ts:114`). Parsing enforces the same 50-error ceiling
   but aborts outright on reaching it rather than continuing
   (`parser/state.ts:99-101`), so a badly malformed file can report fewer than
   50 errors in total.
 - A single `generate` loop's span (`end − start`) cannot exceed 10,000
-  (`parser/parseGenerate.ts:46`). Because both bounds are inclusive, this
+  (`parser/parseGenerate.ts:47`). Because both bounds are inclusive, this
   permits up to **10,001** iterations, not 10,000.
 - A file-wide counter shared by every parsed object, every `use` expansion,
   and every `generate` iteration is capped at 15,000
-  (`parser/parseObject.ts:154-156`, `parser/parseUse.ts:12-14`,
-  `parser/parseGenerate.ts:81-82`). Exceeding it aborts compilation — even a
+  (`parser/parseObject.ts:148-150`, `parser/parseUse.ts:13-14`,
+  `parser/parseGenerate.ts:82-83`). Exceeding it aborts compilation — even a
   file with few real objects can hit the ceiling if it has enough loop
   iterations, since each iteration consumes one unit of the budget before its
   body is parsed.
@@ -833,16 +888,19 @@ runtime warning or a silent clamp.
 ## Not covered here
 
 This document deliberately has no exhaustive per-property type table. A
-later phase generates that table directly from the compiler's own property
-contracts (`PROP_TYPES`, `REQUIRED_PROPS` in `typeChecker/validator.ts`), so
-it cannot drift out of sync with the source the way hand-written prose can.
-Until that phase lands, the editor's own completions and hovers are the
-authority on which properties a given object accepts.
+later phase generates that table directly from the compiler's single property
+contract, `LANGUAGE_CONTRACT` in `src/compiler/languageContract.ts` — the
+type checker, the Monaco hovers, and the completions all read their property
+kinds, required lists, defaults, and constraints from it, so it cannot drift
+out of sync with the source the way hand-written prose can. Until that phase
+lands, the editor's own completions and hovers are the authority on which
+properties a given object accepts.
 
-Colour animation is not supported. `animate`'s `property` accepts only
-`position`, `rotation`, `scale`, and `alpha`
-(`typeChecker/validator.ts:207`); naming any other property, including a
-colour, is a compile error.
+Colour animation is not supported. `animate`'s `property` accepts only the
+four names in `ANIMATABLE_PROPERTIES` (`languageContract.ts:33`) —
+`position`, `rotation`, `scale`, and `alpha` — checked at
+`typeChecker/validator.ts:316`; naming any other property, including a
+colour, is a compile error (`[TYPE_ANIM_PROP]`).
 
 For the design rationale behind these decisions, see
 `docs/specs/`. The authoritative future sequence is

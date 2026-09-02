@@ -2,22 +2,25 @@ import type { Token, SceneNode, AstValue, ObjectNode, ParseResult } from "../typ
 import { ParserState, describeToken, ParseException } from "./state";
 import { parseObject } from "./parseObject";
 import { parseValue } from "./parseValue";
-import { parseDef } from "./parseDef";
+import { parseBinding } from "./parseBinding";
 import { parseGenerate } from "./parseGenerate";
 import { parseTemplate } from "./parseTemplate";
 import { parseUse } from "./parseUse";
+import { consumePropertyName, rejectLegacyBinding } from "./parseProperty";
 
 export function parse(tokens: Token[]): ParseResult {
   const state = new ParserState(tokens);
 
   try {
-    while (state.peek().type === "KEYWORD" && (state.peek().value === "def" || state.peek().value === "template")) {
-      if (state.peek().value === "def") {
-        parseDef(state);
+    rejectLegacyBinding(state);
+    while (state.peek().type === "KEYWORD" && (state.peek().value === "let" || state.peek().value === "template")) {
+      if (state.peek().value === "let") {
+        parseBinding(state);
       } else {
         parseTemplate(state);
       }
     }
+    rejectLegacyBinding(state);
 
     const firstTok = state.peek();
     if (firstTok.type === "EOF") {
@@ -46,12 +49,13 @@ export function parse(tokens: Token[]): ParseResult {
 
     while (state.peek().type !== "RBRACE" && state.peek().type !== "EOF") {
       try {
+        rejectLegacyBinding(state);
         if (state.peek().type === "KEYWORD") {
           if (state.peek().value === "template") {
             state.throwError(`In ${state.currentContext}: Unexpected keyword 'template'. Templates must be defined at the top level of the file, outside of the scene block.`, state.peek());
           }
-          if (state.peek().value === "def") {
-            parseDef(state);
+          if (state.peek().value === "let") {
+            parseBinding(state);
             continue;
           }
           if (state.peek().value === "animate") {
@@ -88,8 +92,8 @@ export function parse(tokens: Token[]): ParseResult {
         }
 
         const peekType = state.peek().type;
-        if (peekType === "IDENT" || peekType === "SCENE_FIT" || peekType === "NAMED_COLOR" || peekType === "BOOLEAN" || peekType === "EASING") {
-            const key = state.consume();
+        if (peekType === "IDENT" || peekType === "FIT" || peekType === "NAMED_COLOR" || peekType === "BOOLEAN" || peekType === "EASING") {
+            const key = consumePropertyName(state);
             const keyName = key.value as string;
 
             if (seenSceneProps.has(keyName)) {
@@ -126,6 +130,7 @@ export function parse(tokens: Token[]): ParseResult {
     state.env = prevEnv;
 
     const trailing = state.peek();
+    rejectLegacyBinding(state);
     if (trailing.type !== "EOF") {
       let hint = "";
       if (trailing.type === "KEYWORD") hint = ` Only one scene block is allowed per file.`;

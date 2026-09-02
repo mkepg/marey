@@ -14,8 +14,8 @@
 // as `baseY - height / 2`, since `position` places the shape's centre, not
 // its top-left corner.
 
-def unit  = 40
-def baseY = 500
+let unit  = 40
+let baseY = 500
 
 scene {
   size: (800, 600)

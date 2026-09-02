@@ -16,7 +16,10 @@ export interface AnimTime {
 
 /**
  * Advance exactly one tick.
- * Returns true only on the tick where a non-looping animation finishes.
+ *
+ * Returns true only on the tick where a non-looping animation finishes: at
+ * `durationTicks` for a plain animation, and at `2 * durationTicks` for a
+ * `yoyo`, whose return leg is part of its runtime.
  */
 export function advanceAnimTime(t: AnimTime): boolean {
   if (t.completed) return false;
@@ -39,7 +42,20 @@ export function advanceAnimTime(t: AnimTime): boolean {
       t.elapsedTicks = 0;
       t.direction = 1;
     } else {
+      // A non-looping yoyo has run both legs, so it is finished (P3A-10). It
+      // completes here rather than at `durationTicks` because the return leg is
+      // part of the animation: total runtime is exactly `2 * durationTicks`.
+      //
+      // Resting at elapsed 0 without completing is what this used to do, and it
+      // meant the runner was never spliced, `isIdle()` never passed, and a
+      // position animation's hold on its body was never released.
+      //
+      // `direction` is deliberately left at -1: `animProgress` ignores the
+      // sub-tick term once `completed` is set, so progress is exactly 0 — the
+      // animation's starting value — and nothing interpolates past it.
       t.elapsedTicks = 0;
+      t.completed = true;
+      return true;
     }
   }
 

@@ -5,10 +5,10 @@
 // `duration: 0.9 + k / 12`), so this is fully generated with no
 // hand-unrolling and no real uncertainty.
 
-def startX  = 100
-def stepX   = 75
-def minR    = 10
-def stepR   = 6
+let startX  = 100
+let stepX   = 75
+let minR    = 10
+let stepR   = 6
 
 scene {
   size: (800, 600)

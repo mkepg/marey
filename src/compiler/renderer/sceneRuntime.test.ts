@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Container } from "pixi.js";
 import { SceneRuntime } from "./sceneRuntime";
 import { TICK_HZ } from "./clock";
+import { MatterWorld } from "./physicsWorld";
 import type {
   IPhysicsWorld, BodyGeometry, BodyState, PhysicsParams, PinReason,
 } from "./physicsWorld";
@@ -82,7 +83,7 @@ function anim(over: Partial<IRAnimation> = {}): IRAnimation {
     easing: "linear",
     loop: false,
     yoyo: false,
-    handOff: false,
+    handoff: false,
     ...over,
   };
 }
@@ -214,9 +215,9 @@ describe("SceneRuntime · tick phase", () => {
     expect(c.__declareLayout!.currentPos.x).toBeCloseTo((200 * 1.75) / TICK_HZ, 6);
   });
 
-  it("parks a handOff velocity on the completion tick and flushes it when the last pin lifts", () => {
+  it("parks a handoff velocity on the completion tick and flushes it when the last pin lifts", () => {
     const c = makeContainer({
-      animations: [anim({ handOff: true, easing: "linear" })],
+      animations: [anim({ handoff: true, easing: "linear" })],
       physics: PHYSICS,
     });
     const world = new RecordingWorld();
@@ -308,6 +309,102 @@ describe("SceneRuntime · tick phase", () => {
     expect(pushes[5]).toBe("setScale:b0:2.0000,2.0000");
   });
 
+  it("releases the POS_ANIM hold on the tick a non-looping yoyo completes", () => {
+    // P3A-10. The return leg is part of the runtime, so the hold lifts at
+    // 2 x duration — and it does lift, which it never did before this phase.
+    const c = makeContainer({
+      animations: [anim({ duration: 6 / TICK_HZ, yoyo: true })],
+      physics: { ...PHYSICS, duration: "indefinitely" },
+    });
+    const world = new RecordingWorld();
+    const rt = new SceneRuntime(world, makeRoot(c));
+    const id = c.__body!;
+
+    for (let i = 0; i < 11; i++) rt.advanceOneTick();
+    expect(world.pins.get(id)!.has("POS_ANIM")).toBe(true);
+
+    rt.advanceOneTick();
+    expect(world.pins.get(id)!.has("POS_ANIM")).toBe(false);
+  });
+
+  it("releases a rotation override when a rotation yoyo completes, and leaves it released", () => {
+    // Same rotation-override family as the test above, on the path this task
+    // opens: before it, a rotation yoyo never completed, so the latch was never
+    // cleared at all.
+    const c = makeContainer({
+      animations: [anim({ property: "rotation", to: 180, duration: 6 / TICK_HZ, yoyo: true })],
+      physics: { ...PHYSICS, duration: "indefinitely" },
+    });
+    const world = new RecordingWorld();
+    const rt = new SceneRuntime(world, makeRoot(c));
+    const id = c.__body!;
+
+    for (let i = 0; i < 11; i++) rt.advanceOneTick();
+    expect(world.angleOverrides.get(id)).not.toBeNull();
+
+    // Checked before any paint() call: if the release ever moved into the
+    // paint phase (invariant 2), this would still be non-null here and only
+    // clear once paint ran below — the same class of bug as the sibling test
+    // above, "not in the paint phase".
+    rt.advanceOneTick();
+    expect(world.angleOverrides.get(id)).toBeNull();
+
+    rt.paint(1);
+    expect(world.angleOverrides.get(id)).toBeNull();
+
+    // And it stays released once the runner has been spliced.
+    for (let i = 0; i < 10; i++) rt.advanceOneTick();
+    rt.paint(1);
+    expect(world.angleOverrides.get(id)).toBeNull();
+  });
+
+  it("hands a yoyo off from its target back toward its start, not outward", () => {
+    // The exit velocity of a non-looping yoyo is the direction of its RETURN
+    // leg. The plain-handoff test above pins the same displacement, duration and
+    // easing with the opposite sign, so a blanket negation would fail there.
+    const c = makeContainer({
+      animations: [anim({ yoyo: true, handoff: true, easing: "linear" })],
+      physics: { ...PHYSICS, duration: "indefinitely" },
+    });
+    const world = new RecordingWorld();
+    const rt = new SceneRuntime(world, makeRoot(c));
+    const id = c.__body!;
+
+    // Nothing is handed off part-way through: the outbound leg is not an end.
+    for (let i = 0; i < 2 * TICK_HZ - 1; i++) rt.advanceOneTick();
+    expect(world.velocities.get(id)).toBeUndefined();
+
+    rt.advanceOneTick();
+    expect(world.velocities.get(id)).toEqual({ x: -200, y: 0 });
+  });
+
+  it("lets a real body fall again once a position yoyo completes", () => {
+    // The lifecycle claim end to end, against the real solver rather than the
+    // recorder: a completed yoyo hands the body back, and it resumes gravity.
+    const c = makeContainer({
+      position: { x: 400, y: 100 },
+      animations: [anim({ to: { x: 400, y: 160 }, duration: 12 / TICK_HZ, easing: "linear", yoyo: true })],
+      physics: { ...PHYSICS, duration: "indefinitely" },
+    });
+    const world = new MatterWorld(800, 600);
+    const rt = new SceneRuntime(world, makeRoot(c));
+    const id = c.__body!;
+
+    // 12 ticks out, 12 back. One short of that the animation still owns the
+    // body — it sits one linear tick from home, and gravity has moved it none.
+    for (let i = 0; i < 23; i++) rt.advanceOneTick();
+    expect(world.isPinned(id)).toBe(true);
+    expect(world.readState(id, 1)!.y).toBeCloseTo(105, 4);
+
+    rt.advanceOneTick();
+    expect(world.isPinned(id)).toBe(false);
+
+    // Half a second of 980px/s^2 is ~122px. Pinned, it would not have moved.
+    for (let i = 0; i < 60; i++) rt.advanceOneTick();
+    expect(world.readState(id, 1)!.y).toBeGreaterThan(180);
+    rt.destroy();
+  });
+
   it("snaps a frozen container to the body's tick-aligned state, not its painted one", () => {
     // Without this the container keeps whatever position it was last PAINTED
     // at, which used the driver's wall-clock alpha — so a frozen object settles
@@ -341,6 +438,26 @@ describe("SceneRuntime · paint phase", () => {
     expect(rt.isIdle()).toBe(true);
   });
 
+  it("splices a completed yoyo, so a scene of yoyos can go idle and stop the ticker", () => {
+    // The consequence LANGUAGE.md used to warn about: a non-looping yoyo held
+    // the runner list open forever, so `isIdle()` never passed and the ticker
+    // never stopped.
+    const c = makeContainer({
+      animations: [anim({ property: "alpha", to: 0, duration: 6 / TICK_HZ, yoyo: true })],
+    });
+    const world = new RecordingWorld();
+    world.idle = true;
+    const rt = new SceneRuntime(world, makeRoot(c));
+
+    expect(rt.isIdle()).toBe(false);
+    for (let i = 0; i < 12; i++) rt.advanceOneTick();
+    expect(rt.isIdle()).toBe(false); // not spliced until paint
+    rt.paint(0);
+    expect(rt.isIdle()).toBe(true);
+    // And it rests on its exact starting value, not one tick short of it.
+    expect(c.alpha).toBe(1);
+  });
+
   it("reports not idle while the world says a body is still moving", () => {
     const c = makeContainer({ physics: { ...PHYSICS, duration: "indefinitely" } });
     const world = new RecordingWorld();
@@ -362,8 +479,28 @@ describe("SceneRuntime · paint phase", () => {
  * scene at two very different frame pacings for an identical number of ticks
  * and requires the world to see the identical call sequence.
  */
-function runAtPacing(ticksPerFrame: number, totalTicks: number): string[] {
-  const c = makeContainer({ sequence: TWO_STEP_SEQUENCE });
+const SEQUENCE_SUBJECT = (): Container => makeContainer({ sequence: TWO_STEP_SEQUENCE });
+
+/**
+ * A non-looping yoyo that completes on tick 10 — six ticks into a 7-tick frame
+ * and ten into a 12-tick one, so the completion lands *inside* a burst rather
+ * than on its last tick, which is the case that hides a burst-length defect.
+ */
+const YOYO_SUBJECT = (): Container =>
+  makeContainer({
+    position: { x: 400, y: 300 },
+    animations: [
+      anim({ to: { x: 420, y: 300 }, duration: 5 / TICK_HZ, easing: "linear", yoyo: true, handoff: true }),
+    ],
+    physics: { ...PHYSICS, duration: "indefinitely" },
+  });
+
+function runAtPacing(
+  ticksPerFrame: number,
+  totalTicks: number,
+  makeSubject: () => Container = SEQUENCE_SUBJECT
+): string[] {
+  const c = makeSubject();
   const world = new RecordingWorld();
   const rt = new SceneRuntime(world, makeRoot(c));
   let done = 0;
@@ -384,6 +521,31 @@ describe("SceneRuntime · frame pacing must not reach the world", () => {
 
   it("sends the same calls at 12 ticks per frame — LiveDriver's catch-up ceiling", () => {
     expect(runAtPacing(12, 60)).toEqual(runAtPacing(1, 60));
+  });
+
+  it("sends the same calls at 7 ticks per frame as at 1 when a yoyo completes mid-burst", () => {
+    // A yoyo that completes is new in this phase, and completion is exactly the
+    // shape defect B took: the runner is not spliced until paint, so every tick
+    // of the burst after it must still be a no-op for the world.
+    expect(runAtPacing(7, 40, YOYO_SUBJECT)).toEqual(runAtPacing(1, 40, YOYO_SUBJECT));
+  });
+
+  it("sends the same calls at 12 ticks per frame when a yoyo completes mid-burst", () => {
+    expect(runAtPacing(12, 40, YOYO_SUBJECT)).toEqual(runAtPacing(1, 40, YOYO_SUBJECT));
+  });
+
+  it("completes the paced yoyo on tick 10, inside a burst rather than at its end", () => {
+    // Guards the harness itself: if the completion drifted onto the last tick
+    // of every burst, the two tests above would pass without exercising the
+    // stale-push window at all.
+    const calls = runAtPacing(1, 40, YOYO_SUBJECT);
+    const handoff = calls.indexOf("setVelocity:b0:-480.0000,0.0000");
+    expect(handoff).toBeGreaterThan(-1);
+    const ticksBefore = calls.slice(0, handoff).filter((s) => s === "step").length;
+    expect(ticksBefore).toBe(9);
+
+    // And it stops pushing after it completes: 10 pushes, not 40.
+    expect(calls.filter((s) => s.startsWith("setPosition:"))).toHaveLength(10);
   });
 
   it("starts a sequence's second animation from the first one's exact target", () => {

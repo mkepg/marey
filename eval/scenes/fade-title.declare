@@ -1,7 +1,7 @@
 scene {
   size: (800, 600)
   background: #0a0e1a
-  sceneFit: contain
+  fit: contain
 
   text title {
     position: (400, 300)

@@ -4,7 +4,7 @@
  * The document is the only copy of its examples — there is no parallel fixture
  * directory to fall out of sync with it. This is the mechanism that stops the
  * reference becoming a fifth hand-synced list (spec 2026-08-27, L2/§5): when
- * Phase 3 renames `def` to `let`, every example here stops compiling and the
+ * final vocabulary changes, every example here stops compiling and the
  * build goes red, rather than the document quietly going stale.
  *
  * Fences tagged ```declare are compiled. Fences tagged ```text are prose
@@ -32,11 +32,12 @@ import markdownDoc from "../../docs/LANGUAGE.md?raw";
 import { lex } from "./lexer";
 import { parse } from "./parser";
 import { typeCheck } from "./typeChecker";
-import { advanceAnimTime, type AnimTime } from "./renderer/timeline";
+import { advanceAnimTime, animProgress, type AnimTime } from "./renderer/timeline";
 import { buildNode } from "./renderer/builder";
 import { MatterWorld } from "./renderer/physicsWorld";
 import { SceneRuntime } from "./renderer/sceneRuntime";
 import { Container } from "pixi.js";
+import { LANGUAGE_CONTRACT } from "./languageContract";
 
 interface Example {
   /** 1-indexed line in LANGUAGE.md where the fence opens. */
@@ -244,23 +245,163 @@ describe("LANGUAGE.md · Animation · loop and yoyo", () => {
     expect(completesAtTick(mkAnimTime(), 500)).toBe(10);
   });
 
-  it("yoyo without loop never completes — see the warning in that section", () => {
+  it("yoyo without loop completes once, on the tick the return leg lands", () => {
+    // 2 x durationTicks, exactly — the outbound leg and the return leg are the
+    // same length, so a 10-tick half-cycle finishes on tick 20.
     const t = mkAnimTime({ yoyo: true, loop: false });
-    expect(completesAtTick(t, 500)).toBe(-1);
+    expect(completesAtTick(t, 500)).toBe(20);
     expect(t).toEqual({
       elapsedTicks: 0,
       durationTicks: 10,
       direction: -1,
-      completed: false,
+      completed: true,
       loop: false,
       yoyo: true,
     });
   });
 
-  it("yoyo without loop rests at its start value rather than drifting", () => {
+  it("yoyo without loop finishes on its exact start value and stays there", () => {
     const t = mkAnimTime({ yoyo: true, loop: false });
-    const seq = elapsedSequence(t, 25);
-    expect(seq.slice(20)).toEqual([0, 0, 0, 0, 0]);
+    expect(elapsedSequence(t, 25)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+      9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
+      0, 0, 0, 0, 0,
+    ]);
+    // Elapsed zero is progress zero, which is the animation's starting value —
+    // not one tick short of it, and not alpha-blended past it.
+    expect(animProgress(t, 0.9)).toBe(0);
+  });
+
+  it("a non-looping yoyo hands its body back to the solver when it finishes", () => {
+    // The reference says a non-looping yoyo now finishes, releasing the hold a
+    // position animation keeps on its object's body. Until this phase it never
+    // completed, so the body stayed pinned and never fell — the whole point of
+    // the warning the section used to carry.
+    //
+    // Driven through the real compiler, builder, SceneRuntime and MatterWorld
+    // because the claim is about the seam between them.
+    const ir = irFor(`
+      scene {
+        size: (800, 600)
+        circle bob {
+          position: (400, 100)
+          radius: 12
+          animate { property: position, to: (400, 200), duration: 0.2, easing: linear, yoyo: true }
+          physics { gravity: (0, 900), bounce: 0.2, duration: indefinitely }
+        }
+      }
+    `);
+
+    const root = new Container();
+    root.addChild(buildNode(ir.registry["scene.bob"]));
+    const world = new MatterWorld(800, 600);
+    const runtime = new SceneRuntime(world, root);
+    const id = root.children[0].__body!;
+
+    // 0.2s out and 0.2s back is 48 ticks. One tick short of that the hold still
+    // holds, and the animation — not gravity — is still placing the body: one
+    // linear tick short of home on the return leg is 100 + 100/24.
+    for (let i = 0; i < 47; i++) runtime.advanceOneTick();
+    expect(world.isPinned(id)).toBe(true);
+    expect(world.readState(id, 1)!.y).toBeCloseTo(100 + 100 / 24, 4);
+
+    runtime.advanceOneTick();
+    expect(world.isPinned(id)).toBe(false);
+    // It finishes where it started, not at `to`: completing on the target would
+    // read 200 here. One tick of gravity has already been applied by now, hence
+    // the band rather than an equality.
+    expect(world.readState(id, 1)!.y).toBeLessThan(101);
+
+    // Released, it falls: half a second of 900px/s^2 is ~112px.
+    for (let i = 0; i < 60; i++) runtime.advanceOneTick();
+    expect(world.readState(id, 1)!.y).toBeGreaterThan(150);
+    runtime.destroy();
+  });
+});
+
+/** Type-check messages for a source string, failing loudly on a parse error. */
+function typeErrorsFor(source: string): string[] {
+  const { ast, errors } = parse(lex(source));
+  expect(errors).toEqual([]);
+  return typeCheck(ast!).errors.map((e) => e.message);
+}
+
+describe("LANGUAGE.md · Sequencing · yoyo inside a step", () => {
+  const YOYO_STEP = `
+    scene {
+      size: (800, 600)
+      rectangle card {
+        position: (100, 300)
+        size: (40, 40)
+        sequence {
+          animate { property: position, to: (400, 300), duration: 1, yoyo: true }
+        }
+      }
+    }
+  `;
+
+  it("rejects a yoyo step and names the rewrite, not the old never-finishes reason", () => {
+    // The rule outlives the defect that motivated it: a top-level yoyo now
+    // finishes, but a sequence step is still one leg of the timeline, so the
+    // return leg has to be written out where the reader can see it.
+    expect(typeErrorsFor(YOYO_STEP)).toEqual([
+      "[TYPE_SEQ_YOYO] 'yoyo: true' is not supported inside a sequence or parallel step. " +
+        "Express the return leg as a second explicit animation step.",
+    ]);
+  });
+
+  it("rejects a yoyo inside a parallel step with the same message", () => {
+    const out = typeErrorsFor(`
+      scene {
+        size: (800, 600)
+        rectangle card {
+          position: (100, 300)
+          size: (40, 40)
+          sequence {
+            parallel {
+              animate { property: position, to: (400, 300), duration: 1, yoyo: true }
+              animate { property: alpha, to: 0.5, duration: 1 }
+            }
+          }
+        }
+      }
+    `);
+    expect(out).toEqual([
+      "[TYPE_SEQ_YOYO] 'yoyo: true' is not supported inside a sequence or parallel step. " +
+        "Express the return leg as a second explicit animation step.",
+    ]);
+  });
+
+  it("accepts the two-step rewrite the message asks for", () => {
+    // The permission case beside the rejection: the error must describe
+    // something that actually compiles.
+    expect(typeErrorsFor(`
+      scene {
+        size: (800, 600)
+        rectangle card {
+          position: (100, 300)
+          size: (40, 40)
+          sequence {
+            animate { property: position, to: (400, 300), duration: 1 }
+            animate { property: position, to: (100, 300), duration: 1 }
+          }
+        }
+      }
+    `)).toEqual([]);
+  });
+
+  it("still accepts yoyo on a top-level animate, with or without loop", () => {
+    expect(typeErrorsFor(`
+      scene {
+        size: (800, 600)
+        circle pulse {
+          position: (400, 300)
+          radius: 20
+          animate { property: scale, to: (1.4, 1.4), duration: 1, yoyo: true }
+          animate { property: alpha, to: 0.4, duration: 1, loop: true, yoyo: true }
+        }
+      }
+    `)).toEqual([]);
   });
 });
 
@@ -429,12 +570,6 @@ describe("LANGUAGE.md · Physics · Animation and physics together", () => {
 });
 
 describe("LANGUAGE.md · Physics · Physics and groups", () => {
-  function typeErrorsFor(source: string): string[] {
-    const { ast, errors } = parse(lex(source));
-    expect(errors).toEqual([]);
-    return typeCheck(ast!).errors.map((e) => e.message);
-  }
-
   it("TYPE_PHYSICS_IN_PHYSICS_GROUP fires on a child of a physics group", () => {
     const out = typeErrorsFor(`
       scene {
@@ -485,5 +620,41 @@ describe("LANGUAGE.md · Physics · Physics and groups", () => {
       kind: "compound",
       parts: [{ kind: "circle", radius: 10, x: 40, y: 0 }],
     });
+  });
+});
+
+describe("LANGUAGE.md · Physics · line has zero collision geometry", () => {
+  it("TYPE_LINE_PHYSICS fires for a line whose sequence — not just its direct physics — declares physics", () => {
+    // The reference (L467-473) claims a line "cannot have physics, directly,
+    // in a sequence step, or as part of a physics group." The direct-physics
+    // and physics-group cases are covered by validator.test.ts's physical-line
+    // permission matrix; this pins the middle clause specifically, because a
+    // vocabulary regex cannot tell "physics inside a sequence" from "physics
+    // directly on the object" and a prose review previously let this slide.
+    const out = typeErrorsFor(`
+      scene {
+        size: (800, 600)
+        line wire {
+          position: (10, 10)
+          points: [(0, 0), (20, 20)]
+          thickness: 1
+          sequence {
+            physics { duration: 1 }
+          }
+        }
+      }
+    `);
+    expect(out.join("\n")).toContain("TYPE_LINE_PHYSICS");
+  });
+});
+
+describe("LANGUAGE.md · Physics · airDrag default", () => {
+  it("defaults to 0 (a vacuum), not the 0.006 snippet placeholder", () => {
+    // L448-451 states airDrag "ranges from 0.0 to 1.0 inclusive, defaulting to
+    // 0.0" and that 0.006 is only the shipped example/placeholder value. A
+    // prior review draft misdocumented the default itself as 0.006 — the
+    // placeholder value, not the semantic default. This pins the contract's
+    // actual default so that mistake cannot silently recur.
+    expect(LANGUAGE_CONTRACT.physics.properties.airDrag.default).toBe(0);
   });
 });
