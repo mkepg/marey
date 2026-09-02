@@ -146,7 +146,9 @@ scene {
 
 `animate` is a child block of a shape or `group`. It requires `property`,
 `to`, and `duration`. `easing`, `loop`, `yoyo`, and `handoff` are optional.
-`handoff` only matters inside a `sequence` and is covered there.
+`handoff` applies to an `animate` with a `physics` sibling that can receive
+its exit velocity — directly on the same object, inside one `parallel`, or
+as a later `sequence` step — and is covered under Sequencing.
 
 `duration` is a number of seconds and must be strictly greater than 0.
 

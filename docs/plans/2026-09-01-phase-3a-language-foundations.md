@@ -1256,3 +1256,293 @@ Use `superpowers:verification-before-completion` with the fresh outputs from
 Steps 1–6. Then use `superpowers:finishing-a-development-branch` to present
 integration choices. Do not merge, push, or open a PR without explicit user
 authorization.
+
+---
+
+## Execution notes
+
+### Final evidence
+
+- Targeted suite (9 files: `languageContract`, `languageSurface`,
+  `determinism`, `validator`, `physicsCost`, `languageCuts`, `timeline`,
+  `sceneRuntime`, `constants`): 172 tests pass.
+- Full suite (`npm test`): **16 test files / 333 tests** pass.
+- `npx tsc -b --noEmit`: clean.
+- `npm run build` (the Vite production build): **succeeds — the first time
+  this is evidenced anywhere in this phase.** 1,932 modules transformed,
+  `dist/` emitted; the only warning is a pre-existing chunk-size-limit notice
+  unrelated to this phase.
+- `eval/scenes` (R1) and `eval/scenes-r2` (R2): both compile **20/20**
+  scenes (`ok: true` for every entry in `report.json` / `report-r2.json`).
+  Both reports are tracked files, so rerunning both corpora from a clean tree
+  and diffing `git status`/`git diff --stat` against the committed reports is
+  byte-level proof the migrated corpora reproduce their committed
+  conclusions — confirmed twice in this task, before and after this pass's
+  own edits.
+- Chromium (`.visual-check/`, gitignored): seven scenes captured — `default`,
+  `fit-contain`, `fit-cover`, `fit-fill`, `fit-none`, `freeze-midair`,
+  `idle`. All seven report `compiled: true`, `rendered: true`, zero
+  `consoleErrors`/`pageErrors`. The four `fit` modes are the only end-to-end
+  exercise of the `sceneFit`→`fit` rename and are visually and numerically
+  distinct exactly as each mode's contract requires: `contain` is
+  letterboxed with a full round disc and all four corner markers visible;
+  `cover` has no letterbox, a larger round disc, and corner markers cropped
+  off the short axis; `fill` has no letterbox and stretches the disc into an
+  ellipse (the only mode that breaks aspect ratio); `none` draws the scene
+  unscaled in the top-left corner with the smallest disc of the four and the
+  rest of the panel empty. `default` reports `frozenAtRest: false` /
+  `deterministicAtRest: false` on both cold loads — expected, not a failure:
+  `SKILL.md` states a scene with `loop: true` animations never settles and
+  names `--scene default` specifically as a case where these two fields are
+  meaningless.
+
+### Defects found in source beyond the plan
+
+- The evaluation harness where an R2 run overwrote R1's report — both
+  corpora wrote `${DIR}/../report.json`. Fixed per P3A-12 by factoring a
+  pure report-path function, now covered by `reportPathForEvalDir` tests in
+  `eval/compile.test.ts`.
+- Five stale `file:line` citations in guidance and the reference:
+  `builder.ts:199` → `271` (the group-pivot-is-local-origin claim, in both
+  `AGENTS.md`) and four more in `docs/LANGUAGE.md`'s
+  "Limits the compiler enforces" section. All fifteen `file:line` citations
+  in both guidance files and the reference were re-verified byte-accurate
+  against current source as part of this task's semantic-staleness pass.
+- A dead `if` in `parseValue.ts` (formerly lines 212–216): its body threw
+  the exact same message as the unconditional `throwError` immediately
+  following it, so the branch was unreachable (`throwError`'s return type is
+  `never`). Removed in this task; full suite, typecheck, build, and both
+  eval corpora unaffected.
+
+For context, not a Phase 3A finding: `AGENTS.md`'s own Phase 2 roadmap entry
+separately documents a group's collision box having been positioned at its
+origin while sized from its children's extent, 100px adrift — that defect
+was found and fixed in Phase 2 (`phase-2-compound-groups`), not this phase,
+and is not part of Phase 3A's beyond-plan list above.
+
+### Defects found in this plan
+
+- **Task 9, Step 4** assumed an existing Matter test could simply be renamed
+  to pin the convex-hull cut. The premise didn't hold: the only concave
+  polygon fixture (`CONCAVE_U`) reduces to a convex shape once hulled, so a
+  plain drop-and-rest test cannot distinguish `hullOf` being called from
+  Matter's own internal `Vertices.hull` fallback (matter-js hulls concave
+  vertices automatically whenever no decomp library is registered) — and the
+  other candidate test pinned the opposite, compound-parts semantic instead.
+  A new, decisive test was added: `"computes the bbox-centre reference
+  offset from the hulled vertices, not the concave outline's own centroid"`
+  (`physicsWorld.test.ts`), which rotates an asymmetric concave `L` and
+  checks the reported position against a value only the hulled-vertex
+  computation predicts (`454.453782`, cross-checked against a
+  hand-reimplementation with `hullOf` deleted, which predicts `485.263`
+  instead).
+- **Task 7's** brief forbade re-recording golden IR snapshots, but the
+  determinism fixtures (`determinism.test.ts`) originally encoded a
+  `handoff` whose physics duration equalled or undercut the animation
+  duration — exactly the case Task 7's new `TYPE_HANDOFF_DURATION` rule
+  (P3A-8) rejects. The fixture was wrong, not the rule; it was corrected
+  (the current `COMPACT_SOURCE`/`EXPANDED_SOURCE` fixtures use
+  `animate { duration:1, handoff:true }` with `physics { duration:2 }`,
+  satisfying `physicsDuration > effectiveAnimDuration`) without touching the
+  rule itself or re-recording any golden snapshot.
+
+### Review findings and fixes
+
+Per-task Important findings from review, all confirmed fixed in the current
+tree:
+
+- Task 2: 2 Important findings, fixed.
+- Task 3: 2 Important findings, fixed.
+- Task 5: 1 Important finding — a vacuous determinism assertion that
+  serialized `null`: an unguarded `JSON.stringify(ir)` where `ir` could be
+  `null` would pass regardless of whether the real IR was byte-identical.
+  Fixed by asserting `expect(result.ir).not.toBeNull()` before dereferencing
+  (confirmed present in the current `determinism.test.ts`).
+- Task 10: 4 Important findings, including a premature "Phase 3A: done"
+  roadmap flip (confirmed corrected — `AGENTS.md` currently read
+  "in review", not "done") and an `airDrag` default misdocumented as
+  `0.006`, when `0.006` is the Monaco snippet placeholder and the actual
+  contract default is `0` (confirmed corrected and now pinned by two
+  independent tests: `constants.test.ts`'s placeholder assertion and this
+  task's new `languageDocs.test.ts` pin on
+  `LANGUAGE_CONTRACT.physics.properties.airDrag.default`).
+- An unexplained "Visible agent process" section appeared in `AGENTS.md`
+  during Task 10 — 14 lines of generic agent-narration instruction with no
+  connection to Declare. The implementer reported no record of drafting it.
+  Caught in review and removed.
+- Task 8's six runtime lifecycle tests (yoyo timeline/runtime/pin/physics/
+  idle/pacing) never had a genuine RED: the fix landed before the tests were
+  written, so none of them was ever seen failing against pre-fix code.
+  Mutation testing (reverting the fix and confirming the tests then fail)
+  was substituted and independently re-verified by review.
+- Whole-branch review (this task): "Ready to integrate: with fixes" — 1
+  Important, 8 Minor, no Critical. Both required fixes applied; see below.
+
+#### This task's fixes
+
+**Fix 1 (Important) — `docs/LANGUAGE.md:149` asserted the opposite of a rule
+this phase added.** It read "`handoff` only matters inside a `sequence` and
+is covered there." False: the shipped default scene's handoff
+(`defaultScene.ts:114-132`) is object-level with no `sequence`; the
+reference's own `### handoff` example (`docs/LANGUAGE.md:380-404`) is
+object-level with no `sequence`; and Task 7's `TYPE_HANDOFF_DURATION` /
+`scheduling: "concurrent"` rule exists specifically for the non-sequence
+case. Replaced with: "`handoff` applies to an `animate` with a `physics`
+sibling that can receive its exit velocity — directly on the same object,
+inside one `parallel`, or as a later `sequence` step — and is covered under
+Sequencing." Left `### handoff` under `## Sequencing`: its five existing
+rules already correctly describe both the concurrent and sequence cases, so
+once the summary line was accurate, promoting the subsection read no better.
+Reverified: `languageDocs.test.ts` (40 tests, compiles every `declare` fence
+in the reference) stays green.
+
+**Fix 2 (Minor, but a false claim in project instructions) — the roadmap
+status line was stale in the other direction.** `AGENTS.md:261-262` /
+`AGENTS.md:278-279` ended "Not yet browser-checked, production-built, or
+merged," no longer true at HEAD: seven Chromium scenes are captured in
+`.visual-check/`, the four `fit` fixtures are committed (`5e272a2`), and
+`npm run build` succeeds. Replaced with "Browser-checked across seven
+Chromium scenes and production-built; not yet merged," identically in both
+files.
+
+Also from this task's own review pass (Task 11), committed at `5e272a2`
+ahead of the whole-branch review above — noted here because an earlier
+report from this task mischaracterized them as merely "verified" rather than
+this task's own review deliverables:
+
+- `handoff.ts`'s docstring claimed the `ancestors`-empty fallback was
+  "currently unreachable in practice." Corrected to name the actual
+  reachable path: literal `scene { animate { ... } }` is rejected by
+  `parser/index.ts`'s scene-body loop before any node is built, but
+  `generate` expands its body through the generic `parseObject` path, which
+  has no such guard — so `generate i from 0 to 0 { animate { ...,
+  handoff: true } } }` at the scene root does produce an `animate` node as a
+  direct scene child, with `ancestors` empty, falling back to `parent` (the
+  scene node), where every branch returns `null`.
+- `validator.test.ts`'s two `TYPE_HANDOFF_DURATION` assertions tightened
+  from `.some(m => m.includes(...))` to `toHaveLength(1)` + `toContain`,
+  matching sibling tests' style.
+- `validator.test.ts` gained a permission case for an animate-only `line`
+  (no `physics` anywhere), confirming `ownsPhysics` doesn't fire for
+  animation alone.
+- `sceneRuntime.test.ts` gained an assertion that the rotation-override
+  release happens before the next `paint()` call, not only after — so the
+  test fails if the release ever drifted into the paint phase, the exact
+  class of bug invariant 2 exists to prevent.
+- `timeline.test.ts`'s comment on the completed-yoyo `animProgress` test was
+  rewritten: it had implied the test regression-guards the P3A-10
+  yoyo-completion fix, but it exercises `animProgress`'s pre-existing,
+  unchanged completed-state handling and would pass against pre-fix code
+  too. The actual P3A-10 regression test — `advanceAnimTime`'s "completes a
+  non-looping yoyo once on the return tick" — is named directly in the
+  corrected comment.
+- `languageDocs.test.ts` gained two pins: `TYPE_LINE_PHYSICS` firing for a
+  `line` whose `sequence` (not just direct physics or a physical-group
+  ancestor) declares physics, and
+  `LANGUAGE_CONTRACT.physics.properties.airDrag.default === 0` against the
+  `0.006` placeholder it was once misdocumented as.
+- `parseValue.ts`'s dead `if` (see "Defects found in source beyond the
+  plan," above).
+
+### Deliberate gaps and deferrals
+
+Seven Minors from the whole-branch review, deferred:
+
+1. **Seconds-vs-ticks gap in the handoff duration rule — highest priority of
+   the seven.** `validator.ts:356-357` compares handoff durations in
+   seconds:
+   ```
+   effectiveAnimDuration = animDuration.value * (yoyo ? 2 : 1)
+   physicsDuration.value <= effectiveAnimDuration   // rejected
+   ```
+   but the runtime compares in ticks, via
+   `secondsToTicks(s) = Math.max(1, Math.round(s * 120))` (`clock.ts:23`).
+   So `animate { duration: 1, handoff: true }` with
+   `physics { duration: 1.001 }` validates clean — `1.001 > 1` in seconds —
+   yet both durations round to the same 120 ticks, so the animation's
+   completion and the physics runner's freeze land on the same tick: the
+   velocity is written and the body freezes on that same tick, precisely
+   the dead handoff `TYPE_HANDOFF_DURATION` exists to prevent. The window is
+   roughly 4ms, under one 120Hz tick (~8.3ms). This gap is emergent across
+   the Task 7/Task 8 seam and invisible to either task's own review — Task 7
+   only exercises the validator's seconds-based comparison, Task 8 only the
+   runtime's tick-based one. **It should be scheduled before Phase 4/5
+   export work**: an export driver runs in ticks with no wall clock, so a
+   handoff the compiler blessed but the tick grid actually kills would bake
+   into a frame sequence silently, with no runtime signal anything went
+   wrong.
+2. Task 3's nested sequence-physics duration placeholder
+   (`constants.ts`'s `physicsSnippet(true)`) borrows
+   `propertyPlaceholder("animate", "duration")` rather than a
+   context-specific physics-in-sequence value. Confirmed the borrowed value
+   is functionally correct — physics's own default placeholder is
+   `"indefinitely"`, which `TYPE_SEQ_PHYSICS_INDEFINITELY` rejects inside a
+   sequence — so this is an architectural inconsistency (metadata borrowed
+   from an unrelated contract entry), not a live bug. A proper fix needs a
+   new contract field for context-specific placeholders; deferred as a
+   design decision, not a mechanical fix.
+3. Task 6: `physicsCost.ts`'s `visit()` avoids double-counting a
+   physics-owning group's flattened parts against a nested physics-owning
+   descendant only because the validator's D17 rule
+   (`TYPE_PHYSICS_IN_PHYSICS_GROUP`) makes that AST shape unreachable in any
+   error-free scene — nothing in `physicsCost.ts` itself enforces
+   non-double-counting structurally. No live bug (any input that would
+   trigger it already fails validation for the D17 violation), but
+   hardening `visit()` to not depend on an invariant enforced in a different
+   module is real work (restructured recursion, a new defensive test)
+   deferred to a future pass.
+4. Task 8: `getEasingDerivativeAtEnd` applied to a yoyo's return leg
+   terminates at progress 0, as specified in the design — recorded for
+   reconsideration at Phase 6, no action due now.
+5. Task 8: `sceneRuntime.test.ts`'s `"hands a yoyo off from its target back
+   toward its start, not outward"` test asserts `{ x: -200, y: 0 }` with
+   `toEqual`, which (empirically reverified this task, via a throwaway probe
+   test since removed) distinguishes `-0` from `0` in Vitest. The test
+   currently passes with an exact `+0`; a future refactor that flips the
+   y-component's sign without changing its physical meaning could break it.
+   Deferred as test-fragility, not a source defect.
+6. Task 8: only one `animProgress` test — not the "two" originally flagged —
+   was found with a comment implying it guards the P3A-10 fix; it's the one
+   fixed in this task's review pass. `main`'s pre-Phase-3A
+   `timeline.test.ts` had no yoyo-related `animProgress` test at all, so a
+   second one could not be located. Recorded as a discrepancy rather than a
+   fabricated second fix.
+7. Task 8: `timeline.ts:73`'s `if (t.durationTicks <= 0) return 1;` is
+   unreachable via compiled source, since every `AnimTime.durationTicks` is
+   constructed through `secondsToTicks` (`clock.ts:23`), which clamps to
+   ≥ 1 — but test helpers (`makeAnim`) can construct `AnimTime` directly
+   with any value, so the guard is a legitimate defensive fallback for that
+   path, not removable dead code. No action.
+
+Also carried forward, undocumented until now:
+
+- An undocumented, strictly-improving side effect of the P3A-10
+  yoyo-completion fix: `sceneRuntime.ts:456-464` gates a `sequence`'s
+  `WAITING`→`RUNNING` transition on every `basePeers` runner reaching
+  `time.completed`. Before P3A-10, a non-looping yoyo base peer never set
+  `completed`, so an object with both a top-level `animate { yoyo: true }`
+  and a sibling `sequence` would have its sequence wait forever and never
+  start. After the fix, it correctly starts once the yoyo's full
+  `2 × duration` return leg completes. No test or doc currently exercises
+  this specific interaction; flagged here as a genuine, correct, but
+  untested consequence of the fix, worth a deliberate follow-up test rather
+  than a rushed addition during final review.
+- `adapter.ts` still has no unit coverage — Phase 1's open gap, and
+  deliberately so per P3A-14 ("do not reopen broad `adapter.ts` unit
+  coverage"). The four `fit` Chromium fixtures added this task now cover
+  its layout branches (contain/cover/fill/none) end-to-end instead of via
+  unit tests. Noted so a later phase does not re-litigate this as an
+  oversight.
+- For Phase 3B: `KIND_LABEL` (`languageContract.ts:341`) is a total
+  `Record<ValueKind, string>`, so adding a new value kind fails typecheck
+  until `KIND_LABEL` is filled in for it, and `languageCuts.test.ts` will go
+  red for whichever specific cuts Phase 3B lifts. Both are intended
+  signals, not defects to pre-empt.
+
+### Final counts
+
+**16 test files / 333 tests** (`npm test`), typecheck clean, production
+build clean, both `.eval` corpora 20/20, seven Chromium scenes all
+`compiled`/`rendered` with zero console/page errors. This task's two
+whole-branch-review fixes and this notes section are committed together
+immediately after `5e272a2`, the prior commit on this branch.
