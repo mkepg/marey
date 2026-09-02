@@ -1,6 +1,6 @@
 import type { AstValue, NumberValue, PointValue, StringValue, PointListValue, ColorValue, BooleanValue, EasingValue, AnimPropertyValue } from "../types";
 import type { IRColor, IRPoint, IRPointList, IRFit, IREasing } from "../sceneIR";
-import { EASING_VALUES as CONTRACT_EASING_VALUES, FIT_VALUES, propertyDefault } from "../languageContract";
+import { EASING_VALUES as CONTRACT_EASING_VALUES, FIT_VALUES, propertyDefault, derivedDefaultStrategy } from "../languageContract";
 import type { ContractDefault } from "../languageContract";
 
 function requireContractDefault(block: string, key: string): ContractDefault {
@@ -35,6 +35,42 @@ export function contractPointDefault(block: string, key: string): IRPoint {
 export function contractStringDefault(block: string, key: string): string {
   const value = requireContractDefault(block, key);
   return typeof value === "string" ? value : invalidContractDefault(block, key, "a string");
+}
+
+/** The minimum x and minimum y across a list of points — a bounding box's top-left corner. */
+function minPoint(points: IRPointList): IRPoint {
+  if (points.length === 0) return { x: 0, y: 0 };
+  let minX = Infinity, minY = Infinity;
+  for (const pt of points) {
+    if (pt.x < minX) minX = pt.x;
+    if (pt.y < minY) minY = pt.y;
+  }
+  return { x: minX, y: minY };
+}
+
+/**
+ * Computes an optional property's fallback value from the contract-named
+ * `derivedDefault` strategy configured for it (Fix 1), rather than the
+ * builder holding private knowledge of how that fallback is computed. The
+ * `points` argument is the only input any current strategy needs; a future
+ * strategy that needs different sibling data would extend this signature.
+ */
+export function contractDerivedPositionDefault(
+  block: string,
+  key: string,
+  points: IRPointList,
+): IRPoint {
+  const strategy = derivedDefaultStrategy(block, key);
+  switch (strategy) {
+    case "polygonMinPoint":
+      return minPoint(points);
+    case undefined:
+      throw new Error(`[IR] No derived-default strategy configured for '${block}.${key}'.`);
+    default: {
+      const _never: never = strategy;
+      throw new Error(`[IR] Unhandled derived-default strategy '${String(_never)}' for '${block}.${key}'.`);
+    }
+  }
 }
 
 function isFit(value: string): value is IRFit {

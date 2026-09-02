@@ -9,13 +9,32 @@ export type LocalConstraint =
   | Readonly<{ kind: "range"; min: number; max: number }>
   | Readonly<{ kind: "positive" }>
   | Readonly<{ kind: "positivePoint" }>
+  | Readonly<{ kind: "positiveScale" }>
   | Readonly<{ kind: "maxLength"; max: number }>
   | Readonly<{ kind: "pointCount"; min: number; max: number }>;
+
+/**
+ * A named strategy for computing an optional property's fallback value from
+ * its own object's other properties, for the cases where a fixed contract
+ * `default` cannot express it (the fallback depends on that instance's data,
+ * not a constant). Naming it here — even though the computation itself still
+ * lives with its consumer (see `resolvers.ts`'s `contractDerivedPositionDefault`)
+ * — keeps the contract the single place that knows *every* optional property
+ * has some documented fallback, so `languageContract.test.ts` can enumerate
+ * them structurally instead of a gap like `polygon.position` going unnoticed.
+ *
+ * `polygonMinPoint`: the minimum x and minimum y across the polygon's
+ * `points`, matching what a bounding box's top-left corner would be in local
+ * point-space. This is the fallback `typeChecker/builder.ts` computed
+ * privately before Fix 1.
+ */
+export type DerivedDefaultStrategy = "polygonMinPoint";
 
 export interface PropertySpec {
   readonly kinds: ValueKind | readonly ValueKind[];
   readonly required?: true;
   readonly default?: ContractDefault;
+  readonly derivedDefault?: DerivedDefaultStrategy;
   readonly constraint?: LocalConstraint;
   readonly description: string;
   readonly example: string;
@@ -44,6 +63,7 @@ const point = (x: number, y: number): Readonly<{ x: number; y: number }> =>
 type PropertyOptions = Readonly<{
   required?: true;
   default?: ContractDefault;
+  derivedDefault?: DerivedDefaultStrategy;
   constraint?: LocalConstraint;
 }>;
 
@@ -57,9 +77,20 @@ function property(
   return Object.freeze({ kinds, description, example, placeholder, ...options });
 }
 
-const position = property(
+// Every visual is wrapped in a container whose pivot is its bounding box's
+// centre — but that coincides with the shape's *geometric* centre only for
+// circle, rectangle and text (AGENTS.md, decision D15). Polygon and line
+// share a distinct description because for an asymmetric shape the
+// bounding-box midpoint is not the centroid.
+const centerPosition = property(
   "point",
   "Sets the (x, y) coordinates of the object's geometric center in the scene.",
+  "position: (100, 200)",
+  "(0, 0)",
+);
+const bboxMidpointPosition = property(
+  "point",
+  "Sets the (x, y) scene coordinates of the shape's bounding-box midpoint — the point 'points' are positioned around, and about which rotation and scale act. For an asymmetric shape this is not the same as the centroid.",
   "position: (100, 200)",
   "(0, 0)",
 );
@@ -89,7 +120,7 @@ const scale = property(
   "Scales the object. Can be a uniform number or a point for independent X/Y scaling.",
   "scale: 1.5 or scale: (2, 0.5)",
   "1.0",
-  { default: point(1, 1), constraint: { kind: "positivePoint" } },
+  { default: point(1, 1), constraint: { kind: "positiveScale" } },
 );
 const layer = property(
   "number",
@@ -132,7 +163,7 @@ const sceneProperties = Object.freeze({
 });
 
 const circleProperties = Object.freeze({
-  position: property(position.kinds, position.description, position.example, position.placeholder, { required: true }),
+  position: property(centerPosition.kinds, centerPosition.description, centerPosition.example, centerPosition.placeholder, { required: true }),
   radius: property(
     "number",
     "Sets the radius of a circle.",
@@ -144,7 +175,7 @@ const circleProperties = Object.freeze({
 });
 
 const rectangleProperties = Object.freeze({
-  position: property(position.kinds, position.description, position.example, position.placeholder, { required: true }),
+  position: property(centerPosition.kinds, centerPosition.description, centerPosition.example, centerPosition.placeholder, { required: true }),
   size: property(
     "point",
     "Sets the width and height of a rectangle.",
@@ -156,7 +187,15 @@ const rectangleProperties = Object.freeze({
 });
 
 const polygonProperties = Object.freeze({
-  position,
+  // Optional: unlike the other shapes, a polygon's position may be omitted
+  // and derived from its own points (Fix 1 — see DerivedDefaultStrategy).
+  position: property(
+    bboxMidpointPosition.kinds,
+    bboxMidpointPosition.description,
+    bboxMidpointPosition.example,
+    bboxMidpointPosition.placeholder,
+    { derivedDefault: "polygonMinPoint" },
+  ),
   points: property(
     "pointList",
     "Defines the vertices of a polygon.",
@@ -168,7 +207,7 @@ const polygonProperties = Object.freeze({
 });
 
 const lineProperties = Object.freeze({
-  position: property(position.kinds, position.description, position.example, position.placeholder, { required: true }),
+  position: property(bboxMidpointPosition.kinds, bboxMidpointPosition.description, bboxMidpointPosition.example, bboxMidpointPosition.placeholder, { required: true }),
   points: property(
     "pointList",
     "Defines the vertices of a line.",
@@ -187,7 +226,7 @@ const lineProperties = Object.freeze({
 });
 
 const textProperties = Object.freeze({
-  position: property(position.kinds, position.description, position.example, position.placeholder, { required: true }),
+  position: property(centerPosition.kinds, centerPosition.description, centerPosition.example, centerPosition.placeholder, { required: true }),
   content: property(
     "string",
     "The text string to display.",
@@ -267,7 +306,7 @@ const physicsProperties = Object.freeze({
   ),
   gravity: property(
     "point",
-    "The continuous acceleration applied each frame. (0, 980) mimics real-world downward gravity.",
+    "The continuous acceleration applied to the object, in pixels per second squared. It is injected once per fixed simulation tick (120 ticks per second) as a velocity delta, never once per rendered frame, so it stays independent of display frame rate. (0, 980) mimics real-world downward gravity.",
     "gravity: (0, 980)",
     "(0, 980)",
     { default: point(0, 980) },
@@ -302,11 +341,15 @@ const physicsProperties = Object.freeze({
   ),
 });
 
+// A group's pivot is its local origin and is never derived from where its
+// children sit (AGENTS.md decision D16) — a distinct description from
+// centerPosition/bboxMidpointPosition above, both of which describe a pivot
+// computed from the object's own visual extent.
 const groupPosition = property(
-  position.kinds,
-  position.description,
-  position.example,
-  position.placeholder,
+  "point",
+  "Sets the (x, y) coordinates of the group's local origin in the scene. Unlike other blocks' pivot, this is never derived from where the group's children sit — children are positioned relative to this fixed origin, and rotation and scale act about it.",
+  "position: (100, 200)",
+  "(0, 0)",
   { default: point(0, 0) },
 );
 
@@ -381,6 +424,15 @@ export function propertyDefault(blockName: string, propertyName: string): Contra
     return Object.freeze({ x: configured.x, y: configured.y });
   }
   return configured;
+}
+
+/** The named derived-default strategy configured for a property, if any. */
+export function derivedDefaultStrategy(
+  blockName: string,
+  propertyName: string,
+): DerivedDefaultStrategy | undefined {
+  const contract = LANGUAGE_CONTRACT[blockName as keyof typeof LANGUAGE_CONTRACT];
+  return contract?.properties[propertyName]?.derivedDefault;
 }
 
 export const LEGACY_SOURCE_FORMS = Object.freeze({

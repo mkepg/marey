@@ -361,7 +361,7 @@ value, so it hands off along that direction rather than the outbound one — the
 same speed, the opposite way. Its runtime is `2 × duration`, and that is the
 figure the duration rule below compares against.
 
-Five rules govern `handoff: true`, each a compile error when broken:
+Six rules govern `handoff: true`, each a compile error when broken:
 
 - It is only valid on `property: position`; on any other property it is a
   compile error (`TYPE_HANDOFF_PROP`).
@@ -369,6 +369,12 @@ Five rules govern `handoff: true`, each a compile error when broken:
   looping animation never ends and so never hands off (`TYPE_HANDOFF_LOOP`).
 - It requires a sibling `physics` block on the same object
   (`TYPE_HANDOFF_PHYSICS`).
+- The object may not start more than one `physics` block, nor more than one
+  `property: position` animation, concurrently with the handoff. The runtime
+  pins the body once per concurrent runner, reason-counted, so with two of
+  either kind it is not clear which one determines when the body freezes or
+  releases it last — rejected as `TYPE_HANDOFF_SCHEDULE_AMBIGUOUS` rather than
+  guessed at.
 - That sibling `physics` block may not also declare `velocity` — the
   animation's exit velocity would overwrite it (`TYPE_HANDOFF_AMBIGUITY`).
 - When that `physics` block runs alongside the animation rather than after it

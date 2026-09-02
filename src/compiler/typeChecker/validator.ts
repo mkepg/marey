@@ -14,13 +14,14 @@ import {
   ownsPhysics,
 } from "./physicsCost";
 import { resolveHandoffTarget, yoyoIsTrue } from "./handoff";
-// `clock.ts` is a pure, dependency-free math module (no `pixi.js`, no other
-// imports) — see AGENTS.md's renderer section — so importing its tick
-// conversion here does not pull the renderer into the typeChecker's worker
-// bundle. It exists specifically so this comparison and the runtime's own
-// (`sceneRuntime.ts`'s `spawnAnim`/`spawnPhysics`) share one implementation
+// `secondsToTicks` lives in `../sceneIR.ts`, the pipeline-neutral module both
+// the typeChecker and the renderer already import — not `renderer/clock.ts`,
+// which would make the type-check stage reach into the render stage (Fix 4,
+// Phase 3A review). It exists specifically so this comparison and the
+// runtime's own (`sceneRuntime.ts`'s `spawnAnim`/`spawnPhysics`, via
+// `clock.ts`'s re-export of the same function) share one implementation
 // instead of a second `Math.round(seconds * 120)` drifting out of step.
-import { secondsToTicks } from "../renderer/clock";
+import { secondsToTicks } from "../sceneIR";
 
 type PropKind = AstValue["kind"];
 type PropContract = PropKind | readonly PropKind[];
@@ -80,6 +81,22 @@ function validateLocalConstraint(
         if (val.y <= 0) {
           return error(`${label}: '${key}' height must be greater than 0, but got ${val.y}.`);
         }
+      }
+      return undefined;
+
+    // `scale` is the only property whose kind is `["number", "point"]` and
+    // whose positivity check differs by which of those two the value is —
+    // a plain number gets one message, a point gets another, both carrying
+    // TYPE_INVALID_SCALE. This used to be a bespoke `key === "scale"` branch
+    // in `collectErrors` that short-circuited before ever reaching this
+    // function, leaving `scale`'s `positivePoint` contract entry dead data
+    // no consumer read. Folded in here, preserving both messages exactly.
+    case "positiveScale":
+      if (val.kind === "number" && val.value <= 0) {
+        return error(`[TYPE_INVALID_SCALE] ${label}: 'scale' must be greater than zero.`);
+      }
+      if (val.kind === "point" && (val.x <= 0 || val.y <= 0)) {
+        return error(`[TYPE_INVALID_SCALE] ${label}: 'scale' components must be greater than zero, but got (${val.x}, ${val.y}).`);
       }
       return undefined;
 
@@ -466,19 +483,14 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         continue;
       }
 
-      if (key === "scale") {
-        if (val.kind === "number" && val.value <= 0) {
-          errors.push({ phase: "TYPE", message: `[TYPE_INVALID_SCALE] ${label}: 'scale' must be greater than zero.`, ...errPos });
-        } else if (val.kind === "point" && (val.x <= 0 || val.y <= 0)) {
-          errors.push({ phase: "TYPE", message: `[TYPE_INVALID_SCALE] ${label}: 'scale' components must be greater than zero, but got (${val.x}, ${val.y}).`, ...errPos });
-        }
-      } else {
-        const spec = LANGUAGE_CONTRACT[typeName as keyof typeof LANGUAGE_CONTRACT]?.properties[key];
-        const localError = spec
-          ? validateLocalConstraint(label, typeName, key, val, spec)
-          : undefined;
-        if (localError) errors.push(localError);
-      }
+      // `scale`'s positivity check (TYPE_INVALID_SCALE) is a `positiveScale`
+      // constraint like any other property's — see validateLocalConstraint —
+      // rather than a bespoke branch here that never consulted the contract.
+      const spec = LANGUAGE_CONTRACT[typeName as keyof typeof LANGUAGE_CONTRACT]?.properties[key];
+      const localError = spec
+        ? validateLocalConstraint(label, typeName, key, val, spec)
+        : undefined;
+      if (localError) errors.push(localError);
     }
 
     const hasVisualChildren = node.children.some(

@@ -131,7 +131,19 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
           md += `**Optional Properties:**\n- \`${optional.join("`\n- `")}\`\n`;
         }
       } else {
-        const propertyDoc = propertyHoverMarkdown(token);
+        // Several property names (e.g. `position`) describe different
+        // things on different blocks, so resolve the block the cursor is
+        // actually inside before falling back to first-appearance lookup.
+        const textUntilPosition = model.getValueInRange({
+          startLineNumber: 1,
+          startColumn: 1,
+          endLineNumber: position.lineNumber,
+          endColumn: position.column,
+        });
+        const scopeChain = analyzeContext(textUntilPosition);
+        const currentBlock = scopeChain[scopeChain.length - 1].blockType;
+
+        const propertyDoc = propertyHoverMarkdown(token, currentBlock ?? undefined);
         if (propertyDoc !== undefined) {
           md = propertyDoc;
         } else {

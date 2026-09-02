@@ -47,11 +47,27 @@ export const KEYWORD_DOCS: Record<string, string> = {
   animate: `### \`animate\`\nA block that animates a specific property of its parent object over time.\n\n${propertySections("animate")}\n\n**Example:**\n\`\`\`declare\nanimate {\n  property: position\n  to: (500, 300)\n  duration: 2.5\n  easing: easeInOut\n  loop: true\n  yoyo: true\n  handoff: false\n}\n\`\`\``,
 };
 
-export function propertyHoverMarkdown(property: string): string | undefined {
+/**
+ * Looks up a property's hover doc, preferring the description declared by
+ * `blockType` when given. Several property names (e.g. `position`) mean
+ * different things on different blocks — `centerPosition` on circle,
+ * rectangle and text, `bboxMidpointPosition` on polygon/line (D15), the
+ * group's local origin (D16) — so falling back to whichever block happens to
+ * declare the name first in `LANGUAGE_CONTRACT` (circle, for `position`)
+ * would show the wrong description whenever the cursor is actually inside a
+ * different block. The first-appearance fallback below only fires when no
+ * block context is available (e.g. hovering a bare identifier outside any
+ * block).
+ */
+export function propertyHoverMarkdown(property: string, blockType?: string): string | undefined {
+  const contractBlockName = blockType as ContractBlockName | undefined;
+  const blockSpec = contractBlockName
+    ? LANGUAGE_CONTRACT[contractBlockName]?.properties[property]
+    : undefined;
   const appearances = Object.values(LANGUAGE_CONTRACT)
     .map((block) => block.properties[property])
     .filter((spec): spec is PropertySpec => spec !== undefined);
-  const spec = appearances[0];
+  const spec = blockSpec ?? appearances[0];
   if (!spec) return undefined;
   const kinds: readonly ValueKind[] = Array.isArray(spec.kinds) ? spec.kinds : [spec.kinds];
   const accepted = kinds

@@ -125,4 +125,92 @@ describe("language contract", () => {
     expect(errors).toEqual([]);
     expect(() => buildIR(ast!)).toThrow("Animation property 'to' must be a number or point");
   });
+
+  it("gives every optional property a contract default or a named derived-default strategy", () => {
+    // The structural guarantee behind §7 item 3: an optional property with
+    // neither a `default` nor a `derivedDefault` is a gap where the builder
+    // would have to hold private fallback knowledge the contract doesn't
+    // know about — exactly the polygon.position defect this test exists to
+    // make impossible to reintroduce.
+    const gaps: string[] = [];
+    for (const [blockName, contract] of Object.entries(LANGUAGE_CONTRACT)) {
+      for (const [propName, spec] of Object.entries(contract.properties)) {
+        if (spec.required) continue;
+        if (spec.default !== undefined) continue;
+        if (spec.derivedDefault !== undefined) continue;
+        gaps.push(`${blockName}.${propName}`);
+      }
+    }
+    expect(gaps).toEqual([]);
+  });
+
+  it("names polygon.position's fallback as a derived-default strategy, not a fixed default", () => {
+    expect(LANGUAGE_CONTRACT.polygon.properties.position.required).toBeUndefined();
+    expect(LANGUAGE_CONTRACT.polygon.properties.position.default).toBeUndefined();
+    expect(LANGUAGE_CONTRACT.polygon.properties.position.derivedDefault).toBe("polygonMinPoint");
+  });
+
+  it("keeps polygon's derived position default identical to the builder's old private min-point fallback", () => {
+    const { ast, errors } = parse(lex(`scene {
+      size: (100, 100)
+      polygon p {
+        points: [(10, 20), (50, 5), (30, 80)]
+      }
+    }`));
+    expect(errors).toEqual([]);
+    const result = typeCheck(ast!);
+    expect(result.errors).toEqual([]);
+    const polygon = result.ir!.children[0].props;
+    if (polygon.kind !== "polygon") throw new Error("Expected a polygon IR node");
+    // minX = 10, minY = 5 — the same fallback builder.ts used to compute
+    // inline before Fix 1 moved it behind the contract's named strategy.
+    expect(polygon.position).toEqual({ x: 10, y: 5 });
+  });
+
+  it("falls back to (0, 0) for a polygon built directly with no points, matching the old inline default", () => {
+    // Bypasses typeCheck (which would reject fewer than 3 points via the
+    // pointCount constraint) to exercise buildIR's defensive empty-points
+    // path directly, the same way the file's other "building IR directly"
+    // tests bypass validation above.
+    const { ast, errors } = parse(lex(`scene {
+      size: (100, 100)
+      polygon p {
+        points: []
+      }
+    }`));
+    expect(errors).toEqual([]);
+    const ir = buildIR(ast!);
+    const polygon = ir.children[0].props;
+    if (polygon.kind !== "polygon") throw new Error("Expected a polygon IR node");
+    expect(polygon.position).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe("position and gravity descriptions (Fix 2)", () => {
+  it("describes circle/rectangle/text position as the geometric center", () => {
+    for (const block of ["circle", "rectangle", "text"] as const) {
+      expect(LANGUAGE_CONTRACT[block].properties.position.description).toContain("geometric center");
+    }
+  });
+
+  it("describes polygon/line position as the bounding-box midpoint, not the centroid — D15", () => {
+    for (const block of ["polygon", "line"] as const) {
+      const desc = LANGUAGE_CONTRACT[block].properties.position.description;
+      expect(desc.toLowerCase()).toContain("bounding");
+      expect(desc.toLowerCase()).toContain("centroid");
+      expect(desc).not.toContain("geometric center");
+    }
+  });
+
+  it("describes group position as the local origin, never derived from its children — D16", () => {
+    const desc = LANGUAGE_CONTRACT.group.properties.position.description;
+    expect(desc.toLowerCase()).toContain("local origin");
+    expect(desc).not.toContain("geometric center");
+  });
+
+  it("describes gravity as injected per simulation tick, not applied each frame", () => {
+    const desc = LANGUAGE_CONTRACT.physics.properties.gravity.description;
+    expect(desc.toLowerCase()).toContain("tick");
+    expect(desc.toLowerCase()).not.toContain("applied each frame");
+  });
 });

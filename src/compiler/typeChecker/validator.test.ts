@@ -642,3 +642,41 @@ describe("handoff targets and duration ordering (P3A-8)", () => {
 }`)).toEqual([]);
   });
 });
+
+describe("TYPE_INVALID_SCALE (dead-contract-data fold-in)", () => {
+  // scale's `positivePoint` contract constraint was dead data: this branch
+  // special-cased `key === "scale"` before validateLocalConstraint ever ran,
+  // so no consumer read the constraint. These pin the exact existing
+  // messages so folding the check into the constraint system (or dropping
+  // the dead entry) cannot silently change behaviour.
+  it("rejects a non-positive numeric scale with the exact TYPE_INVALID_SCALE message", () => {
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  circle c { position: (10, 10), radius: 5, scale: 0 }
+}`);
+    expect(out).toEqual([
+      "[TYPE_INVALID_SCALE] 'circle' object 'c': 'scale' must be greater than zero.",
+    ]);
+  });
+
+  it("rejects a non-positive point scale with the exact TYPE_INVALID_SCALE message", () => {
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  circle c { position: (10, 10), radius: 5, scale: (2, -1) }
+}`);
+    expect(out).toEqual([
+      "[TYPE_INVALID_SCALE] 'circle' object 'c': 'scale' components must be greater than zero, but got (2, -1).",
+    ]);
+  });
+
+  it("allows a positive numeric or point scale", () => {
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  circle c { position: (10, 10), radius: 5, scale: 2 }
+}`)).toEqual([]);
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  circle c { position: (10, 10), radius: 5, scale: (1.5, 0.5) }
+}`)).toEqual([]);
+  });
+});

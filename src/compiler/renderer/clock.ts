@@ -1,9 +1,13 @@
-/**
- * The fixed simulation rate. 120Hz is chosen so that common export frame
- * rates divide evenly into it (24 → 5 ticks, 30 → 4, 60 → 2), which keeps
- * exported frames on exact simulation states rather than interpolations.
- */
-export const TICK_HZ = 120;
+// `TICK_HZ` and `secondsToTicks` live in `../sceneIR.ts`, the pipeline-neutral
+// module both the renderer and the typeChecker import — not here, which would
+// make this the renderer's private copy and invite a second one to drift out
+// of sync (as `typeChecker/validator.ts` briefly did, importing this file
+// directly, before that was corrected to import `../sceneIR` instead). This
+// re-export keeps every other consumer of `clock.ts` (`TICK_MS`, `LiveDriver`,
+// etc.) working unchanged.
+export { TICK_HZ, secondsToTicks } from "../sceneIR";
+import { TICK_HZ } from "../sceneIR";
+
 export const TICK_MS = 1000 / TICK_HZ;
 export const TICK_SECONDS = 1 / TICK_HZ;
 
@@ -17,11 +21,6 @@ export const TICK_SECONDS = 1 / TICK_HZ;
  * the scene into permanent slow motion whenever frames take longer than this.
  */
 export const MAX_CATCHUP_TICKS = 12;
-
-/** Convert a duration in seconds to whole simulation ticks. */
-export function secondsToTicks(seconds: number): number {
-  return Math.max(1, Math.round(seconds * TICK_HZ));
-}
 
 /**
  * Turns wall-clock frame deltas into a whole number of fixed ticks.

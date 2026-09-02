@@ -1,3 +1,23 @@
+/**
+ * The fixed simulation rate. 120Hz is chosen so that common export frame
+ * rates divide evenly into it (24 → 5 ticks, 30 → 4, 60 → 2), which keeps
+ * exported frames on exact simulation states rather than interpolations.
+ *
+ * This lives here rather than in `renderer/clock.ts` because it — and
+ * `secondsToTicks` below — are needed by both pipeline stages: the renderer
+ * for the simulation clock itself, and the typeChecker's validator for
+ * comparing durations in the same unit the runtime does (`TYPE_HANDOFF_DURATION`).
+ * `sceneIR.ts` already sits at the pipeline-neutral level both import, so
+ * this is the one implementation; `clock.ts` re-exports it rather than
+ * keeping its own copy.
+ */
+export const TICK_HZ = 120;
+
+/** Convert a duration in seconds to whole simulation ticks. */
+export function secondsToTicks(seconds: number): number {
+  return Math.max(1, Math.round(seconds * TICK_HZ));
+}
+
 export type IRColor = string;
 
 export interface IRPoint {

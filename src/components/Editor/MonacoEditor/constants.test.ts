@@ -25,4 +25,26 @@ describe("Declare editor guidance", () => {
   it("keeps nested tab stops in the sequence completion snippet", () => {
     expect(sequenceSnippet()).toContain("duration: ${2:1.0}");
   });
+
+  it("gives position a block-specific hover instead of always the first block that declares it", () => {
+    // LANGUAGE_CONTRACT declares circle before polygon/line/group, so a
+    // first-appearance lookup with no block context always shows circle's
+    // "geometric center" wording — wrong for polygon/line (D15's bbox
+    // midpoint) and wrong for group (D16's local origin). A block-aware
+    // lookup must resolve each correctly.
+    expect(propertyHoverMarkdown("position", "circle")!).toContain("geometric center");
+    expect(propertyHoverMarkdown("position", "polygon")!).toContain("bounding");
+    expect(propertyHoverMarkdown("position", "line")!).toContain("bounding");
+    expect(propertyHoverMarkdown("position", "group")!).toContain("local origin");
+  });
+
+  it("falls back to first-appearance lookup when no block context is available", () => {
+    expect(propertyHoverMarkdown("position")).toBeDefined();
+  });
+
+  it("describes gravity as a per-tick simulation input, not applied each frame", () => {
+    const hover = propertyHoverMarkdown("gravity", "physics")!;
+    expect(hover.toLowerCase()).toContain("tick");
+    expect(hover.toLowerCase()).not.toContain("applied each frame");
+  });
 });

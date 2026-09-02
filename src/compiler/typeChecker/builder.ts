@@ -36,6 +36,7 @@ import {
   contractNumberDefault,
   contractPointDefault,
   contractStringDefault,
+  contractDerivedPositionDefault,
 } from "./resolvers";
 
 function buildAnimationFromNode(an: ObjectNode): IRAnimation {
@@ -171,23 +172,12 @@ export function buildIR(ast: AstNode): IRSceneNode {
       }
       case "polygon": {
         const pts = getReqPointList(p, "points");
-        let defaultX = 0, defaultY = 0;
-        if (pts.length > 0) {
-          let minX = Infinity, minY = Infinity;
-          for (const pt of pts) {
-            if (pt.x < minX) minX = pt.x;
-            if (pt.y < minY) minY = pt.y;
-          }
-          defaultX = minX;
-          defaultY = minY;
-        }
-
         const polyProps: IRPolygonProps = {
           kind:      "polygon",
           points:    pts,
           color:     resolveColor(p, "color", contractStringDefault("polygon", "color")),
           alpha:     resolveNumber(p, "alpha", contractNumberDefault("polygon", "alpha")),
-          position:  resolvePoint(p, "position", { x: defaultX, y: defaultY }),
+          position:  resolvePoint(p, "position", contractDerivedPositionDefault("polygon", "position", pts)),
           rotation:  resolveNumber(p, "rotation", contractNumberDefault("polygon", "rotation")),
           scale:     resolveScale(p, "scale", contractPointDefault("polygon", "scale")),
           layer:     resolveNumber(p, "layer", contractNumberDefault("polygon", "layer")),
