@@ -24,11 +24,24 @@ function span(from: AstValue, to: AstValue) {
   return { line: from.line, col: from.col, endLine: to.endLine, endCol: to.endCol };
 }
 
-function requireNumber(state: ParserState, v: AstValue, op: string, side: string): number {
+/**
+ * An operand paired with the token it starts at.
+ *
+ * The token is what a rejected operand is reported *at*. Reporting at
+ * `state.peek()` instead would land on whatever follows the whole binary
+ * expression — for a property value, the next property, on the next line.
+ */
+interface Operand {
+  readonly value: AstValue;
+  readonly tok: Token;
+}
+
+function requireNumber(state: ParserState, operand: Operand, op: string, side: string): number {
+  const v = operand.value;
   if (v.kind !== "number") {
     state.throwError(
       `In ${state.currentContext}: The ${side} operand of '${op}' must be a number, but got ${v.kind}.`,
-      state.peek(),
+      operand.tok,
     );
   }
   return v.value;
@@ -51,8 +64,8 @@ function requireCoordinate(state: ParserState, v: AstValue, tok: Token): number 
 function applyBinary(
   state: ParserState,
   op: string,
-  left: AstValue,
-  right: AstValue,
+  left: Operand,
+  right: Operand,
   opTok: Token,
 ): AstValue {
   const l = requireNumber(state, left, op, "left");
@@ -69,11 +82,16 @@ function applyBinary(
     default:
       state.throwError(`In ${state.currentContext}: Unknown operator '${op}'.`, opTok);
   }
-  return { kind: "number", value, ...span(left, right) };
+  return { kind: "number", value, ...span(left.value, right.value) };
 }
 
-/** `[(x, y), ...]` — ported from the pre-refactor `parseValue.ts:113-146`. */
-function parseListLiteral(state: ParserState, depth: number): AstValue {
+/**
+ * `[(x, y), ...]` — ported from the pre-refactor `parseValue.ts:113-146`.
+ *
+ * Takes no depth: every coordinate below starts a fresh budget, and entry to
+ * the literal was already depth-checked by `parsePrimary`.
+ */
+function parseListLiteral(state: ParserState): AstValue {
   const openTok = state.consume("LBRACKET");
   const pts: Array<{ x: number; y: number }> = [];
 
@@ -89,10 +107,10 @@ function parseListLiteral(state: ParserState, depth: number): AstValue {
 
     const ptOpen = state.consume("LPAREN");
     const xTok = state.peek();
-    const x = requireCoordinate(state, parseExpr(state, 0, depth + 1), xTok);
+    const x = requireCoordinate(state, parseExpr(state, 0, 0), xTok);
     state.consume("COMMA");
     const yTok = state.peek();
-    const y = requireCoordinate(state, parseExpr(state, 0, depth + 1), yTok);
+    const y = requireCoordinate(state, parseExpr(state, 0, 0), yTok);
 
     if (state.peek().type !== "RPAREN") {
       const bad = state.peek();
@@ -121,6 +139,10 @@ function parseListLiteral(state: ParserState, depth: number): AstValue {
  * `(` opens either a point or a grouped expression. Ported from the
  * pre-refactor `parseValue.ts:148-180`; the forward scan for a top-level
  * `,` is what tells the two apart.
+ *
+ * Note the asymmetry in the depth argument below, which is the pre-refactor
+ * behaviour: a *grouped* expression is one level deeper than the `(` it sits
+ * in, but a point *coordinate* starts a fresh budget.
  */
 function parseParenOrPoint(state: ParserState, depth: number): AstValue {
   const t = state.peek();
@@ -143,10 +165,10 @@ function parseParenOrPoint(state: ParserState, depth: number): AstValue {
   if (isPoint) {
     const openTok = state.consume("LPAREN");
     const xTok = state.peek();
-    const x = requireCoordinate(state, parseExpr(state, 0, depth + 1), xTok);
+    const x = requireCoordinate(state, parseExpr(state, 0, 0), xTok);
     state.consume("COMMA");
     const yTok = state.peek();
-    const y = requireCoordinate(state, parseExpr(state, 0, depth + 1), yTok);
+    const y = requireCoordinate(state, parseExpr(state, 0, 0), yTok);
 
     if (state.peek().type === "COMMA") {
       const extra = state.peek();
@@ -226,7 +248,7 @@ function parsePrimary(state: ParserState, depth: number): AstValue {
     return { kind: "indefinitely", line, col, endLine: line, endCol: tok.endCol };
   }
 
-  if (t.type === "LBRACKET") return parseListLiteral(state, depth);
+  if (t.type === "LBRACKET") return parseListLiteral(state);
   if (t.type === "LPAREN")   return parseParenOrPoint(state, depth);
 
   if (t.type === "IDENT") {
@@ -250,6 +272,10 @@ export function parseExpr(state: ParserState, minPrec: number, depth: number): A
     state.throwError(`In ${state.currentContext}: Math expression is too deeply nested. Maximum depth is ${MAX_EXPR_DEPTH}.`, state.peek());
   }
 
+  // The start token of the whole accumulated left-hand side. A folded left is
+  // always a number — otherwise `applyBinary` would have thrown — so this is
+  // only ever read back when the very first primary was the bad operand.
+  const leftTok = state.peek();
   let left = parsePrimary(state, depth);
 
   while (true) {
@@ -260,8 +286,9 @@ export function parseExpr(state: ParserState, minPrec: number, depth: number): A
     if (prec === undefined || prec <= minPrec) break;
 
     state.consume();
+    const rightTok = state.peek();
     const right = parseExpr(state, prec, depth + 1);
-    left = applyBinary(state, op, left, right, t);
+    left = applyBinary(state, op, { value: left, tok: leftTok }, { value: right, tok: rightTok }, t);
   }
 
   return left;
