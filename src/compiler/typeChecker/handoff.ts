@@ -7,10 +7,62 @@ import type { AstNode, ObjectNode } from "../types";
  * on the same renderable, or a sibling inside one `parallel`); `"later"`
  * means the physics runner is a direct step further along the same
  * `sequence`, starting only once the animation has already completed.
+ *
+ * `ambiguousPhysics` and `ambiguousPosAnim` record whether the schedule
+ * `resolveHandoffTarget` picked one runner out of is actually safe to reason
+ * about statically. Runtime pinning (`sceneRuntime.ts`) is reason-counted
+ * across *every* runner that touches the body, not just the one this
+ * function happened to resolve to:
+ *
+ *  - `ambiguousPhysics` is true when more than one `physics` block starts
+ *    concurrently with the handoff. Each spawns its own `PhysicsRunner`
+ *    against the same body; whichever completes first adds the `FROZEN` pin
+ *    reason, and nothing ever removes that specific hold. Checking only the
+ *    first one found (which one is arbitrary — `Array.prototype.find` order)
+ *    would validate a duration relationship that says nothing about when the
+ *    body actually freezes.
+ *  - `ambiguousPosAnim` is true when more than one direct-child animation
+ *    (counting the handoff animation itself) drives `property: position`
+ *    concurrently. Every position animation holds the `POS_ANIM` pin reason
+ *    for its own duration, and the count is reason-counted — two holds need
+ *    two releases (`physicsWorld.ts`'s `pin`/`unpin`). If a second position
+ *    animation is still running when the handoff's own animation completes,
+ *    the body stays pinned past the moment the parked velocity is written,
+ *    and if the physics runner freezes before that second animation
+ *    releases its hold, the velocity is never flushed.
+ *
+ * Both are always false for `"later"` scheduling: a sequence step runs
+ * alone — `SceneRuntime.advanceOneTick`'s sequence phase only starts the next
+ * step once every runner in the previous one has `time.completed` — so a
+ * later physics step can never race another runner the way a concurrent one
+ * can. `resolveHandoffTarget` also does not search into a nested `parallel`
+ * for a later step (see the function doc below), so a "later" target is
+ * always a single bare `physics` block, never a `parallel` wrapping several.
  */
 export interface HandoffTarget {
   readonly physics: ObjectNode;
   readonly scheduling: "concurrent" | "later";
+  readonly ambiguousPhysics: boolean;
+  readonly ambiguousPosAnim: boolean;
+}
+
+/** How many direct children of `container` are `physics` blocks. */
+function countConcurrentPhysics(container: AstNode): number {
+  return container.children.filter((c) => c.type === "physics").length;
+}
+
+/**
+ * How many direct children of `container` are `animate` blocks driving
+ * `property: position` — the only property that takes the `POS_ANIM` pin.
+ */
+function countConcurrentPositionAnims(container: AstNode): number {
+  let n = 0;
+  for (const c of container.children) {
+    if (c.type !== "animate") continue;
+    const prop = c.props["property"];
+    if (prop?.kind === "animProperty" && prop.value === "position") n++;
+  }
+  return n;
 }
 
 const RENDERABLE_TYPES: ReadonlySet<string> = new Set([
@@ -59,7 +111,13 @@ export function resolveHandoffTarget(
 
   if (container.type === "parallel" || RENDERABLE_TYPES.has(container.type)) {
     const physics = container.children.find((c) => c.type === "physics");
-    return physics ? { physics, scheduling: "concurrent" } : null;
+    if (!physics) return null;
+    return {
+      physics,
+      scheduling: "concurrent",
+      ambiguousPhysics: countConcurrentPhysics(container) > 1,
+      ambiguousPosAnim: countConcurrentPositionAnims(container) > 1,
+    };
   }
 
   if (container.type === "sequence") {
@@ -68,7 +126,12 @@ export function resolveHandoffTarget(
     if (index === -1) return null;
     for (let i = index + 1; i < siblings.length; i++) {
       if (siblings[i].type === "physics") {
-        return { physics: siblings[i], scheduling: "later" };
+        return {
+          physics: siblings[i],
+          scheduling: "later",
+          ambiguousPhysics: false,
+          ambiguousPosAnim: false,
+        };
       }
     }
     return null;

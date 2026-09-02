@@ -14,6 +14,13 @@ import {
   ownsPhysics,
 } from "./physicsCost";
 import { resolveHandoffTarget, yoyoIsTrue } from "./handoff";
+// `clock.ts` is a pure, dependency-free math module (no `pixi.js`, no other
+// imports) — see AGENTS.md's renderer section — so importing its tick
+// conversion here does not pull the renderer into the typeChecker's worker
+// bundle. It exists specifically so this comparison and the runtime's own
+// (`sceneRuntime.ts`'s `spawnAnim`/`spawnPhysics`) share one implementation
+// instead of a second `Math.round(seconds * 120)` drifting out of step.
+import { secondsToTicks } from "../renderer/clock";
 
 type PropKind = AstValue["kind"];
 type PropContract = PropKind | readonly PropKind[];
@@ -340,6 +347,32 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         const target = resolveHandoffTarget(node as ObjectNode, parentNode, ancestors);
         if (!target) {
           errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_PHYSICS] 'handoff: true' requires a sibling 'physics' block on the same object.`, line: handoffVal.line, col: handoffVal.col, endLine: handoffVal.endLine, endCol: handoffVal.endCol });
+        } else if (target.ambiguousPhysics) {
+          // More than one 'physics' block starts alongside this handoff.
+          // Each spawns its own PhysicsRunner against the same body, and
+          // whichever freezes first is the one that matters — checking a
+          // duration relationship against only the first one `find` happens
+          // to return would validate the wrong runner. Reject rather than
+          // pick a runner to model, matching this validator's existing
+          // conservative posture (D13's explicit-body rule).
+          errors.push({
+            phase: "TYPE",
+            message: `[TYPE_HANDOFF_SCHEDULE_AMBIGUOUS] This object starts more than one 'physics' block at the same time as the handoff animation, so it is not clear which one determines when the body freezes. 'handoff: true' requires exactly one concurrent 'physics' block.`,
+            line: handoffVal.line, col: handoffVal.col, endLine: handoffVal.endLine, endCol: handoffVal.endCol,
+          });
+        } else if (target.ambiguousPosAnim) {
+          // More than one position animation starts alongside this handoff.
+          // Every position animation holds the body's POS_ANIM pin reason for
+          // its own duration, reason-counted — two holds need two releases.
+          // If the other one is still running when this handoff completes,
+          // the body stays pinned, and if the physics runner freezes in that
+          // window the parked velocity is never flushed. This is the exact
+          // defect confirmed live in Phase 3A's review.
+          errors.push({
+            phase: "TYPE",
+            message: `[TYPE_HANDOFF_SCHEDULE_AMBIGUOUS] This object starts more than one 'property: position' animation at the same time as the handoff, so it is not clear which one releases the body last. 'handoff: true' requires the handoff animation to be the only concurrent position animation.`,
+            line: handoffVal.line, col: handoffVal.col, endLine: handoffVal.endLine, endCol: handoffVal.endCol,
+          });
         } else {
           const velNode = target.physics.props["velocity"];
           if (velNode !== undefined) {
@@ -353,8 +386,20 @@ export function collectErrors(ast: AstNode): CompilerError[] {
             animDuration?.kind === "number" &&
             physicsDuration?.kind === "number"
           ) {
-            const effectiveAnimDuration = animDuration.value * (yoyoIsTrue(node as ObjectNode) ? 2 : 1);
-            if (physicsDuration.value <= effectiveAnimDuration) {
+            const yoyoMultiplier = yoyoIsTrue(node as ObjectNode) ? 2 : 1;
+            // Seconds, for the human-readable message only.
+            const effectiveAnimDuration = animDuration.value * yoyoMultiplier;
+            // Ticks, for the actual pass/fail decision — the runtime never
+            // compares seconds. `secondsToTicks` is the same function
+            // `spawnAnim`/`spawnPhysics` (sceneRuntime.ts) convert with, so a
+            // physics duration whose *tick count* does not clear the
+            // animation's cannot slip through just because it is larger in
+            // seconds: Math.round(1 * 120) === Math.round(1.001 * 120), and
+            // the runtime writes the pending velocity and freezes the body on
+            // that same tick.
+            const effectiveAnimDurationTicks = secondsToTicks(animDuration.value) * yoyoMultiplier;
+            const physicsDurationTicks = secondsToTicks(physicsDuration.value);
+            if (physicsDurationTicks <= effectiveAnimDurationTicks) {
               errors.push({
                 phase: "TYPE",
                 message: `[TYPE_HANDOFF_DURATION] The receiving physics duration (${physicsDuration.value}s) must be greater than the handoff animation runtime (${effectiveAnimDuration}s).`,

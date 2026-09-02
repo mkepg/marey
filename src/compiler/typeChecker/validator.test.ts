@@ -502,4 +502,143 @@ describe("handoff targets and duration ordering (P3A-8)", () => {
     expect(out).toHaveLength(1);
     expect(out[0]).toContain("TYPE_HANDOFF_AMBIGUITY");
   });
+
+  // --- Defect 1: validation must model every concurrent runner on the body,
+  // not just the first physics sibling resolveHandoffTarget happens to find.
+  // Reproduction confirmed live: both scenes below compile with zero errors
+  // before the fix, yet the handoff's parked velocity is never flushed at
+  // runtime because the body is still pinned (POS_ANIM or FROZEN, from a
+  // *different* runner) when its own physics runner freezes.
+
+  it("rejects a handoff when a second concurrent position animation can keep the body pinned past its physics runner's freeze", () => {
+    // c has two direct position animations (concurrent scheduling): the
+    // handoff one (1s) and a plain one (2s). Both hold the POS_ANIM pin
+    // reason-count. The physics runner freezes at 1.5s, before the second
+    // animation's own release at 2s, so the FROZEN reason is added while
+    // POS_ANIM is still held by the second animation — the pin never reaches
+    // zero again, and the handoff's parked velocity is never flushed.
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    animate { property: position, to: (20, 10), duration: 1, handoff: true }
+    animate { property: position, to: (30, 10), duration: 2 }
+    physics { duration: 1.5 }
+  }
+}`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("TYPE_HANDOFF_SCHEDULE_AMBIGUOUS");
+  });
+
+  it("rejects a handoff when the object itself starts two concurrent physics blocks", () => {
+    // Two direct physics children on one object both spawn PhysicsRunners
+    // against the same body. Whichever freezes first adds FROZEN; nothing
+    // ever removes that specific hold, so which of the two the validator
+    // checks against TYPE_HANDOFF_DURATION is not the whole story.
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    animate { property: position, to: (20, 10), duration: 1, handoff: true }
+    physics { duration: 2 }
+    physics { duration: 0.25 }
+  }
+}`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("TYPE_HANDOFF_SCHEDULE_AMBIGUOUS");
+  });
+
+  it("rejects a handoff whose parallel step starts two concurrent physics runners", () => {
+    // The external reviewer's second shape: a sequence/parallel carrying two
+    // physics runners (2s and 0.25s) alongside the handoff animation. Built
+    // via 'sequence { parallel { ... } }' because 'parallel' is only legal
+    // directly inside a 'sequence' — writing it straight in the object body
+    // is itself a parse error and would prove nothing.
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    sequence {
+      parallel {
+        animate { property: position, to: (50, 50), duration: 1, handoff: true }
+        physics { duration: 2 }
+        physics { duration: 0.25 }
+      }
+    }
+  }
+}`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("TYPE_HANDOFF_SCHEDULE_AMBIGUOUS");
+  });
+
+  it("allows a handoff alongside a concurrent non-position animation", () => {
+    // Only position-property animations hold the POS_ANIM pin reason, so a
+    // concurrent rotation animation on the same object is not a competing
+    // release path and must not trip the new ambiguity check.
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    animate { property: position, to: (20, 10), duration: 1, handoff: true }
+    animate { property: rotation, to: 45, duration: 2 }
+    physics { duration: 2 }
+  }
+}`)).toEqual([]);
+  });
+
+  it("allows a sequence handoff with two later physics steps (steps run exclusively, never concurrently)", () => {
+    // Same shape as "picks the first later physics step..." above: two
+    // physics steps after the handoff in one sequence are never concurrent
+    // with each other (a sequence runs one step at a time), so this must
+    // stay legal under the new ambiguity check.
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    sequence {
+      animate { property: position, to: (50, 50), duration: 1, handoff: true }
+      physics { duration: 0.4 }
+      physics { duration: 0.4 }
+    }
+  }
+}`)).toEqual([]);
+  });
+
+  // --- Defect 2: the duration rule must compare converted tick counts (the
+  // runtime's unit), not raw seconds, or a sub-tick gap in seconds can still
+  // round to equal tick counts and reproduce the same-tick freeze-vs-flush
+  // race TYPE_HANDOFF_DURATION exists to prevent.
+
+  it("rejects a handoff whose physics duration is longer in seconds but rounds to the same tick count as the animation", () => {
+    // Math.round(1 * 120) === Math.round(1.001 * 120) === 120. Before the
+    // fix, the validator compared 1.001 > 1 in raw seconds and passed this.
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    animate { property: position, to: (50, 50), duration: 1, handoff: true }
+    physics { duration: 1.001 }
+  }
+}`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("TYPE_HANDOFF_DURATION");
+  });
+
+  it("allows a handoff once the physics duration clears the animation by at least one whole tick", () => {
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    animate { property: position, to: (50, 50), duration: 1, handoff: true }
+    physics { duration: ${1 + 1 / 120} }
+  }
+}`)).toEqual([]);
+  });
 });
