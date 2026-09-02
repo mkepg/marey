@@ -118,6 +118,24 @@ describe("expression nesting depth", () => {
     expect(diags[0].message).toContain("Math expression is too deeply nested. Maximum depth is 50.");
   });
 
+  /**
+   * The point-list coordinate sites are a separate pair of calls from the
+   * point ones (`parseExpr.ts` `parseListLiteral` vs `parseParenOrPoint`), so
+   * the two above do not cover them. Re-introducing `depth + 1` in
+   * `parseListLiteral` alone leaves the whole rest of the suite green.
+   */
+  it("accepts 50 levels of nesting in a point-list coordinate", () => {
+    const source = `scene { size: (100, 100) polygon g { position: (0, 0), points: [(${nest(50)}, 0), (1, 1), (2, 2)] } }`;
+    expect(diagnosticsFor(source)).toEqual([]);
+  });
+
+  it("rejects 51 levels of nesting in a point-list coordinate", () => {
+    const source = `scene { size: (100, 100) polygon g { position: (0, 0), points: [(${nest(51)}, 0), (1, 1), (2, 2)] } }`;
+    const diags = diagnosticsFor(source);
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toContain("Math expression is too deeply nested. Maximum depth is 50.");
+  });
+
   it("applies the same 50/51 boundary to a plain property value", () => {
     const ok = `scene { size: (100, 100) circle c { position: (0, 0), radius: ${nest(50)} } }`;
     expect(diagnosticsFor(ok)).toEqual([]);
@@ -126,6 +144,74 @@ describe("expression nesting depth", () => {
     const diags = diagnosticsFor(tooDeep);
     expect(diags).toHaveLength(1);
     expect(diags[0].message).toContain("Math expression is too deeply nested. Maximum depth is 50.");
+  });
+});
+
+describe("structural nesting depth", () => {
+  /**
+   * A coordinate resets the *expression* budget, so nothing bounded how deeply
+   * points nest inside one another once `((x, y))` made a point reachable from
+   * inside an expression. `(1,(1,(1,…)))` recursed for real and blew the stack
+   * at ~2000 levels — about 6000 characters, inside `MAX_SHARE_LENGTH`
+   * (`lib/share.ts:17`), so it arrives by share link. The pre-refactor parser
+   * reported a clean positioned error at every depth because it rejected the
+   * second level outright and never recursed.
+   *
+   * Note these fixtures are never diagnostic-free at any depth: a coordinate
+   * must be a number, so a point inside one is always an error. The boundary
+   * being pinned is therefore *which* error — the ordinary coordinate-kind
+   * complaint below the cap, the structural one above it — and, above all,
+   * that a position survives instead of the parser throwing.
+   */
+  const nestPoints = (n: number) => {
+    let s = "(1, 1)";
+    for (let i = 1; i < n; i++) s = `(1, ${s})`;
+    return s;
+  };
+  const sceneWith = (point: string) =>
+    `scene { size: (100, 100) circle c { position: ${point}, radius: 5 } }`;
+
+  it("does not reach the structural cap at 50 nested points", () => {
+    const diags = diagnosticsFor(sceneWith(nestPoints(50)));
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toContain("A point coordinate must be a number, but got point.");
+    expect(diags[0].message).not.toContain("nested too deeply");
+  });
+
+  it("rejects 51 nested points with a positioned error", () => {
+    const diags = diagnosticsFor(sceneWith(nestPoints(51)));
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toContain(
+      "Points and point lists are nested too deeply. Maximum nesting depth is 50.",
+    );
+    expect(typeof diags[0].line).toBe("number");
+    expect(typeof diags[0].col).toBe("number");
+  });
+
+  /**
+   * The regression itself: at these depths the parser used to throw
+   * `RangeError: Maximum call stack size exceeded`, which reaches the user
+   * through `compiler.worker.ts`'s catch as a message with no position at all.
+   * `diagnosticsFor` deliberately does not catch, so a throw fails here.
+   */
+  it.each([2000, 5000, 20000])("reports rather than overflowing at %i nested points", (n) => {
+    const diags = diagnosticsFor(sceneWith(nestPoints(n)));
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toContain("nested too deeply");
+    expect(typeof diags[0].line).toBe("number");
+    expect(typeof diags[0].col).toBe("number");
+  });
+
+  it("bounds alternating point-list and point nesting too", () => {
+    let s = "[(1, 1)]";
+    for (let i = 1; i < 3000; i++) s = `[(1, ${s})]`;
+    const diags = diagnosticsFor(
+      `scene { size: (100, 100) polygon g { position: (0, 0), points: ${s} } }`,
+    );
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toContain("nested too deeply");
+    expect(typeof diags[0].line).toBe("number");
+    expect(typeof diags[0].col).toBe("number");
   });
 });
 

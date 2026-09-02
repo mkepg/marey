@@ -2,7 +2,24 @@ import type { AstValue, FitMode, Token } from "../types";
 import { NAMED_COLORS } from "../lexer";
 import { ParserState, describeToken } from "./state";
 
+/**
+ * The expression parser carries two independent nesting counters.
+ *
+ * `depth` bounds one expression's own operator/paren nesting. A point or
+ * point-list *coordinate* resets it to 0, because that is what the
+ * pre-refactor parser did (`de9bf39:parseValue.ts:128,130,166,168`) and
+ * source that relied on the reset must keep compiling.
+ *
+ * `structDepth` bounds how deep points and point lists nest inside one
+ * another, and is precisely the counter `depth` cannot be: it must not reset
+ * at a coordinate, since the reset is what leaves the recursion unbounded.
+ * Before points became reachable from inside an expression, nesting them was
+ * a parse error one level down and the question never arose; now
+ * `(1,(1,(1,…)))` recurses for real, and past ~2000 levels — well inside
+ * `MAX_SHARE_LENGTH` — it overflowed the stack instead of reporting.
+ */
 export const MAX_EXPR_DEPTH = 50;
+export const MAX_STRUCTURAL_DEPTH = 50;
 
 /** Canonical operator name for a token, or null if it is not a binary operator. */
 export function operatorOf(t: Token): string | null {
@@ -88,10 +105,11 @@ function applyBinary(
 /**
  * `[(x, y), ...]` — ported from the pre-refactor `parseValue.ts:113-146`.
  *
- * Takes no depth: every coordinate below starts a fresh budget, and entry to
- * the literal was already depth-checked by `parsePrimary`.
+ * Takes no expression depth: every coordinate below starts a fresh budget,
+ * and entry to the literal was already depth-checked by `parsePrimary`. It
+ * does take `structDepth`, which coordinates increment rather than reset.
  */
-function parseListLiteral(state: ParserState): AstValue {
+function parseListLiteral(state: ParserState, structDepth: number): AstValue {
   const openTok = state.consume("LBRACKET");
   const pts: Array<{ x: number; y: number }> = [];
 
@@ -107,10 +125,10 @@ function parseListLiteral(state: ParserState): AstValue {
 
     const ptOpen = state.consume("LPAREN");
     const xTok = state.peek();
-    const x = requireCoordinate(state, parseExpr(state, 0, 0), xTok);
+    const x = requireCoordinate(state, parseExpr(state, 0, 0, structDepth + 1), xTok);
     state.consume("COMMA");
     const yTok = state.peek();
-    const y = requireCoordinate(state, parseExpr(state, 0, 0), yTok);
+    const y = requireCoordinate(state, parseExpr(state, 0, 0, structDepth + 1), yTok);
 
     if (state.peek().type !== "RPAREN") {
       const bad = state.peek();
@@ -140,11 +158,13 @@ function parseListLiteral(state: ParserState): AstValue {
  * pre-refactor `parseValue.ts:148-180`; the forward scan for a top-level
  * `,` is what tells the two apart.
  *
- * Note the asymmetry in the depth argument below, which is the pre-refactor
+ * Note the asymmetry in the depth arguments below, which is the pre-refactor
  * behaviour: a *grouped* expression is one level deeper than the `(` it sits
- * in, but a point *coordinate* starts a fresh budget.
+ * in, but a point *coordinate* starts a fresh budget. `structDepth` runs the
+ * other way — a coordinate increments it, a grouped expression leaves it
+ * alone, because grouped nesting is already bounded by `depth`.
  */
-function parseParenOrPoint(state: ParserState, depth: number): AstValue {
+function parseParenOrPoint(state: ParserState, depth: number, structDepth: number): AstValue {
   const t = state.peek();
   const { line, col } = t;
 
@@ -165,10 +185,10 @@ function parseParenOrPoint(state: ParserState, depth: number): AstValue {
   if (isPoint) {
     const openTok = state.consume("LPAREN");
     const xTok = state.peek();
-    const x = requireCoordinate(state, parseExpr(state, 0, 0), xTok);
+    const x = requireCoordinate(state, parseExpr(state, 0, 0, structDepth + 1), xTok);
     state.consume("COMMA");
     const yTok = state.peek();
-    const y = requireCoordinate(state, parseExpr(state, 0, 0), yTok);
+    const y = requireCoordinate(state, parseExpr(state, 0, 0, structDepth + 1), yTok);
 
     if (state.peek().type === "COMMA") {
       const extra = state.peek();
@@ -183,7 +203,7 @@ function parseParenOrPoint(state: ParserState, depth: number): AstValue {
   }
 
   const openTok = state.consume("LPAREN");
-  const inner = parseExpr(state, 0, depth + 1);
+  const inner = parseExpr(state, 0, depth + 1, structDepth);
   const bad = state.peek();
   if (bad.type !== "RPAREN") {
     state.throwError(`In ${state.currentContext}: Expected ')' to close the math expression, but found ${describeToken(bad)}.`, bad);
@@ -194,7 +214,7 @@ function parseParenOrPoint(state: ParserState, depth: number): AstValue {
   return { ...inner, line: openTok.line, col: openTok.col, endLine: closeTok.line, endCol: closeTok.endCol };
 }
 
-function parsePrimary(state: ParserState, depth: number): AstValue {
+function parsePrimary(state: ParserState, depth: number, structDepth: number): AstValue {
   if (depth > MAX_EXPR_DEPTH) {
     state.throwError(`In ${state.currentContext}: Math expression is too deeply nested. Maximum depth is ${MAX_EXPR_DEPTH}.`, state.peek());
   }
@@ -204,7 +224,7 @@ function parsePrimary(state: ParserState, depth: number): AstValue {
 
   if (t.type === "MINUS") {
     const minusTok = state.consume("MINUS");
-    const operand = parsePrimary(state, depth + 1);
+    const operand = parsePrimary(state, depth + 1, structDepth);
     if (operand.kind !== "number") {
       state.throwError(`In ${state.currentContext}: Unary '-' requires a number, but got ${operand.kind}.`, minusTok);
     }
@@ -248,8 +268,8 @@ function parsePrimary(state: ParserState, depth: number): AstValue {
     return { kind: "indefinitely", line, col, endLine: line, endCol: tok.endCol };
   }
 
-  if (t.type === "LBRACKET") return parseListLiteral(state);
-  if (t.type === "LPAREN")   return parseParenOrPoint(state, depth);
+  if (t.type === "LBRACKET") return parseListLiteral(state, structDepth);
+  if (t.type === "LPAREN")   return parseParenOrPoint(state, depth, structDepth);
 
   if (t.type === "IDENT") {
     const nameTok = state.consume("IDENT");
@@ -267,16 +287,24 @@ function parsePrimary(state: ParserState, depth: number): AstValue {
   state.throwError(`In ${state.currentContext}: Unexpected ${describeToken(t)} where a property value was expected.`, t);
 }
 
-export function parseExpr(state: ParserState, minPrec: number, depth: number): AstValue {
+export function parseExpr(
+  state: ParserState,
+  minPrec: number,
+  depth: number,
+  structDepth: number,
+): AstValue {
   if (depth > MAX_EXPR_DEPTH) {
     state.throwError(`In ${state.currentContext}: Math expression is too deeply nested. Maximum depth is ${MAX_EXPR_DEPTH}.`, state.peek());
+  }
+  if (structDepth > MAX_STRUCTURAL_DEPTH) {
+    state.throwError(`In ${state.currentContext}: Points and point lists are nested too deeply. Maximum nesting depth is ${MAX_STRUCTURAL_DEPTH}.`, state.peek());
   }
 
   // The start token of the whole accumulated left-hand side. A folded left is
   // always a number — otherwise `applyBinary` would have thrown — so this is
   // only ever read back when the very first primary was the bad operand.
   const leftTok = state.peek();
-  let left = parsePrimary(state, depth);
+  let left = parsePrimary(state, depth, structDepth);
 
   while (true) {
     const t = state.peek();
@@ -287,7 +315,7 @@ export function parseExpr(state: ParserState, minPrec: number, depth: number): A
 
     state.consume();
     const rightTok = state.peek();
-    const right = parseExpr(state, prec, depth + 1);
+    const right = parseExpr(state, prec, depth + 1, structDepth);
     left = applyBinary(state, op, { value: left, tok: leftTok }, { value: right, tok: rightTok }, t);
   }
 

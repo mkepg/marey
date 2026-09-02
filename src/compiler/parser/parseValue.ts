@@ -17,5 +17,5 @@ export function parseValue(state: ParserState, currentKey?: string): AstValue {
     };
   }
 
-  return parseExpr(state, 0, 0);
+  return parseExpr(state, 0, 0, 0);
 }
