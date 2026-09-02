@@ -38,7 +38,15 @@ const RENDERABLE_TYPES: ReadonlySet<string> = new Set([
  * animation's immediate AST parent — the same node `parent` carries. This
  * function reads the enclosing block off `ancestors` so it does not depend
  * on a caller keeping those two views in sync; `parent` is the fallback for
- * the (currently unreachable in practice) case where `ancestors` is empty.
+ * the case where `ancestors` is empty. The literal syntax `scene { animate {
+ * ... } }` cannot reach this: `parser/index.ts` rejects an `animate` keyword
+ * at the scene body loop before any node is built. But `generate` expands its
+ * body through the generic `parseObject` path, which has no such guard, so
+ * `generate i from 0 to 0 { animate { ..., handoff: true } } }` at the scene
+ * root does produce an `animate` node as a direct scene child — `ancestors`
+ * empty, `container` falls back to the scene node, and every branch below
+ * returns `null`, same as `checkNode`'s own (separate, unconditional) "must
+ * be placed inside a renderable object" diagnostic for that node.
  */
 export function resolveHandoffTarget(
   animation: ObjectNode,

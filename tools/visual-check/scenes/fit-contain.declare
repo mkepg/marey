@@ -1,0 +1,23 @@
+// fit: contain — scale uniformly until the whole 400x400 scene fits inside the
+// preview, then centre it. Expect letterbox bars, a round disc, and all four
+// corner markers visible and equally inset.
+//
+// The scene is square while the preview panel is not, so the four fit-*.declare
+// scenes are pixel-distinguishable from each other. They are static, so they go
+// idle immediately: the ticker must stop and both cold loads must match.
+scene {
+  size: (400, 400)
+  background: #101827
+  fit: contain
+
+  circle disc {
+    position: (200, 200)
+    radius: 150
+    color: #38bdf8
+  }
+
+  rectangle cornerTL { position: (30, 30),  size: (44, 44), color: #fb7185 }
+  rectangle cornerTR { position: (370, 30), size: (44, 44), color: #4ade80 }
+  rectangle cornerBL { position: (30, 370), size: (44, 44), color: #fbbf24 }
+  rectangle cornerBR { position: (370, 370), size: (44, 44), color: #a78bfa }
+}

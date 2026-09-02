@@ -106,6 +106,10 @@ for determinism.
 | `freeze-midair.declare` | Minimal repro of the `f9de4a9` bug: one box, no contacts, frozen in free fall. The tightest determinism check here — nothing else can absorb a divergence. |
 | `logo.declare` | A three-bar group welds into one compound body and tumbles rigidly, settling on its own arms (Phase 2, D16). If the bars ever separate, the welding has stopped happening. |
 | `logo-freeze.declare` | The same idea frozen mid-tumble in free air — determinism on a transient state rather than at rest. |
+| `fit-contain.declare` | `fit: contain` — letterboxed, aspect preserved, all four corner markers visible (Phase 3A, `sceneFit → fit` rename). |
+| `fit-cover.declare` | `fit: cover` — no letterbox, aspect preserved, corner markers cropped off the short axis. |
+| `fit-fill.declare` | `fit: fill` — no letterbox, aspect **not** preserved; the disc renders as an ellipse. |
+| `fit-none.declare` | `fit: none` — unscaled, anchored top-left, smallest disc of the four. |
 
 Add a scene rather than editing one when checking something new — these are
 regression checks, and their expected images are their value.

@@ -129,9 +129,17 @@ describe("animProgress", () => {
   });
 
   it("reports exactly the start value for a completed yoyo, ignoring alpha", () => {
-    // A non-looping yoyo completes back at elapsed 0, so its final painted and
-    // pushed value must be progress 0 — the animation's starting value — with
-    // no sub-tick reverse interpolation carrying it past.
+    // Characterizes animProgress's pre-existing completed-state handling
+    // (`sub = t.completed ? 0 : ...`, unchanged by P3A-10) at the specific
+    // AnimTime a completed non-looping yoyo now lands on: elapsed 0, direction
+    // -1. It does not exercise advanceAnimTime, so it would pass unmodified
+    // against the pre-P3A-10 code too — it is not itself a regression test for
+    // that fix. What it does pin is the value the fix's completion state must
+    // read as: without this, `elapsedTicks: 0` could be read as progress 0 OR
+    // 1 depending on which edge `p < 0` / `p > 1` clamps toward with alpha
+    // still applied; the "ignores alpha" branch above is what removes that
+    // ambiguity. The actual regression test for P3A-10 is `advanceAnimTime`'s
+    // "completes a non-looping yoyo once on the return tick" in this file.
     const t = makeAnim({ durationTicks: 10, elapsedTicks: 0, direction: -1, completed: true, yoyo: true });
     expect(animProgress(t, 0.9)).toBe(0);
   });

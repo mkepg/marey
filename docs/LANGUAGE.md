@@ -863,12 +863,12 @@ runtime warning or a silent clamp.
   (`parser/state.ts:99-101`), so a badly malformed file can report fewer than
   50 errors in total.
 - A single `generate` loop's span (`end − start`) cannot exceed 10,000
-  (`parser/parseGenerate.ts:46`). Because both bounds are inclusive, this
+  (`parser/parseGenerate.ts:47`). Because both bounds are inclusive, this
   permits up to **10,001** iterations, not 10,000.
 - A file-wide counter shared by every parsed object, every `use` expansion,
   and every `generate` iteration is capped at 15,000
-  (`parser/parseObject.ts:154-156`, `parser/parseUse.ts:12-14`,
-  `parser/parseGenerate.ts:81-82`). Exceeding it aborts compilation — even a
+  (`parser/parseObject.ts:148-150`, `parser/parseUse.ts:13-14`,
+  `parser/parseGenerate.ts:82-83`). Exceeding it aborts compilation — even a
   file with few real objects can hit the ceiling if it has enough loop
   iterations, since each iteration consumes one unit of the budget before its
   body is parsed.

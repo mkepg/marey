@@ -342,7 +342,13 @@ describe("SceneRuntime · tick phase", () => {
     for (let i = 0; i < 11; i++) rt.advanceOneTick();
     expect(world.angleOverrides.get(id)).not.toBeNull();
 
+    // Checked before any paint() call: if the release ever moved into the
+    // paint phase (invariant 2), this would still be non-null here and only
+    // clear once paint ran below — the same class of bug as the sibling test
+    // above, "not in the paint phase".
     rt.advanceOneTick();
+    expect(world.angleOverrides.get(id)).toBeNull();
+
     rt.paint(1);
     expect(world.angleOverrides.get(id)).toBeNull();
 

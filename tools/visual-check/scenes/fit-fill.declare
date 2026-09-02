@@ -1,0 +1,22 @@
+// fit: fill — scale each axis independently so the scene exactly fills the
+// preview, at the origin. Expect no letterbox bars, all four corner markers
+// visible, and the disc stretched into an ellipse. The ellipse is the tell:
+// it is the only mode that does not preserve aspect ratio.
+//
+// Same geometry as fit-contain.declare; only `fit` differs.
+scene {
+  size: (400, 400)
+  background: #101827
+  fit: fill
+
+  circle disc {
+    position: (200, 200)
+    radius: 150
+    color: #38bdf8
+  }
+
+  rectangle cornerTL { position: (30, 30),  size: (44, 44), color: #fb7185 }
+  rectangle cornerTR { position: (370, 30), size: (44, 44), color: #4ade80 }
+  rectangle cornerBL { position: (30, 370), size: (44, 44), color: #fbbf24 }
+  rectangle cornerBR { position: (370, 370), size: (44, 44), color: #a78bfa }
+}

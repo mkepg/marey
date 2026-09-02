@@ -276,6 +276,21 @@ describe("physical line permissions", () => {
   }
 }`)).toEqual([]);
   });
+
+  it("allows a line with animation only — a line is visual-only, not collision-free", () => {
+    // The `animate`/`sequence` children below are not `physics`, so
+    // `ownsPhysics` never fires for this line; only the direct-physics,
+    // sequence-physics, and physics-group-ancestor cases above are rejected.
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  line wire {
+    position: (10, 10)
+    points: [(0, 0), (20, 20)]
+    thickness: 1
+    animate { property: alpha, to: 0.2, duration: 1 }
+  }
+}`)).toEqual([]);
+  });
 });
 
 describe("handoff targets and duration ordering (P3A-8)", () => {
@@ -362,7 +377,8 @@ describe("handoff targets and duration ordering (P3A-8)", () => {
     }
   }
 }`);
-    expect(shorter.some((m) => m.includes("TYPE_HANDOFF_DURATION"))).toBe(true);
+    expect(shorter).toHaveLength(1);
+    expect(shorter[0]).toContain("TYPE_HANDOFF_DURATION");
 
     const equal = errorsFor(`scene {
   size: (100, 100)
@@ -377,7 +393,8 @@ describe("handoff targets and duration ordering (P3A-8)", () => {
     }
   }
 }`);
-    expect(equal.some((m) => m.includes("TYPE_HANDOFF_DURATION"))).toBe(true);
+    expect(equal).toHaveLength(1);
+    expect(equal[0]).toContain("TYPE_HANDOFF_DURATION");
   });
 
   it("allows a sequence handoff into a shorter, later physics step", () => {

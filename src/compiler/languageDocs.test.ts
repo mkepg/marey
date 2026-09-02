@@ -37,6 +37,7 @@ import { buildNode } from "./renderer/builder";
 import { MatterWorld } from "./renderer/physicsWorld";
 import { SceneRuntime } from "./renderer/sceneRuntime";
 import { Container } from "pixi.js";
+import { LANGUAGE_CONTRACT } from "./languageContract";
 
 interface Example {
   /** 1-indexed line in LANGUAGE.md where the fence opens. */
@@ -619,5 +620,41 @@ describe("LANGUAGE.md · Physics · Physics and groups", () => {
       kind: "compound",
       parts: [{ kind: "circle", radius: 10, x: 40, y: 0 }],
     });
+  });
+});
+
+describe("LANGUAGE.md · Physics · line has zero collision geometry", () => {
+  it("TYPE_LINE_PHYSICS fires for a line whose sequence — not just its direct physics — declares physics", () => {
+    // The reference (L467-473) claims a line "cannot have physics, directly,
+    // in a sequence step, or as part of a physics group." The direct-physics
+    // and physics-group cases are covered by validator.test.ts's physical-line
+    // permission matrix; this pins the middle clause specifically, because a
+    // vocabulary regex cannot tell "physics inside a sequence" from "physics
+    // directly on the object" and a prose review previously let this slide.
+    const out = typeErrorsFor(`
+      scene {
+        size: (800, 600)
+        line wire {
+          position: (10, 10)
+          points: [(0, 0), (20, 20)]
+          thickness: 1
+          sequence {
+            physics { duration: 1 }
+          }
+        }
+      }
+    `);
+    expect(out.join("\n")).toContain("TYPE_LINE_PHYSICS");
+  });
+});
+
+describe("LANGUAGE.md · Physics · airDrag default", () => {
+  it("defaults to 0 (a vacuum), not the 0.006 snippet placeholder", () => {
+    // L448-451 states airDrag "ranges from 0.0 to 1.0 inclusive, defaulting to
+    // 0.0" and that 0.006 is only the shipped example/placeholder value. A
+    // prior review draft misdocumented the default itself as 0.006 — the
+    // placeholder value, not the semantic default. This pins the contract's
+    // actual default so that mistake cannot silently recur.
+    expect(LANGUAGE_CONTRACT.physics.properties.airDrag.default).toBe(0);
   });
 });
