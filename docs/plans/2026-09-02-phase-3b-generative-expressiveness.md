@@ -2385,3 +2385,54 @@ Checked after writing, against the spec:
 **One conflict found and resolved during this review.** The first draft declared both `.eval` corpora byte-frozen while Task 10 removes the `generate ... from` header twelve of their fixtures use — so spec §12 item 5 (both corpora compile 20/20) and §10.1 (edit nothing) could not both hold. The resolution came from precedent: Phase 3A migrated those same fixtures for `def`→`let` and recorded it at `eval/RESULTS.md:7-12`. "Frozen" was the wrong word for the right idea. Spec §10.1 and §12 item 5 now separate **mechanical vocabulary migration** (allowed, precedented, and provably evidence-preserving here — every affected header starts at 0, so no object name changes and both report JSONs stay byte-identical) from **semantic rewriting** (forbidden, because the hand-unrolled repetition is the measurement).
 
 **Naming consistency:** `parseExpr`, `parsePrimary`, `parsePostfix`, `parseConditional`, `parseListLiteral`, `parseParenOrPoint`, `operatorOf`, `applyBinary`, `requireNumber`, `requireBoolean`, `sinDegrees`, `cosDegrees`, `MAX_EXPR_DEPTH`, `MAX_LIST_LENGTH`, `EXPRESSION_WORDS`, `TWO_CHAR_MAP`, `ListValue`, `listOf`, `TYPE_ONE_PHYSICS` — each is defined in exactly one task and used consistently after it.
+
+---
+
+## Running observation log (UNVERIFIED — Task 16 must confirm each against the diff)
+
+These are claims collected from task reports and reviews as execution proceeded.
+**They are not evidence.** Task 16 writes the real execution notes from `git diff`,
+and must confirm or correct every line below before promoting any of it.
+
+### Task 1 — lexer operators (`de9bf39`)
+- Quality review raised two Minors, both accepted, neither fixed: the allowed-symbols
+  string at `lexer/index.ts` is a third hand-maintained list of the same facts as
+  `SINGLE_CHAR_MAP`/`TWO_CHAR_MAP` and nothing pins it; and `ch + state.peek(1)` is
+  built twice rather than bound once.
+- The `!` error wording had to change from the plan's literal text to satisfy the
+  test's contiguous-substring regex.
+- A third `languageCuts` case (`==`) needed updating beyond the two the plan named,
+  because `==` now lexes as one token. The commit message says "the two cases".
+
+### Task 2 — expression parser (`7bd8f22`, fixed in `9cf6088` and after)
+- **Claimed behaviour-preserving; it was not.** Implementer reported 2 changes from a
+  68-source A/B corpus. Two independent reviewer corpora (80, then 106 sources) found
+  23 then 29 differing cases, including a **narrowing** the implementer missed:
+  coordinate expressions inside points and point lists started one depth level down
+  instead of resetting, so a point containing 50 nested parens compiled before and
+  errored after. Fixed.
+- **Diagnostic regression:** `requireNumber` anchored errors at `state.peek()`, which
+  by then is the token after the whole expression, so `radius: true + 1` reported on
+  the *next line's* property. Fixed; the fix restores pre-refactor columns exactly.
+- **Two widenings kept and pinned.** `((1,2))` now parses as a point. And
+  `property: position` now resolves to the animatable property even when a binding
+  of that name is in scope — a latent bug where any `let position = …` in a file
+  broke every `animate` block naming that property.
+- **Half a fix shipped unguarded.** The reviewer re-introduced the narrowing in
+  `parseListLiteral` alone and all 370 tests passed. The point-coordinate test did
+  not guard the list path.
+- **Widening 1 left point recursion unbounded** — ~2000 nested points raised
+  `RangeError: Maximum call stack size exceeded` where `de9bf39` gave a clean
+  positioned error. Reachable under `MAX_SHARE_LENGTH`.
+- Two report-accuracy corrections the implementer accepted: its "md5-identical to the
+  committed blobs" claim was false as worded (`git show` pipes the blob, comparing
+  LF-to-LF and hiding the CRLF question), and `eval/` going ` M` was caused by its
+  own harness runs, not a pre-existing condition.
+- 26 message/position changes on inputs that error at both commits: accepted, unpinned.
+
+### Plan defects found during execution
+- Seven verification steps used `git status --porcelain` to prove `eval/` unchanged.
+  `core.autocrlf=true` with no `.gitattributes` makes that report modifications on
+  content-identical files. Changed to `git diff --stat` in `44f8221`.
+- Task 2 dropped `parseListLiteral`'s `depth` parameter as unused; Task 4 generalises
+  list entries and reopens the question. Recorded into Task 4 in `4f24edd`.
