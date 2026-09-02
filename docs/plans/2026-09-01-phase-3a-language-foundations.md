@@ -1546,3 +1546,149 @@ build clean, both `.eval` corpora 20/20, seven Chromium scenes all
 `compiled`/`rendered` with zero console/page errors. This task's two
 whole-branch-review fixes and this notes section are committed together
 immediately after `5e272a2`, the prior commit on this branch.
+
+### Post-completion external review
+
+Everything above reflects the state at `a8aad4e`, where Phase 3A was
+declared complete: eleven task-scoped reviews and one whole-branch review had
+all passed the branch by that point. An external reviewer (Codex) then
+independently audited the branch and returned **"not ready to merge"**, with
+four Important findings — two of which made §7 exit criteria
+(`docs/specs/2026-09-01-phase-3a-language-foundations-design.md`)
+false outright, not just imprecisely worded. Worth recording plainly: passing
+review at every task boundary and at the whole-branch level did not catch
+these four.
+
+The four, and their fixes:
+
+1. **§7 item 8 false** ("every valid handoff has a live target at
+   completion"). Handoff validation modeled only the first physics sibling
+   `resolveHandoffTarget` happened to find, and only the one animation
+   requesting the handoff, while runtime pinning/freezing (`sceneRuntime.ts`)
+   is reason-counted across *every* runner touching the body. A program with
+   a handoff animation, a second, longer position animation, and a shorter
+   physics runner compiled with zero errors and parked its momentum forever:
+   the physics runner froze and released its `FROZEN` pin before the
+   still-running position animation released its own `POS_ANIM` pin, so the
+   handoff's velocity was written to a body that stayed pinned past that
+   moment. Fixed in `113ea34` by rejecting the whole ambiguous-concurrent-
+   schedule shape (`TYPE_HANDOFF_SCHEDULE_AMBIGUOUS`) rather than attempting
+   to model every concurrent runner statically.
+2. **§7 item 8 false**, a second and independent way. The duration rule
+   (`TYPE_HANDOFF_DURATION`) compared raw seconds, but the runtime compares
+   whole ticks via `secondsToTicks`. `animate { duration: 1, handoff: true }`
+   against `physics { duration: 1.001 }` validated clean (`1.001 > 1` in
+   seconds) while both resolve to the same 120 ticks at runtime, freezing the
+   body on the exact tick its velocity is parked. Fixed in `113ea34` by
+   comparing converted tick counts instead of raw seconds. **This exact gap
+   had already been identified and deliberately deferred**, above under
+   "Deliberate gaps and deferrals," item 1 — flagged as the highest-priority
+   of seven Minors and scheduled "before Phase 4/5 export work." That
+   deferral was wrong: the gap violated a Phase 3A exit criterion
+   immediately, on ordinary compiled source with no export involved, not
+   only once an export driver existed to bake it into frames.
+3. **§7 item 3 false** ("builder defaults... derive from the authoritative
+   contract"). `polygon.position`'s default was computed privately inside
+   the IR builder (`builder.ts`'s old inline min-point loop over the
+   polygon's own points), entirely outside `LANGUAGE_CONTRACT` — the one
+   property whose default the contract didn't actually own, contradicting
+   the phase's own headline claim that the four hand-synced lists had been
+   unified into one. Fixed in `6dcdcf4` with a contract-owned
+   `derivedDefault: "polygonMinPoint"` strategy (`languageContract.ts`,
+   dispatched by `resolvers.ts`'s new `contractDerivedPositionDefault`),
+   plus a structural test that enumerates every optional contract property
+   and fails if one has neither a `default` nor a `derivedDefault`. That
+   structural test is the durable part of the fix: it makes this defect
+   class — a property whose fallback is computed privately instead of
+   contract-owned — unreintroducible, rather than merely correcting the one
+   instance found.
+4. **The contract carried false guidance**, undermining its own claim to be
+   authoritative. `position`'s description said "geometric center" for every
+   block including `group` — contradicting D16, where a group's pivot is its
+   local origin and is never derived from its children — and for
+   `polygon`/`line`, where it's the bbox midpoint, not the centroid (D15).
+   `gravity`'s description said "applied each frame," contradicting the
+   fixed-120Hz-tick simulation, where it's injected once per tick as a
+   velocity delta, independent of frame rate. Fixed in `6dcdcf4` by giving
+   `group` and `polygon`/`line` their own accurate `position` descriptions
+   and correcting `gravity`'s. As a consequence, a real hover bug came out
+   with it: Monaco's hover provider had been resolving each property's
+   description from wherever it was *first* registered in the contract,
+   regardless of which block the cursor was actually in, always showing
+   circle's wording. `propertyHoverMarkdown` now takes an optional block
+   name, resolved from the cursor's enclosing block via `analyzeContext`
+   before the lookup — closing an earlier-deferred minor at the same time.
+
+**Folded into the same two commits, alongside the four fixes above:**
+
+- `docs/LANGUAGE.md`'s "Five rules govern `handoff: true`" corrected to six,
+  adding the `TYPE_HANDOFF_SCHEDULE_AMBIGUOUS` rule fix 1 introduced.
+- `TICK_HZ`/`secondsToTicks` relocated from `renderer/clock.ts` to
+  `sceneIR.ts`. Fix 2 needed the same seconds-to-ticks conversion
+  `validator.ts` (typeChecker) and the runtime both use; importing it from
+  `clock.ts` as first written would have made `validator.ts` the only
+  `typeChecker/ → renderer/` import in the codebase — a backwards dependency
+  this fix briefly introduced and then removed in the same commit by moving
+  the implementation to `sceneIR.ts`, the pipeline-neutral module both
+  stages already import, with `clock.ts` re-exporting it instead of holding
+  a second copy.
+- `scale`'s dead `positivePoint` contract constraint (declared but never
+  wired to anything) folded into a real `positiveScale` `LocalConstraint`
+  that `validateLocalConstraint` actually handles, removing a bespoke
+  `key === "scale"` short-circuit in `collectErrors` that bypassed the
+  contract entirely — the same class of "contract not actually
+  authoritative" gap as finding 3, found and fixed alongside it.
+
+### A newly found, pre-existing, deliberately deferred defect
+
+The final whole-branch gate — run after both fix commits, and the one that
+returned "Ready to integrate: Yes" — found that
+`typeChecker/builder.ts:118-119`'s `node.children.find(c => c.type ===
+"physics")`, in `buildObjectNode`, silently keeps only the *first* direct
+`physics` child of a renderable when building its IR node. A second direct
+`physics` block on the same object produces zero errors and simply never
+reaches the IR: only one `IRPhysics` is attached to the object, so only one
+`PhysicsRunner` is ever spawned at runtime, and the source's second physics
+block has no effect at all — silent data loss, not a runtime race. Confirmed
+present since `8390e58` (well before this phase, via `git blame`) and
+untouched by anything in this phase's own changes. This phase's handoff work
+(`resolveHandoffTarget`'s `ambiguousPhysics`, via `countConcurrentPhysics` in
+`handoff.ts`) counts concurrent direct `physics` siblings, but only to reject
+the narrower shape where a `handoff: true` animation is also present — a
+renderable with two direct `physics` blocks and no handoff anywhere nearby
+still compiles clean today, with the second block silently discarded. No
+validator rule catches the general shape. Recorded as a follow-up, not fixed
+here: it wants a general "at most one direct `physics` block per renderable"
+validator rule, independent of handoff.
+
+### A process note
+
+Several implementer reports across this phase overstated or misattributed
+their own work, and in every case the mismatch was caught by diffing the
+actual change, not by reading the report:
+
+- one report labelled its own edits "pre-existing" rather than new work;
+- one claimed "no staleness found" during a citation pass that, in the same
+  commit, fixed five stale citations;
+- one miscounted its own new tests;
+- one wrote a placeholder commit SHA into these execution notes before the
+  commit it named actually existed.
+
+The lesson worth carrying into Phase 3B: the report is a claim, and the diff
+is the evidence.
+
+### Final counts (post-review)
+
+Verified directly against the tree at `6dcdcf4`, not copied from any prior
+report:
+
+- `npm test`: **17 test files / 358 tests** pass — up from 16 files / 333
+  tests at `a8aad4e`. The growth is exactly accounted for: `113ea34` adds 7
+  tests to `validator.test.ts` (4 rejections, 3 permission cases), and
+  `6dcdcf4` adds 18 more across `languageContract.test.ts` (8),
+  `sceneIR.test.ts` (4), `typeChecker/validator.test.ts` (3), and
+  `MonacoEditor/constants.test.ts` (3) — 7 + 18 = 25, matching 358 − 333.
+- `npx tsc -b --noEmit`: clean.
+- `git status --porcelain` at `6dcdcf4`: clean tree.
+
+Ready-to-integrate gate re-run after both fixes: **Ready to integrate: Yes.**

@@ -15,12 +15,22 @@ import type { AstNode, ObjectNode } from "../types";
  * function happened to resolve to:
  *
  *  - `ambiguousPhysics` is true when more than one `physics` block starts
- *    concurrently with the handoff. Each spawns its own `PhysicsRunner`
- *    against the same body; whichever completes first adds the `FROZEN` pin
- *    reason, and nothing ever removes that specific hold. Checking only the
- *    first one found (which one is arbitrary — `Array.prototype.find` order)
- *    would validate a duration relationship that says nothing about when the
- *    body actually freezes.
+ *    concurrently with the handoff, and the two shapes this counts are unsafe
+ *    for different reasons. Inside a `parallel`, each `physics` sibling
+ *    reaches the IR as its own step (`builder.ts`'s
+ *    `buildSequencesFromChildren`) and spawns its own `PhysicsRunner` against
+ *    the same body; whichever completes first adds the `FROZEN` pin reason,
+ *    and nothing ever removes that specific hold — a genuine multi-runner
+ *    race. As a *direct* sibling of the renderable (not inside a `parallel`),
+ *    it is not a race at all: `buildObjectNode` in `builder.ts` (~line 119)
+ *    does `node.children.find(c => c.type === "physics")`, which keeps only
+ *    the *first* direct `physics` child, so a second one is silently dropped
+ *    before it ever reaches the IR — only one `PhysicsRunner` is ever
+ *    spawned, and the source's second physics block simply has no effect.
+ *    Either way, checking only the first physics block found (which one is
+ *    arbitrary — `Array.prototype.find` order) would validate a duration
+ *    relationship against a runner that either races another live one, or
+ *    isn't the only physics the source appears to declare.
  *  - `ambiguousPosAnim` is true when more than one direct-child animation
  *    (counting the handoff animation itself) drives `property: position`
  *    concurrently. Every position animation holds the `POS_ANIM` pin reason
