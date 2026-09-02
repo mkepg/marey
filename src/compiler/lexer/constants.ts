@@ -24,6 +24,18 @@ export const BOOLEAN_VALUES = new Set<string>(CONTRACT_BOOLEAN_VALUES);
 export const EASING_VALUES = new Set<string>(CONTRACT_EASING_VALUES);
 export const DURATION_INDEFINITELY_VALUES = new Set<string>(DURATION_VALUES);
 
+/**
+ * Two-character operators, matched before SINGLE_CHAR_MAP. Order matters:
+ * '=' is already in SINGLE_CHAR_MAP, so without this pass '==' would lex as
+ * two EQUALS tokens and become indistinguishable from 'let x = = y'.
+ */
+export const TWO_CHAR_MAP: Readonly<Record<string, TokenType>> = {
+  "==": "EQ_EQ",
+  "!=": "BANG_EQ",
+  "<=": "LT_EQ",
+  ">=": "GT_EQ",
+};
+
 export const SINGLE_CHAR_MAP: Readonly<Record<string, TokenType>> = {
   "{": "LBRACE",
   "}": "RBRACE",
@@ -38,4 +50,7 @@ export const SINGLE_CHAR_MAP: Readonly<Record<string, TokenType>> = {
   "*": "STAR",
   "/": "SLASH",
   "=": "EQUALS",
+  "%": "PERCENT",
+  "<": "LT",
+  ">": "GT",
 };

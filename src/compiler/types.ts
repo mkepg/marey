@@ -22,6 +22,13 @@ export type TokenType =
   | "STAR"
   | "SLASH"
   | "EQUALS"
+  | "PERCENT"
+  | "LT"
+  | "GT"
+  | "LT_EQ"
+  | "GT_EQ"
+  | "EQ_EQ"
+  | "BANG_EQ"
   | "EOF";
 
 export interface Token {

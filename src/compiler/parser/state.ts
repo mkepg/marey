@@ -22,6 +22,13 @@ export function describeToken(t: Token): string {
     case "STAR":        return "'*'";
     case "SLASH":       return "'/'";
     case "EQUALS":      return "'='";
+    case "PERCENT":     return "'%'";
+    case "LT":          return "'<'";
+    case "GT":          return "'>'";
+    case "LT_EQ":       return "'<='";
+    case "GT_EQ":       return "'>='";
+    case "EQ_EQ":       return "'=='";
+    case "BANG_EQ":     return "'!='";
     case "EOF":         return "end of file";
     default:            return `token '${String(t.value)}'`;
   }

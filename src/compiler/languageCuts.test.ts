@@ -199,21 +199,23 @@ describe("Phase 3B exclusion: lists and indexing", () => {
 });
 
 describe("Phase 3B exclusion: modulo and comparisons", () => {
-  it("rejects '%' modulo — not a character the lexer accepts", () => {
+  it("rejects '%' modulo — lexed, but the parser has no rule for it yet", () => {
     const source = `let x = 1 % 2 scene { size:(10,10) }`;
     const diags = diagnosticsFor(source);
     expect(diags).toHaveLength(1);
-    expect(diags[0].message).toContain("Unexpected character '%'");
+    expect(diags[0].message).toContain("must begin with the 'scene' keyword");
+    expect(diags[0].message).toContain("found '%'");
     const pos = posAt(source, "%");
     expect(diags[0].line).toBe(pos.line);
     expect(diags[0].col).toBe(pos.col);
   });
 
-  it("rejects '<' comparison — not a character the lexer accepts", () => {
+  it("rejects '<' comparison — lexed, but the parser has no rule for it yet", () => {
     const source = `let x = 1 < 2 scene { size:(10,10) }`;
     const diags = diagnosticsFor(source);
     expect(diags).toHaveLength(1);
-    expect(diags[0].message).toContain("Unexpected character '<'");
+    expect(diags[0].message).toContain("must begin with the 'scene' keyword");
+    expect(diags[0].message).toContain("found '<'");
     const pos = posAt(source, "<");
     expect(diags[0].line).toBe(pos.line);
     expect(diags[0].col).toBe(pos.col);
@@ -223,7 +225,7 @@ describe("Phase 3B exclusion: modulo and comparisons", () => {
     const source = `scene { size:(10,10) circle c { position:(0,0), radius: 1 == 2 } }`;
     const diags = diagnosticsFor(source);
     expect(diags).toHaveLength(1);
-    expect(diags[0].message).toContain("Expected a property name, but found '='.");
+    expect(diags[0].message).toContain("Expected a property name, but found '=='.");
     const pos = posAt(source, "==");
     expect(diags[0].line).toBe(pos.line);
     expect(diags[0].col).toBe(pos.col);
