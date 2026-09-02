@@ -420,15 +420,36 @@ had a genuine red (`…phase-3a-language-foundations.md:1375-1379`).
 
 ## 10. What moves, and why each move is a decision
 
-### 10.1 The evaluation corpora are frozen
+### 10.1 The evaluation corpora keep their evidence
 
-`eval/scenes/` and `eval/scenes-r2/` are **not edited**. They are a record of
-what four blind authors actually wrote, and `eval/RESULTS.md:117-125` sets the
-re-run protocol itself: *"Keep the briefs and the protocol identical."*
-Rewriting the fixtures destroys the "before" and the comparison with it.
-Roadmap §8.3 independently requires both corpora stay green, meaning still
-compiling — and both must still report 20/20 with `report.json` and
-`report-r2.json` byte-unchanged.
+`eval/scenes/` and `eval/scenes-r2/` are a record of what four blind authors
+actually wrote, and `eval/RESULTS.md:117-125` sets the re-run protocol itself:
+*"Keep the briefs and the protocol identical."* Roadmap §8.3 independently
+requires both corpora stay green, meaning still compiling.
+
+Two kinds of edit have to be told apart, because Phase 3A already settled the
+distinction and this phase inherits it.
+
+**Mechanical vocabulary migration is allowed, and is what Phase 3A did.** When
+that phase renamed `def`→`let`, `handOff`→`handoff`, `sceneFit`→`fit` and
+`z`→`layer`, it migrated every fixture in both corpora and recorded the fact in
+a note at `eval/RESULTS.md:7-12`: *"the quotes, findings, and conclusions below
+are untouched and their conclusions are unchanged by the rename."* Phase 3B
+removes `generate NAME from A to B` (§4.4), which twelve fixtures use, so the
+same mechanical migration applies — `from` → `in`, nothing else.
+
+That migration is provably evidence-preserving here. Every one of the twelve
+headers starts at 0, so the ordinal suffix equals the old loop value and no
+object name changes. `report.json` and `report-r2.json` must therefore remain
+**byte-identical**, and a moved report byte is a defect, not an expected
+consequence.
+
+**Semantic rewriting is forbidden.** No fixture in either corpus may be changed
+to *use* the new expression layer. The hand-unrolled seven rectangles in
+`bar-chart`, the twelve literal coordinates in `radial-dots`, the two
+overlapping loops in `timeline-ticks`, and every author comment explaining why
+they were written that way, stay exactly as authored. That repetition is the
+measurement; rewriting it destroys the "before" and the comparison with it.
 
 The rewrites live in a new `eval/scenes-3b/`, a **demonstration corpus**, with
 a README stating plainly that it is not an authorability round. A blind-author
@@ -437,7 +458,7 @@ R3 round is explicitly **not** in this phase; it is the separate exercise
 this spec would measure nothing.
 
 `eval/RESULTS-3B.md` records roadmap §5's metrics for each of the three
-scenes, against the frozen baselines: source lines, literal-coordinate count,
+scenes, against the hand-unrolled baselines: source lines, literal-coordinate count,
 hand-unrolled object count, and the diff size for one representative change
 (add a bar; change 12 dots to 24; change 11 ticks to 21).
 
@@ -538,9 +559,12 @@ Roadmap §8.3's criteria, made checkable:
 3. `eval/scenes-3b/timeline-ticks.declare` uses **one** loop, not two.
 4. Each is materially shorter than its baseline, with the reduction and the
    representative-change diff size recorded in `eval/RESULTS-3B.md`.
-5. `eval/scenes/` and `eval/scenes-r2/` are **byte-unchanged**, both compile
-   20/20, and `report.json` / `report-r2.json` are byte-unchanged after a
-   re-run — the same clean-`git status` proof Phase 3A used.
+5. `eval/scenes/` and `eval/scenes-r2/` differ from their committed state by
+   **nothing but the mechanical `generate ... from` → `generate ... in`
+   rename** (§10.1) — verified by reading the diff, which must contain no
+   other changed line. Both compile 20/20, and `report.json` /
+   `report-r2.json` are **byte-unchanged** after a re-run, the same clean-`git
+   status` proof Phase 3A used. No fixture uses the new expression layer.
 6. Every `declare` fence in `docs/LANGUAGE.md` compiles, and the "Current
    limits" section no longer claims gaps that are closed.
 7. Every lifted cut has a permission test; every retained cut keeps its
