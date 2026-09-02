@@ -804,7 +804,9 @@ export function getReqPointList(props: Record<string, AstValue>, key: string): I
 
 - [ ] **Step 7: Generalise the list literal in the parser**
 
-In `src/compiler/parser/parseExpr.ts`, `parseListLiteral` currently requires each entry to be `LPAREN`-led and builds `{x, y}` pairs. Replace its body so each entry is `parseExpr(state, 0, depth + 1)`, collect the `AstValue`s, and return `{ kind: "list", value: entries, ... }`. Keep the unterminated-list error at `parser/parseValue.ts:118-120` verbatim, adjusting only the words "point list" → "list". The per-entry *"Each entry in a point list must be a point"* error is deleted — that rule now lives in the contract.
+In `src/compiler/parser/parseExpr.ts`, `parseListLiteral` currently requires each entry to be `LPAREN`-led and builds `{x, y}` pairs. Replace its body so each entry is a general `parseExpr` call, collect the `AstValue`s, and return `{ kind: "list", value: entries, ... }`. Keep the unterminated-list error at `parser/parseValue.ts:118-120` verbatim, adjusting only the words "point list" → "list". The per-entry *"Each entry in a point list must be a point"* error is deleted — that rule now lives in the contract.
+
+**Handoff note from Task 2, which you must resolve deliberately.** Task 2 established that a *coordinate* expression resets the depth budget to `0` (matching the pre-refactor parser at `de9bf39:parseValue.ts:128,130,166,168`), while a *grouped* expression inherits `depth + 1`. Because every list entry was a coordinate, `parseListLiteral` ended up with no use for its `depth` parameter and Task 2 dropped it — `noUnusedParameters` is on. Generalising list entries to arbitrary expressions changes that: a list entry is no longer necessarily a coordinate, so you must decide and record which rule a general entry follows, and re-add the parameter if it needs one. Getting this wrong is invisible to the suite except through Task 2's `parseExpr.test.ts` depth tests — read them first. **Do not "tidy up" the `depth + 1` at the grouped-expression site; it is deliberate and carries a comment saying so.**
 
 - [ ] **Step 8: Update the Monaco binding scanner**
 
