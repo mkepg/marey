@@ -21,6 +21,7 @@ Every task must respect these. They are not restated per task.
 5. **A moving golden snapshot is a decision, never a re-record.** Only the snapshot changes listed in Task 15 are permitted. `npx vitest run -u` is forbidden.
 6. Run `npx tsc -b --noEmit` before every commit. The build typechecks.
 7. Commit at the end of every task. Work on branch `phase-3b-generative-expressiveness`. Do not merge or push.
+8. **Use `git diff`, never `git status`, to prove a file is unchanged.** This repo has `core.autocrlf=true` and no `.gitattributes`, so regenerating a file with LF endings makes `git status --porcelain` report ` M` even when the content is byte-identical after normalisation. `git diff --stat -- <path>` printing nothing is the reliable check; `git status` is not. `src/compiler/__snapshots__/determinism.test.ts.snap` has shown as modified from before this branch existed for exactly this reason, with an empty content diff — that is the artifact, not a change. For the same reason, do **not** compare raw `md5` of a worktree file against its committed blob; normalise line endings first, or just use `git diff`.
 
 ### Commands
 
@@ -475,9 +476,9 @@ If a test fails on an error *position*, the port dropped a span. Today a number'
 ```bash
 npx vitest run --config eval/vitest.config.ts
 EVAL_DIR=eval/scenes-r2 npx vitest run --config eval/vitest.config.ts
-git status --porcelain eval/
+git diff --stat -- eval/          # content check, NOT git status — see Global Constraint 8
 ```
-Expected: both report 20/20, and `git status --porcelain eval/` prints **nothing**.
+Expected: both report 20/20, and `git diff --stat -- eval/` prints **nothing**.
 
 - [ ] **Step 5: Commit**
 
@@ -640,7 +641,7 @@ Expected: pass.
 ```bash
 npx vitest run --config eval/vitest.config.ts
 EVAL_DIR=eval/scenes-r2 npx vitest run --config eval/vitest.config.ts
-git status --porcelain eval/
+git diff --stat -- eval/          # content check, NOT git status — see Global Constraint 8
 ```
 Expected: 20/20 both, empty `git status`. If a scene now fails, a first-party file *did* use a reserved word and the §6.2 verification was wrong — report it rather than renaming quietly.
 
@@ -819,7 +820,7 @@ Expected: pass.
 ```bash
 npx vitest run --config eval/vitest.config.ts
 EVAL_DIR=eval/scenes-r2 npx vitest run --config eval/vitest.config.ts
-git status --porcelain eval/ src/compiler/__snapshots__/
+git diff --stat -- eval/ src/compiler/__snapshots__/   # content check, NOT git status
 ```
 Expected: 20/20 both, empty `git status`. A moved snapshot here is a defect — the IR shape did not change.
 
@@ -1091,7 +1092,7 @@ Expected: pass. The `%`, `<` and `==` cases in `languageCuts.test.ts` now fail �
 ```bash
 npx vitest run --config eval/vitest.config.ts
 EVAL_DIR=eval/scenes-r2 npx vitest run --config eval/vitest.config.ts
-git status --porcelain eval/
+git diff --stat -- eval/          # content check, NOT git status — see Global Constraint 8
 ```
 Expected: 20/20 both, empty output.
 
@@ -1816,7 +1817,7 @@ Expected: the second command prints **nothing** — every changed line in `eval/
 ```bash
 npx vitest run --config eval/vitest.config.ts
 EVAL_DIR=eval/scenes-r2 npx vitest run --config eval/vitest.config.ts
-git status --porcelain eval/report.json eval/report-r2.json
+git diff --stat -- eval/report.json eval/report-r2.json    # content check, NOT git status
 ```
 Expected: 20/20 both, and the third command prints **nothing** — the reports are byte-identical because no object name changed.
 
@@ -2189,7 +2190,7 @@ State plainly in the note that the hand-unrolled `bar-chart`, `radial-dots` and 
 
 ```bash
 git diff HEAD~N --stat eval/scenes eval/scenes-r2     # N = commits back to before Task 10
-git status --porcelain eval/report.json eval/report-r2.json
+git diff --stat -- eval/report.json eval/report-r2.json    # content check, NOT git status
 grep -c "rectangle bar" eval/scenes/bar-chart.declare   # expect 7 — still hand-unrolled
 grep -c "circle dot" eval/scenes-r2/radial-dots.declare # expect 12 — still hand-unrolled
 ```
@@ -2308,7 +2309,7 @@ npm test
 npx tsc -b --noEmit
 npm run build
 EVAL_DIR=eval/scenes-3b npx vitest run --config eval/vitest.config.ts
-git status --porcelain eval/scenes eval/scenes-r2 eval/report.json eval/report-r2.json
+git diff --stat -- eval/report.json eval/report-r2.json    # content check, NOT git status
 ```
 
 Record the **actual** numbers — test-file and test counts, build result, corpus result. Do not carry a number forward from an earlier task's report; re-derive it here.
