@@ -126,11 +126,22 @@ task. Ordered by how hard each is to notice:
 | 2 | Asserts a substring another code path also emits | delete the code under test: assertion still passed |
 | 3 | Asserts something only true for the fixture's shape | append a sibling to the fixture: went red |
 | 4 | **No test exists at all** | delete the code under test: 404/404 still green |
+| 5 | Name claims more than the assertion checks | revert the fix: test named for the boundary still passed |
 
 Rung 4 was a hint in `parseBinding.ts` added to satisfy an explicit requirement,
 which nothing ever exercised. It is the easiest rung to miss precisely because
 there is nothing to read — a reviewer scanning the diff sees the implementation
 and moves on.
+
+Rung 5 is the most insidious, because the *name* is the documentation. A test
+called `"rejects the 51st alternating level structurally"` kept passing when the
+arithmetic it named was deliberately broken — the generic "too deeply nested"
+message fired either way, so the assertion could not tell a correct cap from a
+double-charged one. A neighbouring test was doing the real work. Anyone reading
+the file would have counted two guards and had one.
+
+Two independent reviewers found it separately, which is the tell: when a test's
+name and its assertion disagree, the name is what people remember.
 
 *Do instead:* for each behaviour a task requires, delete the line that implements
 it and run the suite. Anything still green is untested. This is cheap, mechanical,
