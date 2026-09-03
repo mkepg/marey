@@ -115,6 +115,36 @@ replacement.** Run the revert on the fix too.
 
 ---
 
+### 2c. The strongest form: no assertion at all
+
+Weak tests sit on a scale, and Phase 3B produced every rung of it in a single
+task. Ordered by how hard each is to notice:
+
+| Rung | Shape | How it was found |
+|---|---|---|
+| 1 | Asserts a property that is true by construction, so no change can fail it | revert the whole branch: 11 tests failed, this one passed |
+| 2 | Asserts a substring another code path also emits | delete the code under test: assertion still passed |
+| 3 | Asserts something only true for the fixture's shape | append a sibling to the fixture: went red |
+| 4 | **No test exists at all** | delete the code under test: 404/404 still green |
+
+Rung 4 was a hint in `parseBinding.ts` added to satisfy an explicit requirement,
+which nothing ever exercised. It is the easiest rung to miss precisely because
+there is nothing to read — a reviewer scanning the diff sees the implementation
+and moves on.
+
+*Do instead:* for each behaviour a task requires, delete the line that implements
+it and run the suite. Anything still green is untested. This is cheap, mechanical,
+and it is the only one of the four rungs that reading cannot catch.
+
+**A corollary about breadth.** The same review found that of three edited
+property-name gates, reverting two of them individually left the whole suite
+green — the third was covered only incidentally, by 53 unrelated tests that
+happened to route through it. When a change touches N call sites, revert each one
+*separately*. A suite that goes red when you revert all N tells you nothing about
+which of them is actually guarded.
+
+---
+
 ---
 
 ## 3. Never hand a subagent your own conclusions as fact
