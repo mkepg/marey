@@ -2444,6 +2444,22 @@ and must confirm or correct every line below before promoting any of it.
   probe files before reporting, and any suite count quoted in the execution notes must
   be re-derived on a clean tree.
 
+- **Quality review: the two nesting caps multiply.** Counter *threading* was verified
+  correct across all 9 recursive edges, but because `depth` resets at every coordinate,
+  50 structural levels each carry a fresh 50-level expression budget — so a
+  **3,212-character** source still raised `RangeError` and surfaced through the worker
+  with no position. The guard closed the instance, not the class, while its own comment
+  claimed completeness. Third, never-resetting total-recursion counter added.
+- **Two hand-synced tables re-introduced in miniature.** `operatorOf` returns bare
+  `string` and `PRECEDENCE` is `Record<string, number>`, so adding an operator to one
+  and not the other leaves the token unconsumed and produces a `parseObject` error
+  byte-identical to the ordinary case. TypeScript cannot catch it. Exactly the
+  anti-pattern `AGENTS.md` names, and Tasks 4-9 add operators seven more times.
+  Unified into one table before Task 4.
+- **One test in 378 stood between a mis-threaded counter and a green suite** (measured by
+  revert experiment). That is why the numeric parameters were collapsed into a named
+  `ExprCtx` with intent-named transitions before Tasks 4-9 add more recursive edges.
+
 ### Plan defects found during execution
 - Seven verification steps used `git status --porcelain` to prove `eval/` unchanged.
   `core.autocrlf=true` with no `.gitattributes` makes that report modifications on
