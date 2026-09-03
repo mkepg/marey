@@ -214,8 +214,6 @@ out cannot exist has learned something useful — but only if told.
 
 ---
 
----
-
 ## 3. Never hand a subagent your own conclusions as fact
 
 **Phase 3B, controller error, twice.** Both are mine.
