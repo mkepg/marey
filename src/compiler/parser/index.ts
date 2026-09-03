@@ -92,7 +92,7 @@ export function parse(tokens: Token[]): ParseResult {
         }
 
         const peekType = state.peek().type;
-        if (peekType === "IDENT" || peekType === "FIT" || peekType === "NAMED_COLOR" || peekType === "BOOLEAN" || peekType === "EASING") {
+        if (peekType === "IDENT" || peekType === "FIT" || peekType === "NAMED_COLOR" || peekType === "BOOLEAN" || peekType === "EASING" || peekType === "EXPR_KEYWORD") {
             const key = consumePropertyName(state);
             const keyName = key.value as string;
 

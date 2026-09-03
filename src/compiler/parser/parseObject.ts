@@ -8,6 +8,27 @@ import { parseGenerate } from "./parseGenerate";
 import { parseUse } from "./parseUse";
 import { consumePropertyName, rejectLegacyBinding } from "./parseProperty";
 
+/**
+ * If the token right after `tokenPos` opens a '{ ... }' block, advance
+ * `state.pos` past its matching '}' (brace-depth counted, so nested blocks
+ * are skipped as a unit). No-op if it doesn't. See the EXPR_KEYWORD branch
+ * in parseObject's name check for why this exists.
+ */
+function skipBraceBlockAfter(state: ParserState, tokenPos: number): void {
+  if (state.tokens[tokenPos + 1]?.type !== "LBRACE") return;
+  let depth = 0;
+  let i = tokenPos + 1;
+  for (; i < state.tokens.length; i++) {
+    const tt = state.tokens[i].type;
+    if (tt === "LBRACE") depth++;
+    else if (tt === "RBRACE") {
+      depth--;
+      if (depth === 0) { i++; break; }
+    } else if (tt === "EOF") break;
+  }
+  state.pos = i;
+}
+
 function parseParallelBlock(state: ParserState, parentContext: string): ObjectNode {
   const parTok = state.consume("KEYWORD");
   const braceTok = state.consume("LBRACE");
@@ -163,8 +184,19 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
       if (bad.type === "KEYWORD") hint = ` '${bad.value}' is a reserved object keyword.`;
       else if (bad.type === "NAMED_COLOR") hint = ` '${bad.value}' is a reserved color keyword.`;
       else if (bad.type === "FIT") hint = ` '${bad.value}' is a reserved fit keyword.`;
+      else if (bad.type === "EXPR_KEYWORD") {
+        hint = ` '${bad.value}' is a reserved expression word.`;
+        // The name check fires before this object's own '{' is ever
+        // consumed, so the generic synchronize() recovery (parser/state.ts)
+        // stops at that '{' and the caller's loop then misreads the
+        // rejected object's own properties as belonging to its parent —
+        // cascading into two more spurious diagnostics. Skip the whole
+        // '{ ... }' body here instead, so recovery lands cleanly past it
+        // and this is the only diagnostic produced.
+        skipBraceBlockAfter(state, state.pos);
+      }
       else if (bad.type === "LBRACE") hint = ` Every object must have a name before its '{'.`;
-      
+
       state.throwError(`In ${state.currentContext}: Expected a valid, unique name for the '${objType}' object, but found ${describeToken(bad)}.${hint}`, bad);
     }
     const nameTok = state.consume("IDENT");
@@ -278,7 +310,7 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
       }
 
       const peekType = state.peek().type;
-      if (peekType === "IDENT" || peekType === "FIT" || peekType === "NAMED_COLOR" || peekType === "BOOLEAN" || peekType === "EASING") {
+      if (peekType === "IDENT" || peekType === "FIT" || peekType === "NAMED_COLOR" || peekType === "BOOLEAN" || peekType === "EASING" || peekType === "EXPR_KEYWORD") {
         const key = consumePropertyName(state);
         const keyName = key.value as string;
 

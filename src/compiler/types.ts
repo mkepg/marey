@@ -1,5 +1,6 @@
 export type TokenType =
   | "KEYWORD"
+  | "EXPR_KEYWORD"
   | "IDENT"
   | "NUMBER"
   | "HEX_COLOR"

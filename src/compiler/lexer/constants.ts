@@ -25,6 +25,24 @@ export const EASING_VALUES = new Set<string>(CONTRACT_EASING_VALUES);
 export const DURATION_INDEFINITELY_VALUES = new Set<string>(DURATION_VALUES);
 
 /**
+ * Words that are operators in the expression grammar, not block names.
+ *
+ * Deliberately separate from KEYWORDS: KEYWORDS is `Object.keys(LANGUAGE_CONTRACT)`
+ * plus the macro keywords and means "names a block", and parseValue reports any
+ * KEYWORD found in value position as "is an object keyword and cannot be used as
+ * a property value" — false for 'if'.
+ *
+ * 'to' is reserved here and is *also* legal as a property name, because
+ * `animate { to: ... }` exists. That works because property names are consumed
+ * positionally by consumePropertyName (parser/parseProperty.ts:5-16), and the
+ * gates in parseObject.ts and parseUse.ts admit EXPR_KEYWORD for exactly the
+ * reason they already admit FIT, NAMED_COLOR, BOOLEAN and EASING.
+ */
+export const EXPRESSION_WORDS = new Set<string>([
+  "in", "to", "if", "then", "else", "and", "or", "not", "sin", "cos", "length",
+]);
+
+/**
  * Two-character operators, matched before SINGLE_CHAR_MAP. Order matters:
  * '=' is already in SINGLE_CHAR_MAP, so without this pass '==' would lex as
  * two EQUALS tokens and become indistinguishable from 'let x = = y'.

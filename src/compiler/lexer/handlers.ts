@@ -1,5 +1,5 @@
 import type { FitMode } from "../types";
-import { KEYWORDS, NAMED_COLORS, FIT_VALUE_WORDS, BOOLEAN_VALUES, EASING_VALUES, DURATION_INDEFINITELY_VALUES } from "./constants";
+import { KEYWORDS, NAMED_COLORS, FIT_VALUE_WORDS, BOOLEAN_VALUES, EASING_VALUES, DURATION_INDEFINITELY_VALUES, EXPRESSION_WORDS } from "./constants";
 import type { LexerState } from "./state";
 
 export function handleColor(state: LexerState): void {
@@ -85,6 +85,8 @@ export function handleWord(state: LexerState): void {
   const length = j - state.i;
   if (KEYWORDS.has(word)) {
     state.push("KEYWORD", word, length);
+  } else if (EXPRESSION_WORDS.has(word)) {
+    state.push("EXPR_KEYWORD", word, length);
   } else if (word in NAMED_COLORS) {
     state.push("NAMED_COLOR", word, length);
   } else if (FIT_VALUE_WORDS.has(word)) {

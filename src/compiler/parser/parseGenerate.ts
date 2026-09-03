@@ -29,9 +29,9 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
   }
   const start = startVal.value;
 
-  const toTok = state.consume("IDENT");
+  const toTok = state.consume();
   if (toTok.value !== "to") {
-    state.throwError(`In ${state.currentContext}: Expected 'to' after start bound, but found '${toTok.value as string}'.`, toTok);
+    state.throwError(`In ${state.currentContext}: Expected 'to' after start bound, but found ${describeToken(toTok)}.`, toTok);
   }
 
   const endVal = parseValue(state);

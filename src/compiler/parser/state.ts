@@ -3,6 +3,7 @@ import type { Token, AstValue, CompilerError, TemplateDef } from "../types";
 export function describeToken(t: Token): string {
   switch (t.type) {
     case "KEYWORD":     return `keyword '${t.value as string}'`;
+    case "EXPR_KEYWORD": return `reserved word '${t.value as string}'`;
     case "IDENT":       return `identifier '${t.value as string}'`;
     case "NUMBER":      return `number ${t.value as number}`;
     case "HEX_COLOR":   return `color '${t.value as string}'`;

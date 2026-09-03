@@ -123,7 +123,6 @@ describe("roadmap cut: user-defined functions, scripting runtime, plugin system,
     ["while", "while true { }"],
     ["plugin", "plugin foo { }"],
     ["world", "world { gravity: (0, 900) }"],
-    ["if", "if true { }"],
   ])("rejects top-level '%s' construct", (word, stmt) => {
     const source = `${stmt} scene { size:(10,10) }`;
     const diags = diagnosticsFor(source);
@@ -131,6 +130,20 @@ describe("roadmap cut: user-defined functions, scripting runtime, plugin system,
     expect(diags[0].message).toContain(`found identifier '${word}'`);
     expect(diags[0].message).toContain("must begin with the 'scene' keyword");
     const pos = posAt(source, word);
+    expect(diags[0].line).toBe(pos.line);
+    expect(diags[0].col).toBe(pos.col);
+  });
+
+  // 'if' moved from this bucket in Phase 3B: it is no longer a bare
+  // identifier (see "expression keywords" in lexer.test.ts), so it fails
+  // one step earlier with a different, more specific message.
+  it("rejects top-level 'if' construct as a reserved word, not a bare identifier", () => {
+    const source = `if true { } scene { size:(10,10) }`;
+    const diags = diagnosticsFor(source);
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toContain(`found reserved word 'if'`);
+    expect(diags[0].message).toContain("must begin with the 'scene' keyword");
+    const pos = posAt(source, "if");
     expect(diags[0].line).toBe(pos.line);
     expect(diags[0].col).toBe(pos.col);
   });
@@ -168,7 +181,7 @@ describe("Phase 3B exclusion: trig", () => {
     const source = `scene { size:(10,10) circle c { position:(0,0), radius: ${expr} } }`;
     const diags = diagnosticsFor(source);
     expect(diags).toHaveLength(1);
-    expect(diags[0].message).toContain(`Undefined variable '${name}'.`);
+    expect(diags[0].message).toContain(`Unexpected reserved word '${name}' where a property value was expected.`);
     const pos = posAt(source, expr);
     expect(diags[0].line).toBe(pos.line);
     expect(diags[0].col).toBe(pos.col);
@@ -237,7 +250,7 @@ describe("Phase 3B exclusion: conditional value expression", () => {
     const source = `scene { size:(10,10) circle c { position:(0,0), radius: if true then 1 else 2 } }`;
     const diags = diagnosticsFor(source);
     expect(diags).toHaveLength(1);
-    expect(diags[0].message).toContain("Undefined variable 'if'.");
+    expect(diags[0].message).toContain("Unexpected reserved word 'if' where a property value was expected.");
     const pos = posAt(source, "if true");
     expect(diags[0].line).toBe(pos.line);
     expect(diags[0].col).toBe(pos.col);
@@ -342,13 +355,40 @@ describe("Phase 3A permission neighbors", () => {
   it.each([
     "mass", "friction", "collisionCategory", "collisionMask",
     "lockPosition", "lockRotation", "spin", "isStatic", "angularVelocity",
-    "function", "import", "fetch", "while", "if", "plugin", "world", "sin", "cos",
+    "function", "import", "fetch", "while", "plugin", "world",
   ])("keeps cut word '%s' usable as an ordinary identifier, not a reserved word", (word) => {
     const source = `
       let ${word} = 5
       scene {
         size: (10, 10)
         circle ${word} { position: (0, 0), radius: ${word} }
+      }
+    `;
+    expect(messagesFor(source)).toEqual([]);
+  });
+
+  // Phase 3B reserves these as expression operators. They were ordinary
+  // identifiers until this phase; the roadmap authority is 8.1 and the
+  // grammar is settled in the Phase 3B design, section 6.1.
+  it.each(["if", "then", "else", "and", "or", "not", "sin", "cos", "length", "in"])(
+    "reserves expression word '%s' so it cannot be an object name",
+    (word) => {
+      const source = `scene { size: (10, 10) circle ${word} { position: (0, 0), radius: 5 } }`;
+      const diags = diagnosticsFor(source);
+      expect(diags).toHaveLength(1);
+      expect(diags[0].message).toContain("reserved");
+    },
+  );
+
+  it("still allows 'to' as a property name, because animate declares one", () => {
+    const source = `
+      scene {
+        size: (100, 100)
+        circle c {
+          position: (0, 0)
+          radius: 10
+          animate { property: position, to: (10, 10), duration: 1 }
+        }
       }
     `;
     expect(messagesFor(source)).toEqual([]);

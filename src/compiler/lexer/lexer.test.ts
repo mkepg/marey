@@ -25,3 +25,18 @@ describe("operator tokens", () => {
     expect(() => lex("!")).toThrow(/'!=' or 'not'/);
   });
 });
+
+describe("expression keywords", () => {
+  it.each(["in", "to", "if", "then", "else", "and", "or", "not", "sin", "cos", "length"])(
+    "lexes '%s' as EXPR_KEYWORD, not IDENT or KEYWORD",
+    (word) => {
+      const [tok] = lex(word);
+      expect(tok.type).toBe("EXPR_KEYWORD");
+      expect(tok.value).toBe(word);
+    },
+  );
+
+  it("keeps block keywords as KEYWORD", () => {
+    expect(lex("circle")[0].type).toBe("KEYWORD");
+  });
+});

@@ -6,7 +6,9 @@ export function parseBinding(state: ParserState): void {
 
   if (state.peek().type !== "IDENT") {
     const bad = state.peek();
-    state.throwError(`In ${state.currentContext}: Expected a variable name after 'let', but found ${bad.value}.`, bad);
+    let hint = "";
+    if (bad.type === "EXPR_KEYWORD") hint = ` '${bad.value}' is a reserved expression word.`;
+    state.throwError(`In ${state.currentContext}: Expected a variable name after 'let', but found ${bad.value}.${hint}`, bad);
   }
 
   const nameTok = state.consume("IDENT");
