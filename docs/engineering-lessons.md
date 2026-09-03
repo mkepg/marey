@@ -230,6 +230,14 @@ add a test that enumerates both and fails on divergence.
   up and the suite reported **379** tests instead of 378 — a number that looks
   right unless you know the baseline. Delete probe files before reporting, and
   re-derive any quoted count on a clean tree.
+- **A subagent cut off mid-run may leave the tree dirty, or may not.** Rate
+  limits and interruptions land at arbitrary points. Before resuming one, check
+  the tree yourself: `git log --oneline -1`, `git diff --stat`, and
+  `git status --porcelain --untracked-files=all` for stray files, then re-run the
+  suite and compare the count to the known baseline. Tell the resumed agent what
+  you found, so it does not re-do or double-apply work. Never assume an
+  interrupted agent left nothing behind — one left a `.test.ts` that inflated the
+  suite count, and it went unnoticed until the baseline was checked.
 - **`visual-check` leaves a Vite server on port 5199.** Kill it when done; it
   blocked a worktree deletion at the end of Phase 3A.
 
