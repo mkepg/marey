@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  KIND_LABEL,
   LANGUAGE_CONTRACT,
   RESERVED_PROPERTY_NAMES,
   REQUIRED_PROPS,
@@ -170,7 +169,7 @@ describe("language contract", () => {
 
   it("falls back to (0, 0) for a polygon built directly with no points, matching the old inline default", () => {
     // Bypasses typeCheck (which would reject fewer than 3 points via the
-    // pointCount constraint) to exercise buildIR's defensive empty-points
+    // listOf constraint) to exercise buildIR's defensive empty-points
     // path directly, the same way the file's other "building IR directly"
     // tests bypass validation above.
     const { ast, errors } = parse(lex(`scene {
@@ -217,18 +216,23 @@ describe("position and gravity descriptions (Fix 2)", () => {
 });
 
 describe("one list kind (Phase 3B)", () => {
-  it("declares points as a list constrained to point elements", () => {
-    expect(LANGUAGE_CONTRACT.polygon.properties.points.kinds).toBe("list");
-    expect(LANGUAGE_CONTRACT.polygon.properties.points.constraint)
-      .toEqual({ kind: "listOf", element: "point", min: 3, max: 10000 });
-    expect(LANGUAGE_CONTRACT.line.properties.points.constraint)
-      .toEqual({ kind: "listOf", element: "point", min: 2, max: 10000 });
-  });
-
-  it("labels the list kind", () => {
-    expect(KIND_LABEL.list).toBe("a list [a, b, c]");
-  });
-
+  // Two tests used to open this block:
+  //   it("declares points as a list constrained to point elements", ...)
+  //   it("labels the list kind", ...)
+  // Both were deleted (Fix 3, post-Task-4 review): each read a value straight
+  // out of LANGUAGE_CONTRACT or KIND_LABEL — `polygon.points.kinds`,
+  // `polygon.points.constraint`, `line.points.constraint`, `KIND_LABEL.list`
+  // — and asserted it equal to a hand-typed transcription of that exact same
+  // literal, so the assertion was a copy of the data rather than a check of
+  // any derivation or behaviour; none of the four involved a computed value
+  // or an absence check. The `constraint` values are already covered
+  // behaviourally by this file's own min/max/element tests just below, and by
+  // `languageCuts.test.ts`'s non-point-element rejection test, so nothing
+  // about `kinds`/`constraint` went unguarded. `KIND_LABEL.list`'s exact
+  // string is the one genuine gap: nothing else in the suite drives a `list`
+  // value through the "expects X, but got Y" message path (no test gives a
+  // list where a non-list is expected, or vice versa), so that specific
+  // wording is no longer pinned anywhere.
   /**
    * The `listOf` count checks carry the two messages the old `pointCount`
    * constraint carried, unchanged. Nothing pinned either of them: deleting
