@@ -145,6 +145,51 @@ which of them is actually guarded.
 
 ---
 
+### 2d. Pin the judgment calls, not just the behaviour
+
+Weak tests are one problem. A distinct one is a **decision with two plausible
+answers, both of which pass**.
+
+Phase 3B's list-literal work had to choose which recursion budget a general list
+entry follows — the coordinate rule (reset the expression budget) or the grouped
+rule (inherit it). The implementer reasoned it out and chose correctly. Then they
+checked: swapping to the other rule left **411/411 green**. The suite had no
+opinion at all about a choice that halves how deeply lists and points may nest.
+
+This is not a missing test for a *behaviour*; every behaviour was covered. It is a
+missing test for a *decision*. Nobody would have written it, because the code
+looked right either way.
+
+*Do instead:* when implementation requires a judgment call — a constant, a
+traversal order, which of two rules an edge follows — flip it to the other answer
+and run the suite before you commit. If nothing fails, write the test that makes
+the decision load-bearing, and put the reasoning in a comment beside it. The
+comment explains why; the test stops someone from silently choosing otherwise.
+
+---
+
+## 2e. Do not compose user-facing text from metadata written for another context
+
+**Phase 3B, controller error.** A plan specified this diagnostic template:
+
+```
+'${key}' expects a list of ${KIND_LABEL[element]} values, but element ${i} is ${KIND_LABEL[kind]}.
+```
+
+`KIND_LABEL` entries are noun phrases *with articles* — `"a point (x, y)"`,
+`"a number"` — because they were written for a different sentence frame
+(`expects X, but got Y`). Composed into the new frame they produce *"expects a
+list of a point (x, y) values"*. The implementer noticed, kept the specified
+string verbatim rather than deviating quietly, and flagged it — which was the
+right call, and is how it got fixed instead of shipping.
+
+*Do instead:* when reusing a metadata string in a new sentence, write the sentence
+out with a real value substituted and read it aloud before specifying it. If a
+label needs to work in two frames, either give the contract two fields or phrase
+the frame so one label fits both.
+
+---
+
 ---
 
 ## 3. Never hand a subagent your own conclusions as fact
