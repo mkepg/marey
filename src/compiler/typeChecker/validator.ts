@@ -3,6 +3,8 @@ import {
   ANIMATABLE_PROPERTIES,
   KIND_LABEL,
   LANGUAGE_CONTRACT,
+  LIST_ELEMENT_NOUN_PLURAL,
+  listTooLargeCode,
   PROP_TYPES,
   REQUIRED_PROPS,
 } from "../languageContract";
@@ -36,7 +38,13 @@ function formatPointCount(value: number): string {
   return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
-function validateLocalConstraint(
+// Exported only as a test seam (validator.test.ts's "generic listOf path"
+// describe block): no real contract entry gives `listOf` a non-point
+// `element` today, so the generic branch below is otherwise unreachable
+// through the normal parse -> typeCheck pipeline `collectErrors` drives.
+// This function is otherwise still called exclusively from `collectErrors`
+// in this file.
+export function validateLocalConstraint(
   label: string,
   typeName: string,
   key: string,
@@ -123,11 +131,22 @@ function validateLocalConstraint(
             line: el.line, col: el.col, endLine: el.endLine, endCol: el.endCol,
           };
         }
+        // The noun and the too-large diagnostic code both vary by element
+        // kind (`LIST_ELEMENT_NOUN_PLURAL` / `listTooLargeCode` in
+        // languageContract.ts), not hardcoded to "points" — see those two
+        // exports' doc comments for why this was a real bug (a future
+        // non-point `listOf` would have been told it needed more "points")
+        // and why the too-large code stays `TYPE_POLYGON_TOO_LARGE` only for
+        // `element: "point"`. `typeName` (not `key`) stays the subject of
+        // the sentence unchanged from before this generic-ized version, to
+        // keep the pinned polygon/line messages byte-for-byte identical.
+        const noun = LIST_ELEMENT_NOUN_PLURAL[constraint.element];
         if (val.value.length < constraint.min) {
-          return error(`${label}: '${typeName}' requires at least ${constraint.min} points.`);
+          return error(`${label}: '${typeName}' requires at least ${constraint.min} ${noun}.`);
         }
         if (val.value.length > constraint.max) {
-          return error(`[TYPE_POLYGON_TOO_LARGE] ${label}: '${typeName}' exceeds the maximum safe limit of ${formatPointCount(constraint.max)} points.`);
+          const code = listTooLargeCode(constraint.element);
+          return error(`[${code}] ${label}: '${typeName}' exceeds the maximum safe limit of ${formatPointCount(constraint.max)} ${noun}.`);
         }
       }
       return undefined;

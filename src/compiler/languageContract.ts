@@ -394,6 +394,50 @@ export const KIND_LABEL: Readonly<Record<ValueKind, string>> = {
   indefinitely: "the keyword 'indefinitely'",
 };
 
+/**
+ * Plural noun for a `listOf` element kind, used only by `validator.ts`'s
+ * `listOf` case for its "requires at least N ___" / "exceeds ... N ___"
+ * counting messages. Deliberately a separate table from `KIND_LABEL` above,
+ * not a derivation of it: `KIND_LABEL`'s entries are singular noun phrases
+ * *with an article*, written for the "expects X, but got Y" frame ("a point
+ * (x, y)", "a number"). Dropped into a count they would read as "requires at
+ * least 3 a point (x, y)" — this project has already shipped exactly that
+ * class of bug once by composing an article-bearing phrase into the wrong
+ * sentence shape (see `KIND_LABEL`'s own history). Every `ValueKind` needs an
+ * entry, and TypeScript enforces that exhaustively, even though only `point`
+ * is used by any contract entry today.
+ */
+export const LIST_ELEMENT_NOUN_PLURAL: Readonly<Record<ValueKind, string>> = {
+  number: "numbers",
+  color: "colors",
+  string: "strings",
+  point: "points",
+  list: "lists",
+  fit: "fit keywords",
+  boolean: "booleans",
+  easing: "easing keywords",
+  animProperty: "animatable property names",
+  indefinitely: "'indefinitely' keywords",
+};
+
+/**
+ * Diagnostic code for a `listOf` value exceeding its `max` element count.
+ * `TYPE_POLYGON_TOO_LARGE` predates the general list feature (Phase 3B) —
+ * coined back when the only `listOf` constraint that existed described a
+ * shape's `points` — and `languageContract.test.ts` pins its exact text for
+ * `polygon`. Keying it off `element === "point"` rather than the block name
+ * changes nothing about today's actual behaviour: a `line` exceeding its max
+ * already produced this same code before this function existed, since
+ * `line.points` is also `element: "point"`. What it does change is every
+ * *future* non-point `listOf` constraint: instead of silently inheriting a
+ * code whose name claims the offending object is a polygon, it gets an
+ * honest generic code. A confidently wrong diagnostic is worse than a merely
+ * generic one — see AGENTS.md's process rules for this project.
+ */
+export function listTooLargeCode(element: ValueKind): string {
+  return element === "point" ? "TYPE_POLYGON_TOO_LARGE" : "TYPE_LIST_TOO_LARGE";
+}
+
 export const REQUIRED_PROPS = Object.fromEntries(
   Object.entries(LANGUAGE_CONTRACT).map(([name, contract]) => [
     name,

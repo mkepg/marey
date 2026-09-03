@@ -2,7 +2,9 @@ import { describe, it, expect } from "vitest";
 import { lex } from "../lexer";
 import { parse } from "../parser";
 import { typeCheck } from "../typeChecker";
-import type { CompilerError } from "../types";
+import type { AstValue, CompilerError } from "../types";
+import { validateLocalConstraint } from "./validator";
+import type { PropertySpec } from "../languageContract";
 
 function errorsFor(source: string): string[] {
   const { ast, errors } = parse(lex(source));
@@ -678,5 +680,58 @@ describe("TYPE_INVALID_SCALE (dead-contract-data fold-in)", () => {
   size: (100, 100)
   circle c { position: (10, 10), radius: 5, scale: (1.5, 0.5) }
 }`)).toEqual([]);
+  });
+});
+
+describe("listOf's generic path (Fix 1)", () => {
+  // No property in LANGUAGE_CONTRACT declares `listOf` with an element other
+  // than "point" (only polygon.points and line.points use it, both
+  // `element: "point"`), so no source text the parser accepts can drive
+  // `validateLocalConstraint`'s listOf case down its non-point branch —
+  // `collectErrors` only ever reaches that case with a `spec` read straight
+  // out of `LANGUAGE_CONTRACT` (validator.ts, `collectErrors`, the
+  // `LANGUAGE_CONTRACT[...].properties[key]` lookup feeding
+  // `validateLocalConstraint`). `validateLocalConstraint` is exported
+  // (validator.ts) for exactly this reason: calling it directly with a
+  // synthetic `PropertySpec`/`AstValue` pair exercises the real function,
+  // not a reimplementation of it, without needing a second non-point list
+  // property to exist in the language just to reach it.
+  const numberValue = (n: number, col: number): AstValue => ({
+    kind: "number", value: n, line: 1, col, endLine: 1, endCol: col + String(n).length,
+  });
+  const numberList = (nums: number[]): AstValue => ({
+    kind: "list",
+    value: nums.map((n, i) => numberValue(n, i + 1)),
+    line: 1, col: 1, endLine: 1, endCol: 10,
+  });
+  const numberListSpec = (min: number, max: number): PropertySpec => ({
+    kinds: "list",
+    description: "test-only",
+    example: "test-only",
+    placeholder: "test-only",
+    constraint: { kind: "listOf", element: "number", min, max },
+  });
+
+  it("uses the element's plural noun instead of the hardcoded 'points' for a too-short list", () => {
+    const err = validateLocalConstraint(
+      "'star' object 's'", "star", "radii", numberList([1]), numberListSpec(2, 8),
+    );
+    expect(err?.message).toBe("'star' object 's': 'star' requires at least 2 numbers.");
+  });
+
+  it("uses a generic diagnostic code, not TYPE_POLYGON_TOO_LARGE, for a too-long non-point list", () => {
+    const err = validateLocalConstraint(
+      "'star' object 's'", "star", "radii", numberList([1, 2, 3]), numberListSpec(1, 2),
+    );
+    expect(err?.message).toBe(
+      "[TYPE_LIST_TOO_LARGE] 'star' object 's': 'star' exceeds the maximum safe limit of 2 numbers.",
+    );
+  });
+
+  it("reports nothing for a count within [min, max]", () => {
+    const err = validateLocalConstraint(
+      "'star' object 's'", "star", "radii", numberList([1, 2]), numberListSpec(1, 3),
+    );
+    expect(err).toBeUndefined();
   });
 });
