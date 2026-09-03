@@ -200,7 +200,7 @@ describe("Phase 3B: one list kind; indexing still excluded", () => {
     expect(diags).toHaveLength(1);
     expect(diags[0].message).toContain("element 1");
     expect(diags[0].message).toBe(
-      "'polygon' object 'p': 'points' expects a list of a point (x, y) values, but element 1 is a number.",
+      "'polygon' object 'p': 'points' expects a list where every element is a point (x, y), but element 1 is a number.",
     );
     // Positioned at the offending element itself, not at the whole list.
     const pos = posAt(source, "5,");

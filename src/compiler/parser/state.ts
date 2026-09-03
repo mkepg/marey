@@ -39,8 +39,13 @@ export function expectedTypeDescription(expected: Token["type"], got: Token): st
   switch (expected) {
     case "LBRACE":  return "'{' to open a block";
     case "RBRACE":  return "'}' to close the block";
-    case "LBRACKET":return "'[' to open a point list";
-    case "RBRACKET":return "']' to close the point list";
+    // Unreachable today: the only two `consume` calls with these token types
+    // (parseExpr.ts:229 and :243) are each guarded by a `peek()` check, so the
+    // mismatch that would print these cannot happen. Kept correct rather than
+    // deleted, so a future unguarded `consume("RBRACKET")` inherits wording
+    // that matches the one list kind instead of the old point-only one.
+    case "LBRACKET":return "'[' to open a list";
+    case "RBRACKET":return "']' to close the list";
     case "LPAREN":  return "'(' to open a point or expression";
     case "RPAREN":  return "')' to close the point or expression";
     case "COMMA":   return "','";

@@ -182,7 +182,7 @@ describe("structural nesting depth", () => {
     const diags = diagnosticsFor(sceneWith(nestPoints(51)));
     expect(diags).toHaveLength(1);
     expect(diags[0].message).toContain(
-      "Points and point lists are nested too deeply. Maximum nesting depth is 50.",
+      "Points and lists are nested too deeply. Maximum nesting depth is 50.",
     );
     expect(typeof diags[0].line).toBe("number");
     expect(typeof diags[0].col).toBe("number");
@@ -277,7 +277,7 @@ describe("structural nesting depth", () => {
     const diags = diagnosticsFor(polygonWith(nestListsAndPoints(51)));
     expect(diags).toHaveLength(1);
     expect(diags[0].message).toContain(
-      "Points and point lists are nested too deeply. Maximum nesting depth is 50.",
+      "Points and lists are nested too deeply. Maximum nesting depth is 50.",
     );
   });
 

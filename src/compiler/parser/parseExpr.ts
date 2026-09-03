@@ -13,7 +13,10 @@ import { ParserState, describeToken } from "./state";
  *   did (`de9bf39:parseValue.ts:128,130,166,168`) and source relying on the
  *   reset must keep compiling. Nothing else resets it — see
  *   `parseListLiteral` on why a list entry does not.
- * - `struct` bounds how deep points and point lists nest inside one another.
+ * - `struct` bounds how deep points and lists nest inside one another. Only a
+ *   point *coordinate* charges it — a list entry does not, so a chain that
+ *   alternates the two costs one structural level per point, whether or not
+ *   lists are interleaved.
  *   It must not reset at a coordinate, since that reset is exactly what left
  *   the recursion unbounded once `((x, y))` made a point reachable from
  *   inside an expression.
@@ -91,7 +94,7 @@ function checkNesting(state: ParserState, ctx: ExprCtx): void {
     state.throwError(`In ${state.currentContext}: Math expression is too deeply nested. Maximum depth is ${MAX_EXPR_DEPTH}.`, state.peek());
   }
   if (ctx.struct > MAX_STRUCTURAL_DEPTH) {
-    state.throwError(`In ${state.currentContext}: Points and point lists are nested too deeply. Maximum nesting depth is ${MAX_STRUCTURAL_DEPTH}.`, state.peek());
+    state.throwError(`In ${state.currentContext}: Points and lists are nested too deeply. Maximum nesting depth is ${MAX_STRUCTURAL_DEPTH}.`, state.peek());
   }
   if (ctx.total > MAX_TOTAL_DEPTH) {
     state.throwError(`In ${state.currentContext}: This value nests too deeply overall. Maximum total nesting is ${MAX_TOTAL_DEPTH}.`, state.peek());
@@ -209,12 +212,13 @@ function applyBinary(
  *     parser's hard-coded 0 at its four *coordinate* sites
  *     (`de9bf39:parseValue.ts:128,130,166,168`). An entry is not one of them;
  *     pre-refactor there was no entry expression at all to be parity with.
- *  2. It leaves a point list's arithmetic exactly as it was. A point entry's
- *     own coordinates still reset `expr` and advance `struct` one level inside
+ *  2. It leaves a list of points — the only list this language could write
+ *     until now — costing exactly what it used to. A point entry's own
+ *     coordinates still reset `expr` and advance `struct` one level inside
  *     `parseParenOrPoint`, so the coordinate sits at the same `struct` and the
  *     same zeroed `expr` this function used to pass directly — which is what
- *     keeps `parseExpr.test.ts`'s 50/51 point-list-coordinate boundary and its
- *     alternating list/point structural cap where they are. `intoCoordinate`
+ *     keeps `parseExpr.test.ts`'s 50/51 coordinate-inside-a-list boundary and
+ *     its alternating list/point structural cap where they are. `intoCoordinate`
  *     here would instead charge `struct` twice per level, halving how deeply
  *     lists and points may alternate.
  *  3. Every edge out of an entry still advances `expr` and `total`, so bare

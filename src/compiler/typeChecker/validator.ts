@@ -119,7 +119,7 @@ function validateLocalConstraint(
           const el = val.value[badIdx];
           return {
             phase: "TYPE",
-            message: `${label}: '${key}' expects a list of ${KIND_LABEL[constraint.element]} values, but element ${badIdx} is ${KIND_LABEL[el.kind]}.`,
+            message: `${label}: '${key}' expects a list where every element is ${KIND_LABEL[constraint.element]}, but element ${badIdx} is ${KIND_LABEL[el.kind]}.`,
             line: el.line, col: el.col, endLine: el.endLine, endCol: el.endCol,
           };
         }
