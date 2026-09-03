@@ -61,6 +61,34 @@ Phase 3B produced three more, all in one task:
 restore. Report the actual failure output. If a fix touches two code paths,
 verify the test guards *both* — re-introduce the defect in each path separately.
 
+### 2a. Two specific shapes of worthless test
+
+Both found in one Phase 3B task, by review rather than by the suite:
+
+**A test shaped to the fix, not to the requirement.** A parser-recovery helper
+collapsed a 3-diagnostic cascade to 1 — but only when the rejected object was the
+*last child of its parent*. The fixture had no following sibling, so
+`toHaveLength(1)` passed. Appending one valid object after it turned the test red.
+The test encoded the shape the fix happened to handle instead of the behaviour the
+requirement asked for.
+
+*Do instead:* assert the thing the requirement actually names. Here that was "the
+diagnostic names the word as reserved" — `diags[0].message` containing `reserved`
+— not "there is exactly one diagnostic", which was an artifact of the fixture.
+Then vary the fixture along the dimension the fix is most likely to be sensitive
+to, and see whether the assertion survives.
+
+**A test that cannot fail.** `"keeps block keywords as KEYWORD"` guarded the
+ordering of two branches in the lexer's word handler. But the two word sets are
+*disjoint by construction*, so the ordering is not load-bearing and no
+implementation change can make the assertion false. Confirmed by reverting the
+entire branch under test: 11 tests failed, this one still passed.
+
+*Do instead:* before writing a test, name the change that would make it fail. If
+you cannot, either the test is vacuous or the property is enforced structurally —
+in which case pin the *structure* (here: that the two sets are disjoint), not a
+consequence of it.
+
 ---
 
 ## 3. Never hand a subagent your own conclusions as fact
