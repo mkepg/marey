@@ -2431,6 +2431,19 @@ and must confirm or correct every line below before promoting any of it.
   own harness runs, not a pre-existing condition.
 - 26 message/position changes on inputs that error at both commits: accepted, unpinned.
 
+- Computed `Infinity` reaches the IR silently: the lexer rejects an *Infinite literal*
+  (`lexer/handlers.ts:73-75`) and scientific notation (`:67-70`), but no binary-operator
+  path checks `isFinite` on a *result*, so repeated multiplication of long literals
+  overflows unnoticed. **Verified pre-existing** — `de9bf39:parseValue.ts:63-72` has no
+  such guard either. Not introduced by this phase; recorded so it is not rediscovered.
+
+### Process observations
+- A review subagent left `src/compiler/parser/__probe.test.ts` behind when it was cut
+  off mid-run. The runner picked it up and the suite reported **379** tests instead of
+  378 — a count that looks right unless you know the baseline. Reviewers must delete
+  probe files before reporting, and any suite count quoted in the execution notes must
+  be re-derived on a clean tree.
+
 ### Plan defects found during execution
 - Seven verification steps used `git status --porcelain` to prove `eval/` unchanged.
   `core.autocrlf=true` with no `.gitattributes` makes that report modifications on
