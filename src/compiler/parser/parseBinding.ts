@@ -1,14 +1,13 @@
-import type { ParserState } from "./state";
+import { describeToken, type ParserState } from "./state";
 import { parseValue } from "./parseValue";
+import { reservedExpressionWordHint } from "./parseProperty";
 
 export function parseBinding(state: ParserState): void {
   state.consume("KEYWORD");
 
   if (state.peek().type !== "IDENT") {
     const bad = state.peek();
-    let hint = "";
-    if (bad.type === "EXPR_KEYWORD") hint = ` '${bad.value}' is a reserved expression word.`;
-    state.throwError(`In ${state.currentContext}: Expected a variable name after 'let', but found ${bad.value}.${hint}`, bad);
+    state.throwError(`In ${state.currentContext}: Expected a variable name after 'let', but found ${describeToken(bad)}.${reservedExpressionWordHint(bad)}`, bad);
   }
 
   const nameTok = state.consume("IDENT");

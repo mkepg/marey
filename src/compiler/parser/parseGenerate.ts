@@ -29,10 +29,11 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
   }
   const start = startVal.value;
 
-  const toTok = state.consume();
+  const toTok = state.peek();
   if (toTok.value !== "to") {
     state.throwError(`In ${state.currentContext}: Expected 'to' after start bound, but found ${describeToken(toTok)}.`, toTok);
   }
+  state.consume();
 
   const endVal = parseValue(state);
   if (endVal.kind !== "number") {

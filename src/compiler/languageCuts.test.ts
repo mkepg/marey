@@ -257,6 +257,24 @@ describe("Phase 3B exclusion: conditional value expression", () => {
   });
 });
 
+describe("Phase 3B reservation regression: parseGenerate's 'to' bound recovery", () => {
+  // parseGenerate used to read the loop-bound 'to' via consume("IDENT"),
+  // which threw *without* advancing on a mismatch. Reserving 'to' broke
+  // that (it no longer lexes as IDENT), so this switched to an untyped
+  // consume() — but consume() with no expected type always advances `pos`
+  // (parser/state.ts), even on a value mismatch, which moved where
+  // synchronize() resumes and produced a spurious extra diagnostic for a
+  // malformed 'generate' followed by a sibling object. Pinning the count so
+  // that regression can't come back silently.
+  it("reports exactly two diagnostics for a 'generate' missing its 'to' bound, not three", () => {
+    const source = `scene { size:(10,10) group g { generate i from 0 } circle ok { position:(0,0), radius:5 } } }`;
+    const diags = diagnosticsFor(source);
+    expect(diags).toHaveLength(2);
+    expect(diags[0].message).toContain("Expected 'to' after start bound, but found '}'.");
+    expect(diags[1].message).toContain("Unexpected '}' after the scene block closed.");
+  });
+});
+
 describe("Phase 3A permission neighbors", () => {
   it("allows immutable shadowing across nested scopes", () => {
     const source = `
@@ -417,6 +435,53 @@ describe("Phase 3A permission neighbors", () => {
     const diags = diagnosticsFor(source);
     expect(diags.length).toBeGreaterThan(0);
     expect(diags[0].message).toContain("'sin' is a reserved expression word");
+  });
+
+  it("reserves an expression word as a 'let' binding name too", () => {
+    // parseBinding's name check (parser/parseBinding.ts) is a third
+    // separate code path from parseObject's and parseUse's, and had zero
+    // coverage of its own hint text: deleting the hint line left the whole
+    // 404-test suite green. Pinning the exact wording here, same as the
+    // object-name and use-instance-name cases above.
+    const source = `let sin = 5 scene { size:(10,10) }`;
+    const diags = diagnosticsFor(source);
+    expect(diags.length).toBeGreaterThan(0);
+    expect(diags[0].message).toContain("'sin' is a reserved expression word");
+  });
+
+  it("still exercises the scene-level property-name gate for a reserved word", () => {
+    // The scene-level property gate (parser/index.ts) admits EXPR_KEYWORD
+    // the same way parseObject's and parseUse's do, but nothing exercised
+    // it: reverting just that one arm left the full suite green. 'to' is
+    // not a scene property, so this is a *type*-phase rejection ("unknown
+    // property"), not a parse-phase "expected a property name" — proof the
+    // gate let the token through as a property-name attempt instead of
+    // rejecting it on the spot.
+    const source = `scene { size:(10,10) to: (1,2) }`;
+    const diags = diagnosticsFor(source);
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toContain("has an unknown property 'to'");
+  });
+
+  it("still exercises the 'use'-body property-name gate for a reserved word", () => {
+    // Same reasoning as the scene-level case above, for parseUse's other
+    // property gate (parser/parseUse.ts, the one inside a 'use' instance's
+    // '{ }' override block — distinct from the instance-*name* gate tested
+    // above). 'to' is not a group property, so this is an "unknown
+    // property" type error, proving the token reached property-name
+    // position instead of being rejected as "expected a property name".
+    const source = `
+      template T(r) {
+        circle c { position: (0, 0), radius: r }
+      }
+      scene {
+        size: (100, 100)
+        use T(5) inst { to: (1, 2) }
+      }
+    `;
+    const diags = diagnosticsFor(source);
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toContain("has an unknown property 'to'");
   });
 
   it("still allows 'to' as a property name, because animate declares one", () => {

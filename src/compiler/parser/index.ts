@@ -6,7 +6,7 @@ import { parseBinding } from "./parseBinding";
 import { parseGenerate } from "./parseGenerate";
 import { parseTemplate } from "./parseTemplate";
 import { parseUse } from "./parseUse";
-import { consumePropertyName, rejectLegacyBinding } from "./parseProperty";
+import { consumePropertyName, rejectLegacyBinding, isPropertyNameStart } from "./parseProperty";
 
 export function parse(tokens: Token[]): ParseResult {
   const state = new ParserState(tokens);
@@ -92,7 +92,7 @@ export function parse(tokens: Token[]): ParseResult {
         }
 
         const peekType = state.peek().type;
-        if (peekType === "IDENT" || peekType === "FIT" || peekType === "NAMED_COLOR" || peekType === "BOOLEAN" || peekType === "EASING" || peekType === "EXPR_KEYWORD") {
+        if (isPropertyNameStart(peekType)) {
             const key = consumePropertyName(state);
             const keyName = key.value as string;
 

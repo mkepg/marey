@@ -4,7 +4,7 @@ import { parseValue } from "./parseValue";
 import { parseObject } from "./parseObject";
 import { parseGenerate } from "./parseGenerate";
 import { parseBinding } from "./parseBinding";
-import { consumePropertyName, rejectLegacyBinding } from "./parseProperty";
+import { consumePropertyName, rejectLegacyBinding, isPropertyNameStart, reservedExpressionWordHint } from "./parseProperty";
 
 export function parseUse(state: ParserState, depth: number): ObjectNode {
   if (depth > 50) {
@@ -50,8 +50,7 @@ export function parseUse(state: ParserState, depth: number): ObjectNode {
 
   if (state.peek().type !== "IDENT") {
     const bad = state.peek();
-    const hint = bad.type === "EXPR_KEYWORD" ? ` '${bad.value}' is a reserved expression word.` : "";
-    state.throwError(`In ${state.currentContext}: Expected a unique instance name for the template after arguments, but found ${describeToken(bad)}.${hint}`, bad);
+    state.throwError(`In ${state.currentContext}: Expected a unique instance name for the template after arguments, but found ${describeToken(bad)}.${reservedExpressionWordHint(bad)}`, bad);
   }
 
   const instanceNameTok = state.consume("IDENT");
@@ -71,7 +70,7 @@ export function parseUse(state: ParserState, depth: number): ObjectNode {
     while (state.peek().type !== "RBRACE" && state.peek().type !== "EOF") {
       rejectLegacyBinding(state);
       const peekType = state.peek().type;
-      if (peekType === "IDENT" || peekType === "FIT" || peekType === "NAMED_COLOR" || peekType === "BOOLEAN" || peekType === "EASING" || peekType === "EXPR_KEYWORD") {
+      if (isPropertyNameStart(peekType)) {
           const key = consumePropertyName(state);
           const keyName = key.value as string;
 

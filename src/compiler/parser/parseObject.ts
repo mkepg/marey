@@ -6,7 +6,7 @@ import { parseValue } from "./parseValue";
 import { parseBinding } from "./parseBinding";
 import { parseGenerate } from "./parseGenerate";
 import { parseUse } from "./parseUse";
-import { consumePropertyName, rejectLegacyBinding } from "./parseProperty";
+import { consumePropertyName, rejectLegacyBinding, isPropertyNameStart, reservedExpressionWordHint } from "./parseProperty";
 
 function parseParallelBlock(state: ParserState, parentContext: string): ObjectNode {
   const parTok = state.consume("KEYWORD");
@@ -163,7 +163,7 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
       if (bad.type === "KEYWORD") hint = ` '${bad.value}' is a reserved object keyword.`;
       else if (bad.type === "NAMED_COLOR") hint = ` '${bad.value}' is a reserved color keyword.`;
       else if (bad.type === "FIT") hint = ` '${bad.value}' is a reserved fit keyword.`;
-      else if (bad.type === "EXPR_KEYWORD") hint = ` '${bad.value}' is a reserved expression word.`;
+      else if (bad.type === "EXPR_KEYWORD") hint = reservedExpressionWordHint(bad);
       else if (bad.type === "LBRACE") hint = ` Every object must have a name before its '{'.`;
 
       state.throwError(`In ${state.currentContext}: Expected a valid, unique name for the '${objType}' object, but found ${describeToken(bad)}.${hint}`, bad);
@@ -279,7 +279,7 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
       }
 
       const peekType = state.peek().type;
-      if (peekType === "IDENT" || peekType === "FIT" || peekType === "NAMED_COLOR" || peekType === "BOOLEAN" || peekType === "EASING" || peekType === "EXPR_KEYWORD") {
+      if (isPropertyNameStart(peekType)) {
         const key = consumePropertyName(state);
         const keyName = key.value as string;
 
