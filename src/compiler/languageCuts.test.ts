@@ -188,13 +188,22 @@ describe("Phase 3B exclusion: trig", () => {
   });
 });
 
-describe("Phase 3B exclusion: lists and indexing", () => {
-  it("rejects a bare number list '[1,2,3]' — only point lists parse inside '[...]'", () => {
-    const source = `let nums = [1,2,3] scene { size:(10,10) }`;
+describe("Phase 3B: one list kind; indexing still excluded", () => {
+  // Lifted by Phase 3B (roadmap 8.1): [...] is a general list.
+  it("allows a bare number list, which Phase 3B lifts", () => {
+    expect(messagesFor(`let nums = [1,2,3] scene { size:(10,10) }`)).toEqual([]);
+  });
+
+  it("still rejects a non-point element on 'points', now from the contract", () => {
+    const source = `scene { size:(100,100) polygon p { position:(0,0), points: [(0,0), 5, (5,10)] } }`;
     const diags = diagnosticsFor(source);
     expect(diags).toHaveLength(1);
-    expect(diags[0].message).toContain("Each entry in a point list must be a point");
-    const pos = posAt(source, "1,2,3");
+    expect(diags[0].message).toContain("element 1");
+    expect(diags[0].message).toBe(
+      "'polygon' object 'p': 'points' expects a list of a point (x, y) values, but element 1 is a number.",
+    );
+    // Positioned at the offending element itself, not at the whole list.
+    const pos = posAt(source, "5,");
     expect(diags[0].line).toBe(pos.line);
     expect(diags[0].col).toBe(pos.col);
   });

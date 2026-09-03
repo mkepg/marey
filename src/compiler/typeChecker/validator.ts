@@ -106,8 +106,23 @@ function validateLocalConstraint(
       }
       return undefined;
 
-    case "pointCount":
-      if (val.kind === "pointList") {
+    // One list kind, so a list's *element* rule is a contract constraint
+    // rather than a parse error: `[...]` parses as a list of anything, and
+    // `points` is the property that additionally requires every element to be
+    // a point. The element check runs before the count checks because it is
+    // the more informative diagnostic when both apply, and it reports at the
+    // offending element's own span rather than the whole list's.
+    case "listOf":
+      if (val.kind === "list") {
+        const badIdx = val.value.findIndex((el) => el.kind !== constraint.element);
+        if (badIdx !== -1) {
+          const el = val.value[badIdx];
+          return {
+            phase: "TYPE",
+            message: `${label}: '${key}' expects a list of ${KIND_LABEL[constraint.element]} values, but element ${badIdx} is ${KIND_LABEL[el.kind]}.`,
+            line: el.line, col: el.col, endLine: el.endLine, endCol: el.endCol,
+          };
+        }
         if (val.value.length < constraint.min) {
           return error(`${label}: '${typeName}' requires at least ${constraint.min} points.`);
         }

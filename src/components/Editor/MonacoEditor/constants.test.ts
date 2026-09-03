@@ -22,6 +22,15 @@ describe("Declare editor guidance", () => {
     expect(analyzeContext("use Foo() instance {").at(-1)?.blockType).toBe("use");
   });
 
+  it("names a '[...]' binding by the language's one list kind", () => {
+    // The scanner's kind strings are what a completion shows as
+    // "Variable (<kind>)" (language.ts), so they must spell the same kinds the
+    // compiler does. Phase 3B folded `pointList` into `list`; nothing else in
+    // the suite reads this value, so reverting the scanner alone stayed green.
+    expect(analyzeContext("let tri = [(0,0), (10,0), (5,10)]").at(-1)?.vars.tri).toBe("list");
+    expect(analyzeContext("let p = (1, 2)").at(-1)?.vars.p).toBe("point");
+  });
+
   it("keeps nested tab stops in the sequence completion snippet", () => {
     expect(sequenceSnippet()).toContain("duration: ${2:1.0}");
   });

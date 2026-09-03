@@ -8,10 +8,11 @@ import { ParserState, describeToken } from "./state";
  * The three compose rather than being alternatives, which is the whole reason
  * the third exists:
  *
- * - `expr` bounds one expression's own operator/paren nesting. A point or
- *   point-list *coordinate* resets it to 0, because that is what the
- *   pre-refactor parser did (`de9bf39:parseValue.ts:128,130,166,168`) and
- *   source relying on the reset must keep compiling.
+ * - `expr` bounds one expression's own operator/paren nesting. A point
+ *   *coordinate* resets it to 0, because that is what the pre-refactor parser
+ *   did (`de9bf39:parseValue.ts:128,130,166,168`) and source relying on the
+ *   reset must keep compiling. Nothing else resets it — see
+ *   `parseListLiteral` on why a list entry does not.
  * - `struct` bounds how deep points and point lists nest inside one another.
  *   It must not reset at a coordinate, since that reset is exactly what left
  *   the recursion unbounded once `((x, y))` made a point reachable from
@@ -49,13 +50,12 @@ const MAX_TOTAL_DEPTH = 400;
  *   parsePrimary      | parsePrimary      | intoUnary    (unary '-')
  *   parsePrimary      | parseListLiteral  | (dispatch — no transition)
  *   parsePrimary      | parseParenOrPoint | (dispatch — no transition)
- *   parseListLiteral  | parseExpr         | intoCoordinate  (x)
- *   parseListLiteral  | parseExpr         | intoCoordinate  (y)
+ *   parseListLiteral  | parseExpr         | intoGroup       (entry)
  *   parseParenOrPoint | parseExpr         | intoCoordinate  (point x)
  *   parseParenOrPoint | parseExpr         | intoCoordinate  (point y)
  *   parseParenOrPoint | parseExpr         | intoGroup       (grouped expr)
  *
- * Ten call edges; the three no-transition ones are strict descents within a
+ * Nine call edges; the three no-transition ones are strict descents within a
  * level, and every edge that can close a cycle advances `total`.
  */
 interface ExprCtx {
@@ -66,12 +66,12 @@ interface ExprCtx {
 
 export const ROOT_CTX: ExprCtx = { expr: 0, struct: 0, total: 0 };
 
-/** Into a point or point-list coordinate: the expression budget restarts. */
+/** Into a point coordinate: the expression budget restarts. */
 function intoCoordinate(c: ExprCtx): ExprCtx {
   return { expr: 0, struct: c.struct + 1, total: c.total + 1 };
 }
 
-/** Into a parenthesised sub-expression: deeper, but structurally flat. */
+/** Into a parenthesised sub-expression or a list entry: deeper, but structurally flat. */
 function intoGroup(c: ExprCtx): ExprCtx {
   return { expr: c.expr + 1, struct: c.struct, total: c.total + 1 };
 }
@@ -192,39 +192,45 @@ function applyBinary(
 }
 
 /**
- * `[(x, y), ...]` — ported from the pre-refactor `parseValue.ts:113-146`.
+ * `[a, b, c]` — a list of values, ported from the pre-refactor
+ * `parseValue.ts:113-146`, which admitted only points.
  *
- * Entry was already nesting-checked by `parsePrimary`; each coordinate below
- * opens a fresh expression budget via `intoCoordinate`.
+ * There is one list kind, so an entry is any expression and "every element is
+ * a point" is no longer a parse rule: it is the `listOf` element constraint
+ * `polygon.points` and `line.points` carry in `languageContract.ts`, reported
+ * by the type checker at the offending element's own span.
+ *
+ * **Depth budget for an entry (resolved from Task 2's handoff).** An entry
+ * follows the *grouped-expression* rule, not the coordinate one — `[` costs
+ * one expression level exactly as `(` does, and does not reset the budget.
+ * Three reasons:
+ *
+ *  1. The coordinate reset exists only for parity with the pre-refactor
+ *     parser's hard-coded 0 at its four *coordinate* sites
+ *     (`de9bf39:parseValue.ts:128,130,166,168`). An entry is not one of them;
+ *     pre-refactor there was no entry expression at all to be parity with.
+ *  2. It leaves a point list's arithmetic exactly as it was. A point entry's
+ *     own coordinates still reset `expr` and advance `struct` one level inside
+ *     `parseParenOrPoint`, so the coordinate sits at the same `struct` and the
+ *     same zeroed `expr` this function used to pass directly — which is what
+ *     keeps `parseExpr.test.ts`'s 50/51 point-list-coordinate boundary and its
+ *     alternating list/point structural cap where they are. `intoCoordinate`
+ *     here would instead charge `struct` twice per level, halving how deeply
+ *     lists and points may alternate.
+ *  3. Every edge out of an entry still advances `expr` and `total`, so bare
+ *     `[[[…]]]` nesting — newly expressible now that an entry need not be a
+ *     point — is bounded by the expression cap rather than recursing free.
  */
 function parseListLiteral(state: ParserState, ctx: ExprCtx): AstValue {
   const openTok = state.consume("LBRACKET");
-  const pts: Array<{ x: number; y: number }> = [];
+  const entries: AstValue[] = [];
 
   while (state.peek().type !== "RBRACKET") {
     if (state.peek().type === "EOF") {
-      state.throwError(`In ${state.currentContext}: Point list opened at line ${openTok.line}, column ${openTok.col} was not closed before end of file. Add a closing ']'.`, openTok);
+      state.throwError(`In ${state.currentContext}: List opened at line ${openTok.line}, column ${openTok.col} was not closed before end of file. Add a closing ']'.`, openTok);
     }
 
-    if (state.peek().type !== "LPAREN") {
-      const bad = state.peek();
-      state.throwError(`In ${state.currentContext}: Expected a point '(x, y)' inside the point list, but found ${describeToken(bad)}. Each entry in a point list must be a point, e.g. [(0,0), (100,0), (50,80)].`, bad);
-    }
-
-    const ptOpen = state.consume("LPAREN");
-    const xTok = state.peek();
-    const x = requireCoordinate(state, parseExpr(state, 0, intoCoordinate(ctx)), xTok);
-    state.consume("COMMA");
-    const yTok = state.peek();
-    const y = requireCoordinate(state, parseExpr(state, 0, intoCoordinate(ctx)), yTok);
-
-    if (state.peek().type !== "RPAREN") {
-      const bad = state.peek();
-      state.throwError(`In ${state.currentContext}: Expected ')' to close the point opened at line ${ptOpen.line}, column ${ptOpen.col}, but found ${describeToken(bad)}.`, bad);
-    }
-    state.consume("RPAREN");
-
-    pts.push({ x, y });
+    entries.push(parseExpr(state, 0, intoGroup(ctx)));
 
     if (state.peek().type !== "RBRACKET") {
       state.consume("COMMA");
@@ -232,8 +238,8 @@ function parseListLiteral(state: ParserState, ctx: ExprCtx): AstValue {
   }
   const endTok = state.consume("RBRACKET");
   return {
-    kind: "pointList",
-    value: pts,
+    kind: "list",
+    value: entries,
     line: openTok.line,
     col: openTok.col,
     endLine: endTok.line,

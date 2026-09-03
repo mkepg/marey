@@ -1,6 +1,6 @@
 /** The value categories understood by the Declare type checker. */
 export type ValueKind =
-  | "number" | "color" | "string" | "point" | "pointList"
+  | "number" | "color" | "string" | "point" | "list"
   | "fit" | "boolean" | "easing" | "animProperty" | "indefinitely";
 
 export type ContractDefault = number | string | boolean | Readonly<{ x: number; y: number }>;
@@ -11,7 +11,7 @@ export type LocalConstraint =
   | Readonly<{ kind: "positivePoint" }>
   | Readonly<{ kind: "positiveScale" }>
   | Readonly<{ kind: "maxLength"; max: number }>
-  | Readonly<{ kind: "pointCount"; min: number; max: number }>;
+  | Readonly<{ kind: "listOf"; element: ValueKind; min: number; max: number }>;
 
 /**
  * A named strategy for computing an optional property's fallback value from
@@ -197,11 +197,11 @@ const polygonProperties = Object.freeze({
     { derivedDefault: "polygonMinPoint" },
   ),
   points: property(
-    "pointList",
+    "list",
     "Defines the vertices of a polygon.",
     "points: [(0,0), (100,0), (50,100)]",
     "[(0, 0), (100, 0), (50, 100)]",
-    { required: true, constraint: { kind: "pointCount", min: 3, max: 10000 } },
+    { required: true, constraint: { kind: "listOf", element: "point", min: 3, max: 10000 } },
   ),
   ...visualProperties,
 });
@@ -209,11 +209,11 @@ const polygonProperties = Object.freeze({
 const lineProperties = Object.freeze({
   position: property(bboxMidpointPosition.kinds, bboxMidpointPosition.description, bboxMidpointPosition.example, bboxMidpointPosition.placeholder, { required: true }),
   points: property(
-    "pointList",
+    "list",
     "Defines the vertices of a line.",
     "points: [(0,0), (100,0), (50,100)]",
     "[(0, 0), (100, 0)]",
-    { required: true, constraint: { kind: "pointCount", min: 2, max: 10000 } },
+    { required: true, constraint: { kind: "listOf", element: "point", min: 2, max: 10000 } },
   ),
   thickness: property(
     "number",
@@ -386,7 +386,7 @@ export const KIND_LABEL: Readonly<Record<ValueKind, string>> = {
   color: "a color (hex code or named color keyword)",
   string: "a quoted string",
   point: "a point (x, y)",
-  pointList: "a point list [(x,y), ...]",
+  list: "a list [a, b, c]",
   fit: "a fit keyword (contain, cover, fill, or none)",
   boolean: "a boolean (true or false)",
   easing: "an easing keyword (e.g. easeInOut, linear)",

@@ -77,9 +77,9 @@ export interface PointValue {
   readonly endCol: number;
 }
 
-export interface PointListValue {
-  readonly kind: "pointList";
-  readonly value: ReadonlyArray<{ readonly x: number; readonly y: number }>;
+export interface ListValue {
+  readonly kind: "list";
+  readonly value: ReadonlyArray<AstValue>;
   readonly line: number;
   readonly col: number;
   readonly endLine: number;
@@ -137,7 +137,7 @@ export type AstValue =
   | ColorValue
   | StringValue
   | PointValue
-  | PointListValue
+  | ListValue
   | FitValue
   | BooleanValue
   | EasingValue

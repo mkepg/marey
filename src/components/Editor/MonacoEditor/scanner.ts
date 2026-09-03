@@ -127,7 +127,7 @@ export function analyzeContext(textUntilCursor: string): ScopeNode[] {
     // ── first character of a let value (non-word) ────────────────────
     if (expectingBindingVal && currentBindingName) {
       if (char === "#")      scopes[scopes.length - 1].vars[currentBindingName] = "color";
-      else if (char === "[") scopes[scopes.length - 1].vars[currentBindingName] = "pointList";
+      else if (char === "[") scopes[scopes.length - 1].vars[currentBindingName] = "list";
       else if (char === "(") scopes[scopes.length - 1].vars[currentBindingName] = "point";
       else if (/[0-9\-]/.test(char)) scopes[scopes.length - 1].vars[currentBindingName] = "number";
 

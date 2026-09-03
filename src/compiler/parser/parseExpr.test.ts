@@ -239,6 +239,48 @@ describe("structural nesting depth", () => {
     expect(diags[0].message).toContain("A point coordinate must be a number, but got point.");
   });
 
+  /**
+   * What a *list entry* costs, pinned at the exact boundary.
+   *
+   * Phase 3B made a list entry a general expression, which forced a choice
+   * between the two budget rules: an entry could reset the expression budget
+   * like a point coordinate, or inherit an incremented one like a grouped
+   * expression. `parseListLiteral` takes the second, so a `[` costs one
+   * *expression* level and no structural level, and one level of
+   * `[(1, <inner>)]` therefore costs exactly one structural level — the
+   * point's own coordinate — the same as a bare `(1, <inner>)` does above.
+   *
+   * Switching that one call to `intoCoordinate` charges `struct` twice per
+   * level instead, halving how deeply lists and points may alternate, and
+   * leaves every other test in the repository green — verified by making the
+   * swap and running the full suite. Only a fixture sitting exactly on the
+   * cap can see it: at 50 levels the structural budget is spent to the last
+   * level and the ordinary coordinate complaint still wins, while the halved
+   * arithmetic would report the structural error here instead.
+   */
+  const nestListsAndPoints = (n: number) => {
+    let s = "[(1, 1)]";
+    for (let i = 1; i < n; i++) s = `[(1, ${s})]`;
+    return s;
+  };
+  const polygonWith = (points: string) =>
+    `scene { size: (100, 100) polygon g { position: (0, 0), points: ${points} } }`;
+
+  it("charges one structural level per alternating list-and-point level, not two", () => {
+    const diags = diagnosticsFor(polygonWith(nestListsAndPoints(50)));
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toContain("A point coordinate must be a number, but got list.");
+    expect(diags[0].message).not.toContain("nested too deeply");
+  });
+
+  it("rejects the 51st alternating level structurally", () => {
+    const diags = diagnosticsFor(polygonWith(nestListsAndPoints(51)));
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toContain(
+      "Points and point lists are nested too deeply. Maximum nesting depth is 50.",
+    );
+  });
+
   it("bounds alternating point-list and point nesting too", () => {
     let s = "[(1, 1)]";
     for (let i = 1; i < 3000; i++) s = `[(1, ${s})]`;

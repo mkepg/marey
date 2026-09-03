@@ -1,4 +1,4 @@
-import type { AstValue, NumberValue, PointValue, StringValue, PointListValue, ColorValue, BooleanValue, EasingValue, AnimPropertyValue } from "../types";
+import type { AstValue, NumberValue, PointValue, StringValue, ListValue, ColorValue, BooleanValue, EasingValue, AnimPropertyValue } from "../types";
 import type { IRColor, IRPoint, IRPointList, IRFit, IREasing } from "../sceneIR";
 import { EASING_VALUES as CONTRACT_EASING_VALUES, FIT_VALUES, propertyDefault, derivedDefaultStrategy } from "../languageContract";
 import type { ContractDefault } from "../languageContract";
@@ -163,7 +163,24 @@ export function getReqPoint(props: Record<string, AstValue>, key: string): IRPoi
 export function getReqString(props: Record<string, AstValue>, key: string): string {
   return (props[key] as StringValue).value;
 }
+/**
+ * Narrows the one list kind down to the point list the IR wants.
+ *
+ * `IRPointList` is unchanged: a list is folded away at parse time, so nothing
+ * of the list kind itself reaches the IR. The element check here is a "cannot
+ * happen" guard — `points` carries a `listOf` element constraint, so the
+ * validator has already rejected a non-point element with a positioned
+ * diagnostic before `buildIR` runs.
+ */
 export function getReqPointList(props: Record<string, AstValue>, key: string): IRPointList {
-  const v = props[key] as PointListValue;
-  return v.value.map((pt) => ({ x: pt.x, y: pt.y }));
+  const v = props[key];
+  if (v === undefined || v.kind !== "list") {
+    throw new Error(`[IR] Required point list '${key}' is missing or is not a list.`);
+  }
+  return (v as ListValue).value.map((el) => {
+    if (el.kind !== "point") {
+      throw new Error(`[IR] Point list '${key}' contains a '${el.kind}' element; the validator should have rejected this.`);
+    }
+    return { x: el.x, y: el.y };
+  });
 }

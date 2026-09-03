@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  KIND_LABEL,
   LANGUAGE_CONTRACT,
   RESERVED_PROPERTY_NAMES,
   REQUIRED_PROPS,
@@ -212,5 +213,77 @@ describe("position and gravity descriptions (Fix 2)", () => {
     const desc = LANGUAGE_CONTRACT.physics.properties.gravity.description;
     expect(desc.toLowerCase()).toContain("tick");
     expect(desc.toLowerCase()).not.toContain("applied each frame");
+  });
+});
+
+describe("one list kind (Phase 3B)", () => {
+  it("declares points as a list constrained to point elements", () => {
+    expect(LANGUAGE_CONTRACT.polygon.properties.points.kinds).toBe("list");
+    expect(LANGUAGE_CONTRACT.polygon.properties.points.constraint)
+      .toEqual({ kind: "listOf", element: "point", min: 3, max: 10000 });
+    expect(LANGUAGE_CONTRACT.line.properties.points.constraint)
+      .toEqual({ kind: "listOf", element: "point", min: 2, max: 10000 });
+  });
+
+  it("labels the list kind", () => {
+    expect(KIND_LABEL.list).toBe("a list [a, b, c]");
+  });
+
+  /**
+   * The `listOf` count checks carry the two messages the old `pointCount`
+   * constraint carried, unchanged. Nothing pinned either of them: deleting
+   * both length checks outright, and separately mangling each message, left
+   * all 411 tests green. They are the reason a 2-point polygon is rejected at
+   * all, so they are pinned here rather than left to the next rewrite.
+   */
+  const messagesFor = (source: string): string[] => {
+    const { ast, errors } = parse(lex(source));
+    if (errors.length || !ast) return errors.map((e) => e.message);
+    return typeCheck(ast).errors.map((e) => e.message);
+  };
+
+  it("rejects a polygon with fewer than the contract's minimum points", () => {
+    expect(messagesFor(`scene { size:(100,100) polygon p { position:(0,0), points: [(0,0), (10,10)] } }`))
+      .toEqual(["'polygon' object 'p': 'polygon' requires at least 3 points."]);
+  });
+
+  it("rejects a line with fewer than the contract's minimum points", () => {
+    expect(messagesFor(`scene { size:(100,100) line l { position:(0,0), thickness: 2, points: [(0,0)] } }`))
+      .toEqual(["'line' object 'l': 'line' requires at least 2 points."]);
+  });
+
+  /**
+   * `getReqPointList` narrows the one list kind down to `IRPointList`, so it
+   * has to say what it does with a list the validator would never have let
+   * through. Both branches are "cannot happen" guards, exercised the same way
+   * this file's other direct-buildIR tests exercise theirs: by bypassing
+   * typeCheck, which is what would normally have rejected the input.
+   */
+  it("refuses to build IR from a points list containing a non-point", () => {
+    const { ast, errors } = parse(lex(`scene {
+      size: (100, 100)
+      polygon p { position: (0, 0), points: [(0,0), 5, (5,10)] }
+    }`));
+    expect(errors).toEqual([]);
+    expect(() => buildIR(ast!)).toThrow(
+      "Point list 'points' contains a 'number' element; the validator should have rejected this.",
+    );
+  });
+
+  it("refuses to build IR from a polygon with no points at all", () => {
+    const { ast, errors } = parse(lex(`scene {
+      size: (100, 100)
+      polygon p { position: (0, 0) }
+    }`));
+    expect(errors).toEqual([]);
+    expect(() => buildIR(ast!)).toThrow("Required point list 'points' is missing or is not a list.");
+  });
+
+  it("rejects a polygon above the contract's maximum point count", () => {
+    const tooMany = Array.from({ length: 10001 }, (_, i) => `(${i},0)`).join(",");
+    expect(messagesFor(`scene { size:(100,100) polygon p { position:(0,0), points: [${tooMany}] } }`))
+      .toEqual([
+        "[TYPE_POLYGON_TOO_LARGE] 'polygon' object 'p': 'polygon' exceeds the maximum safe limit of 10,000 points.",
+      ]);
   });
 });
