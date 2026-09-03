@@ -190,6 +190,30 @@ the frame so one label fits both.
 
 ---
 
+### 2f. "I could not write that test, and here is why" is a valid result
+
+A controller asked for a revert-check on a reworded parser string. The
+implementer found the string was **unreachable dead code** — both switch arms sat
+behind a guarded `consume`, so no input could print them — and said so plainly:
+the revert test is impossible here, and that is the finding, not an omission.
+
+They established it three independent ways rather than asserting it: statically
+(every `consume` of those token types is preceded by a `peek` guard), by sentinel
+(replacing the strings with `SENTINEL-OPEN`/`SENTINEL-CLOSE` left the suite fully
+green), and empirically (thirteen malformed sources, none reached either arm).
+The arms were kept, with a comment recording why they are dead, so a future
+unguarded call inherits correct wording.
+
+This matters because the alternative failure modes are both common and both bad:
+inventing a test that passes for an unrelated reason, or quietly skipping the
+check and reporting the fix as verified.
+
+*Do instead:* when a demanded verification cannot be performed, say so, prove the
+reason, and name what you did instead. A controller asking for a check it turns
+out cannot exist has learned something useful — but only if told.
+
+---
+
 ---
 
 ## 3. Never hand a subagent your own conclusions as fact
