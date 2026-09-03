@@ -225,14 +225,17 @@ describe("one list kind (Phase 3B)", () => {
   // — and asserted it equal to a hand-typed transcription of that exact same
   // literal, so the assertion was a copy of the data rather than a check of
   // any derivation or behaviour; none of the four involved a computed value
-  // or an absence check. The `constraint` values are already covered
-  // behaviourally by this file's own min/max/element tests just below, and by
-  // `languageCuts.test.ts`'s non-point-element rejection test, so nothing
-  // about `kinds`/`constraint` went unguarded. `KIND_LABEL.list`'s exact
-  // string is the one genuine gap: nothing else in the suite drives a `list`
-  // value through the "expects X, but got Y" message path (no test gives a
-  // list where a non-list is expected, or vice versa), so that specific
-  // wording is no longer pinned anywhere.
+  // or an absence check. The `constraint` values are covered behaviourally by
+  // this file's own min/max/element tests just below (including the
+  // "rejects a line above the contract's maximum point count" test — added
+  // after code review found the deleted echo was, until then, the only place
+  // pinning line.points's `max: 10000`) and by `languageCuts.test.ts`'s
+  // non-point-element rejection test, so nothing about `kinds`/`constraint`
+  // went unguarded. `KIND_LABEL.list`'s exact string is the one genuine gap:
+  // nothing else in the suite drives a `list` value through the "expects X,
+  // but got Y" message path (no test gives a list where a non-list is
+  // expected, or vice versa), so that specific wording is no longer pinned
+  // anywhere.
   /**
    * The `listOf` count checks carry the two messages the old `pointCount`
    * constraint carried, unchanged. Nothing pinned either of them: deleting
@@ -288,6 +291,23 @@ describe("one list kind (Phase 3B)", () => {
     expect(messagesFor(`scene { size:(100,100) polygon p { position:(0,0), points: [${tooMany}] } }`))
       .toEqual([
         "[TYPE_POLYGON_TOO_LARGE] 'polygon' object 'p': 'polygon' exceeds the maximum safe limit of 10,000 points.",
+      ]);
+  });
+
+  // Mirrors the polygon case directly above. Added after code review found
+  // that deleting the two data-echo tests (this block's former first two
+  // `it`s) had left line.points's max — unlike its min just above — with no
+  // coverage anywhere: the deleted echo test was the only place pinning
+  // `line.points.constraint`'s `max: 10000`, and nothing else in the suite
+  // ever builds a line with more than 10,000 points. `line` shares
+  // `TYPE_POLYGON_TOO_LARGE` with `polygon` here because both declare
+  // `element: "point"` (languageContract.ts's `listTooLargeCode` keys off
+  // the element kind, not the block name — see Fix 1).
+  it("rejects a line above the contract's maximum point count", () => {
+    const tooMany = Array.from({ length: 10001 }, (_, i) => `(${i},0)`).join(",");
+    expect(messagesFor(`scene { size:(100,100) line l { position:(0,0), thickness: 2, points: [${tooMany}] } }`))
+      .toEqual([
+        "[TYPE_POLYGON_TOO_LARGE] 'line' object 'l': 'line' exceeds the maximum safe limit of 10,000 points.",
       ]);
   });
 });
