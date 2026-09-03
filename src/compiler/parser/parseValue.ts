@@ -1,6 +1,6 @@
 import type { AstValue } from "../types";
 import type { ParserState } from "./state";
-import { parseExpr } from "./parseExpr";
+import { parseExpr, ROOT_CTX } from "./parseExpr";
 
 export function parseValue(state: ParserState, currentKey?: string): AstValue {
   const t = state.peek();
@@ -17,5 +17,5 @@ export function parseValue(state: ParserState, currentKey?: string): AstValue {
     };
   }
 
-  return parseExpr(state, 0, 0, 0);
+  return parseExpr(state, 0, ROOT_CTX);
 }

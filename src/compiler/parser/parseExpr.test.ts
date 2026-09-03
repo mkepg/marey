@@ -202,6 +202,43 @@ describe("structural nesting depth", () => {
     expect(typeof diags[0].col).toBe("number");
   });
 
+  /**
+   * The structural and expression caps *multiply*: a coordinate resets the
+   * expression budget, so each of the 50 permitted structural levels carries
+   * a fresh 50-level expression budget and the reachable stack depth is their
+   * product. Both caps stay satisfied the whole way down while the stack runs
+   * out — a few thousand characters was enough. A third budget bounds the
+   * product; these fixtures keep both factors legal so only that third one
+   * can be what stops them.
+   */
+  const nestedGroupsAndPoints = (levels: number, groups: number) => {
+    let s = "(1, 1)";
+    for (let i = 1; i < levels; i++) {
+      s = `${"(".repeat(groups)}(1, ${s})${")".repeat(groups)}`;
+    }
+    return s;
+  };
+
+  it.each([
+    [30, 50],
+    [50, 40],
+    [50, 50],
+  ])("bounds %i structural levels each %i groups deep", (levels, groups) => {
+    const diags = diagnosticsFor(sceneWith(nestedGroupsAndPoints(levels, groups)));
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toContain("This value nests too deeply overall.");
+    expect(typeof diags[0].line).toBe("number");
+    expect(typeof diags[0].col).toBe("number");
+  });
+
+  it("leaves a shape well inside the product alone", () => {
+    // 5 x 50 stays under the total budget, so the ordinary coordinate
+    // complaint still wins — the cap is not swallowing everything.
+    const diags = diagnosticsFor(sceneWith(nestedGroupsAndPoints(5, 50)));
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toContain("A point coordinate must be a number, but got point.");
+  });
+
   it("bounds alternating point-list and point nesting too", () => {
     let s = "[(1, 1)]";
     for (let i = 1; i < 3000; i++) s = `[(1, ${s})]`;
