@@ -273,14 +273,24 @@ describe("structural nesting depth", () => {
     expect(diags[0].message).not.toContain("nested too deeply");
   });
 
-  it("rejects the 51st alternating level structurally", () => {
-    const diags = diagnosticsFor(polygonWith(nestListsAndPoints(51)));
-    expect(diags).toHaveLength(1);
-    expect(diags[0].message).toContain(
-      "Points and lists are nested too deeply. Maximum nesting depth is 50.",
-    );
-  });
-
+  // A sibling test used to sit here, named "rejects the 51st alternating
+  // level structurally" (nestListsAndPoints(51), asserting only that some
+  // "nested too deeply" message appears). It was deleted: two reviewers
+  // found its assertion did not check what its name claimed. Verified by
+  // swapping `parseListLiteral`'s entry transition from `intoGroup` to
+  // `intoCoordinate` (making each level cost two structural levels instead
+  // of one, exactly the bug this test's name says it guards against) and
+  // running the full suite — that mutation turns exactly one test red across
+  // all 422: the "charges one structural level..." test directly above,
+  // whose 50-level fixture sits exactly on the boundary and so distinguishes
+  // cost-per-level 1 from 2. The deleted test's 51-level fixture overshoots
+  // the cap either way — at cost 1 by one level, at cost 2 by ~26 — so it
+  // reported "too deeply" under both the correct arithmetic and the broken
+  // one and could not have caught this regression. The test directly above
+  // is the real pin for this boundary; "bounds alternating point-list and
+  // point nesting too" below already covers "does sufficiently deep
+  // alternating nesting report rather than crash" at a depth (3000) far past
+  // where a per-level cost of 1 vs 2 could matter.
   it("bounds alternating point-list and point nesting too", () => {
     let s = "[(1, 1)]";
     for (let i = 1; i < 3000; i++) s = `[(1, ${s})]`;
