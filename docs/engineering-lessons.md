@@ -339,6 +339,57 @@ of being wrong about a deferral is unbounded.
 
 ---
 
+## 7b. Tier the process by risk, or it costs more than the work
+
+**Phase 3B, controller error — the most expensive one so far.**
+
+Measured across the first 4 of 16 tasks: **~2.8M subagent tokens**, producing
+**585 lines of net implementation** and 642 lines of tests. Roughly 4,700 tokens
+per shipped line. Of 29 commits, 19 were the controller's own documentation, not
+the work.
+
+The discipline itself was right — it found five defects that would have shipped,
+none of them visible by reading code or from a green run. The *calibration* was
+wrong, in four specific ways:
+
+**Uniform ceremony on non-uniform risk.** Task 1 was a six-line change adding
+`%` and `<` to a token map. It received a full implementer plus two full
+reviewers: three agent invocations, 190K tokens. Task 2 rewrote the entire
+expression evaluator and received exactly the same ceremony. The process did not
+scale with risk because nobody made it.
+
+**Reviewer *recommendations* treated as blocking.** A named `ExprCtx`, a unified
+operator table, two extractions — all were recommendations, not defects. Each was
+accepted mid-task, turning a 2-round task into a 5-round one. Roughly 600K of
+Task 2's 1.04M tokens went to hardening nobody had asked for.
+
+**Unbatched fix rounds.** Task 3 took four separate implementer dispatches for
+fixes that were largely independent. Each round pays a full context reload.
+
+**A task that was actually a project.** "Refactor the math parser into a general
+expression parser" was written as one task. The plans skill asks for steps of
+2–5 minutes. It ran five rounds, consumed 1.04M tokens, and destabilised
+everything downstream — Tasks 4–9 had to be re-briefed twice as its signature
+changed under them. It was also scheduled second, so every later task inherited
+its churn.
+
+**Do instead — tier the process before starting:**
+
+| Task kind | Treatment |
+|---|---|
+| Mechanical (one file, complete spec, e.g. add a token) | Implementer + **one** review, or self-review with a controller spot-check |
+| Integration (several files, established patterns) | Implementer + spec review; quality review only if spec review flags something |
+| Architecture (new abstraction, cross-cutting) | Full two-stage treatment — **but split it into 2–3 tasks first** |
+
+And adopt the rule this phase lacked: **a reviewer recommendation is filed, not
+fixed, unless it blocks the next task.** The `ExprCtx` work genuinely did block
+the five operator tasks that follow, so it belonged. The extractions did not.
+
+The test for whether a plan's tasks are sized right: if any single task needs
+more than two implementer rounds, it should have been two tasks.
+
+---
+
 ## 8. Budget an external review that shares none of your reasoning
 
 Phase 3A passed eleven task-scoped reviews and one whole-branch review, was
