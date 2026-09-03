@@ -50,7 +50,8 @@ export function parseUse(state: ParserState, depth: number): ObjectNode {
 
   if (state.peek().type !== "IDENT") {
     const bad = state.peek();
-    state.throwError(`In ${state.currentContext}: Expected a unique instance name for the template after arguments, but found ${describeToken(bad)}.`, bad);
+    const hint = bad.type === "EXPR_KEYWORD" ? ` '${bad.value}' is a reserved expression word.` : "";
+    state.throwError(`In ${state.currentContext}: Expected a unique instance name for the template after arguments, but found ${describeToken(bad)}.${hint}`, bad);
   }
 
   const instanceNameTok = state.consume("IDENT");

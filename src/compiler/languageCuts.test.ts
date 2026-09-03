@@ -370,15 +370,54 @@ describe("Phase 3A permission neighbors", () => {
   // Phase 3B reserves these as expression operators. They were ordinary
   // identifiers until this phase; the roadmap authority is 8.1 and the
   // grammar is settled in the Phase 3B design, section 6.1.
-  it.each(["if", "then", "else", "and", "or", "not", "sin", "cos", "length", "in"])(
+  //
+  // Asserting only the *first* diagnostic, not the count: rejecting an
+  // object name throws before that object's own '{' is consumed, so the
+  // parser's generic synchronize() recovery (parser/state.ts) resyncs mid
+  // object rather than skipping it whole and can cascade into further
+  // diagnostics once a sibling object follows — see the second `circle ok`
+  // below, which exercises exactly that shape. Fixing the cascade means
+  // changing synchronize(), which is cross-cutting parser recovery used by
+  // every error path in the language; out of scope for reserving eleven
+  // words. The real requirement is that the rejection is clearly reported
+  // as a reserved word, which the first diagnostic always is.
+  //
+  // The assertion below pins the exact hint text ("<word> is a reserved
+  // expression word"), not just the substring "reserved": describeToken's
+  // own EXPR_KEYWORD rendering ("reserved word 'sin'", state.ts) already
+  // contains "reserved" on its own, so a bare `toContain("reserved")` would
+  // keep passing even with the parseObject.ts/parseUse.ts hint deleted —
+  // verified by temporarily deleting it and re-running this suite, which
+  // stayed green under the weaker assertion and went red under this one.
+  it.each(["if", "then", "else", "and", "or", "not", "sin", "cos", "length", "in", "to"])(
     "reserves expression word '%s' so it cannot be an object name",
     (word) => {
-      const source = `scene { size: (10, 10) circle ${word} { position: (0, 0), radius: 5 } }`;
+      const source = `scene { size: (10, 10) circle ${word} { position: (0, 0), radius: 5 } circle ok { position: (0, 0), radius: 5 } }`;
       const diags = diagnosticsFor(source);
-      expect(diags).toHaveLength(1);
-      expect(diags[0].message).toContain("reserved");
+      expect(diags.length).toBeGreaterThan(0);
+      expect(diags[0].message).toContain(`'${word}' is a reserved expression word`);
     },
   );
+
+  it("reserves an expression word as a 'use' instance name too", () => {
+    // parseUse's instance-name check (parser/parseUse.ts) is a separate code
+    // path from parseObject's object-name check, and was not covered by the
+    // it.each above. Same reasoning on asserting only diags[0]: no
+    // brace-skip recovery here either, so a sibling property inside the
+    // 'use' block can cascade the same way.
+    const source = `
+      template T(r) {
+        circle c { position: (0, 0), radius: r }
+      }
+      scene {
+        size: (100, 100)
+        use T(5) sin { }
+      }
+    `;
+    const diags = diagnosticsFor(source);
+    expect(diags.length).toBeGreaterThan(0);
+    expect(diags[0].message).toContain("'sin' is a reserved expression word");
+  });
 
   it("still allows 'to' as a property name, because animate declares one", () => {
     const source = `

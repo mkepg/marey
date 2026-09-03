@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { lex } from "./index";
+import { KEYWORDS, EXPRESSION_WORDS } from "./constants";
 
 describe("operator tokens", () => {
   it("lexes the single-character operators", () => {
@@ -36,7 +37,15 @@ describe("expression keywords", () => {
     },
   );
 
-  it("keeps block keywords as KEYWORD", () => {
-    expect(lex("circle")[0].type).toBe("KEYWORD");
+  // handleWord (lexer/handlers.ts) checks KEYWORDS before EXPRESSION_WORDS,
+  // so a word in both sets would silently lex as whichever branch runs
+  // first — nobody has decided that, and nothing should depend on it. This
+  // is what actually makes the branch order safe, not a spot-check like
+  // "circle lexes as KEYWORD" (KEYWORDS and EXPRESSION_WORDS have no
+  // overlap today, so that check passes regardless of which set is tested
+  // first, and can never fail).
+  it("KEYWORDS and EXPRESSION_WORDS are disjoint, so handleWord's branch order cannot matter", () => {
+    const overlap = [...KEYWORDS].filter((k) => EXPRESSION_WORDS.has(k));
+    expect(overlap).toEqual([]);
   });
 });
