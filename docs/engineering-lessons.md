@@ -89,6 +89,32 @@ you cannot, either the test is vacuous or the property is enforced structurally 
 in which case pin the *structure* (here: that the two sets are disjoint), not a
 consequence of it.
 
+### 2b. A substring assertion can pass for the wrong reason
+
+**Phase 3B, controller error.** Having just rejected a test that asserted
+`toHaveLength(1)` because it was shaped to its fixture, the controller proposed
+replacing it with `expect(diags[0].message).toContain("reserved")` — reasoning
+that the requirement was "the diagnostic names the word as reserved", so assert
+that.
+
+That assertion was *also* vacuous. Deleting the hint entirely did not fail it,
+because `describeToken` independently renders an `EXPR_KEYWORD` as
+`reserved word 'sin'` (`parser/state.ts:6`). The substring survived without the
+code under test. It was caught only because the instruction demanded the revert
+be performed and its output reported — not because anyone reasoned about it.
+
+Fixed by asserting the hint's full distinguishing wording,
+`'sin' is a reserved expression word`, and re-running both directions: hint
+present, 12 pass; hint deleted, 12 fail.
+
+*Do instead:* prefer an assertion on wording that only the code under test can
+produce. A short substring is likely to appear in a neighbouring diagnostic, a
+shared formatter, or a fallback path. And note the general shape of this mistake:
+**the reviewer who diagnoses a weak test is not therefore right about its
+replacement.** Run the revert on the fix too.
+
+---
+
 ---
 
 ## 3. Never hand a subagent your own conclusions as fact
