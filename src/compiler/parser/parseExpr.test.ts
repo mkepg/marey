@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { AstValue } from "../types";
 import { lex } from "../lexer";
 import { parse } from "../parser";
 import { typeCheck } from "../typeChecker";
@@ -37,6 +38,35 @@ function posAt(source: string, needle: string): { line: number; col: number } {
   const line = before.split("\n").length;
   const col = idx - (before.lastIndexOf("\n") + 1) + 1;
   return { line, col };
+}
+
+/**
+ * The shortest fixture that folds one expression and keeps the result
+ * reachable: a `let` binding survives on `ParseResult.env`, so the folded
+ * value can be asserted directly instead of through a property the contract
+ * also has an opinion about.
+ */
+const bindingOf = (expr: string) => `let value = ${expr}\nscene { size: (100, 100) }`;
+
+/** Folds `expr` in a binding, asserting it produced no diagnostics at all. */
+function foldOf(expr: string): AstValue {
+  const parsed = parse(lex(bindingOf(expr)));
+  expect(parsed.errors).toEqual([]);
+  return parsed.env.value;
+}
+
+/**
+ * Diagnostics from folding `expr` in a binding — asserted to be exactly one.
+ *
+ * Every rejection fixture below produces a single diagnostic, confirmed by
+ * dumping the whole array for each. A second one appearing is a regression in
+ * its own right (the parser recovering somewhere it used to stop), so the
+ * count is checked here rather than restated in every test.
+ */
+function diagnosticsForExpr(expr: string): Diagnostic[] {
+  const diags = diagnosticsFor(bindingOf(expr));
+  expect(diags).toHaveLength(1);
+  return diags;
 }
 
 describe("redundant parentheses around a point", () => {
@@ -346,5 +376,236 @@ describe("operand-type errors", () => {
     expect(diags).toHaveLength(1);
     expect(diags[0].message).toContain("The right operand of '+' must be a number, but got color.");
     expect({ line: diags[0].line, col: diags[0].col }).toEqual(posAt(source, "sky\n"));
+  });
+});
+
+/* ------------------------------------------------------------------------ *
+ * Task 5 — modulo, comparisons, and boolean combinators (design 4.1-4.3)
+ * ------------------------------------------------------------------------ */
+
+describe("modulo", () => {
+  it("folds a remainder", () => {
+    expect(foldOf("17 % 5")).toMatchObject({ kind: "number", value: 2 });
+  });
+
+  it("binds tighter than '+', the way '*' does", () => {
+    // 1 + (7 % 4) = 4; at additive precedence it would be (1 + 7) % 4 = 0,
+    // so the two groupings disagree and this fixture can tell them apart.
+    expect(foldOf("1 + 7 % 4")).toMatchObject({ kind: "number", value: 4 });
+  });
+
+  it("associates left against '*' at its own precedence level", () => {
+    // (10 % 4) * 2 = 4, not 10 % (4 * 2) = 2.
+    expect(foldOf("10 % 4 * 2")).toMatchObject({ kind: "number", value: 4 });
+  });
+
+  it("rejects modulo by zero rather than folding NaN into the scene", () => {
+    const diags = diagnosticsForExpr("5 % 0");
+    expect(diags[0].message).toContain("Modulo by zero.");
+  });
+
+  it("takes JavaScript's remainder sign rather than a floored modulo", () => {
+    // Unary '-' binds tighter than '%', so this is (-7) % 3, and JavaScript's
+    // '%' keeps the dividend's sign: -1, not the floored 2. No phase has
+    // decided to floor it; pinned so that changing it is a decision, not drift.
+    expect(foldOf("-7 % 3")).toMatchObject({ kind: "number", value: -1 });
+  });
+});
+
+describe("comparison operators", () => {
+  it.each([
+    ["1 == 1", true],  ["1 == 2", false],
+    ["1 != 2", true],  ["1 != 1", false],
+    ["1 < 2", true],   ["2 < 1", false],
+    ["2 > 1", true],   ["1 > 2", false],
+    ["1 <= 1", true],  ["2 <= 1", false],
+    ["1 >= 1", true],  ["1 >= 2", false],
+  ])("folds '%s'", (expr, expected) => {
+    expect(foldOf(expr)).toMatchObject({ kind: "boolean", value: expected });
+  });
+
+  it("binds looser than arithmetic, so '1 + 1 == 2' is true", () => {
+    expect(foldOf("1 + 1 == 2")).toMatchObject({ kind: "boolean", value: true });
+  });
+
+  it("compares strings and colors by equality", () => {
+    expect(foldOf(`"a" == "a"`)).toMatchObject({ kind: "boolean", value: true });
+    // A named color is only ever kept as the hex it resolves to.
+    expect(foldOf("red == red")).toMatchObject({ kind: "boolean", value: true });
+    expect(foldOf("red == blue")).toMatchObject({ kind: "boolean", value: false });
+  });
+});
+
+describe("boolean combinators", () => {
+  it.each([
+    ["true and true", true],   ["true and false", false],
+    ["false or true", true],   ["false or false", false],
+    ["not false", true],       ["not true", false],
+  ])("folds '%s'", (expr, expected) => {
+    expect(foldOf(expr)).toMatchObject({ kind: "boolean", value: expected });
+  });
+
+  it("gives 'and' tighter precedence than 'or'", () => {
+    // (false and false) or true = true; false and (false or true) = false.
+    expect(foldOf("false and false or true")).toMatchObject({ kind: "boolean", value: true });
+  });
+});
+
+describe("'not' binds looser than a comparison and tighter than 'and'", () => {
+  /**
+   * `not`'s operand is parsed at `and`'s precedence (`parseExpr.ts`
+   * NOT_OPERAND_MIN_PREC), which fixes three readings at once. Each test below
+   * is red under a different wrong choice, so the constant is pinned from both
+   * sides rather than only from above:
+   *
+   *  - operand parsed by `parsePrimary` (the shape unary '-' uses), or at
+   *    comparison precedence: the first test alone goes red — `not 1 == 2`
+   *    becomes `(not 1) == 2`, i.e. 'not' applied to a number.
+   *  - operand parsed at `or`'s precedence: the second alone goes red. At 0,
+   *    the second and third both do — `not` swallows the `and`/`or` after it.
+   *
+   * Verified by making each of those four edits and running the whole suite;
+   * outside this describe nothing else noticed any of them, which is why these
+   * three tests exist.
+   */
+  it("reads 'not a == b' as 'not (a == b)'", () => {
+    expect(foldOf("not 1 == 2")).toMatchObject({ kind: "boolean", value: true });
+  });
+
+  it("reads 'not a and b' as '(not a) and b'", () => {
+    // not (true and false) would be true.
+    expect(foldOf("not true and false")).toMatchObject({ kind: "boolean", value: false });
+  });
+
+  it("reads 'not a or b' as '(not a) or b'", () => {
+    // not (true or true) would be false.
+    expect(foldOf("not true or true")).toMatchObject({ kind: "boolean", value: true });
+  });
+
+  it("charges the expression budget for every recursive 'not' operand", () => {
+    const nestedNot = (count: number) => `${Array.from({ length: count }, () => "not").join(" ")} true`;
+
+    expect(foldOf(nestedNot(50))).toMatchObject({ kind: "boolean", value: true });
+
+    const diags = diagnosticsForExpr(nestedNot(51));
+    expect(diags[0].message).toContain(
+      "Math expression is too deeply nested. Maximum depth is 50.",
+    );
+  });
+});
+
+describe("type rules on the new operators", () => {
+  it("rejects equality between different kinds instead of folding false", () => {
+    const diags = diagnosticsForExpr("1 == red");
+    expect(diags[0].message).toContain(
+      "'==' compares two values of the same kind, but got number and color.",
+    );
+    expect(diags[0].message).toContain(
+      "Comparing different kinds is an error rather than always false",
+    );
+  });
+
+  it("rejects equality on a kind with no single primitive payload", () => {
+    const diags = diagnosticsForExpr("(1, 2) == (1, 2)");
+    expect(diags[0].message).toContain(
+      "'==' cannot compare point values. Comparable kinds are number, string, boolean and color.",
+    );
+  });
+
+  it("reports a mixed-kind comparison at the operator, not at either operand", () => {
+    // Neither operand is wrong on its own — it is the pairing that fails — so
+    // this diagnostic anchors differently from the operand-type ones above.
+    const source = bindingOf("1 == red");
+    const diags = diagnosticsFor(source);
+    expect({ line: diags[0].line, col: diags[0].col }).toEqual(posAt(source, "=="));
+  });
+
+  it("rejects an ordering comparison on non-numbers", () => {
+    const diags = diagnosticsForExpr("red < blue");
+    expect(diags[0].message).toContain("The left operand of '<' must be a number, but got color.");
+  });
+
+  it("rejects a non-number on the right of an ordering comparison too", () => {
+    const diags = diagnosticsForExpr("1 < blue");
+    expect(diags[0].message).toContain("The right operand of '<' must be a number, but got color.");
+  });
+
+  it.each([
+    ["1 and true", "and", "left", "number"],
+    ["true and 1", "and", "right", "number"],
+    ["red or true", "or", "left", "color"],
+    ["true or red", "or", "right", "color"],
+  ])("rejects '%s' — there is no truthiness", (expr, op, side, kind) => {
+    const diags = diagnosticsForExpr(expr);
+    expect(diags[0].message).toContain(
+      `The ${side} operand of '${op}' must be a boolean, but got ${kind}. Declare has no truthiness — write an explicit comparison.`,
+    );
+  });
+
+  it("rejects a non-boolean operand to 'not'", () => {
+    const diags = diagnosticsForExpr("not 1");
+    expect(diags[0].message).toContain(
+      "'not' requires a boolean, but got number. Declare has no truthiness — write an explicit comparison.",
+    );
+  });
+});
+
+describe("comparisons are non-associative", () => {
+  it.each(["1 < 2 < 3", "1 == 2 == 3", "1 < 2 == 3", "1 >= 2 <= 3"])(
+    "rejects the chain '%s' rather than regrouping it",
+    (expr) => {
+      const diags = diagnosticsForExpr(expr);
+      expect(diags[0].message).toContain("Comparisons cannot be chained.");
+    },
+  );
+
+  it("names both operators in the rewrite it suggests", () => {
+    const diags = diagnosticsForExpr("1 < 2 == 3");
+    expect(diags[0].message).toContain("Write 'a < b and b == c' rather than 'a < b == c'.");
+  });
+
+  it("still accepts comparisons combined through parentheses", () => {
+    expect(foldOf("(1 < 2) == (3 < 4)")).toMatchObject({ kind: "boolean", value: true });
+  });
+
+  it("still accepts comparisons combined with 'and'", () => {
+    expect(foldOf("1 < 2 and 3 < 4")).toMatchObject({ kind: "boolean", value: true });
+  });
+});
+
+describe("reserved words that are not operators", () => {
+  /**
+   * `and` and `or` lex as EXPR_KEYWORD, the one token type Task 3 gave to all
+   * eleven reserved expression words — so the operator table keys word
+   * operators by the *word* rather than by the token type. Keying by token
+   * type would make every reserved word bind as a single operator in the
+   * middle of an expression, silently.
+   *
+   * That mistake is loud rather than subtle: making the lookup match any
+   * EXPR_KEYWORD by token type turns 23 tests red across 8 files — the golden
+   * IR snapshots, the LANGUAGE.md examples, and the existing `generate`
+   * permission case in languageCuts.test.ts among them. These two fixtures are
+   * here because none of those *names* the cause; both are red under that
+   * change, and each says which word was eaten and where: `to` after a
+   * `generate` start bound, `sin` after a property value.
+   */
+  it("leaves 'to' after a 'generate' start bound to parseGenerate", () => {
+    const source = `
+      scene {
+        size: (200, 100)
+        generate i from 0 to 2 {
+          circle dot { position: (i * 50, 50), radius: 5 }
+        }
+      }
+    `;
+    expect(diagnosticsFor(source)).toEqual([]);
+    expect(parse(lex(source)).ast?.children).toHaveLength(3);
+  });
+
+  it("leaves a reserved word after a complete value to the property parser", () => {
+    const source = `scene { size: (10, 10) circle c { position: (0, 0) radius: 5 sin } }`;
+    const diags = diagnosticsFor(source);
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toContain("Expected ':' after the property name, but found '}'.");
   });
 });

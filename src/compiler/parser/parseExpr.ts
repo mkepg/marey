@@ -1,5 +1,5 @@
 import type { AstValue, FitMode, Token } from "../types";
-import { NAMED_COLORS } from "../lexer";
+import { NAMED_COLORS, type ExpressionWord } from "../lexer";
 import { ParserState, describeToken } from "./state";
 
 /**
@@ -51,6 +51,7 @@ const MAX_TOTAL_DEPTH = 400;
  *   parseExpr         | parsePrimary      | (same level — no transition)
  *   parseExpr         | parseExpr         | intoOperand  (binary RHS)
  *   parsePrimary      | parsePrimary      | intoUnary    (unary '-')
+ *   parsePrimary      | parseExpr         | intoUnary    (unary 'not')
  *   parsePrimary      | parseListLiteral  | (dispatch — no transition)
  *   parsePrimary      | parseParenOrPoint | (dispatch — no transition)
  *   parseListLiteral  | parseExpr         | intoGroup       (entry)
@@ -58,8 +59,13 @@ const MAX_TOTAL_DEPTH = 400;
  *   parseParenOrPoint | parseExpr         | intoCoordinate  (point y)
  *   parseParenOrPoint | parseExpr         | intoGroup       (grouped expr)
  *
- * Nine call edges; the three no-transition ones are strict descents within a
+ * Ten call edges; the three no-transition ones are strict descents within a
  * level, and every edge that can close a cycle advances `total`.
+ *
+ * The 'not' edge is the one Task 5 added. It re-enters `parseExpr` rather than
+ * `parsePrimary` (unlike unary '-'), so it closes a cycle and must advance
+ * `total` — which `intoUnary` already does, since a prefix operand costs the
+ * same whichever prefix it belongs to.
  */
 interface ExprCtx {
   readonly expr: number;
@@ -84,7 +90,7 @@ function intoOperand(c: ExprCtx): ExprCtx {
   return { expr: c.expr + 1, struct: c.struct, total: c.total + 1 };
 }
 
-/** Into the operand of unary '-'. */
+/** Into the operand of a unary prefix — '-' or 'not'. */
 function intoUnary(c: ExprCtx): ExprCtx {
   return { expr: c.expr + 1, struct: c.struct, total: c.total + 1 };
 }
@@ -102,30 +108,91 @@ function checkNesting(state: ParserState, ctx: ExprCtx): void {
 }
 
 /**
+ * What a row is keyed by: the token type for an operator spelled as a symbol,
+ * the reserved word itself for one spelled as a word.
+ *
+ * `EXPR_KEYWORD` is deliberately excluded, so the row that would break this
+ * cannot be written at all. See `OPERATORS` below.
+ */
+type OperatorKey = Exclude<Token["type"], "EXPR_KEYWORD"> | ExpressionWord;
+
+/**
  * The binary operators, declared once.
  *
- * Token type, spelling and precedence live in a single row, so adding an
- * operator cannot half-land. A previous shape — `operatorOf` returning a bare
- * `string` plus a separate `Record<string, number>` of precedences — could be
- * updated in one place and not the other, and the result was silent: the
- * precedence lookup missed, the loop broke, and the operator token was left
- * unconsumed to be reported later as "Expected a property name", which is
- * exactly what an operator the parser genuinely does not know looks like.
- * Neither table's `string` key could catch that at compile time.
+ * Token type, spelling, precedence and associativity live in a single row, so
+ * adding an operator cannot half-land. A previous shape — `operatorOf`
+ * returning a bare `string` plus a separate `Record<string, number>` of
+ * precedences — could be updated in one place and not the other, and the
+ * result was silent: the precedence lookup missed, the loop broke, and the
+ * operator token was left unconsumed to be reported later as "Expected a
+ * property name", which is exactly what an operator the parser genuinely does
+ * not know looks like. Neither table's `string` key could catch that at
+ * compile time. `assoc` lives here for the same reason: a separate
+ * `NON_ASSOCIATIVE` set is a second list to forget.
+ *
+ * **How `and` and `or` are keyed, and what it costs.** Task 3 gave all eleven
+ * reserved expression words one token type, `EXPR_KEYWORD`, distinguished
+ * only by the token's value — so a token type no longer identifies an
+ * operator. Keying a row `EXPR_KEYWORD` would make `in`, `to`, `if`, `then`,
+ * `else`, `not`, `sin`, `cos` and `length` all bind as whichever operator that
+ * row named, silently, in the middle of an expression; `OperatorKey` excludes
+ * that type so the mistake does not compile. Word operators are keyed by the
+ * word instead, and the two key spaces cannot collide because every token type
+ * is upper-case and no reserved word is.
+ *
+ * The cost is that a row's key is no longer a single field of `Token`, so
+ * `operatorFor` computes it. That is one branch in one place — the alternative,
+ * a second word-keyed table beside this one, is again two lists to keep in
+ * step. The compile-time guarantee that a row without a handler fails the
+ * build is untouched either way: it comes from `name` feeding `applyBinary`'s
+ * exhaustive switch, not from the key.
+ *
+ * Precedence 4 is left free on purpose: `to` takes it in Task 9, between the
+ * comparisons and `+`/`-`, per design section 4.2.
  */
 const OPERATORS = {
-  PLUS:  { name: "+", prec: 5 },
-  MINUS: { name: "-", prec: 5 },
-  STAR:  { name: "*", prec: 6 },
-  SLASH: { name: "/", prec: 6 },
-} as const;
+  or:      { name: "or", prec: 1, assoc: "left" },
+  and:     { name: "and", prec: 2, assoc: "left" },
+  EQ_EQ:   { name: "==", prec: 3, assoc: "none" },
+  BANG_EQ: { name: "!=", prec: 3, assoc: "none" },
+  LT:      { name: "<",  prec: 3, assoc: "none" },
+  GT:      { name: ">",  prec: 3, assoc: "none" },
+  LT_EQ:   { name: "<=", prec: 3, assoc: "none" },
+  GT_EQ:   { name: ">=", prec: 3, assoc: "none" },
+  PLUS:    { name: "+",  prec: 5, assoc: "left" },
+  MINUS:   { name: "-",  prec: 5, assoc: "left" },
+  STAR:    { name: "*",  prec: 6, assoc: "left" },
+  SLASH:   { name: "/",  prec: 6, assoc: "left" },
+  PERCENT: { name: "%",  prec: 6, assoc: "left" },
+} as const satisfies Partial<Record<OperatorKey, { name: string; prec: number; assoc: "left" | "none" }>>;
 
 type Operator = (typeof OPERATORS)[keyof typeof OPERATORS];
 type OperatorName = Operator["name"];
 
+/**
+ * The minimum precedence `not`'s operand is parsed at.
+ *
+ * `parseExpr` consumes an operator only when its precedence is *greater* than
+ * the minimum it was given, so parsing the operand at `and`'s precedence takes
+ * in everything binding tighter than `and` — the comparisons at 3 and the
+ * arithmetic below them — and leaves `and` (2) and `or` (1) to the caller.
+ * That is what gives `not a == b` the reading `not (a == b)`, the only useful
+ * one, while `not a and b` still reads `(not a) and b`.
+ *
+ * Unary '-' does it differently, and the difference is not an oversight: '-'
+ * calls `parsePrimary`, taking no binary operator at all, because `-a * b` has
+ * to be `(-a) * b`. `not` cannot do that — `not a == b` would become
+ * `(not a) == b`, i.e. `not` applied to a number, which is always an error and
+ * never what was written.
+ *
+ * Read off the table rather than written as `2`, so the two cannot drift.
+ */
+const NOT_OPERAND_MIN_PREC: number = OPERATORS.and.prec;
+
 /** The operator a token denotes, or null if it is not a binary operator. */
 function operatorFor(t: Token): Operator | null {
-  return (OPERATORS as Partial<Record<Token["type"], Operator>>)[t.type] ?? null;
+  const key = t.type === "EXPR_KEYWORD" ? (t.value as string) : t.type;
+  return (OPERATORS as Partial<Record<string, Operator>>)[key] ?? null;
 }
 
 function span(from: AstValue, to: AstValue) {
@@ -156,6 +223,69 @@ function requireNumber(state: ParserState, operand: Operand, op: OperatorName, s
 }
 
 /**
+ * `and`/`or` take booleans and nothing else. There is no truthiness in this
+ * language (design section 4.3), so the message says so rather than leaving
+ * the author to guess that `1 and true` might have worked.
+ */
+function requireBoolean(state: ParserState, operand: Operand, op: OperatorName, side: string): boolean {
+  const v = operand.value;
+  if (v.kind !== "boolean") {
+    state.throwError(
+      `In ${state.currentContext}: The ${side} operand of '${op}' must be a boolean, but got ${v.kind}. Declare has no truthiness — write an explicit comparison.`,
+      operand.tok,
+    );
+  }
+  return v.value;
+}
+
+/**
+ * The kinds `==` and `!=` are defined over: exactly those whose whole payload
+ * is one primitive `value` (design section 4.3). A `point` has two numbers and
+ * a `list` has an arbitrary tree, so equality on them is a further decision
+ * with its own edge cases (element-wise? by length?) that no phase has taken.
+ * `indefinitely` has no payload at all.
+ */
+const COMPARABLE_KINDS = ["number", "string", "boolean", "color"] as const;
+type ComparableValue = Extract<AstValue, { kind: (typeof COMPARABLE_KINDS)[number] }>;
+
+function isComparable(v: AstValue): v is ComparableValue {
+  return (COMPARABLE_KINDS as readonly string[]).includes(v.kind);
+}
+
+/**
+ * Whether the two operands of `==`/`!=` are equal, rejecting the pairs where
+ * the question has no honest answer.
+ *
+ * A mismatch of kinds is an error rather than `false`: a silent `false`
+ * compiles, renders something wrong, and gives the author nothing to read.
+ *
+ * Both errors are reported at the operator, not at either operand, because
+ * neither operand is the wrong one on its own — it is the pairing that fails.
+ * That is the opposite of `requireNumber`/`requireBoolean`, where exactly one
+ * side is at fault and the diagnostic anchors there.
+ *
+ * A named color compares by the hex it resolves to, since that is all the
+ * lexer keeps (`red == #ff0000` is true).
+ */
+function compareEqual(state: ParserState, op: OperatorName, left: Operand, right: Operand, opTok: Token): boolean {
+  const l = left.value;
+  const r = right.value;
+  if (l.kind !== r.kind) {
+    state.throwError(
+      `In ${state.currentContext}: '${op}' compares two values of the same kind, but got ${l.kind} and ${r.kind}. Comparing different kinds is an error rather than always false, so a mismatch is visible instead of silently rendering the wrong thing.`,
+      opTok,
+    );
+  }
+  if (!isComparable(l) || !isComparable(r)) {
+    state.throwError(
+      `In ${state.currentContext}: '${op}' cannot compare ${l.kind} values. Comparable kinds are number, string, boolean and color.`,
+      opTok,
+    );
+  }
+  return l.value === r.value;
+}
+
+/**
  * A point's `x`/`y` are plain numbers on `PointValue`, so a coordinate that
  * evaluates to any other kind has to be rejected here rather than carried.
  */
@@ -176,22 +306,79 @@ function applyBinary(
   right: Operand,
   opTok: Token,
 ): AstValue {
-  const l = requireNumber(state, left, op, "left");
-  const r = requireNumber(state, right, op, "right");
-  // No default branch: the switch is exhaustive over `OperatorName`, so
-  // adding a row to OPERATORS without handling it here leaves `value` unassigned
+  const at = span(left.value, right.value);
+
+  // No default branch and no trailing return: the switch is exhaustive over
+  // `OperatorName`, so adding a row to OPERATORS without handling it here
+  // leaves a path that falls out of a function declared to return `AstValue`,
   // and fails the build.
-  let value: number;
+  //
+  // The inner switches are exhaustive over their own narrowed families and
+  // give the same guarantee one level down (`value` used before assigned). A
+  // chain of ternaries would not: a new operator listed in a `case` above but
+  // forgotten in the chain would silently inherit the last branch's arithmetic.
   switch (op) {
-    case "+": value = l + r; break;
-    case "-": value = l - r; break;
-    case "*": value = l * r; break;
-    case "/":
-      if (r === 0) state.throwError(`In ${state.currentContext}: Division by zero.`, opTok);
-      value = l / r;
-      break;
+    case "+": case "-": case "*": case "/": case "%": {
+      const l = requireNumber(state, left, op, "left");
+      const r = requireNumber(state, right, op, "right");
+      let value: number;
+      switch (op) {
+        case "+": value = l + r; break;
+        case "-": value = l - r; break;
+        case "*": value = l * r; break;
+        case "/":
+          if (r === 0) state.throwError(`In ${state.currentContext}: Division by zero.`, opTok);
+          value = l / r;
+          break;
+        case "%":
+          // Matching '/' rather than yielding NaN: `x % 0` is NaN in
+          // JavaScript, and a NaN folded into the IR reaches the renderer as
+          // a coordinate no error ever mentions.
+          if (r === 0) state.throwError(`In ${state.currentContext}: Modulo by zero.`, opTok);
+          value = l % r;
+          break;
+      }
+      return { kind: "number", value, ...at };
+    }
+
+    case "<": case ">": case "<=": case ">=": {
+      const l = requireNumber(state, left, op, "left");
+      const r = requireNumber(state, right, op, "right");
+      let value: boolean;
+      switch (op) {
+        case "<":  value = l < r;  break;
+        case ">":  value = l > r;  break;
+        case "<=": value = l <= r; break;
+        case ">=": value = l >= r; break;
+      }
+      return { kind: "boolean", value, ...at };
+    }
+
+    case "==": case "!=": {
+      const equal = compareEqual(state, op, left, right, opTok);
+      let value: boolean;
+      switch (op) {
+        case "==": value = equal; break;
+        case "!=": value = !equal; break;
+      }
+      return { kind: "boolean", value, ...at };
+    }
+
+    case "and": case "or": {
+      // Not short-circuiting, and there is nothing to short-circuit: both
+      // operands were folded to literals before this call, and the language
+      // has no runtime. `false and (1 / 0 > 1)` is still a division-by-zero
+      // error, exactly as it would be outside the `and`.
+      const l = requireBoolean(state, left, op, "left");
+      const r = requireBoolean(state, right, op, "right");
+      let value: boolean;
+      switch (op) {
+        case "and": value = l && r; break;
+        case "or":  value = l || r; break;
+      }
+      return { kind: "boolean", value, ...at };
+    }
   }
-  return { kind: "number", value, ...span(left.value, right.value) };
 }
 
 /**
@@ -317,6 +504,21 @@ function parsePrimary(state: ParserState, ctx: ExprCtx): AstValue {
   const t = state.peek();
   const { line, col } = t;
 
+  // `not` is a prefix, so it is reached from primary position — but its
+  // operand is a whole expression down to `and`, not a primary. See
+  // NOT_OPERAND_MIN_PREC for why, and for why unary '-' below is different.
+  if (t.type === "EXPR_KEYWORD" && t.value === "not") {
+    const notTok = state.consume();
+    const operand = parseExpr(state, NOT_OPERAND_MIN_PREC, intoUnary(ctx));
+    if (operand.kind !== "boolean") {
+      state.throwError(
+        `In ${state.currentContext}: 'not' requires a boolean, but got ${operand.kind}. Declare has no truthiness — write an explicit comparison.`,
+        notTok,
+      );
+    }
+    return { kind: "boolean", value: !operand.value, line: notTok.line, col: notTok.col, endLine: operand.endLine, endCol: operand.endCol };
+  }
+
   if (t.type === "MINUS") {
     const minusTok = state.consume("MINUS");
     const operand = parsePrimary(state, intoUnary(ctx));
@@ -400,6 +602,22 @@ export function parseExpr(state: ParserState, minPrec: number, ctx: ExprCtx): As
     const rightTok = state.peek();
     const right = parseExpr(state, op.prec, intoOperand(ctx));
     left = applyBinary(state, op.name, { value: left, tok: leftTok }, { value: right, tok: rightTok }, t);
+
+    // `a < b < c` is rejected here rather than regrouped. Without this the
+    // loop would fold it left-associatively into `(a < b) < c` and complain
+    // that the left operand of the second '<' is a boolean — a description of
+    // the consequence rather than of the mistake. Comparing precedence rather
+    // than `assoc` on the *next* operator is deliberate: `a < b == c` chains
+    // just as much as `a < b < c` does, and both are level 3.
+    if (op.assoc === "none") {
+      const next = operatorFor(state.peek());
+      if (next !== null && next.prec === op.prec) {
+        state.throwError(
+          `In ${state.currentContext}: Comparisons cannot be chained. Write 'a ${op.name} b and b ${next.name} c' rather than 'a ${op.name} b ${next.name} c'.`,
+          state.peek(),
+        );
+      }
+    }
   }
 
   return left;

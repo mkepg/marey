@@ -37,10 +37,19 @@ export const DURATION_INDEFINITELY_VALUES = new Set<string>(DURATION_VALUES);
  * positionally by consumePropertyName (parser/parseProperty.ts:5-16), and the
  * gates in parseObject.ts and parseUse.ts admit EXPR_KEYWORD for exactly the
  * reason they already admit FIT, NAMED_COLOR, BOOLEAN and EASING.
+ *
+ * Declared as a tuple and widened into the `Set` below, rather than written as
+ * a `Set` directly, so the words are available as a type as well as a value:
+ * `parseExpr.ts` keys its operator table by reserved *word* for the two words
+ * that are operators ('and', 'or'), and that key space has to be checkable.
  */
-export const EXPRESSION_WORDS = new Set<string>([
+export const EXPRESSION_WORD_LIST = [
   "in", "to", "if", "then", "else", "and", "or", "not", "sin", "cos", "length",
-]);
+] as const;
+
+export type ExpressionWord = (typeof EXPRESSION_WORD_LIST)[number];
+
+export const EXPRESSION_WORDS = new Set<string>(EXPRESSION_WORD_LIST);
 
 /**
  * Two-character operators, matched before SINGLE_CHAR_MAP. Order matters:

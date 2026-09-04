@@ -80,3 +80,4 @@ export function lex(src: string): Token[] {
 }
 
 export { KEYWORDS, NAMED_COLORS } from "./constants";
+export type { ExpressionWord } from "./constants";

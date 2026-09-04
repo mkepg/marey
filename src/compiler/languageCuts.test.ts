@@ -220,37 +220,51 @@ describe("Phase 3B: one list kind; indexing still excluded", () => {
   });
 });
 
-describe("Phase 3B exclusion: modulo and comparisons", () => {
-  it("rejects '%' modulo — lexed, but the parser has no rule for it yet", () => {
-    const source = `let x = 1 % 2 scene { size:(10,10) }`;
-    const diags = diagnosticsFor(source);
-    expect(diags).toHaveLength(1);
-    expect(diags[0].message).toContain("must begin with the 'scene' keyword");
-    expect(diags[0].message).toContain("found '%'");
-    const pos = posAt(source, "%");
-    expect(diags[0].line).toBe(pos.line);
-    expect(diags[0].col).toBe(pos.col);
+describe("Phase 3B lift: modulo and comparisons", () => {
+  // Lifted by Phase 3B, whose Task 5 gave the parser a rule for each of these.
+  // Authority: roadmap 8.1 ("Modulo"; "Equality and basic numeric
+  // comparison"), grammar and type rules settled in the Phase 3B design,
+  // sections 4.1-4.3.
+  //
+  // Each of the three cases below is the inversion of the exclusion case it
+  // replaces, on the same fixture: what used to assert that no parser rule
+  // existed now asserts that the rule exists and folds to the right value. The
+  // folded value is asserted, not just the absence of diagnostics — an
+  // operator quietly dropped would satisfy "no diagnostics" too.
+  it("allows '%' modulo, which Phase 3B lifts", () => {
+    const parsed = parse(lex(`let x = 7 % 4 scene { size:(10,10) }`));
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.env.x).toMatchObject({ kind: "number", value: 3 });
   });
 
-  it("rejects '<' comparison — lexed, but the parser has no rule for it yet", () => {
-    const source = `let x = 1 < 2 scene { size:(10,10) }`;
-    const diags = diagnosticsFor(source);
-    expect(diags).toHaveLength(1);
-    expect(diags[0].message).toContain("must begin with the 'scene' keyword");
-    expect(diags[0].message).toContain("found '<'");
-    const pos = posAt(source, "<");
-    expect(diags[0].line).toBe(pos.line);
-    expect(diags[0].col).toBe(pos.col);
+  it("allows '<' comparison, which Phase 3B lifts", () => {
+    const parsed = parse(lex(`let x = 1 < 2 scene { size:(10,10) }`));
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.env.x).toMatchObject({ kind: "boolean", value: true });
   });
 
-  it("rejects '==' comparison — leftover tokens are not a property name", () => {
+  it("allows '==' comparison, and the property contract still rejects its result on 'radius'", () => {
+    // The old exclusion case used this fixture to show '==' had no parser
+    // rule at all ("Expected a property name, but found '=='"). It parses now,
+    // so what is left is the *contract* refusing a boolean where a number
+    // belongs — a type-phase diagnostic, which is the proof the parse
+    // succeeded. Lifting the operator did not loosen the property contract.
     const source = `scene { size:(10,10) circle c { position:(0,0), radius: 1 == 2 } }`;
     const diags = diagnosticsFor(source);
     expect(diags).toHaveLength(1);
-    expect(diags[0].message).toContain("Expected a property name, but found '=='.");
-    const pos = posAt(source, "==");
-    expect(diags[0].line).toBe(pos.line);
-    expect(diags[0].col).toBe(pos.col);
+    expect(diags[0].message).toBe(
+      "'circle' object 'c': property 'radius' expects a number, but got a boolean (true or false).",
+    );
+  });
+
+  // Retained, not lifted: the operators arrived, the truthiness did not.
+  // Design section 4.3 is explicit that 'and'/'or'/'not' take booleans only.
+  it("still rejects a non-boolean operand to 'and' — there is no truthiness", () => {
+    const diags = diagnosticsFor(`let x = 1 and true scene { size:(10,10) }`);
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toContain(
+      "The left operand of 'and' must be a boolean, but got number. Declare has no truthiness — write an explicit comparison.",
+    );
   });
 });
 
