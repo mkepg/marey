@@ -951,3 +951,146 @@ describe("the conditional's recursion budgets", () => {
   });
 });
 
+describe("indexing and length", () => {
+  it("reads an element by index", () => {
+    expect(foldOf("[3,7,2][1]")).toMatchObject({ kind: "number", value: 7 });
+  });
+
+  it("indexes a point list, which is the same list kind", () => {
+    expect(foldOf("[(1,2),(3,4)][0]")).toMatchObject({ kind: "point", x: 1, y: 2 });
+  });
+
+  it("chains through nested lists", () => {
+    expect(foldOf("[[1,2],[3,4]][1][0]")).toMatchObject({ kind: "number", value: 3 });
+  });
+
+  it("indexes a name bound with 'let'", () => {
+    const parsed = parse(lex(`let v = [3,7,2]\nlet x = v[1]\nscene { size: (100, 100) }`));
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.env.x).toMatchObject({ kind: "number", value: 7 });
+  });
+
+  it("reports length", () => {
+    expect(foldOf("length([3,7,2])")).toMatchObject({ kind: "number", value: 3 });
+  });
+
+  // Design 4.2: postfix binds tighter than unary '-'. If the minus branch calls
+  // parsePrimary instead of parsePostfix this reads as -( [1,2] ) and errors.
+  it("binds tighter than unary minus, so '-v[0]' negates the element", () => {
+    expect(foldOf("-[5,9][1]")).toMatchObject({ kind: "number", value: -9 });
+  });
+
+  // The index is a full expression, and it is a *group*: it does not reset the
+  // expression budget the way a point coordinate does.
+  it("takes a whole expression as the index", () => {
+    expect(foldOf("[10,20,30][1 + 1]")).toMatchObject({ kind: "number", value: 30 });
+  });
+
+  /**
+   * Task 7's brief specifies `intoGroup` for the index expression, but no
+   * fixture above distinguishes it from a bare, unadvanced `ctx` — every one
+   * of them stays far under the 50-level expression cap either way. Verified
+   * directly: swapping `intoGroup(ctx)` for a bare `ctx` in `parsePostfix`'s
+   * index parse and running the whole suite leaves it entirely green.
+   *
+   * This fixture sits exactly on the boundary that only `intoGroup` produces.
+   * The index costs one level for the bracket itself — matching a list entry,
+   * per `parsePostfix`'s own comment — so 49 redundant parens *inside* the
+   * index is the last depth that still folds (1 + 49 = 50) and 50 is the
+   * first that overflows (1 + 50 = 51). Under a bare `ctx` the bracket costs
+   * nothing, so the same 50-paren fixture would still fold (0 + 50 = 50) and
+   * prove nothing — which is exactly the swap above, confirmed empirically.
+   */
+  const nestIndex = (n: number) => `${"(".repeat(n)}0${")".repeat(n)}`;
+
+  it("charges the index expression one level like a group, not a bare pass-through", () => {
+    expect(foldOf(`[9][${nestIndex(49)}]`)).toMatchObject({ kind: "number", value: 9 });
+    expect(diagnosticsForExpr(`[9][${nestIndex(50)}]`)[0].message).toContain(
+      "Math expression is too deeply nested. Maximum depth is 50.",
+    );
+  });
+
+  /**
+   * Same gap, same fix, for `length`'s argument: the brief's `intoGroup(ctx)`
+   * is likewise unpinned by every fixture above. Verified the same way —
+   * swapping it for a bare `ctx` in the 'length' branch and running the whole
+   * suite leaves it green.
+   *
+   * The argument costs one level for the call's own parentheses, and the
+   * list argument's own single entry costs a second one via
+   * `parseListLiteral`'s `intoGroup(ctx)` — a level `nestIndex` above does not
+   * pay, since its inner value is a bare number rather than a list entry. So
+   * 48 redundant parens around the list argument is the last depth that folds
+   * (1 + 48 + 1 = 50) and 49 is the first that overflows (1 + 49 + 1 = 51); a
+   * bare `ctx` in the 'length' branch would only reach 0 + 49 + 1 = 50 at that
+   * same depth and still fold, proving nothing.
+   *
+   * The list argument is a single element, `[3]`, deliberately with no comma.
+   * `parseParenOrPoint`'s forward scan for a point-marking comma tracks paren
+   * nesting only, not bracket nesting, so a comma *inside* a list that sits
+   * directly under exactly one paren pair is misread as a point separator —
+   * confirmed directly: `foldOf("([1,2,3])")` throws "A point coordinate must
+   * be a number, but got list" today, on unmodified `main`, unrelated to this
+   * task. A single-element list has no comma for that pre-existing bug to
+   * misread, so this fixture sidesteps it rather than exercising it.
+   */
+  const nestLengthArg = (n: number) => `${"(".repeat(n)}[3]${")".repeat(n)}`;
+
+  it("charges the length argument one level like a group, not a bare pass-through", () => {
+    expect(foldOf(`length(${nestLengthArg(48)})`)).toMatchObject({ kind: "number", value: 1 });
+    expect(diagnosticsForExpr(`length(${nestLengthArg(49)})`)[0].message).toContain(
+      "Math expression is too deeply nested. Maximum depth is 50.",
+    );
+  });
+
+  it("rejects an out-of-range index, naming the index and the length", () => {
+    const msg = diagnosticsForExpr("[1,2][5]")[0].message;
+    // The brief's own draft asserted "index 5" (lowercase), but the message
+    // template capitalises "Index" at the start of the sentence — toContain is
+    // case-sensitive, so the lowercase form never matches. The wording stands
+    // (design section 8 only requires the diagnostic name the index and the
+    // length); the assertion is corrected to match the actual sentence case.
+    expect(msg).toContain("Index 5");
+    expect(msg).toContain("length 2");
+  });
+
+  it("rejects a non-integer index", () => {
+    expect(diagnosticsForExpr("[1,2][0.5]")[0].message).toContain("whole number");
+  });
+
+  it("rejects a negative index rather than wrapping", () => {
+    const msg = diagnosticsForExpr("[1,2][-1]")[0].message;
+    // Same case-sensitivity correction as the out-of-range test above: the
+    // shared "Index ... is out of range" template capitalises "Index".
+    expect(msg).toContain("Index -1");
+  });
+
+  it("rejects indexing a non-list, naming the kind", () => {
+    expect(diagnosticsForExpr("5[0]")[0].message).toContain("only a list can be indexed");
+  });
+
+  it("rejects length of a non-list, naming the kind", () => {
+    expect(diagnosticsForExpr("length(5)")[0].message).toContain("'length' requires a list");
+  });
+
+  it("anchors an out-of-range index at the '[', not at the end of the expression", () => {
+    const source = bindingOf("[1,2][5]");
+    const diags = diagnosticsFor(source);
+    // `posAt(source, "[")` finds the *first* '[' in the source, which is the
+    // list literal's opening bracket, not the index bracket the diagnostic is
+    // meant to anchor on — the whole point of this test. The fixture locator
+    // is corrected to "[5]", whose position is the index's own '[', while the
+    // anchor in parsePostfix stays on openTok as designed.
+    //
+    // Position alone is not enough to pin this: before indexing exists, `[5]`
+    // is simply unparsed top-level input, and the parser's pre-existing
+    // "must begin with 'scene'" recovery diagnostic happens to land at that
+    // very column too (verified — it passes on position alone with no
+    // indexing support at all). Asserting the message keeps this test from
+    // going green for that unrelated reason.
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toContain("Index 5");
+    expect(diags[0]).toMatchObject(posAt(source, "[5]"));
+  });
+});
+

@@ -208,15 +208,11 @@ describe("Phase 3B: one list kind; indexing still excluded", () => {
     expect(diags[0].col).toBe(pos.col);
   });
 
-  it("rejects index syntax 'pts[0]' — a value reference consumes only the bare name", () => {
-    const source = `let pts = [(0,0),(1,1)] let first = pts[0] scene { size:(10,10) }`;
-    const diags = diagnosticsFor(source);
-    expect(diags).toHaveLength(1);
-    expect(diags[0].message).toContain("must begin with the 'scene' keyword");
-    expect(diags[0].message).toContain("found '['");
-    const pos = posAt(source, "[0]");
-    expect(diags[0].line).toBe(pos.line);
-    expect(diags[0].col).toBe(pos.col);
+  // Phase 3B lifts this cut (roadmap 8.1; design section 11, deviation 2):
+  // indexing ships alongside direct iteration rather than instead of it,
+  // because parallel lists — values with labels — need it.
+  it("allows indexing, which Phase 3B lifts for parallel lists", () => {
+    expect(messagesFor(`let pts = [(0,0),(1,1)] let first = pts[0] scene { size:(10,10) }`)).toEqual([]);
   });
 });
 

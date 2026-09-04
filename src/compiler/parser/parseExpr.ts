@@ -49,13 +49,16 @@ const MAX_TOTAL_DEPTH = 400;
  *   from              | to                | transition
  *   ------------------|-------------------|---------------------------------
  *   parseExpr         | parseConditional  | (dispatch — no transition)
- *   parseExpr         | parsePrimary      | (same level — no transition)
+ *   parseExpr         | parsePostfix      | (same level — no transition)
  *   parseExpr         | parseExpr         | intoOperand  (binary RHS)
  *   parseConditional  | parseExpr         | intoOperand  (condition)
  *   parseConditional  | parseExpr         | intoOperand  (then branch)
  *   parseConditional  | parseExpr         | intoOperand  (else branch)
- *   parsePrimary      | parsePrimary      | intoUnary    (unary '-')
+ *   parsePostfix      | parsePrimary      | (same level — no transition)
+ *   parsePostfix      | parseExpr         | intoGroup    (index expression)
+ *   parsePrimary      | parsePostfix      | intoUnary    (unary '-')
  *   parsePrimary      | parseExpr         | intoUnary    (unary 'not')
+ *   parsePrimary      | parseExpr         | intoGroup    ('length' argument)
  *   parsePrimary      | parseListLiteral  | (dispatch — no transition)
  *   parsePrimary      | parseParenOrPoint | (dispatch — no transition)
  *   parseListLiteral  | parseExpr         | intoGroup       (entry)
@@ -63,7 +66,7 @@ const MAX_TOTAL_DEPTH = 400;
  *   parseParenOrPoint | parseExpr         | intoCoordinate  (point y)
  *   parseParenOrPoint | parseExpr         | intoGroup       (grouped expr)
  *
- * Fourteen call edges; the four no-transition ones are strict descents within
+ * Seventeen call edges; the five no-transition ones are strict descents within
  * a level, and every edge that can close a cycle advances `total`.
  *
  * The 'not' edge is the one Task 5 added. It re-enters `parseExpr` rather than
@@ -85,6 +88,44 @@ const MAX_TOTAL_DEPTH = 400;
  * three take `intoOperand` because `if`/`then`/`else` is a ternary *operator*
  * and these are its operands: one expression level each, no structural level
  * (a conditional is not a point or a list), and no reset.
+ *
+ * Task 7's postfix indexing adds five edges. `parseExpr` now reaches a
+ * primary through `parsePostfix` rather than calling `parsePrimary` directly,
+ * and `parsePostfix` wraps `parsePrimary` in a loop that consumes `[index]`
+ * brackets — chainable, as in `grid[r][c]`. The loop does not advance `ctx`
+ * between links, so a chain's *length* is bounded only by source length, not
+ * by any of the three budgets; what the budgets bound is how deeply the index
+ * *expression itself* nests, not how many brackets follow one another (see
+ * the block comment on `parsePostfix`).
+ *
+ * The index expression and the 'length' argument both take `intoGroup`: the
+ * bracket (or the call's parenthesis) costs one expression level exactly as
+ * `(` and a list entry do, and neither is a point or a list itself, so
+ * neither charges `struct`. Unary '-' now calls `parsePostfix` rather than
+ * `parsePrimary` directly, so `-v[0]` reads as `-(v[0])` per design 4.2
+ * (postfix at level 10 binds tighter than unary '-' at level 9) — pinned in
+ * `parseExpr.test.ts` ("binds tighter than unary minus"); reverting that one
+ * call back to `parsePrimary` is confirmed to turn that fixture red.
+ *
+ * Both new `intoGroup` edges close a cycle back through `parseExpr` — a
+ * chained or nested index (`l[i[j]]`) or a nested 'length' call
+ * (`length(length(l)[0])`) can re-enter `parsePostfix`/`parsePrimary` — and
+ * both advance `total`, satisfying the invariant above. Neither is pinned by
+ * any fixture elsewhere in the suite (every existing nesting fixture stays
+ * far under the caps whenever it passes through an index or a 'length'
+ * call), so `parseExpr.test.ts` adds one boundary fixture per edge, each
+ * sitting exactly on the 50-level expression cap the way the 'not' and
+ * conditional fixtures do — confirmed by swapping each `intoGroup(ctx)` for a
+ * bare `ctx` in turn and watching only its own fixture go red.
+ *
+ * `intoGroup`, `intoOperand` and `intoUnary` are, by inspection, the same
+ * function under three names — every body is `{ expr: c.expr + 1, struct:
+ * c.struct, total: c.total + 1 }` — so no program, valid or invalid, could
+ * distinguish which of the three labels the index expression or the
+ * 'length' argument actually carries; only `intoCoordinate` (which resets
+ * `expr` instead of advancing it) would be observably different. The names
+ * exist for what they document at each call site, not for a behavioural
+ * difference `ExprCtx`'s three numbers cannot express.
  */
 interface ExprCtx {
   readonly expr: number;
@@ -570,9 +611,23 @@ function parsePrimary(state: ParserState, ctx: ExprCtx): AstValue {
     return { kind: "boolean", value: !operand.value, line: notTok.line, col: notTok.col, endLine: operand.endLine, endCol: operand.endCol };
   }
 
+  if (t.type === "EXPR_KEYWORD" && t.value === "length") {
+    const nameTok = state.consume();
+    if (state.peek().type !== "LPAREN") {
+      state.throwError(`In ${state.currentContext}: 'length' is a function and needs parentheses — write 'length(values)'.`, state.peek());
+    }
+    state.consume("LPAREN");
+    const arg = parseExpr(state, 0, intoGroup(ctx));
+    const closeTok = state.consume("RPAREN");
+    if (arg.kind !== "list") {
+      state.throwError(`In ${state.currentContext}: 'length' requires a list, but got ${arg.kind}.`, nameTok);
+    }
+    return { kind: "number", value: arg.value.length, line: nameTok.line, col: nameTok.col, endLine: closeTok.line, endCol: closeTok.endCol };
+  }
+
   if (t.type === "MINUS") {
     const minusTok = state.consume("MINUS");
-    const operand = parsePrimary(state, intoUnary(ctx));
+    const operand = parsePostfix(state, intoUnary(ctx));
     if (operand.kind !== "number") {
       state.throwError(`In ${state.currentContext}: Unary '-' requires a number, but got ${operand.kind}.`, minusTok);
     }
@@ -633,6 +688,55 @@ function parsePrimary(state: ParserState, ctx: ExprCtx): AstValue {
   }
 
   state.throwError(`In ${state.currentContext}: Unexpected ${describeToken(t)} where a property value was expected.`, t);
+}
+
+/**
+ * `l[i]`, chainable as `grid[r][c]` (design 4.2, level 10).
+ *
+ * A loop rather than recursion, so a chain costs no stack: `ctx` is not
+ * advanced between links, and `v[0][0][0]…` is bounded by source length alone.
+ * Only the index *expression* is a new level, and it takes `intoGroup` — the
+ * bracket is a grouping construct exactly as `(` is, and like a list entry it
+ * does not reset the expression budget the way a point coordinate does.
+ */
+function parsePostfix(state: ParserState, ctx: ExprCtx): AstValue {
+  let value = parsePrimary(state, ctx);
+
+  while (state.peek().type === "LBRACKET") {
+    const openTok = state.consume("LBRACKET");
+    const index = parseExpr(state, 0, intoGroup(ctx));
+
+    if (state.peek().type !== "RBRACKET") {
+      state.throwError(
+        `In ${state.currentContext}: Expected ']' to close the index opened at line ${openTok.line}, column ${openTok.col}, but found ${describeToken(state.peek())}.`,
+        state.peek(),
+      );
+    }
+    const closeTok = state.consume("RBRACKET");
+
+    // Every rejection anchors on `openTok`. `state.peek()` is by now the token
+    // after the whole index and reports on the following property — the Task 2
+    // diagnostic regression, which is pinned above.
+    if (value.kind !== "list") {
+      state.throwError(`In ${state.currentContext}: Cannot index a ${value.kind} — only a list can be indexed.`, openTok);
+    }
+    if (index.kind !== "number") {
+      state.throwError(`In ${state.currentContext}: A list index must be a number, but got ${index.kind}.`, openTok);
+    }
+    if (!Number.isInteger(index.value)) {
+      state.throwError(`In ${state.currentContext}: A list index must be a whole number, but got ${index.value}.`, openTok);
+    }
+    if (index.value < 0 || index.value >= value.value.length) {
+      state.throwError(`In ${state.currentContext}: Index ${index.value} is out of range for a list of length ${value.value.length}. Valid indices run 0 to ${value.value.length - 1}; there is no negative indexing and no wrap-around.`, openTok);
+    }
+
+    // The element keeps its own kind but takes the span of the whole index
+    // expression, so a later error about it points at `v[2]` and not at
+    // wherever the list literal was written.
+    value = { ...value.value[index.value], line: value.line, col: value.col, endLine: closeTok.line, endCol: closeTok.endCol };
+  }
+
+  return value;
 }
 
 /** Whether `t` is the reserved word `word`. */
@@ -759,7 +863,7 @@ export function parseExpr(state: ParserState, minPrec: number, ctx: ExprCtx): As
   // always a number — otherwise `applyBinary` would have thrown — so this is
   // only ever read back when the very first primary was the bad operand.
   const leftTok = state.peek();
-  let left = parsePrimary(state, ctx);
+  let left = parsePostfix(state, ctx);
 
   while (true) {
     const t = state.peek();
