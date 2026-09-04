@@ -207,7 +207,17 @@ describe("Phase 3B: one list kind; indexing still excluded", () => {
     expect(diags[0].line).toBe(pos.line);
     expect(diags[0].col).toBe(pos.col);
   });
+});
 
+describe("Phase 3B lift: indexing", () => {
+  // Fix round 1, Minor 7: this test used to live in the "one list kind;
+  // indexing still excluded" block above, which made that block's title false
+  // the moment the test asserted the opposite of "excluded". Moved here to
+  // match the file's own convention for a pure lift (see "Phase 3B lift:
+  // modulo and comparisons" below) rather than leave a title contradicting
+  // its own content in the one file whose job is to record what the language
+  // excludes.
+  //
   // Phase 3B lifts this cut (roadmap 8.1; design section 11, deviation 2):
   // indexing ships alongside direct iteration rather than instead of it,
   // because parallel lists — values with labels — need it.

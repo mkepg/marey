@@ -730,9 +730,10 @@ function parsePostfix(state: ParserState, ctx: ExprCtx): AstValue {
       state.throwError(`In ${state.currentContext}: Index ${index.value} is out of range for a list of length ${value.value.length}. Valid indices run 0 to ${value.value.length - 1}; there is no negative indexing and no wrap-around.`, openTok);
     }
 
-    // The element keeps its own kind but takes the span of the whole index
-    // expression, so a later error about it points at `v[2]` and not at
-    // wherever the list literal was written.
+    // The element keeps its own kind but takes the span of the whole postfix
+    // expression — from the base's own start through this closing ']' — so a
+    // later error about it points at `v[2]` and not at wherever the list
+    // literal was written.
     value = { ...value.value[index.value], line: value.line, col: value.col, endLine: closeTok.line, endCol: closeTok.endCol };
   }
 

@@ -1054,6 +1054,17 @@ describe("indexing and length", () => {
     expect(msg).toContain("length 2");
   });
 
+  // Fix round 1, Important 2: the brief's own fixtures only ever put a
+  // non-integer or negative *number* in the index position, so
+  // `index.kind !== "number"` (parseExpr.ts) had no fixture anywhere that
+  // reached it — confirmed by deleting the guard and running the whole
+  // suite (518/518 stayed green). The guard's *presence* is type-enforced
+  // (without it, `index.value` on a non-number `AstValue` variant fails
+  // `tsc`), but its message and reachability were unverified. Pinned here.
+  it("rejects a non-number index, naming the kind", () => {
+    expect(diagnosticsForExpr("[1,2][true]")[0].message).toContain("must be a number, but got boolean");
+  });
+
   it("rejects a non-integer index", () => {
     expect(diagnosticsForExpr("[1,2][0.5]")[0].message).toContain("whole number");
   });
@@ -1066,11 +1077,21 @@ describe("indexing and length", () => {
   });
 
   it("rejects indexing a non-list, naming the kind", () => {
-    expect(diagnosticsForExpr("5[0]")[0].message).toContain("only a list can be indexed");
+    const msg = diagnosticsForExpr("5[0]")[0].message;
+    expect(msg).toContain("only a list can be indexed");
+    // The name alone does not pin the *kind* being reported: `${value.kind}`
+    // in the template could be swapped for a constant or dropped and the
+    // assertion above stays green. This one only survives if the message
+    // actually names "number".
+    expect(msg).toContain("Cannot index a number");
   });
 
   it("rejects length of a non-list, naming the kind", () => {
-    expect(diagnosticsForExpr("length(5)")[0].message).toContain("'length' requires a list");
+    const msg = diagnosticsForExpr("length(5)")[0].message;
+    expect(msg).toContain("'length' requires a list");
+    // Same gap as above: `${arg.kind}` could be dropped and the assertion
+    // above alone would not notice. Pin the actual kind too.
+    expect(msg).toContain("but got number");
   });
 
   it("anchors an out-of-range index at the '[', not at the end of the expression", () => {
