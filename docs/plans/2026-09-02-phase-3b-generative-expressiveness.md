@@ -1649,7 +1649,7 @@ retained cut for the constant:
   });
 
   // Deliberately NOT shipped — design section 11, deviation 1. A pi constant
-  // beside degree-based trig is a trap: sin(pi) would be 0.0274, not 0.
+  // beside degree-based trig is a trap: sin(pi) would be 0.0548, not 0.
   it("has no pi constant", () => {
     const source = `scene { size:(10,10) circle c { position:(0,0), radius: sin(pi) } }`;
     const diags = diagnosticsFor(source);
@@ -1671,7 +1671,7 @@ git commit -m "feat(parser): sin and cos in degrees
 Degrees match rotation, the only other angle in the language, so Declare
 has exactly one angle unit. No pi constant — a deliberate deviation from
 roadmap 8.1, recorded in the design's section 11: sin(pi) would be
-0.0274, not 0, which is a trap sitting next to the functions it looks
+0.0548, not 0, which is a trap sitting next to the functions it looks
 like it belongs to.
 
 Cardinal angles return exact values. Math.sin(Math.PI) is 1.22e-16, which

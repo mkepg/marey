@@ -625,6 +625,13 @@ function parseParenOrPoint(state: ParserState, ctx: ExprCtx): AstValue {
  *
  * The modulo is written twice so a negative input lands in [0, 360): plain
  * `-90 % 360` is `-90` in JavaScript, which would miss the `270` arm.
+ *
+ * The reduction is not free off the cardinal angles: `sinDegrees(-30)` is
+ * `-0.5000000000000004`, a few ULP off `Math.sin(-30 * Math.PI / 180)`
+ * (`-0.49999999999999994`), since the two feed a different `d` into the same
+ * `Math.sin`. Harmless for a scene DSL, but worth recording — this helper
+ * exists to reason about float noise, and this is the one place it adds a
+ * little rather than removing it.
  */
 function sinDegrees(deg: number): number {
   const d = ((deg % 360) + 360) % 360;
@@ -676,8 +683,12 @@ function parsePrimary(state: ParserState, ctx: ExprCtx): AstValue {
   }
 
   if (t.type === "EXPR_KEYWORD" && (t.value === "sin" || t.value === "cos")) {
+    // `t.value` is narrowed to `"sin" | "cos"` by the condition above; captured
+    // here, before `state.consume()` returns a fresh `Token` whose own `.value`
+    // (`Token`'s `value` field is `string | number | boolean | null`, not tied
+    // to `type`) would not carry that narrowing.
+    const fn = t.value;
     const nameTok = state.consume();
-    const fn = nameTok.value as "sin" | "cos";
     if (state.peek().type !== "LPAREN") {
       state.throwError(`In ${state.currentContext}: '${fn}' is a function and needs parentheses — write '${fn}(45)'.`, state.peek());
     }
@@ -691,6 +702,19 @@ function parsePrimary(state: ParserState, ctx: ExprCtx): AstValue {
     const closeTok = state.consume("RPAREN");
     if (arg.kind !== "number") {
       state.throwError(`In ${state.currentContext}: '${fn}' requires a number of degrees, but got ${arg.kind}.`, nameTok);
+    }
+    // `%`/`/` above already refuse to fold a NaN into the IR (see the comment
+    // in `applyBinary`'s '%' arm): a silent NaN has no runtime signal in this
+    // language and reaches the renderer as a coordinate no error ever
+    // mentions. `arg.value` can be non-finite even though the *lexer* rejects
+    // any single literal that itself parses to Infinity (`lexer/handlers.ts`)
+    // — `*` has no overflow guard, so two merely-large finite literals can
+    // still multiply past `Number.MAX_VALUE` (pinned below). Guarded here,
+    // not at `*`: `*` overflowing to `Infinity` is not otherwise an error in
+    // this language, and making it one is a wider change than sin/cos needs —
+    // it belongs to whoever owns numeric limits generally, not to this task.
+    if (!Number.isFinite(arg.value)) {
+      state.throwError(`In ${state.currentContext}: '${fn}' requires a finite number of degrees, but got ${arg.value}.`, nameTok);
     }
     return { kind: "number", value: fn === "sin" ? sinDegrees(arg.value) : cosDegrees(arg.value), line: nameTok.line, col: nameTok.col, endLine: closeTok.line, endCol: closeTok.endCol };
   }

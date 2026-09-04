@@ -1116,18 +1116,21 @@ describe("indexing and length", () => {
 });
 
 describe("trigonometry", () => {
+  // `toMatchObject`'s primitive-field comparison is exact equality, which is
+  // the point: Math.sin(Math.PI) is 1.2246e-16, and a naive radian conversion
+  // fails every one of the four `0`/`1` rows below outright — confirmed by
+  // revert check 1 (task-8-report.md), which shows this exact table's
+  // `sin(180)`/`cos(90)`/`cos(270)` rows going red on that float noise. A
+  // separate "exact at the cardinal angles" test was cut in fix round 1: it
+  // asserted `toBe(0)` twice and never `1` at all (a name that claimed more
+  // than it checked), and was fully subsumed by this table regardless — see
+  // the revert-1 evidence above for proof that this `it.each` alone already
+  // discriminates the exactness property, at both `0` and `1`.
   it.each([
     ["sin(0)", 0], ["sin(90)", 1], ["sin(180)", 0], ["sin(270)", -1],
     ["cos(0)", 1], ["cos(90)", 0], ["cos(180)", -1], ["cos(270)", 0],
   ])("evaluates %s in degrees", (expr, expected) => {
     expect(foldOf(expr)).toMatchObject({ kind: "number", value: expected });
-  });
-
-  // toMatchObject above is exact equality, which is the point: Math.sin(Math.PI)
-  // is 1.2246e-16, and a naive radian conversion fails these four outright.
-  it("returns exactly 0 and exactly 1 at the cardinal angles", () => {
-    expect((foldOf("sin(180)") as { value: number }).value).toBe(0);
-    expect((foldOf("cos(90)") as { value: number }).value).toBe(0);
   });
 
   /**
@@ -1185,6 +1188,31 @@ describe("trigonometry", () => {
 
   it("has no pi constant", () => {
     expect(diagnosticsForExpr("sin(pi)")[0].message).toContain("Undefined variable 'pi'");
+  });
+
+  /**
+   * Fix round 1, Minor 4: `sin`/`cos` is the first fold in this module that
+   * can put `NaN` in the IR, and `applyBinary`'s `%`/`/` arms already refuse
+   * to do that (division/modulo by zero throw rather than yielding `NaN`).
+   *
+   * The lexer rejects any single literal that itself parses to `Infinity`
+   * (`lexer/handlers.ts`) and rejects scientific notation outright, so
+   * neither `sin(1e400)` nor a 400-digit literal reaches the parser at all —
+   * both fixtures were tried directly and both are lexer errors, confirmed
+   * before writing this one. But `*` (`parseExpr.ts`'s `applyBinary`) has no
+   * overflow guard, so two separately-finite literals can still multiply past
+   * `Number.MAX_VALUE` (~1.8e308): `1` followed by 159 zeros is `1e159`,
+   * finite and lexer-legal on its own, and `1e159 * 1e159 = 1e318` overflows
+   * to `Infinity` — confirmed with `node -e` before writing this fixture.
+   * `sinDegrees(Infinity)` is `NaN` (`Infinity % 360` is `NaN` in JavaScript),
+   * which is exactly the silent-NaN outcome the guard exists to catch.
+   */
+  const hugeLiteral = "1" + "0".repeat(159);
+
+  it("rejects a non-finite argument reached by overflowing '*', not a silent NaN", () => {
+    const msg = diagnosticsForExpr(`sin(${hugeLiteral} * ${hugeLiteral})`)[0].message;
+    expect(msg).toContain("'sin' requires a finite number of degrees");
+    expect(msg).toContain("but got Infinity");
   });
 
   /**

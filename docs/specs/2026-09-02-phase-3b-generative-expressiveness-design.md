@@ -532,7 +532,7 @@ followed, and are recorded here rather than quietly dropped.
    explicitly documented angle units." `sin`/`cos` take **degrees**, matching
    `rotation`, which is the only other angle in the language
    (`languageContract.ts:111-117`). A π constant alongside degree-based trig is
-   a trap: `sin(pi)` would be `0.0274`, not `0`. The requirement §8.1 was
+   a trap: `sin(pi)` would be `0.0548`, not `0`. The requirement §8.1 was
    protecting — that angle units are explicit — is met more strongly by having
    exactly one angle unit in the language than by shipping a constant that
    contradicts it.

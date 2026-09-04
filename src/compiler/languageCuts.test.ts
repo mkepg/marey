@@ -181,7 +181,7 @@ describe("Phase 3B lift: trig", () => {
   });
 
   // Deliberately NOT shipped — design section 11, deviation 1. A pi constant
-  // beside degree-based trig is a trap: sin(pi) would be 0.0274, not 0.
+  // beside degree-based trig is a trap: sin(pi) would be 0.0548, not 0.
   it("has no pi constant", () => {
     const source = `scene { size:(10,10) circle c { position:(0,0), radius: sin(pi) } }`;
     const diags = diagnosticsFor(source);
