@@ -620,15 +620,27 @@ describe("type rules on the new operators", () => {
 });
 
 describe("comparisons are non-associative", () => {
-  it.each(["1 < 2 < 3", "1 == 2 == 3", "1 < 2 == 3", "1 >= 2 <= 3"])(
+  // Fix round: `toContain("cannot be chained.")` alone pins nothing about
+  // *which* operator's name the template interpolates — a fixed string
+  // substituted for `op.name` in `'${op.name}' cannot be chained.` would
+  // still pass every row below. Each row now names the operator that
+  // actually fires first for its own expression (the first of the pair,
+  // per `parseExpr.ts`'s chaining check), so a wrong-operator regression in
+  // the template is caught per-row rather than only by the shared suffix.
+  it.each([
+    ["1 < 2 < 3", "<"],
+    ["1 == 2 == 3", "=="],
+    ["1 < 2 == 3", "<"],
+    ["1 >= 2 <= 3", ">="],
+  ])(
     "rejects the chain '%s' rather than regrouping it",
-    (expr) => {
+    (expr, op) => {
       // Task 9 generalised this message off the comparison-specific wording,
       // since 'to' is now non-associative at a different precedence too: it
       // now names the first operator of the pair rather than saying
       // "Comparisons".
       const diags = diagnosticsForExpr(expr);
-      expect(diags[0].message).toContain("cannot be chained.");
+      expect(diags[0].message).toContain(`'${op}' cannot be chained.`);
     },
   );
 
@@ -1318,5 +1330,44 @@ describe("range", () => {
     const src = `scene { size:(100,100)\n circle c { position:(0,0)\n radius:5\n animate {\n property: alpha\n duration: 1\n to: 0.5\n } } }`;
     expect(parse(lex(src)).errors).toEqual([]);
   });
-});
 
+  /**
+   * `GENERATE_START_MIN_PREC` (see the export's doc comment in
+   * `parseExpr.ts`) only stops the *outer* `parseExpr` call's own operator
+   * loop at a `to`. `parseConditional` re-enters `parseExpr` for its
+   * condition, `then`, and `else` branches through a hardcoded
+   * `parseExpr(state, 0, …)` each — its own independent loop, deaf to
+   * whatever minPrec floor the caller passed in. So a `to` sitting inside a
+   * conditional start bound's `else` branch is still folded into a range
+   * there, before `GENERATE_START_MIN_PREC` ever gets a chance to stop it,
+   * reproducing the exact collision the floor exists to prevent for the
+   * ordinary case.
+   *
+   * This is accepted, not fixed, for three reasons: the failure is loud (a
+   * compile error with a position — never a silent clamp, matching this
+   * language's stated design philosophy) rather than silent data loss; no
+   * corpus scene or `src/store/defaultScene.ts` uses a conditional as a
+   * `generate ... from` start bound; and this whole `from`/`to`
+   * header-parsing block in `parseGenerate.ts` — including
+   * `GENERATE_START_MIN_PREC` and its one call site — is scheduled for
+   * wholesale replacement by Task 10's `in LIST` header rewrite, so
+   * investing in a structural fix (threading `minPrec` through
+   * `parseConditional`) to code with a two-task lifespan is disproportionate.
+   * Pinned here so the current, accepted behaviour is documented and a
+   * change to it is visible rather than silent.
+   */
+  it("known limitation: a conditional generate start bound still collides with 'to' (stopgap doesn't cover parseConditional's independent minPrec)", () => {
+    const source = `
+      scene {
+        size: (200, 100)
+        generate i from if 1 < 2 then 0 else 1 to 2 {
+          circle dot { position: (i * 50, 50), radius: 5 }
+        }
+      }
+    `;
+    const diags = diagnosticsFor(source);
+    expect(diags[0].message).toBe(
+      "In generate block loop bounds: Both branches of an 'if' must be the same kind, but 'then' is number and 'else' is list. Both branches are checked whichever one the condition selects, so a value's kind never depends on data.",
+    );
+  });
+});

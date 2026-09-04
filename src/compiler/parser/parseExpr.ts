@@ -50,12 +50,18 @@ const MAX_TOTAL_DEPTH = 400;
  * specific, coded `TYPE_POLYGON_TOO_LARGE` diagnostic) never gets to run.
  * That is a deliberate, user-approved trade — a generic parse-time message
  * instead of decoupling the two ceilings with an arbitrary, design-spec-
- * contradicting second number. There is no way to make TypeScript enforce
- * this link between a parser numeric literal and a data table's field
- * directly; changing this constant without checking those two entries (or
- * vice versa) reopens or closes `TYPE_POLYGON_TOO_LARGE`'s reachability, and
- * `languageContract.test.ts`'s polygon/line "above the maximum point count"
- * tests are what stand in for a compiler check that can't exist.
+ * contradicting second number. The two are kept independent by choice, not
+ * because linking them is impossible — `languageContract.ts` imports nothing,
+ * so nothing stops it importing this constant, or vice versa. They are left
+ * to drift on their own because they serve different purposes (a parser's
+ * parse-time budget versus a type contract's per-property limit) and could
+ * reasonably change on different schedules; wiring them together would trade
+ * that independence for a guarantee neither side has asked for yet. Because
+ * of that choice, changing this constant without checking those two entries
+ * (or vice versa) silently reopens or closes `TYPE_POLYGON_TOO_LARGE`'s
+ * reachability, and `languageContract.test.ts`'s polygon/line "above the
+ * maximum point count" tests are what stand in for the link that was chosen
+ * not to exist.
  */
 const MAX_LIST_LENGTH = 10000;
 
@@ -339,6 +345,19 @@ const NOT_OPERAND_MIN_PREC: number = OPERATORS.and.prec;
  * Read off `OPERATORS.to.prec` rather than written as a literal, for the same
  * reason `NOT_OPERAND_MIN_PREC` is: a future change to `to`'s precedence must
  * not be able to silently desync from this call site.
+ *
+ * **This floor does not cover every case.** It only governs the *outer*
+ * `parseExpr` call's own operator loop — the `while` that reads `minPrec` on
+ * every iteration. Anything that re-enters `parseExpr` with its own,
+ * independent minPrec is unaffected by it. `parseConditional` is exactly
+ * that: its condition, `then`, and `else` branches are each parsed via a
+ * hardcoded `parseExpr(state, 0, …)`, regardless of what minPrec the caller
+ * passed in — so a `to` sitting inside a conditional start bound's `else`
+ * branch (e.g. `generate i from if a then 0 else 1 to 2 { … }`) is still
+ * folded into a range there, before this floor ever gets a chance to stop
+ * it. `parseExpr.test.ts`'s "known limitation: a conditional generate start
+ * bound still collides with 'to'" test pins the resulting, currently-accepted
+ * failure; see that test's comment for why it is accepted rather than fixed.
  *
  * This is a stopgap, not a lasting design choice. Task 10 rewrites
  * `generate`'s header shape entirely (per this phase's plan), which is

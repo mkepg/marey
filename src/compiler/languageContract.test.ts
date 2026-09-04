@@ -323,4 +323,23 @@ describe("one list kind (Phase 3B)", () => {
         "In 'line' object 'l': A list of 10,001 values exceeds the maximum list length of 10,000.",
       ]);
   });
+
+  /**
+   * The two tests above no longer reach `typeChecker/validator.ts`'s own
+   * `listOf` `max` check (see the comments above both of them and above
+   * `parser/parseExpr.ts`'s `MAX_LIST_LENGTH`), so nothing else in the suite
+   * would notice if `polygon.points` or `line.points`'s `constraint.max`
+   * silently changed to some other value >= 10001 independently of
+   * `MAX_LIST_LENGTH` — the parser's ceiling would still fire first and mask
+   * it. This is a data-shape assertion on the contract itself, not a
+   * behavioural one, so it stands in for that gap directly.
+   */
+  it("keeps polygon.points and line.points pinned to the same 10,000 maximum", () => {
+    expect(LANGUAGE_CONTRACT.polygon.properties.points.constraint).toEqual({
+      kind: "listOf", element: "point", min: 3, max: 10000,
+    });
+    expect(LANGUAGE_CONTRACT.line.properties.points.constraint).toEqual({
+      kind: "listOf", element: "point", min: 2, max: 10000,
+    });
+  });
 });
