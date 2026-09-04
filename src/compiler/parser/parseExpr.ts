@@ -66,6 +66,14 @@ const MAX_TOTAL_DEPTH = 400;
  * `parsePrimary` (unlike unary '-'), so it closes a cycle and must advance
  * `total` — which `intoUnary` already does, since a prefix operand costs the
  * same whichever prefix it belongs to.
+ *
+ * That advance looks unobservable and is not. `total` can only be the cap that
+ * fires below an `expr` reset, `intoCoordinate` is the only reset, and a
+ * coordinate must be a number — so no *valid* program has a `not` below one.
+ * But `checkNesting` runs on the way down and `requireCoordinate` on the way
+ * back up, so an invalid one still reports whichever it reaches first, and that
+ * differs between charging this edge and not. `parseExpr.test.ts` pins it at
+ * total 400 exactly ("charges the total budget for the 'not' operand").
  */
 interface ExprCtx {
   readonly expr: number;
@@ -108,13 +116,25 @@ function checkNesting(state: ParserState, ctx: ExprCtx): void {
 }
 
 /**
+ * The reserved words that are binary operators — two of the eleven.
+ *
+ * Written as `Extract` from `ExpressionWord` rather than as a bare
+ * `"and" | "or"` so the two are tied to the lexer's list: if a word is renamed
+ * or dropped in `lexer/constants.ts`, `Extract` drops it here too and the
+ * `OPERATORS` row that names it stops compiling, instead of the row surviving
+ * against a spelling the lexer no longer produces.
+ */
+type OperatorWord = Extract<ExpressionWord, "and" | "or">;
+
+/**
  * What a row is keyed by: the token type for an operator spelled as a symbol,
  * the reserved word itself for one spelled as a word.
  *
- * `EXPR_KEYWORD` is deliberately excluded, so the row that would break this
- * cannot be written at all. See `OPERATORS` below.
+ * `EXPR_KEYWORD` is deliberately excluded, and the word half is `OperatorWord`
+ * rather than all of `ExpressionWord`, so neither shape of the row that would
+ * break this can be written at all. See `OPERATORS` below.
  */
-type OperatorKey = Exclude<Token["type"], "EXPR_KEYWORD"> | ExpressionWord;
+type OperatorKey = Exclude<Token["type"], "EXPR_KEYWORD"> | OperatorWord;
 
 /**
  * The binary operators, declared once.
@@ -139,6 +159,15 @@ type OperatorKey = Exclude<Token["type"], "EXPR_KEYWORD"> | ExpressionWord;
  * that type so the mistake does not compile. Word operators are keyed by the
  * word instead, and the two key spaces cannot collide because every token type
  * is upper-case and no reserved word is.
+ *
+ * Excluding the *type* is only half of it, and the half that was missing let
+ * the same bug through one row at a time. While the word half of `OperatorKey`
+ * was all of `ExpressionWord`, a row keyed `if` — or `sin`, or `then` —
+ * satisfied the constraint and compiled clean, and `let x = 1 if 2` folded to
+ * `3` with no diagnostic: `operatorFor` looks a word token up by its value, so
+ * any reserved word with a row is an operator, whatever the row's key was
+ * meant to mean. `OperatorWord` narrows that half to the two words that are
+ * operators, which is what makes the guarantee hold in both directions.
  *
  * The cost is that a row's key is no longer a single field of `Token`, so
  * `operatorFor` computes it. That is one branch in one place — the alternative,

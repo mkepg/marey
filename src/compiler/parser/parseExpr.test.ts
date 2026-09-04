@@ -424,8 +424,33 @@ describe("comparison operators", () => {
     expect(foldOf(expr)).toMatchObject({ kind: "boolean", value: expected });
   });
 
-  it("binds looser than arithmetic, so '1 + 1 == 2' is true", () => {
-    expect(foldOf("1 + 1 == 2")).toMatchObject({ kind: "boolean", value: true });
+  /**
+   * Precedence 3 — *below* `+`/`-` at 5 — rather than merely some level of its
+   * own. What that buys is on the right: arithmetic following a comparison has
+   * to be folded into the comparison's right operand.
+   *
+   * `1 + 1 == 2`, the fixture these replaced, could not show that, and its name
+   * ("binds looser than arithmetic") claimed it did. Move all six comparisons
+   * from 3 to 5 and `+` shares their level, so the loop's left-associative fold
+   * still yields `(1 + 1) == 2` and still `true`. The whole suite stayed green
+   * under that mutation — 470/470 — because nothing anywhere put arithmetic on
+   * the *right* of a comparison.
+   *
+   * Each fixture below does, and each is red under it: at equal precedence the
+   * comparison's operand stops before the `+`, leaving the `+` facing the
+   * non-associativity check, which reports the bogus "Comparisons cannot be
+   * chained" — so `foldOf`'s no-diagnostics assertion fails.
+   */
+  it.each([
+    // Value-distinguishing, not just error-distinguishing: if the `+ 1` were
+    // not absorbed into the right operand this would be comparing 1 to 1.
+    ["1 == 1 + 1", false],
+    ["1 < 2 + 3", true],
+    // The replaced fixture's left-hand arithmetic, kept — but now with a right
+    // side that makes the grouping observable.
+    ["1 + 1 == 2 + 0", true],
+  ])("binds looser than the arithmetic on either side of it: '%s'", (expr, expected) => {
+    expect(foldOf(expr)).toMatchObject({ kind: "boolean", value: expected });
   });
 
   it("compares strings and colors by equality", () => {
@@ -490,6 +515,50 @@ describe("'not' binds looser than a comparison and tighter than 'and'", () => {
     const diags = diagnosticsForExpr(nestedNot(51));
     expect(diags[0].message).toContain(
       "Math expression is too deeply nested. Maximum depth is 50.",
+    );
+  });
+
+  it("charges the total budget for the 'not' operand, not only the expression one", () => {
+    /**
+     * `total` can only be the cap that fires where `expr` has been reset, and
+     * `intoCoordinate` is the only thing that resets it — so pinning this edge
+     * means putting the `not` underneath a point coordinate, where a boolean is
+     * never legal. That looks like it should make the edge unpinnable, and it
+     * is why it went unpinned: `not` yields a boolean, so no *valid* program
+     * has a `not` below a coordinate.
+     *
+     * The observation window is that both diagnostics are reachable and their
+     * order is fixed by the direction of travel. `checkNesting` runs on the way
+     * *down*, before the operand is folded; `requireCoordinate` runs on the way
+     * back *up*. So the invalid program still distinguishes the two versions of
+     * this edge by *which* error it stops at.
+     *
+     * 40 point levels each holding 9 parens put the ctx at the `not` at exactly
+     * total 400 — 40 x (1 coordinate + 9 groups) — with expr at 9 and struct at
+     * 40, both far from their own 50s, so `total` is the only budget at its
+     * edge. `intoUnary` takes it to 401 and the descent stops there.
+     *
+     * Drop the `total` advance from this one edge and the descent continues,
+     * the operand folds to a boolean, and the innermost coordinate rejects it
+     * instead. Verified: that mutation turns the first assertion below red and
+     * leaves the rest of the suite green, which is exactly the gap this closes.
+     */
+    const nestedCoordinate = (levels: number, parens: number) => {
+      let s = "not true";
+      for (let i = 0; i < levels; i++) s = `(${"(".repeat(parens)}${s}${")".repeat(parens)}, 0)`;
+      return s;
+    };
+
+    expect(diagnosticsForExpr(nestedCoordinate(40, 9))[0].message).toContain(
+      "This value nests too deeply overall. Maximum total nesting is 400.",
+    );
+
+    // One level less — total 390 at the `not`, so nothing overflows and the
+    // coordinate's own type error is what surfaces. This is what makes the
+    // fixture above a *boundary*: without it, the same assertion would pass on
+    // a build that charged `total` far too eagerly somewhere else entirely.
+    expect(diagnosticsForExpr(nestedCoordinate(39, 9))[0].message).toContain(
+      "A point coordinate must be a number, but got boolean.",
     );
   });
 });
