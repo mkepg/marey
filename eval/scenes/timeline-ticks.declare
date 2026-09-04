@@ -35,7 +35,7 @@ scene {
     color: dim
   }
 
-  generate i from 0 to 10 {
+  generate i in 0 to 10 {
     line tick {
       position: (startX + i * tickSpacing, axisY)
       points: [(0, shortHalfNeg), (0, shortHalf)]
@@ -44,7 +44,7 @@ scene {
     }
   }
 
-  generate j from 0 to 2 {
+  generate j in 0 to 2 {
     line majorTick {
       position: (startX + j * 5 * tickSpacing, axisY)
       points: [(0, longHalfNeg), (0, longHalf)]

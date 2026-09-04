@@ -372,7 +372,7 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
           suggestions.push({
             label: "generate",
             kind: monaco.languages.CompletionItemKind.Keyword,
-            insertText: `generate \${1:i} from \${2:1} to \${3:5} {\n\t$0\n}`,
+            insertText: `generate \${1:i} in \${2:1} to \${3:5} {\n\t$0\n}`,
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             detail: "Generate objects in a loop",
             range,

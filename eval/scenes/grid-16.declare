@@ -8,8 +8,8 @@ scene {
   background: #0a0e1a
   fit: contain
 
-  generate row from 0 to 3 {
-    generate col from 0 to 3 {
+  generate row in 0 to 3 {
+    generate col in 0 to 3 {
       rectangle cell {
         position: (160 + col * 160, 120 + row * 120)
         size: (cellSize, cellSize)

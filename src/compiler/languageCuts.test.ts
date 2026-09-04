@@ -341,7 +341,7 @@ describe("Phase 3B lift: conditional value expression", () => {
   });
 });
 
-describe("Phase 3B reservation regression: parseGenerate's 'to' bound recovery", () => {
+describe("Phase 3B reservation regression: parseGenerate's 'in' collection recovery", () => {
   // parseGenerate used to read the loop-bound 'to' via consume("IDENT"),
   // which threw *without* advancing on a mismatch. Reserving 'to' broke
   // that (it no longer lexes as IDENT), so this switched to an untyped
@@ -350,11 +350,11 @@ describe("Phase 3B reservation regression: parseGenerate's 'to' bound recovery",
   // synchronize() resumes and produced a spurious extra diagnostic for a
   // malformed 'generate' followed by a sibling object. Pinning the count so
   // that regression can't come back silently.
-  it("reports exactly two diagnostics for a 'generate' missing its 'to' bound, not three", () => {
-    const source = `scene { size:(10,10) group g { generate i from 0 } circle ok { position:(0,0), radius:5 } } }`;
+  it("reports exactly two diagnostics for a 'generate' missing its collection, not three", () => {
+    const source = `scene { size:(10,10) group g { generate i in } circle ok { position:(0,0), radius:5 } } }`;
     const diags = diagnosticsFor(source);
     expect(diags).toHaveLength(2);
-    expect(diags[0].message).toContain("Expected 'to' after start bound, but found '}'.");
+    expect(diags[0].message).toContain("Unexpected '}' where a property value was expected.");
     expect(diags[1].message).toContain("Unexpected '}' after the scene block closed.");
   });
 });
@@ -400,7 +400,7 @@ describe("Phase 3A permission neighbors", () => {
     const source = `
       scene {
         size: (200, 100)
-        generate i from 0 to 2 {
+        generate i in 0 to 2 {
           circle dot { position: (i * 50, 50), radius: 5 }
         }
       }

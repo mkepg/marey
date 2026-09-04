@@ -13,7 +13,7 @@ scene {
   size: (800, 600)
   background: #0a0e1a
 
-  generate k from 0 to 9 {
+  generate k in 0 to 9 {
     rectangle bar {
       position: (startX + k * gapX, 300)
       size: (barW, barH)

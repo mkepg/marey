@@ -26,7 +26,7 @@ scene {
   }
 
   // All eleven ticks, short by default.
-  generate i from 0 to 10 {
+  generate i in 0 to 10 {
     line tick {
       position: (startX + i * spacing, axisY)
       points: [(0, -shortHalf), (0, shortHalf)]
@@ -36,7 +36,7 @@ scene {
   }
 
   // Every fifth tick (i = j * 5 -> 0, 5, 10), drawn longer, on top.
-  generate j from 0 to 2 {
+  generate j in 0 to 2 {
     line tickMajor {
       position: (startX + (j * 5) * spacing, axisY)
       points: [(0, -longHalf), (0, longHalf)]

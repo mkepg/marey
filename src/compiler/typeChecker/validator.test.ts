@@ -144,7 +144,7 @@ describe("physics inside a group (spec D17)", () => {
       }
       scene {
         size: (800, 600)
-        generate i from 0 to 2 {
+        generate i in 0 to 2 {
           use Ball(cyan) ball { position: (200 + i * 100, 80) }
         }
       }

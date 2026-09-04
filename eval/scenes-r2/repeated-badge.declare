@@ -25,7 +25,7 @@ scene {
   size: (800, 600)
   background: #0a0e1a
 
-  generate i from 0 to 4 {
+  generate i in 0 to 4 {
     use Badge(cyan) badge {
       position: (140 + i * 130, 300)
     }

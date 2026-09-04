@@ -56,7 +56,7 @@ describe("Phase 3A language surface", () => {
   it.each([
     "scene { size:(10,10), def x = 1 }",
     "scene { size:(10,10) circle c { def x = 1 position:(5,5), radius:1 } }",
-    "scene { size:(10,10) generate i from 0 to 0 { def x = i circle c { position:(5,5), radius:1 } } }",
+    "scene { size:(10,10) generate i in 0 to 0 { def x = i circle c { position:(5,5), radius:1 } } }",
     "template T() { def y = 1 circle c { position:(5,5), radius:1 } }\nscene { size:(10,10) }",
     "template T() { def y = 1 circle c { position:(5,5), radius:1 } }\nscene { size:(10,10) use T() inst }",
   ])("rejects old def in binding-bearing context", (source) => {

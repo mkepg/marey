@@ -3,13 +3,11 @@ import { ParserState, describeToken, ParseException } from "./state";
 import { parseObject } from "./parseObject";
 import { parseBinding } from "./parseBinding";
 import { parseValue } from "./parseValue";
-import { parseExpr, ROOT_CTX, GENERATE_START_MIN_PREC } from "./parseExpr";
 import { parseUse } from "./parseUse";
 import { rejectLegacyBinding } from "./parseProperty";
 
 export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
   state.consume("KEYWORD");
-
   if (state.peek().type !== "IDENT") {
     const bad = state.peek();
     state.throwError(`In ${state.currentContext}: Expected a loop variable name after 'generate', but found ${describeToken(bad)}.`, bad);
@@ -17,50 +15,38 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
   const loopVarTok = state.consume("IDENT");
   const loopVar = loopVarTok.value as string;
 
-  const fromTok = state.consume("IDENT");
-  if (fromTok.value !== "from") {
-    state.throwError(`In ${state.currentContext}: Expected 'from' after loop variable, but found '${fromTok.value as string}'.`, fromTok);
+  let indexVar: string | null = null;
+  if (state.peek().type === "COMMA") {
+    state.consume("COMMA");
+    if (state.peek().type !== "IDENT") {
+      state.throwError(`In ${state.currentContext}: Expected an index variable name after ',', but found ${describeToken(state.peek())}.`, state.peek());
+    }
+    indexVar = state.consume("IDENT").value as string;
   }
 
-  const prevContext = state.currentContext;
-  state.currentContext = `generate block loop bounds`;
-  // Not `parseValue(state)` (which falls through to `parseExpr(state, 0,
-  // ROOT_CTX)` with no `currentKey`): this header's own 'to' keyword must not
-  // be swallowed by the start bound's expression, and unlike a property value
-  // there is no colon here for that lookahead trick to key off. Parsing at
-  // `GENERATE_START_MIN_PREC` instead stops the precedence climb at 'to'
-  // itself, leaving it for the check below to consume. See that export's
-  // comment — this is a deliberately short-lived stopgap that Task 10's
-  // header-shape rewrite is expected to remove, not a lasting design choice.
-  const startVal = parseExpr(state, GENERATE_START_MIN_PREC, ROOT_CTX);
-  if (startVal.kind !== "number") {
-    state.throwError(`In ${state.currentContext}: Expected a numeric start value, but got ${startVal.kind}.`, state.peek());
+  const inTok = state.peek();
+  if (inTok.type === "IDENT" && inTok.value === "from") {
+    state.throwError(
+      `[PARSE_RENAMED_KEYWORD] 'generate ${loopVar} from A to B' was replaced by 'generate ${loopVar} in A to B'. 'A to B' is now an ordinary list, so 'generate' has one header shape for both ranges and data lists.`,
+      inTok,
+    );
   }
-  const start = startVal.value;
-
-  const toTok = state.peek();
-  if (toTok.value !== "to") {
-    state.throwError(`In ${state.currentContext}: Expected 'to' after start bound, but found ${describeToken(toTok)}.`, toTok);
+  if (inTok.type !== "EXPR_KEYWORD" || inTok.value !== "in") {
+    state.throwError(`In ${state.currentContext}: Expected 'in' after the loop variable, but found ${describeToken(inTok)}.`, inTok);
   }
   state.consume();
 
-  const endVal = parseValue(state);
-  if (endVal.kind !== "number") {
-    state.throwError(`In ${state.currentContext}: Expected a numeric end value, but got ${endVal.kind}.`, state.peek());
-  }
-  const end = endVal.value;
+  const prevContext = state.currentContext;
+  state.currentContext = "generate block collection";
+  const collection = parseValue(state);
   state.currentContext = prevContext;
-
-  if (!Number.isInteger(start) || !Number.isInteger(end)) {
-    state.throwError(`In ${state.currentContext}: 'generate' bounds must be integers. Got start: ${start}, end: ${end}.`, toTok);
+  if (collection.kind !== "list") {
+    state.throwError(`In ${state.currentContext}: 'generate' requires a list to iterate, but got ${collection.kind}. Write a list literal, a range such as '0 to 9', or a 'let' bound to one.`, inTok);
   }
-  if (end - start > 10000) {
-    state.throwError(`In ${state.currentContext}: Generate block exceeds maximum loop limit of 10,000 iterations to prevent freezing.`, toTok);
-  }
+  const items = collection.value;
 
   const braceTok = state.consume("LBRACE");
   const blockStartPos = state.pos;
-
   let nesting = 1;
   let blockEndPos = state.pos;
   while (blockEndPos < state.tokens.length) {
@@ -72,50 +58,34 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
     }
     blockEndPos++;
   }
-
   if (nesting !== 0) {
     state.throwError(`In ${state.currentContext}: 'generate' block was not closed before end of file. Add a closing '}'.`, braceTok);
   }
 
   const generatedNodes: ObjectNode[] = [];
   const prevEnv = state.env;
-  
-  // Track errors so we don't spam 10,000 identical syntax errors if the loop body is malformed
   const initialErrorCount = state.errors.length;
-
-  for (let i = start; i <= end; i++) {
-    // Break early if a syntax error was caught during the loop execution to prevent crashing the worker
-    if (state.errors.length > initialErrorCount) {
-      break; 
-    }
-
+  for (let ordinal = 0; ordinal < items.length; ordinal++) {
+    if (state.errors.length > initialErrorCount) break;
     state.globalNodeCount++;
     if (state.globalNodeCount > 15000) {
       state.throwError(`In ${state.currentContext}: Global iteration limit exceeded (>15,000) to prevent freezing.`, state.peek());
     }
-
     state.pos = blockStartPos;
     state.env = Object.create(prevEnv);
-    
-    // Inject the loop variable into the environment for this iteration
-    state.env[loopVar] = {
-      kind: "number",
-      value: i,
-      line: loopVarTok.line,
-      col: loopVarTok.col,
-      endLine: loopVarTok.line,
-      endCol: loopVarTok.endCol
-    };
+    state.env[loopVar] = { ...items[ordinal], line: loopVarTok.line, col: loopVarTok.col, endLine: loopVarTok.line, endCol: loopVarTok.endCol };
+    if (indexVar !== null) {
+      state.env[indexVar] = { kind: "number", value: ordinal, line: loopVarTok.line, col: loopVarTok.col, endLine: loopVarTok.line, endCol: loopVarTok.endCol };
+    }
 
     const iterNodes: ObjectNode[] = [];
-
     while (state.peek().type !== "RBRACE" && state.peek().type !== "EOF") {
       try {
         rejectLegacyBinding(state);
         const t = state.peek();
         if (t.type === "KEYWORD") {
-          if (state.peek().value === "template") {
-            state.throwError(`In ${state.currentContext}: Unexpected keyword 'template'. Templates must be defined at the top level of the file, outside of the scene block.`, state.peek());
+          if (t.value === "template") {
+            state.throwError(`In ${state.currentContext}: Unexpected keyword 'template'. Templates must be defined at the top level of the file, outside of the scene block.`, t);
           }
           if (t.value === "let") {
             parseBinding(state);
@@ -123,28 +93,20 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
           }
           if (t.value === "generate") {
             const subNodes = parseGenerate(state, depth);
-            for (const sn of subNodes) {
-              const suffixedSn: ObjectNode = { ...sn, name: `${sn.name}_${i}` };
-              iterNodes.push(suffixedSn);
-            }
+            for (const sn of subNodes) iterNodes.push({ ...sn, name: `${sn.name}_${ordinal}` });
             continue;
           }
           if (t.value === "use") {
             const usedNode = parseUse(state, depth);
-            const suffixedNode: ObjectNode = { ...usedNode, name: `${usedNode.name}_${i}` };
-            iterNodes.push(suffixedNode);
+            iterNodes.push({ ...usedNode, name: `${usedNode.name}_${ordinal}` });
             continue;
           }
-
           const child = parseObject(state, depth);
-          const suffixedChild: ObjectNode = { ...child, name: `${child.name}_${i}` };
-            iterNodes.push(suffixedChild);
+          iterNodes.push({ ...child, name: `${child.name}_${ordinal}` });
           continue;
         }
-
         const bad = state.consume();
         state.throwError(`In 'generate' block: Expected an object definition, 'let', 'use', or 'generate', but found ${describeToken(bad)}.`, bad);
-
       } catch (e) {
         if (e instanceof ParseException) {
           state.errors.push(e.error);
@@ -156,9 +118,7 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
     }
     generatedNodes.push(...iterNodes);
   }
-
   state.pos = blockEndPos + 1;
   state.env = prevEnv;
-
   return generatedNodes;
 }

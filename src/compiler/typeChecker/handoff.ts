@@ -104,7 +104,7 @@ const RENDERABLE_TYPES: ReadonlySet<string> = new Set([
  * ... } }` cannot reach this: `parser/index.ts` rejects an `animate` keyword
  * at the scene body loop before any node is built. But `generate` expands its
  * body through the generic `parseObject` path, which has no such guard, so
- * `generate i from 0 to 0 { animate { ..., handoff: true } } }` at the scene
+ * `generate i in 0 to 0 { animate { ..., handoff: true } } }` at the scene
  * root does produce an `animate` node as a direct scene child — `ancestors`
  * empty, `container` falls back to the scene node, and every branch below
  * returns `null`, same as `checkNode`'s own (separate, unconditional) "must

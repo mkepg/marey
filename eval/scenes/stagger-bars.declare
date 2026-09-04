@@ -9,7 +9,7 @@ scene {
   background: #0a0e1a
   fit: contain
 
-  generate k from 0 to 9 {
+  generate k in 0 to 9 {
     rectangle bar {
       position: (65 + k * 72, 460)
       size: (14, 60)

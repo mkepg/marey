@@ -24,7 +24,7 @@ scene {
   background: #0a0e1a
   fit: contain
 
-  generate i from 0 to 4 {
+  generate i in 0 to 4 {
     use Badge(badgeColor) tag {
       position: (133 + i * 133, 300)
     }

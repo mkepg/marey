@@ -228,7 +228,7 @@ scene {
   // ── 5 · STAGGER ─────────────────────────────────────────────
   // Ten bars, each a little slower than the last, so the row
   // ripples instead of pulsing in unison.
-  generate k from 0 to 9 {
+  generate k in 0 to 9 {
     rectangle tick {
       position: (76 + k * 32, 470)
       size: (7, 30)

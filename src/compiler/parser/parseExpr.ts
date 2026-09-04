@@ -327,46 +327,6 @@ type OperatorName = Operator["name"];
  */
 const NOT_OPERAND_MIN_PREC: number = OPERATORS.and.prec;
 
-/**
- * The minimum precedence at which `generate`'s own start bound is parsed.
- *
- * `generate i from X to Y { … }` spells its own `to` as a bare reserved word,
- * with no colon nearby for the property-name lookahead above to key off — the
- * token after a `generate` start bound's `to` is an ordinary operand (`2`),
- * indistinguishable at that point from a genuine range's right-hand side. A
- * start bound parsed at precedence 0 (the general expression path every other
- * value uses) therefore consumes `to` as a range operator and folds `0 to 2`
- * into `[0, 1, 2]` — exactly the corpus-breaking collision the `to` row
- * introduced. Parsing the start bound at this floor instead stops the climb
- * at `to` (prec 4 <= 4) and leaves it for `parseGenerate` to consume itself,
- * the same outcome the colon lookahead achieves for property values by a
- * different mechanism.
- *
- * Read off `OPERATORS.to.prec` rather than written as a literal, for the same
- * reason `NOT_OPERAND_MIN_PREC` is: a future change to `to`'s precedence must
- * not be able to silently desync from this call site.
- *
- * **This floor does not cover every case.** It only governs the *outer*
- * `parseExpr` call's own operator loop — the `while` that reads `minPrec` on
- * every iteration. Anything that re-enters `parseExpr` with its own,
- * independent minPrec is unaffected by it. `parseConditional` is exactly
- * that: its condition, `then`, and `else` branches are each parsed via a
- * hardcoded `parseExpr(state, 0, …)`, regardless of what minPrec the caller
- * passed in — so a `to` sitting inside a conditional start bound's `else`
- * branch (e.g. `generate i from if a then 0 else 1 to 2 { … }`) is still
- * folded into a range there, before this floor ever gets a chance to stop
- * it. `parseExpr.test.ts`'s "known limitation: a conditional generate start
- * bound still collides with 'to'" test pins the resulting, currently-accepted
- * failure; see that test's comment for why it is accepted rather than fixed.
- *
- * This is a stopgap, not a lasting design choice. Task 10 rewrites
- * `generate`'s header shape entirely (per this phase's plan), which is
- * expected to remove the need for this export and its one call site in
- * `parseGenerate.ts` — a future reader finding it gone should not be
- * surprised.
- */
-export const GENERATE_START_MIN_PREC: number = OPERATORS.to.prec;
-
 /** The operator a token denotes, or null if it is not a binary operator. */
 function operatorFor(t: Token): Operator | null {
   const key = t.type === "EXPR_KEYWORD" ? (t.value as string) : t.type;

@@ -31,8 +31,8 @@ scene {
 
   group stage {
     position: (10, 10)
-    generate i from 0 to 1 {
-      generate j from 0 to 1 {
+    generate i in 0 to 1 {
+      generate j in 0 to 1 {
         use Badge(cyan) item { position: (20 + i * 30, 20 + j * 30) }
       }
     }
@@ -118,7 +118,7 @@ template Token(tone) {
 scene {
   size: (240, 140)
   fit: fill
-  generate i from 0 to 1 {
+  generate i in 0 to 1 {
     use Token(cyan) token { position: (40 + i * 70, 30), layer: i }
   }
   rectangle staged {

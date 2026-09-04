@@ -33,7 +33,7 @@ scene {
   size: (800, 600)
   background: #0a0e1a
 
-  generate i from 0 to 19 {
+  generate i in 0 to 19 {
     rectangle sq {
       position: (startX + i * spacing, baseY - coeff * (i - mid) * (i - mid))
       size: (20, 20)

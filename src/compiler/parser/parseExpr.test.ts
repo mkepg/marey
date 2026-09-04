@@ -674,19 +674,6 @@ describe("reserved words that are not operators", () => {
    * change, and each says which word was eaten and where: `to` after a
    * `generate` start bound, `sin` after a property value.
    */
-  it("leaves 'to' after a 'generate' start bound to parseGenerate", () => {
-    const source = `
-      scene {
-        size: (200, 100)
-        generate i from 0 to 2 {
-          circle dot { position: (i * 50, 50), radius: 5 }
-        }
-      }
-    `;
-    expect(diagnosticsFor(source)).toEqual([]);
-    expect(parse(lex(source)).ast?.children).toHaveLength(3);
-  });
-
   it("leaves a reserved word after a complete value to the property parser", () => {
     const source = `scene { size: (10, 10) circle c { position: (0, 0) radius: 5 sin } }`;
     const diags = diagnosticsFor(source);
@@ -1331,43 +1318,4 @@ describe("range", () => {
     expect(parse(lex(src)).errors).toEqual([]);
   });
 
-  /**
-   * `GENERATE_START_MIN_PREC` (see the export's doc comment in
-   * `parseExpr.ts`) only stops the *outer* `parseExpr` call's own operator
-   * loop at a `to`. `parseConditional` re-enters `parseExpr` for its
-   * condition, `then`, and `else` branches through a hardcoded
-   * `parseExpr(state, 0, …)` each — its own independent loop, deaf to
-   * whatever minPrec floor the caller passed in. So a `to` sitting inside a
-   * conditional start bound's `else` branch is still folded into a range
-   * there, before `GENERATE_START_MIN_PREC` ever gets a chance to stop it,
-   * reproducing the exact collision the floor exists to prevent for the
-   * ordinary case.
-   *
-   * This is accepted, not fixed, for three reasons: the failure is loud (a
-   * compile error with a position — never a silent clamp, matching this
-   * language's stated design philosophy) rather than silent data loss; no
-   * corpus scene or `src/store/defaultScene.ts` uses a conditional as a
-   * `generate ... from` start bound; and this whole `from`/`to`
-   * header-parsing block in `parseGenerate.ts` — including
-   * `GENERATE_START_MIN_PREC` and its one call site — is scheduled for
-   * wholesale replacement by Task 10's `in LIST` header rewrite, so
-   * investing in a structural fix (threading `minPrec` through
-   * `parseConditional`) to code with a two-task lifespan is disproportionate.
-   * Pinned here so the current, accepted behaviour is documented and a
-   * change to it is visible rather than silent.
-   */
-  it("known limitation: a conditional generate start bound still collides with 'to' (stopgap doesn't cover parseConditional's independent minPrec)", () => {
-    const source = `
-      scene {
-        size: (200, 100)
-        generate i from if 1 < 2 then 0 else 1 to 2 {
-          circle dot { position: (i * 50, 50), radius: 5 }
-        }
-      }
-    `;
-    const diags = diagnosticsFor(source);
-    expect(diags[0].message).toBe(
-      "In generate block loop bounds: Both branches of an 'if' must be the same kind, but 'then' is number and 'else' is list. Both branches are checked whichever one the condition selects, so a value's kind never depends on data.",
-    );
-  });
 });

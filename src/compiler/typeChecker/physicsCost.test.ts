@@ -115,7 +115,7 @@ describe("physics body and collision-part ceilings", () => {
   });
 
   it("counts generated physics bodies after expansion", () => {
-    const source = scene(`  generate i from 0 to 500 {
+    const source = scene(`  generate i in 0 to 500 {
     circle c { position: (i, 10), radius: 1, physics { duration: 1 } }
   }`);
     const errors = diagnosticsFor(source).filter((error) => error.message.includes("TYPE_PHYSICS_BODY_LIMIT"));
@@ -127,7 +127,7 @@ describe("physics body and collision-part ceilings", () => {
     const source = `template Ball() {
   circle c { position: (0, 0), radius: 1, physics { duration: 1 } }
 }
-${scene("  generate i from 0 to 500 { use Ball() ball }")}`;
+${scene("  generate i in 0 to 500 { use Ball() ball }")}`;
     const errors = diagnosticsFor(source).filter((error) => error.message.includes("TYPE_PHYSICS_BODY_LIMIT"));
     expect(errors).toHaveLength(1);
     expect(errors[0].message).toContain("501");

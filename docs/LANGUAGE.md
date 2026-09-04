@@ -540,7 +540,7 @@ scene {
   size: (800, 600)
   background: #0a0e1a
 
-  generate i from 0 to 4 {
+  generate i in 0 to 4 {
     use Ball(cyan) ball { position: (160 + i * 120, 80) }
   }
 }
@@ -620,7 +620,7 @@ scene {
   size: (800, 600)
   background: #0a0e1a
 
-  generate i from 0 to 3 {
+  generate i in 0 to 3 {
     rectangle box {
       position: (400, 100 + i * 60)
       size: (60, 60)
@@ -717,17 +717,16 @@ scene {
 
 ### `generate`
 
-`generate i from A to B { ... }` repeats its body once for each integer `i`
-from `A` to `B`, **inclusive of both ends** — `from 0 to 4` runs five times,
-for `i` = 0, 1, 2, 3, 4. `A` and `B` must be integer literals or
-integer-valued `let` names; a non-integer bound is a compile error. A single
-`generate`'s span from `A` to `B` cannot exceed 10,000 — since both ends are
-inclusive, that allows up to 10,001 iterations. A file-wide counter shared by
-every object, `use` expansion, and `generate` iteration is capped at 15,000;
-see "Limits the compiler enforces" below for the exact mechanics.
+`generate value [, index] in list { ... }` repeats its body once for every
+literal element in `list`. A range such as `0 to 4` is a list of integers,
+inclusive of both ends, so `generate i in 0 to 4` runs five times for `i` =
+0, 1, 2, 3, 4. The optional `index` is the element's 0-based ordinal. Lists
+may contain up to 10,000 elements; a file-wide counter shared by every object,
+`use` expansion, and `generate` iteration is capped at 15,000; see "Limits
+the compiler enforces" below for the exact mechanics.
 
 Every object created inside the loop has its declared name suffixed with
-the loop index: a `rectangle tick` inside `generate k from 0 to 9` produces
+the 0-based ordinal: a `rectangle tick` inside `generate k in 0 to 9` produces
 `tick_0` through `tick_9`. `generate` blocks may nest. Each level of nesting
 appends its own suffix, innermost first — an object named `dot` inside an
 inner loop bound to `j` nested in an outer loop bound to `i` is named
@@ -785,7 +784,7 @@ scene {
   size: (800, 600)
   background: #0a0e1a
 
-  generate i from 0 to 4 {
+  generate i in 0 to 4 {
     use Badge(cyan) badge { position: (100 + i * gap, 200) }
   }
 
@@ -870,9 +869,8 @@ runtime warning or a silent clamp.
   but aborts outright on reaching it rather than continuing
   (`parser/state.ts:99-101`), so a badly malformed file can report fewer than
   50 errors in total.
-- A single `generate` loop's span (`end − start`) cannot exceed 10,000
-  (`parser/parseGenerate.ts:47`). Because both bounds are inclusive, this
-  permits up to **10,001** iterations, not 10,000.
+- A literal list or range cannot exceed 10,000 elements (`parser/parseValue.ts`),
+  so a `generate` iteration has the same ceiling.
 - A file-wide counter shared by every parsed object, every `use` expansion,
   and every `generate` iteration is capped at 15,000
   (`parser/parseObject.ts:148-150`, `parser/parseUse.ts:13-14`,

@@ -14,7 +14,7 @@ scene {
   size: (800, 600)
   background: #0a0e1a
 
-  generate i from 0 to 8 {
+  generate i in 0 to 8 {
     circle dot {
       position: (startX + i * stepX, 300)
       radius: minR + i * stepR

@@ -13,7 +13,7 @@
 ## Metaprogramming
 
 `let name = value` (lexically scoped, immutable, shadowable),
-`generate i from A to B { }` (loop; generated names get `_i` suffixed),
+`generate value, index in LIST { }` (loop; generated names get the 0-based ordinal suffixed),
 `template Name(params) { }` + `use Name(args) instance { }` (parametric macros
 with cycle detection). Template arguments carry **any** value kind, including
 keywords — `use Racer(easeInOut) row { }` passes an easing.

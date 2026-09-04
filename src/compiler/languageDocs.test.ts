@@ -410,8 +410,8 @@ describe("LANGUAGE.md · Reuse · generate", () => {
     const source = `
       scene {
         size: (800, 600)
-        generate i from 0 to 1 {
-          generate j from 0 to 2 {
+        generate i in 0 to 1 {
+          generate j in 0 to 2 {
             circle dot {
               position: (0, 0)
               radius: 5
