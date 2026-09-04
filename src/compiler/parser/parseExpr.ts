@@ -48,8 +48,12 @@ const MAX_TOTAL_DEPTH = 400;
  *
  *   from              | to                | transition
  *   ------------------|-------------------|---------------------------------
+ *   parseExpr         | parseConditional  | (dispatch — no transition)
  *   parseExpr         | parsePrimary      | (same level — no transition)
  *   parseExpr         | parseExpr         | intoOperand  (binary RHS)
+ *   parseConditional  | parseExpr         | intoOperand  (condition)
+ *   parseConditional  | parseExpr         | intoOperand  (then branch)
+ *   parseConditional  | parseExpr         | intoOperand  (else branch)
  *   parsePrimary      | parsePrimary      | intoUnary    (unary '-')
  *   parsePrimary      | parseExpr         | intoUnary    (unary 'not')
  *   parsePrimary      | parseListLiteral  | (dispatch — no transition)
@@ -59,8 +63,8 @@ const MAX_TOTAL_DEPTH = 400;
  *   parseParenOrPoint | parseExpr         | intoCoordinate  (point y)
  *   parseParenOrPoint | parseExpr         | intoGroup       (grouped expr)
  *
- * Ten call edges; the three no-transition ones are strict descents within a
- * level, and every edge that can close a cycle advances `total`.
+ * Fourteen call edges; the four no-transition ones are strict descents within
+ * a level, and every edge that can close a cycle advances `total`.
  *
  * The 'not' edge is the one Task 5 added. It re-enters `parseExpr` rather than
  * `parsePrimary` (unlike unary '-'), so it closes a cycle and must advance
@@ -74,6 +78,13 @@ const MAX_TOTAL_DEPTH = 400;
  * back up, so an invalid one still reports whichever it reaches first, and that
  * differs between charging this edge and not. `parseExpr.test.ts` pins it at
  * total 400 exactly ("charges the total budget for the 'not' operand").
+ *
+ * The three `parseConditional` edges are Task 6's, and they are pinned the same
+ * way — one fixture per edge, each at total 399 with a redundant `(…)` in that
+ * one position, so exactly one edge's advance is what tips it over 400. All
+ * three take `intoOperand` because `if`/`then`/`else` is a ternary *operator*
+ * and these are its operands: one expression level each, no structural level
+ * (a conditional is not a point or a list), and no reset.
  */
 interface ExprCtx {
   readonly expr: number;
@@ -93,7 +104,10 @@ function intoGroup(c: ExprCtx): ExprCtx {
   return { expr: c.expr + 1, struct: c.struct, total: c.total + 1 };
 }
 
-/** Into the right-hand operand of a binary operator. */
+/**
+ * Into an operand of an operator: the right-hand side of a binary one, or any
+ * of the three sub-expressions of the `if`/`then`/`else` ternary.
+ */
 function intoOperand(c: ExprCtx): ExprCtx {
   return { expr: c.expr + 1, struct: c.struct, total: c.total + 1 };
 }
@@ -125,6 +139,14 @@ function checkNesting(state: ParserState, ctx: ExprCtx): void {
  * against a spelling the lexer no longer produces.
  */
 type OperatorWord = Extract<ExpressionWord, "and" | "or">;
+
+/**
+ * The three words of the conditional, tied to the lexer's list for the same
+ * reason `OperatorWord` is: rename one in `lexer/constants.ts` and `Extract`
+ * drops it here, so the `parseConditional` call that names it stops compiling
+ * rather than silently looking for a spelling the lexer no longer produces.
+ */
+type ConditionalWord = Extract<ExpressionWord, "if" | "then" | "else">;
 
 /**
  * What a row is keyed by: the token type for an operator spelled as a symbol,
@@ -613,8 +635,125 @@ function parsePrimary(state: ParserState, ctx: ExprCtx): AstValue {
   state.throwError(`In ${state.currentContext}: Unexpected ${describeToken(t)} where a property value was expected.`, t);
 }
 
+/** Whether `t` is the reserved word `word`. */
+function isWord(t: Token, word: ConditionalWord): boolean {
+  return t.type === "EXPR_KEYWORD" && t.value === word;
+}
+
+/**
+ * Consumes the `then` or `else` that structures a conditional.
+ *
+ * Written as its own check rather than `state.consume("EXPR_KEYWORD")` because
+ * that token type is shared by all eleven reserved words, so consuming by type
+ * would take `if c else x` as a well-formed `if … then …` and go looking for a
+ * second `else`. It also throws *before* consuming: `consume()` with no
+ * expected type advances `pos` even on a mismatch, which is what moved
+ * `synchronize()`'s resume point and produced a spurious extra diagnostic when
+ * `parseGenerate` switched to it (`languageCuts.test.ts`, "parseGenerate's 'to'
+ * bound recovery").
+ */
+function consumeWord(state: ParserState, word: ConditionalWord, after: string): void {
+  const t = state.peek();
+  if (!isWord(t, word)) {
+    state.throwError(
+      `In ${state.currentContext}: Expected '${word}' after the ${after} of an 'if', but found ${describeToken(t)}.`,
+      t,
+    );
+  }
+  state.consume();
+}
+
+/**
+ * `if C then A else B` (design 4.2, 4.3).
+ *
+ * It gets no row in `OPERATORS` and could not have one: that table is keyed by
+ * the single token an operator *is*, and a conditional is spelled with three,
+ * two of which are separators rather than the thing being dispatched on.
+ *
+ * **All three sub-expressions are parsed at minimum precedence 0.** For the
+ * condition and the `then` branch that costs nothing in ambiguity: neither
+ * `then` nor `else` is a binary operator, so the precedence climb stops at them
+ * of its own accord, and parsing at 0 is what lets `if a or b then …` and
+ * `if c then 1 + 2 else …` mean what they read as. For the `else` branch it is
+ * the whole point — it is what makes the conditional the *loosest* construct,
+ * so `if c then 1 else 2 + 3` is `if c then 1 else (2 + 3)` rather than
+ * `(if c then 1 else 2) + 3`. Those two disagree whenever the condition is
+ * true, which is what `parseExpr.test.ts` pins.
+ *
+ * **Right-associativity is structural, not a rule.** `else if` chains because
+ * the else branch re-enters `parseExpr`, which dispatches back here on a
+ * leading `if`; the inner conditional consumes its own `else`, so a trailing
+ * `else` always belongs to the nearest unclosed `if`. There is nothing to
+ * choose: the left-associative reading would require the *outer* `if` to claim
+ * an `else` the inner one has already taken.
+ *
+ * **Both branches are folded and kind-checked whichever one is selected.**
+ * Returning early on the taken branch would make `radius: if flag then 5 else red`
+ * legal whenever `flag` is true — a value whose *kind* depends on data, which
+ * is the one place design 2.1 ("data determines values; the source's literal
+ * structure determines shape") is easiest to cross by accident.
+ */
+function parseConditional(state: ParserState, ctx: ExprCtx): AstValue {
+  const ifTok = state.consume();
+
+  // Anchored at the condition, not at the `if`: exactly one sub-expression is
+  // at fault, so this follows `requireNumber`'s operand anchoring rather than
+  // `compareEqual`'s at-the-operator anchoring.
+  const condTok = state.peek();
+  const condition = parseExpr(state, 0, intoOperand(ctx));
+  if (condition.kind !== "boolean") {
+    state.throwError(
+      `In ${state.currentContext}: An 'if' condition must be a boolean, but got ${condition.kind}. Declare has no truthiness — write an explicit comparison such as 'i % 5 == 0'.`,
+      condTok,
+    );
+  }
+
+  consumeWord(state, "then", "condition");
+  const whenTrue = parseExpr(state, 0, intoOperand(ctx));
+
+  consumeWord(state, "else", "'then' branch");
+  const whenFalse = parseExpr(state, 0, intoOperand(ctx));
+
+  // Reported at the `if`, like the mixed-kind equality in `compareEqual`:
+  // neither branch is the wrong one on its own, it is the pairing that fails.
+  if (whenTrue.kind !== whenFalse.kind) {
+    state.throwError(
+      `In ${state.currentContext}: Both branches of an 'if' must be the same kind, but 'then' is ${whenTrue.kind} and 'else' is ${whenFalse.kind}. Both branches are checked whichever one the condition selects, so a value's kind never depends on data.`,
+      ifTok,
+    );
+  }
+
+  const chosen = condition.value ? whenTrue : whenFalse;
+  // The span covers the whole construct, the way a parenthesised expression
+  // takes its brackets' span rather than the inner value's.
+  return { ...chosen, line: ifTok.line, col: ifTok.col, endLine: whenFalse.endLine, endCol: whenFalse.endCol };
+}
+
 export function parseExpr(state: ParserState, minPrec: number, ctx: ExprCtx): AstValue {
   checkNesting(state, ctx);
+
+  // The conditional is dispatched here rather than from `parsePrimary`, where
+  // the other prefix forms ('-' and 'not') live, because it is the loosest
+  // construct in the grammar and a primary is the tightest thing there is: an
+  // expression is *either* a conditional or a precedence climb. The one
+  // observable consequence is that `-if c then 1 else 2` is rejected — unary
+  // '-' takes a primary — where `-(if c then 1 else 2)` is fine.
+  //
+  // `minPrec` is deliberately not consulted. A conditional may begin any
+  // expression, including one an operator is already waiting on, and it then
+  // runs to the end of its own else branch; `1 + if c then 2 else 3` is legal
+  // and means `1 + (if c then 2 else 3)`. Gating on `minPrec === 0` instead
+  // would reject that while still admitting `if if a then b else c then …`,
+  // since a condition is itself parsed at 0 — so it would buy no readability,
+  // only an exception to state.
+  //
+  // Returning rather than feeding the loop below is a formality and no test can
+  // tell the two apart, which was checked rather than assumed: the else branch
+  // is parsed at minimum precedence 0, so its own loop runs until
+  // `operatorFor(peek())` is null or its precedence is <= 0, and the lowest
+  // precedence in `OPERATORS` is 1. Whatever follows a conditional is therefore
+  // never a binary operator, and the loop would break on its first iteration.
+  if (isWord(state.peek(), "if")) return parseConditional(state, ctx);
 
   // The start token of the whole accumulated left-hand side. A folded left is
   // always a number — otherwise `applyBinary` would have thrown — so this is

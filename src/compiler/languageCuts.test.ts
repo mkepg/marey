@@ -268,15 +268,68 @@ describe("Phase 3B lift: modulo and comparisons", () => {
   });
 });
 
-describe("Phase 3B exclusion: conditional value expression", () => {
-  it("rejects an inline 'if...then...else' value", () => {
+describe("Phase 3B lift: conditional value expression", () => {
+  // Lifted by Phase 3B, whose Task 6 gave the parser an if/then/else rule.
+  // Authority: roadmap 8.1 ("a conditional"), decided by R4 ("'Every fifth item
+  // differs' requires a decision as well as a remainder"); the grammar and the
+  // type rules are settled in the Phase 3B design, sections 4.1-4.3.
+  //
+  // The inversion runs on the same fixture as the exclusion case it replaces,
+  // and asserts the folded value rather than only the absence of diagnostics —
+  // a construct quietly dropped would satisfy "no diagnostics" too.
+  it("allows an inline 'if...then...else' value, which Phase 3B lifts", () => {
     const source = `scene { size:(10,10) circle c { position:(0,0), radius: if true then 1 else 2 } }`;
+    expect(messagesFor(source)).toEqual([]);
+    expect(parse(lex(source)).ast?.children[0].props.radius).toMatchObject({
+      kind: "number",
+      value: 1,
+    });
+  });
+
+  // Retained, not lifted. The conditional lives in *value* position only: it
+  // decides what a property is, never whether an object exists (design 2.1).
+  // The top-level statement form is already covered by "rejects top-level 'if'
+  // construct as a reserved word" above; this is the in-scene one, which is
+  // where an author would actually reach for a guard.
+  //
+  // It fails at the missing ':' rather than at 'if', because a reserved word is
+  // admitted where a *property name* goes — the gate that keeps
+  // `animate { to: ... }` working. Only the first diagnostic is pinned: the
+  // three that follow are recovery walking out of the block 'if true {' opened,
+  // and their number is recovery behaviour rather than a language rule.
+  it("still rejects 'if' as an emission guard inside the scene", () => {
+    const source = `scene { size:(10,10) if true { circle c { position:(0,0), radius:5 } } }`;
     const diags = diagnosticsFor(source);
-    expect(diags).toHaveLength(1);
-    expect(diags[0].message).toContain("Unexpected reserved word 'if' where a property value was expected.");
-    const pos = posAt(source, "if true");
+    expect(diags[0].message).toBe(
+      "In the scene: Expected ':' after the property name, but found token 'true'.",
+    );
+    const pos = posAt(source, "true");
     expect(diags[0].line).toBe(pos.line);
     expect(diags[0].col).toBe(pos.col);
+  });
+
+  // Retained for the same reason 'and'/'or' kept theirs: the operator arrived,
+  // the truthiness did not (design 4.3).
+  it("still rejects a non-boolean 'if' condition — there is no truthiness", () => {
+    const diags = diagnosticsFor(`let x = if 1 then 2 else 3 scene { size:(10,10) }`);
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toContain(
+      "An 'if' condition must be a boolean, but got number. Declare has no truthiness — write an explicit comparison such as 'i % 5 == 0'.",
+    );
+  });
+
+  // The design names this exact fixture (section 4.3): without the rule,
+  // `radius: if flag then 5 else red` compiles whenever `flag` is true and a
+  // value's *kind* becomes data-dependent, which is where design 2.1 is
+  // easiest to cross by accident. The condition here is true, so the taken
+  // branch is valid on its own and only the untaken one is wrong.
+  it("still rejects branches of different kinds, taken branch or not", () => {
+    const source = `scene { size:(10,10) circle c { position:(0,0), radius: if true then 5 else red } }`;
+    const diags = diagnosticsFor(source);
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toContain(
+      "Both branches of an 'if' must be the same kind, but 'then' is number and 'else' is color.",
+    );
   });
 });
 

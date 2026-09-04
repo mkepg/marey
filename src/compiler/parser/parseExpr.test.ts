@@ -678,3 +678,276 @@ describe("reserved words that are not operators", () => {
     expect(diags[0].message).toContain("Expected ':' after the property name, but found '}'.");
   });
 });
+
+/* ------------------------------------------------------------------------ *
+ * Task 6 — the conditional value expression (design 4.2, 4.3)
+ * ------------------------------------------------------------------------ */
+
+describe("conditional value expression", () => {
+  it("folds to the 'then' branch when the condition holds", () => {
+    expect(foldOf("if 1 == 1 then 10 else 20")).toMatchObject({ kind: "number", value: 10 });
+  });
+
+  it("folds to the 'else' branch when it does not", () => {
+    expect(foldOf("if 1 == 2 then 10 else 20")).toMatchObject({ kind: "number", value: 20 });
+  });
+
+  it("carries a non-numeric kind through", () => {
+    // Nothing about the result is numeric: a named color survives only as the
+    // hex it resolves to, and both branches produce one.
+    expect(foldOf("if true then red else blue")).toMatchObject({ kind: "color", value: "#ff0000" });
+    expect(foldOf("if false then red else blue")).toMatchObject({ kind: "color", value: "#0000ff" });
+  });
+
+  it("chains through the else branch", () => {
+    expect(foldOf("if false then 1 else if true then 2 else 3")).toMatchObject({
+      kind: "number",
+      value: 2,
+    });
+  });
+
+  it("chains four deep and still reaches the last else", () => {
+    expect(
+      foldOf("if false then 1 else if false then 2 else if false then 3 else 4"),
+    ).toMatchObject({ kind: "number", value: 4 });
+  });
+});
+
+describe("the conditional is the loosest construct", () => {
+  /**
+   * All three sub-expressions are parsed at minimum precedence 0, and the else
+   * branch is the one where that is observable rather than merely tidy. Each
+   * test below is red under a different tightening, verified by making the edit
+   * and running the whole suite; nothing outside this describe noticed any of
+   * them.
+   */
+  it("extends the else branch as far right as it goes", () => {
+    // `if true then 1 else (2 + 3)` = 1. The competing grouping,
+    // `(if true then 1 else 2) + 3`, is 4 — so a *taken* then branch is what
+    // distinguishes them. With the condition false the two agree at 5, which
+    // is why the second assertion cannot stand alone: it only shows the '+ 3'
+    // was not silently dropped.
+    expect(foldOf("if true then 1 else 2 + 3")).toMatchObject({ kind: "number", value: 1 });
+    expect(foldOf("if false then 1 else 2 + 3")).toMatchObject({ kind: "number", value: 5 });
+    // The two fixtures above only reach down to precedence 5, so parsing the
+    // branch at `and`'s 2 truncates it at the loosest operators and still left
+    // the whole suite green — verified. Hence this third fixture: the 'or'
+    // would be stranded after a conditional that has already returned, and
+    // `foldOf`'s no-diagnostics assertion is what catches it.
+    expect(foldOf("if false then false else false or true")).toMatchObject({
+      kind: "boolean",
+      value: true,
+    });
+  });
+
+  it("takes a whole boolean expression as the condition", () => {
+    // At any minimum precedence above 0 the condition stops at 'false' and the
+    // 'or' is what `consumeWord` finds where it wanted 'then'.
+    expect(foldOf("if false or true then 1 else 2")).toMatchObject({ kind: "number", value: 1 });
+  });
+
+  it("takes a whole arithmetic or boolean expression as the then branch", () => {
+    // Likewise, and from both sides of the precedence table: at additive
+    // precedence or tighter the branch stops at '1' and the '+' faces
+    // `consumeWord`'s 'else'; at `and`'s precedence the second fixture stops at
+    // 'false' and the 'or' does.
+    expect(foldOf("if true then 1 + 2 else 0")).toMatchObject({ kind: "number", value: 3 });
+    expect(foldOf("if true then false or true else false")).toMatchObject({
+      kind: "boolean",
+      value: true,
+    });
+  });
+
+  it("may begin the operand of a tighter operator", () => {
+    // `minPrec` is not consulted by the dispatch, so a conditional can start an
+    // expression an operator is already waiting on, and then runs to the end of
+    // its own else branch: 1 + (if true then 2 else (3 * 4)).
+    expect(foldOf("1 + if true then 2 else 3 * 4")).toMatchObject({ kind: "number", value: 3 });
+    expect(foldOf("1 + if false then 2 else 3 * 4")).toMatchObject({ kind: "number", value: 13 });
+  });
+
+  it("is not a primary, so unary '-' does not take one", () => {
+    // The dispatch is in `parseExpr`, not in `parsePrimary` where '-' and 'not'
+    // live — an expression is either a conditional or a precedence climb. This
+    // is the one case where that placement is observable.
+    const diags = diagnosticsForExpr("-if true then 1 else 2");
+    expect(diags[0].message).toContain(
+      "Unexpected reserved word 'if' where a property value was expected.",
+    );
+    expect(foldOf("-(if true then 1 else 2)")).toMatchObject({ kind: "number", value: -1 });
+  });
+
+  it("binds a trailing 'else' to the nearest unclosed 'if'", () => {
+    // `if true then (if false then 1 else 2) else 3` = 2. The trailing else
+    // cannot belong to the outer 'if' instead: the inner one would then have
+    // none, and this grammar has no if-without-else form.
+    expect(foldOf("if true then if false then 1 else 2 else 3")).toMatchObject({
+      kind: "number",
+      value: 2,
+    });
+  });
+
+  it("permits a bare conditional as the condition", () => {
+    // Deliberate, not incidental. Forbidding it would need a second entry into
+    // the precedence climb that skips the dispatch, to reject a program that is
+    // already unambiguous: 'then' is not an operator, so the inner conditional's
+    // else branch stops there of its own accord.
+    //   if (if true then false else true) then 1 else 2  ->  2
+    expect(foldOf("if if true then false else true then 1 else 2")).toMatchObject({
+      kind: "number",
+      value: 2,
+    });
+  });
+});
+
+describe("type rules on the conditional", () => {
+  it("requires a boolean condition — there is no truthiness", () => {
+    const diags = diagnosticsForExpr("if 1 then 2 else 3");
+    expect(diags[0].message).toContain(
+      "An 'if' condition must be a boolean, but got number. Declare has no truthiness — write an explicit comparison such as 'i % 5 == 0'.",
+    );
+  });
+
+  it("reports a non-boolean condition at the condition, not at the 'if'", () => {
+    // Exactly one sub-expression is at fault, so this anchors like
+    // `requireNumber` does rather than like `compareEqual`'s at-the-operator
+    // mixed-kind message.
+    const source = bindingOf("if 1 then 2 else 3");
+    const diags = diagnosticsFor(source);
+    expect({ line: diags[0].line, col: diags[0].col }).toEqual(posAt(source, "1 then"));
+  });
+
+  it("requires both branches to be the same kind", () => {
+    const diags = diagnosticsForExpr("if false then 5 else red");
+    expect(diags[0].message).toContain(
+      "Both branches of an 'if' must be the same kind, but 'then' is number and 'else' is color.",
+    );
+  });
+
+  it("reports the mismatch even when the taken branch is valid on its own", () => {
+    // The condition is true, so the then branch alone folds to 5 and a parser
+    // that returned early would never look at 'else red'. That is the shape
+    // design 2.1 forbids: `radius:` would be a number or a color depending on
+    // data. `diagnosticsForExpr` also asserts this is the *only* diagnostic, so
+    // the construct is rejected rather than rejected-and-recovered-into-noise.
+    const diags = diagnosticsForExpr("if true then 5 else red");
+    expect(diags[0].message).toContain(
+      "Both branches of an 'if' must be the same kind, but 'then' is number and 'else' is color.",
+    );
+    expect(diags[0].message).toContain(
+      "Both branches are checked whichever one the condition selects, so a value's kind never depends on data.",
+    );
+  });
+
+  it("reports a branch mismatch at the 'if', not at either branch", () => {
+    // Neither branch is wrong on its own — it is the pairing that fails — so
+    // this anchors the way `compareEqual` does and not the way the condition
+    // check above does.
+    const source = bindingOf("if true then 5 else red");
+    const diags = diagnosticsFor(source);
+    expect({ line: diags[0].line, col: diags[0].col }).toEqual(posAt(source, "if true"));
+  });
+
+  it("names what it found where 'then' belonged", () => {
+    const diags = diagnosticsForExpr("if true 1 else 2");
+    expect(diags[0].message).toContain(
+      "Expected 'then' after the condition of an 'if', but found number 1.",
+    );
+  });
+
+  it("names what it found where 'else' belonged", () => {
+    const diags = diagnosticsForExpr("if true then 1");
+    expect(diags[0].message).toContain(
+      "Expected 'else' after the 'then' branch of an 'if', but found keyword 'scene'.",
+    );
+  });
+});
+
+describe("the conditional's recursion budgets", () => {
+  it("charges the expression budget for every 'else if' in a chain", () => {
+    const chain = (n: number) =>
+      `${Array.from({ length: n }, (_, i) => `if false then ${i} else `).join("")}${n}`;
+
+    // The k-th conditional sits at expr k-1, so its own three edges reach
+    // expr k: 50 chained conditionals land exactly on the cap, 51 pass it.
+    expect(foldOf(chain(50))).toMatchObject({ kind: "number", value: 50 });
+    expect(diagnosticsForExpr(chain(51))[0].message).toContain(
+      "Math expression is too deeply nested. Maximum depth is 50.",
+    );
+  });
+
+  /**
+   * Which budget rule a branch follows — the same choice `parseListLiteral`
+   * faced for a list entry, and the same answer: the grouped-expression rule,
+   * not the coordinate one. A branch costs one expression level and does not
+   * reset the budget, and charges no structural level at all, because a
+   * conditional is not a point or a list.
+   *
+   * Only a fixture sitting exactly on the cap can see it. Switching one edge to
+   * `intoCoordinate` restarts `expr`, so 50 parens inside that branch fit where
+   * they must not. Made separately, that swap left the whole suite green for
+   * the condition and for the then branch until these fixtures existed; on the
+   * else branch the chain test above caught it, and this one does too.
+   */
+  const nest = (n: number, inner: string) => `${"(".repeat(n)}${inner}${")".repeat(n)}`;
+
+  it.each([
+    ["condition", (n: number) => `if ${nest(n, "true")} then 1 else 2`],
+    ["then branch", (n: number) => `if true then ${nest(n, "1")} else 2`],
+    ["else branch", (n: number) => `if true then 1 else ${nest(n, "2")}`],
+  ])("charges one non-resetting expression level for the %s", (_position, build) => {
+    // The branch itself is level 1, so 49 more parens reach exactly 50.
+    expect(foldOf(build(49))).toMatchObject({ kind: "number", value: 1 });
+    expect(diagnosticsForExpr(build(50))[0].message).toContain(
+      "Math expression is too deeply nested. Maximum depth is 50.",
+    );
+  });
+
+  /**
+   * That all three sub-expression edges advance `total`, pinned one edge at a
+   * time — the corollary in AGENT-LESSONS 2c: a suite that goes red when you
+   * revert all three tells you nothing about which of them is guarded.
+   *
+   * The window is the same one the `not` edge uses above. `total` can only be
+   * the cap that fires where `expr` has been reset, and `intoCoordinate` is the
+   * only reset — so the fixture has to put the conditional under a point
+   * coordinate, where a boolean would be illegal anyway. `checkNesting` runs on
+   * the way *down* and `requireCoordinate` on the way back *up*, so which of
+   * the two errors surfaces is what distinguishes charging an edge from not.
+   *
+   * 19 point levels each holding 20 parens put the ctx at the innermost
+   * expression at exactly total 399 — 19 x (1 coordinate + 20 groups) — with
+   * expr at 20 and struct at 19, both far from their own 50s. Every one of the
+   * conditional's three edges therefore lands on 400, the last legal value, and
+   * a single redundant `(…)` in *one* branch position is what tips that branch
+   * to 401. Drop the `total` advance from that one edge and the descent
+   * completes instead, folding to a number the enclosing coordinate accepts —
+   * so the diagnostic becomes the baseline test's coordinate complaint.
+   * Verified by making each of the three mutations separately.
+   */
+  const nestedCoordinate = (inner: string) => {
+    let s = inner;
+    for (let i = 0; i < 19; i++) s = `(${"(".repeat(20)}${s}${")".repeat(20)}, 0)`;
+    return s;
+  };
+
+  it("leaves a conditional sitting exactly on the total budget alone", () => {
+    // This is what makes the three below a *boundary*: with no redundant parens
+    // the descent completes and the complaint is the ordinary one about the
+    // point one level up, never about nesting.
+    expect(diagnosticsForExpr(nestedCoordinate("if true then 1 else 2"))[0].message).toContain(
+      "A point coordinate must be a number, but got point.",
+    );
+  });
+
+  it.each([
+    ["condition", "if (true) then 1 else 2"],
+    ["then branch", "if true then (1) else 2"],
+    ["else branch", "if true then 1 else (2)"],
+  ])("charges the total budget for the %s", (_position, inner) => {
+    expect(diagnosticsForExpr(nestedCoordinate(inner))[0].message).toContain(
+      "This value nests too deeply overall. Maximum total nesting is 400.",
+    );
+  });
+});
+
