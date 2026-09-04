@@ -1115,3 +1115,99 @@ describe("indexing and length", () => {
   });
 });
 
+describe("trigonometry", () => {
+  it.each([
+    ["sin(0)", 0], ["sin(90)", 1], ["sin(180)", 0], ["sin(270)", -1],
+    ["cos(0)", 1], ["cos(90)", 0], ["cos(180)", -1], ["cos(270)", 0],
+  ])("evaluates %s in degrees", (expr, expected) => {
+    expect(foldOf(expr)).toMatchObject({ kind: "number", value: expected });
+  });
+
+  // toMatchObject above is exact equality, which is the point: Math.sin(Math.PI)
+  // is 1.2246e-16, and a naive radian conversion fails these four outright.
+  it("returns exactly 0 and exactly 1 at the cardinal angles", () => {
+    expect((foldOf("sin(180)") as { value: number }).value).toBe(0);
+    expect((foldOf("cos(90)") as { value: number }).value).toBe(0);
+  });
+
+  /**
+   * The brief's own two rows here (`sin(-90)`, `cos(720)`) do not actually
+   * discriminate the `+ 360` correction this test claims to pin. Worked out
+   * with `node -e` before writing this test:
+   *
+   *  - `-90 % 360` is `-90`, which matches none of the cardinal checks, so
+   *    the reverted (uncorrected) code falls through to
+   *    `Math.sin((-90 * Math.PI) / 180)` — which is exactly `-1` in IEEE 754
+   *    double precision, the mirror image of `Math.sin(Math.PI / 2) === 1`.
+   *  - `810 % 360` is `90`, already non-negative, so the correction never
+   *    triggers for `cos(720)` (routed through `sinDegrees(810)`) at all.
+   *
+   * Both rows pass unchanged even with `deg % 360` in place of
+   * `((deg % 360) + 360) % 360` — confirmed by the revert in
+   * task-8-report.md, revert check 2. `sin(-180)` is added because it is not
+   * this lucky: `-180 % 360` is `-180` (matches no cardinal), and
+   * `Math.sin(-Math.PI)` is `-1.2246...e-16`, not `0` — the exact float-noise
+   * failure the cardinal-exactness design exists to prevent, reached through
+   * the negative-angle branch instead of the direct one. The original two
+   * rows are kept: they still exercise the reduction path, even though they
+   * do not pin the correction on their own.
+   */
+  it("reduces angles outside 0-360 before the cardinal check", () => {
+    expect(foldOf("sin(-90)")).toMatchObject({ value: -1 });
+    expect(foldOf("cos(720)")).toMatchObject({ value: 1 });
+    expect(foldOf("sin(-180)")).toMatchObject({ value: 0 });
+  });
+
+  it("is still approximate off the cardinal angles", () => {
+    expect((foldOf("sin(30)") as { value: number }).value).toBeCloseTo(0.5, 10);
+  });
+
+  it("places a dot on a circle without hand-computed coordinates", () => {
+    // 180 * cos(0) = 180 exactly; the radial-dots case.
+    expect(foldOf("400 + 180 * cos(0)")).toMatchObject({ value: 580 });
+  });
+
+  it("takes a whole expression as the argument", () => {
+    expect(foldOf("sin(45 + 45)")).toMatchObject({ value: 1 });
+  });
+
+  it("rejects a non-numeric argument, naming the kind", () => {
+    // The brief's own assertion checked only `toContain("requires a
+    // number")`, which `Unary '-' requires a number, but got ...` also
+    // satisfies — the identical neighbouring-path trap Task 7's review found
+    // for the index and 'length' rejections ("naming the kind", above).
+    // `red` is a NAMED_COLOR (languageContract.ts), so the argument's kind is
+    // `color`; pin that the way the index/length fixtures do.
+    const msg = diagnosticsForExpr("sin(red)")[0].message;
+    expect(msg).toContain("'sin' requires a number of degrees");
+    expect(msg).toContain("but got color");
+  });
+
+  it("has no pi constant", () => {
+    expect(diagnosticsForExpr("sin(pi)")[0].message).toContain("Undefined variable 'pi'");
+  });
+
+  /**
+   * Same gap as Task 7's index and 'length' fixtures (see
+   * "charges the index expression..." / "charges the length argument..."
+   * above): the brief's `intoGroup(ctx)` for the trig argument is unpinned
+   * by every fixture above it. Verified directly — swapping `intoGroup(ctx)`
+   * for a bare `ctx` in the sin/cos branch and running the whole suite left
+   * it entirely green (see task-8-report.md).
+   *
+   * The argument costs one level for the call's own parenthesis, matching
+   * the index bracket exactly (not `length`'s argument, which pays a second
+   * level for its list literal), so 49 redundant parens around a bare number
+   * is the last depth that still folds (1 + 49 = 50) and 50 is the first
+   * that overflows (1 + 50 = 51).
+   */
+  const nestTrigArg = (n: number) => `${"(".repeat(n)}0${")".repeat(n)}`;
+
+  it("charges the trig argument one level like a group, not a bare pass-through", () => {
+    expect(foldOf(`sin(${nestTrigArg(49)})`)).toMatchObject({ kind: "number", value: 0 });
+    expect(diagnosticsForExpr(`sin(${nestTrigArg(50)})`)[0].message).toContain(
+      "Math expression is too deeply nested. Maximum depth is 50.",
+    );
+  });
+});
+

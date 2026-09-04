@@ -59,6 +59,7 @@ const MAX_TOTAL_DEPTH = 400;
  *   parsePrimary      | parsePostfix      | intoUnary    (unary '-')
  *   parsePrimary      | parseExpr         | intoUnary    (unary 'not')
  *   parsePrimary      | parseExpr         | intoGroup    ('length' argument)
+ *   parsePrimary      | parseExpr         | intoGroup    ('sin'/'cos' argument)
  *   parsePrimary      | parseListLiteral  | (dispatch — no transition)
  *   parsePrimary      | parseParenOrPoint | (dispatch — no transition)
  *   parseListLiteral  | parseExpr         | intoGroup       (entry)
@@ -66,7 +67,7 @@ const MAX_TOTAL_DEPTH = 400;
  *   parseParenOrPoint | parseExpr         | intoCoordinate  (point y)
  *   parseParenOrPoint | parseExpr         | intoGroup       (grouped expr)
  *
- * Seventeen call edges; the five no-transition ones are strict descents within
+ * Eighteen call edges; the five no-transition ones are strict descents within
  * a level, and every edge that can close a cycle advances `total`.
  *
  * The 'not' edge is the one Task 5 added. It re-enters `parseExpr` rather than
@@ -121,11 +122,27 @@ const MAX_TOTAL_DEPTH = 400;
  * `intoGroup`, `intoOperand` and `intoUnary` are, by inspection, the same
  * function under three names — every body is `{ expr: c.expr + 1, struct:
  * c.struct, total: c.total + 1 }` — so no program, valid or invalid, could
- * distinguish which of the three labels the index expression or the
- * 'length' argument actually carries; only `intoCoordinate` (which resets
- * `expr` instead of advancing it) would be observably different. The names
- * exist for what they document at each call site, not for a behavioural
- * difference `ExprCtx`'s three numbers cannot express.
+ * distinguish which of the three labels the index expression, the
+ * 'length' argument, or the trig argument below actually carries; only
+ * `intoCoordinate` (which resets `expr` instead of advancing it) would be
+ * observably different. The names exist for what they document at each call
+ * site, not for a behavioural difference `ExprCtx`'s three numbers cannot
+ * express.
+ *
+ * Task 8's `sin`/`cos` argument is the eighteenth edge, and it takes
+ * `intoGroup` for the same reason 'length''s argument does: the call's own
+ * parenthesis is a group, not a coordinate. It closes a cycle the same way
+ * (`sin(cos(0))` re-enters `parseExpr`) and so must advance `total`, which
+ * `intoGroup` already does. It is likewise unpinned by every fixture that
+ * existed before it — confirmed by swapping `intoGroup(ctx)` for a bare
+ * `ctx` in the branch and running the whole suite, which stayed green apart
+ * from the one fixture added to pin it, the same pattern as the index and
+ * 'length' edges above. Swapping in `intoOperand` or `intoUnary` instead of
+ * `intoGroup` leaves the whole suite green too, confirming the paragraph
+ * above by direct measurement rather than by inspection alone; swapping in
+ * `intoCoordinate` turns that same pinning fixture red, since resetting
+ * `expr` rather than advancing it lets 50 redundant parens fold where the
+ * fixture expects them to overflow.
  */
 interface ExprCtx {
   readonly expr: number;
@@ -590,6 +607,39 @@ function parseParenOrPoint(state: ParserState, ctx: ExprCtx): AstValue {
   return { ...inner, line: openTok.line, col: openTok.col, endLine: closeTok.line, endCol: closeTok.endCol };
 }
 
+/**
+ * sin/cos in degrees, exact at multiples of 90.
+ *
+ * Degrees, not radians — the only other angle in the language, `rotation`
+ * (`languageContract.ts:111-117`), is degrees, and design section 11
+ * deviation 1 is explicit that Declare ships no pi constant. `Math.sin`
+ * takes radians, so the conversion happens here rather than being pushed
+ * onto every call site.
+ *
+ * `Math.sin(Math.PI)` is `1.2246e-16`, not `0`, so a plain radian conversion
+ * puts every dot in a radial layout a fraction of a pixel off its true
+ * position and makes committed IR goldens (Task 15) carry float noise.
+ * Reducing the angle modulo 360 and returning the exact value at the four
+ * cardinal angles avoids that, and matches what an author writing
+ * `cos(180)` expects to see.
+ *
+ * The modulo is written twice so a negative input lands in [0, 360): plain
+ * `-90 % 360` is `-90` in JavaScript, which would miss the `270` arm.
+ */
+function sinDegrees(deg: number): number {
+  const d = ((deg % 360) + 360) % 360;
+  if (d === 0) return 0;
+  if (d === 90) return 1;
+  if (d === 180) return 0;
+  if (d === 270) return -1;
+  return Math.sin((d * Math.PI) / 180);
+}
+
+/** cos(d) = sin(d + 90); the reduction inside `sinDegrees` handles the wrap. */
+function cosDegrees(deg: number): number {
+  return sinDegrees(deg + 90);
+}
+
 function parsePrimary(state: ParserState, ctx: ExprCtx): AstValue {
   checkNesting(state, ctx);
 
@@ -623,6 +673,26 @@ function parsePrimary(state: ParserState, ctx: ExprCtx): AstValue {
       state.throwError(`In ${state.currentContext}: 'length' requires a list, but got ${arg.kind}.`, nameTok);
     }
     return { kind: "number", value: arg.value.length, line: nameTok.line, col: nameTok.col, endLine: closeTok.line, endCol: closeTok.endCol };
+  }
+
+  if (t.type === "EXPR_KEYWORD" && (t.value === "sin" || t.value === "cos")) {
+    const nameTok = state.consume();
+    const fn = nameTok.value as "sin" | "cos";
+    if (state.peek().type !== "LPAREN") {
+      state.throwError(`In ${state.currentContext}: '${fn}' is a function and needs parentheses — write '${fn}(45)'.`, state.peek());
+    }
+    state.consume("LPAREN");
+    // Same shape as 'length' above: the call's own parenthesis is a group,
+    // not a coordinate, so it does not reset the expression budget. See the
+    // `ExprCtx` edge table for why `intoGroup` — rather than `intoOperand` or
+    // `intoUnary`, which advance the budgets identically — is the name used
+    // here.
+    const arg = parseExpr(state, 0, intoGroup(ctx));
+    const closeTok = state.consume("RPAREN");
+    if (arg.kind !== "number") {
+      state.throwError(`In ${state.currentContext}: '${fn}' requires a number of degrees, but got ${arg.kind}.`, nameTok);
+    }
+    return { kind: "number", value: fn === "sin" ? sinDegrees(arg.value) : cosDegrees(arg.value), line: nameTok.line, col: nameTok.col, endLine: closeTok.line, endCol: closeTok.endCol };
   }
 
   if (t.type === "MINUS") {

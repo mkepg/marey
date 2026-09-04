@@ -173,18 +173,20 @@ describe("roadmap cut: network/file access in source", () => {
   });
 });
 
-describe("Phase 3B exclusion: trig", () => {
-  it.each([
-    ["sin", "sin(45)"],
-    ["cos", "cos(45)"],
-  ])("rejects trig function '%s(...)' — no function-call syntax exists", (name, expr) => {
-    const source = `scene { size:(10,10) circle c { position:(0,0), radius: ${expr} } }`;
+describe("Phase 3B lift: trig", () => {
+  // Lifted by Phase 3B (roadmap 8.1, R5). Angles are in DEGREES, matching
+  // `rotation` — the only other angle in the language.
+  it.each(["sin(45)", "cos(45)"])("allows trig function '%s' in degrees", (expr) => {
+    expect(messagesFor(`scene { size:(10,10) circle c { position:(0,0), radius: 100 + ${expr} } }`)).toEqual([]);
+  });
+
+  // Deliberately NOT shipped — design section 11, deviation 1. A pi constant
+  // beside degree-based trig is a trap: sin(pi) would be 0.0274, not 0.
+  it("has no pi constant", () => {
+    const source = `scene { size:(10,10) circle c { position:(0,0), radius: sin(pi) } }`;
     const diags = diagnosticsFor(source);
     expect(diags).toHaveLength(1);
-    expect(diags[0].message).toContain(`Unexpected reserved word '${name}' where a property value was expected.`);
-    const pos = posAt(source, expr);
-    expect(diags[0].line).toBe(pos.line);
-    expect(diags[0].col).toBe(pos.col);
+    expect(diags[0].message).toContain("Undefined variable 'pi'");
   });
 });
 
