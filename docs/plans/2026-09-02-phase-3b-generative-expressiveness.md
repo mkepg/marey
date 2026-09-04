@@ -1920,6 +1920,14 @@ header shape instead of two, and folds parseGenerate's separate
 
 **Twelve `.eval` fixtures use `from` and must be migrated in this task** — six in `eval/scenes/`, six in `eval/scenes-r2/`. This is the one permitted edit to either corpus in the whole phase: a mechanical `from` → `in` rename and nothing else, matching the vocabulary migration Phase 3A performed and recorded at `eval/RESULTS.md:7-12`. **Do not touch anything else in those files** — not the hand-unrolled rectangles, not the literal coordinates, not the author comments explaining why they were written that way. Every affected header starts at 0, so no object name changes and both report JSONs must stay byte-identical.
 
+**Since this section was drafted, Task 9 landed a temporary stopgap in exactly the code this task rewrites, because giving `to` an `OPERATORS` row broke `generate`'s own `from`/`to` header the same way it briefly threatened to break `animate { to: … }`.** Re-derive against current source before writing the dispatch (per AGENT-LESSONS §7b) — this is not a prediction, it is read directly off the branch as of commit `414d1f8`:
+
+- `src/compiler/parser/parseGenerate.ts` grew an import (`parseExpr, ROOT_CTX, GENERATE_START_MIN_PREC` from `./parseExpr`, currently `:6`) and its start-bound parse changed from `parseValue(state)` to `parseExpr(state, GENERATE_START_MIN_PREC, ROOT_CTX)` (currently `:35`), with an 8-line comment explaining why. **This task's rewrite deletes all of it** — the new `in`-header code below needs none of those three names, so the import line should simply disappear rather than be edited down.
+- `src/compiler/parser/parseExpr.ts` gained the `GENERATE_START_MIN_PREC` export and its doc comment (currently `:330-368`). It exists only to serve the call site above. **Delete both together** — leaving the export behind with no caller is exactly the orphaned-scaffolding this stopgap's own comment says Task 10 should remove.
+- `src/compiler/parser/parseExpr.test.ts` gained a test documenting a known limitation of the stopgap (currently `:1334-1372`, `it("known limitation: a conditional generate start bound still collides with 'to' …")`) — it pins that `generate i from if 1 < 2 then 0 else 1 to 2 { … }` throws "Both branches of an 'if' must be the same kind…". **Delete this test, do not migrate it.** Once this task's rewrite lands, that fixture's `from` is rejected by the new `[PARSE_RENAMED_KEYWORD]` check (see Step 3) before any bound is ever parsed, so it can no longer reach the branch-kind-mismatch error the test pins — keeping it would pin a message the new code cannot produce, the exact "assertion the pipeline cannot produce" shape a later task already had to fix once this phase (Task 9's own `listOf`/`MAX_LIST_LENGTH` round).
+
+Confirm all three against source before dispatching — this task's own commit may have moved since this note was written, same as everything else in this plan.
+
 - [ ] **Step 1: Write the failing tests**
 
 ```ts
@@ -1966,7 +1974,14 @@ describe("generate ... in", () => {
   it("rejects the removed 'from' header, naming the replacement", () => {
     const msg = parse(lex(`scene { size:(100,100) generate i from 0 to 2 { circle d { position:(0,0), radius:1 } } }`))
       .errors.map((e) => e.message).join();
-    expect(msg).toContain("generate i in 0 to 2");
+    // Step 3's [PARSE_RENAMED_KEYWORD] message is deliberately templated —
+    // 'A to B' is a fixed illustration, not the fixture's actual '0 to 2' —
+    // because the check fires before any bound is parsed, and re-deriving the
+    // original bound text from tokens not yet consumed is not worth doing for
+    // a diagnostic whose useful information is entirely "from is now in".
+    // A version of this test asserting `toContain("generate i in 0 to 2")`
+    // will not pass: confirm the real message before pinning it.
+    expect(msg).toContain("generate i in A to B");
   });
 
   it("rejects iterating a non-list", () => {
@@ -1984,7 +1999,7 @@ Expected: FAIL.
 
 - [ ] **Step 3: Rewrite the header**
 
-In `src/compiler/parser/parseGenerate.ts`, replace `:19-49` (the `from`/`to` parsing, the integer check and the 10,000 cap) with:
+In `src/compiler/parser/parseGenerate.ts`, replace the whole `from`/`to` header-parsing block — the `from`/`to` parsing, the integer check, and the 10,000 cap, currently `:20-59` (shifted from this plan's original `:19-49` by Task 9's now-obsolete stopgap; confirm against source, this has already moved once) — with:
 
 ```ts
   let indexVar: string | null = null;
@@ -2074,7 +2089,12 @@ Expected: 20/20 both, and the third command prints **nothing** — the reports a
 - [ ] **Step 6: Run everything**
 
 Run: `npm test && npx tsc -b --noEmit && npm run build`
-Expected: pass. `languageCuts.test.ts:282-292`'s `generate` permission case uses `from` and must be migrated too.
+Expected: pass.
+
+`languageCuts.test.ts` has two `from`-using cases, at different lines than this plan originally cited (`:282-292` is stale — confirm current numbers, approximately `:353-359` and `:399-409` as of `414d1f8`, and re-check since this too may have moved again):
+
+- **`"allows 'generate' to produce a run of objects"`** — a plain `generate i from 0 to 2 { … }`. This one is Step 5's mechanical rename: becomes `generate i in 0 to 2 { … }`, nothing else changes.
+- **`"reports exactly two diagnostics for a 'generate' missing its 'to' bound, not three"`** — **not a mechanical rename.** Its fixture (`generate i from 0 }`) and its two pinned messages (`"Expected 'to' after start bound, but found '}'."`, then the `"Unexpected '}' after the scene block closed."` knock-on) both name the *old* grammar's error shape directly. Under the new grammar, `generate i from 0 }` hits the `[PARSE_RENAMED_KEYWORD]` check immediately (before any bound is parsed at all), which is an entirely different diagnostic — a blind rename would leave this test asserting a message the new code cannot produce, the same "assertion the pipeline cannot produce" shape Task 9's own `listOf`/`MAX_LIST_LENGTH` fix round already had to correct once this phase. The test's own comment (`:345-352`) explains what regression it guards: a historical bug where an untyped `consume()` advanced position even on a mismatch, shifting where `synchronize()` resumes and adding a spurious diagnostic. That regression class is still possible in the new `in`-check code (it uses the same peek-then-throw-then-consume shape, now for `in` instead of `to`), so the underlying guard is still worth having — but the fixture and both messages need re-deriving against whatever the new grammar's actual malformed-header shape produces (e.g. `generate i in }` or similar), not copied forward. Do this at dispatch time against current source, not from this note.
 
 - [ ] **Step 7: Commit**
 
