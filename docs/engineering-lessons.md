@@ -301,6 +301,52 @@ defects here. But do not let it stand in for running RED and looking at what the
 failure actually says. Reading finds contradictions; only execution finds
 coincidences.
 
+### 3c. Scan a task body against current source before you dispatch it
+
+**Phase 3B Tasks 7 and 8.** A controller pre-flight scan — reading the task's own text
+against the code as it exists now, before writing the dispatch — found **six real
+defects across two tasks**, every one of which would otherwise have reached an
+implementer as instructions:
+
+- Two `toContain` assertions that could never match the message they targeted, because
+  the fixture was lower-case and the template capitalised the sentence.
+- A `posAt(source, "[")` locator that resolved to the list literal's bracket while the
+  diagnostic anchored on the index's bracket.
+- **A revert check that could not fail.** "Delete the `+360` correction, expect
+  `sin(-90)` to fail" — but `Math.sin(-Math.PI/2)` is exactly `-1`, so the reverted code
+  returns the right answer and the check reports a false pass. `cos(720)` survived for a
+  different reason (`810 % 360` is already positive). Both of that test's rows were
+  green against the code they existed to catch.
+- A substring assertion (`"requires a number"`) that a neighbouring diagnostic
+  (`Unary '-' requires a number`) also emits.
+- A Global-Constraint obligation the task body never mentioned (re-deriving the
+  `ExprCtx` edge table).
+
+A seventh suspicion was **wrong** — a predicted `it.each` typing failure that existing
+precedent in the same file already disproved. Six of seven. Say which is which when you
+report; a scan that is never wrong is a scan nobody checked.
+
+**Why this is cheap:** it is reading, before any agent is dispatched, with no context
+reload to pay. **Why it is not sufficient:** the same two tasks produced a defect
+reading could not find. Task 7's anchor fixture was a *false green* — with no indexing
+implemented, the trailing `[5]` is unparsed input and the parser's "must begin with the
+'scene' keyword" recovery diagnostic lands on exactly the column the fixture computes,
+so the position assertion passed with zero implementation present. Only running RED and
+reading the output exposed it.
+
+**Do instead:** before dispatching a task written earlier, read its body against the
+files it names and check three things — that every fixture can match the message it
+asserts, that every revert check would actually fail against the reverted code, and
+that the task's obligations under the plan's global constraints are all named. Then
+still run RED and read the failures. **Reading finds contradictions; only execution
+finds coincidences.**
+
+Related and worth the same suspicion: **a plan sketch citing a signature is a claim
+about the past.** Task 8's body was drafted against `77f9297`, before Task 7 changed
+the same file. A wrong constant (`sin(pi)` stated as `0.0274`; it is `0.0548`) had
+propagated design → plan → commit message → test comment before anyone recomputed it.
+Recompute the arithmetic in a rationale before copying it forward.
+
 ---
 
 ## 4. Name workflow deviations up front
@@ -419,6 +465,18 @@ Task 2's 1.04M tokens went to hardening nobody had asked for.
 
 **Unbatched fix rounds.** Task 3 took four separate implementer dispatches for
 fixes that were largely independent. Each round pays a full context reload.
+
+Measured in Phase 3B Task 7: one fix round — resumed implementer plus scoped
+re-review — cost **282,971 tokens against a `+37/-5` diff**. The brief, the prior
+report and the prior diff are re-sent whole to fix three assertions. **The reload,
+not the fix, is the cost**, so the number of rounds matters far more than the size
+of what each one changes. Batch every independent finding into one round.
+
+This is also why routing *input* context does not lower total spend. Measured across
+Tasks 7 and 8 under a per-task context manifest: **4,714 tokens per net
+implementation line, against a ~4,700 baseline** for Tasks 1–4 without one. Startup
+fell; peak did not. Full write-up in
+`docs/harness/2026-09-04-context-routing-experiment-result.md`.
 
 **A task that was actually a project.** "Refactor the math parser into a general
 expression parser" was written as one task. The plans skill asks for steps of
