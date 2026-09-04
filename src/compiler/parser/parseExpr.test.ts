@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AstValue } from "../types";
+import type { AstValue, ListValue } from "../types";
 import { lex } from "../lexer";
 import { parse } from "../parser";
 import { typeCheck } from "../typeChecker";
@@ -623,8 +623,12 @@ describe("comparisons are non-associative", () => {
   it.each(["1 < 2 < 3", "1 == 2 == 3", "1 < 2 == 3", "1 >= 2 <= 3"])(
     "rejects the chain '%s' rather than regrouping it",
     (expr) => {
+      // Task 9 generalised this message off the comparison-specific wording,
+      // since 'to' is now non-associative at a different precedence too: it
+      // now names the first operator of the pair rather than saying
+      // "Comparisons".
       const diags = diagnosticsForExpr(expr);
-      expect(diags[0].message).toContain("Comparisons cannot be chained.");
+      expect(diags[0].message).toContain("cannot be chained.");
     },
   );
 
@@ -1236,6 +1240,83 @@ describe("trigonometry", () => {
     expect(diagnosticsForExpr(`sin(${nestTrigArg(50)})`)[0].message).toContain(
       "Math expression is too deeply nested. Maximum depth is 50.",
     );
+  });
+});
+
+/* ------------------------------------------------------------------------ *
+ * Task 9 — the 'A to B' range (design section 8)
+ * ------------------------------------------------------------------------ */
+
+describe("range", () => {
+  it("builds an inclusive list of integers", () => {
+    const r = foldOf("0 to 3") as ListValue;
+    expect(r.kind).toBe("list");
+    expect(r.value.map((v) => (v as { value: number }).value)).toEqual([0, 1, 2, 3]);
+  });
+
+  it("binds looser than subtraction, so '0 to n - 1' is a range of n items", () => {
+    const parsed = parse(lex(`let n = 12\nlet r = 0 to n - 1\nscene { size: (100, 100) }`));
+    expect(parsed.errors).toEqual([]);
+    expect((parsed.env.r as ListValue).value).toHaveLength(12);
+  });
+
+  it("binds tighter than comparison, so '0 to 3 == x' compares the list", () => {
+    // Precedence 4 sits below comparison at 3, so the range folds first and the
+    // '==' then rejects a list operand. The diagnostic naming 'list' is what
+    // distinguishes this from 'to' having been given precedence 2.
+    expect(diagnosticsForExpr("0 to 3 == 1")[0].message).toContain("list");
+  });
+
+  it("yields the empty list when the end precedes the start", () => {
+    expect((foldOf("5 to 1") as ListValue).value).toHaveLength(0);
+  });
+
+  it("rejects non-integer bounds", () => {
+    expect(diagnosticsForExpr("0 to 2.5")[0].message).toContain("whole numbers");
+  });
+
+  it("rejects a range longer than the list ceiling", () => {
+    expect(diagnosticsForExpr("0 to 10001")[0].message).toContain("10,000");
+  });
+
+  it("applies the same ceiling to a list literal", () => {
+    const literal = `[${Array.from({ length: 10001 }, (_, i) => i).join(",")}]`;
+    expect(diagnosticsForExpr(literal)[0].message).toContain("10,000");
+  });
+
+  it("rejects a chained range rather than regrouping it", () => {
+    expect(diagnosticsForExpr("0 to 3 to 5")[0].message).toContain("cannot be chained");
+  });
+
+  // The corpus shape. Commas between properties are optional and no .eval scene
+  // uses them, so this — not the comma'd version — is what protects the corpus.
+  it("still allows 'to' as a property name with no separating comma", () => {
+    const src = `scene { size:(100,100)\n circle c { position:(0,0)\n radius:5\n animate {\n property: alpha\n to: 0.5\n duration: 1\n } } }`;
+    expect(parse(lex(src)).errors).toEqual([]);
+  });
+
+  it("still allows 'to' as a property name with a comma", () => {
+    const src = `scene { size:(100,100) circle c { position:(0,0), radius:5 animate { property: position, to: (10,10), duration: 1 } } }`;
+    expect(parse(lex(src)).errors).toEqual([]);
+  });
+
+  /**
+   * The two fixtures above do not actually pin the lookahead guard: `property`
+   * is the one property key whose value is a bare identifier, and
+   * `parseValue.ts:11` special-cases exactly that — `property: alpha` returns
+   * an `animProperty` value without ever entering `parseExpr`'s operator loop
+   * at all, so the loop never gets a chance to misread the following `to`.
+   * Confirmed by deleting the guard and running both fixtures above: neither
+   * goes red. Every '.eval' animate block puts 'to' right after 'property',
+   * so the guard happens not to be load-bearing for that exact shape — but it
+   * is load-bearing for any other comma-free ordering, which property order is
+   * not restricted to at parse time. This fixture puts a plain-number
+   * property ('duration') directly before 'to', which does fold through the
+   * ordinary operator loop, and is what actually exercises the guard.
+   */
+  it("still allows 'to' as a property name straight after an ordinary folded value", () => {
+    const src = `scene { size:(100,100)\n circle c { position:(0,0)\n radius:5\n animate {\n property: alpha\n duration: 1\n to: 0.5\n } } }`;
+    expect(parse(lex(src)).errors).toEqual([]);
   });
 });
 

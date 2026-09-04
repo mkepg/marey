@@ -82,8 +82,8 @@ export class ParserState {
     this.tokens = tokens;
   }
 
-  peek(): Token {
-    return this.tokens[this.pos] || this.tokens[this.tokens.length - 1];
+  peek(offset = 0): Token {
+    return this.tokens[this.pos + offset] || this.tokens[this.tokens.length - 1];
   }
 
   isAtEnd(): boolean {

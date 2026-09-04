@@ -242,6 +242,19 @@ describe("one list kind (Phase 3B)", () => {
    * both length checks outright, and separately mangling each message, left
    * all 411 tests green. They are the reason a 2-point polygon is rejected at
    * all, so they are pinned here rather than left to the next rewrite.
+   *
+   * The two "maximum point count" tests below no longer reach the `max`
+   * branch they were originally written to pin: Phase 3B's `A to B` range
+   * task added `parser/parseExpr.ts`'s `MAX_LIST_LENGTH` (10,000), a
+   * parse-time ceiling on every list literal, and parsing always finishes
+   * before type-checking runs. A 10,001-entry `points:` list literal now
+   * throws that parser diagnostic before `typeChecker/validator.ts`'s own
+   * `listOf` `max` check — the one that produces `[TYPE_POLYGON_TOO_LARGE]`
+   * — ever runs. Both tests below now assert the parser's message instead,
+   * so a reader of a "type contract" test file asserting parser wording
+   * isn't left wondering why: the type-check-time branch is still there
+   * (see the comment above it in `validator.ts`) but is presently
+   * unreachable by construction.
    */
   const messagesFor = (source: string): string[] => {
     const { ast, errors } = parse(lex(source));
@@ -290,7 +303,7 @@ describe("one list kind (Phase 3B)", () => {
     const tooMany = Array.from({ length: 10001 }, (_, i) => `(${i},0)`).join(",");
     expect(messagesFor(`scene { size:(100,100) polygon p { position:(0,0), points: [${tooMany}] } }`))
       .toEqual([
-        "[TYPE_POLYGON_TOO_LARGE] 'polygon' object 'p': 'polygon' exceeds the maximum safe limit of 10,000 points.",
+        "In 'polygon' object 'p': A list of 10,001 values exceeds the maximum list length of 10,000.",
       ]);
   });
 
@@ -307,7 +320,7 @@ describe("one list kind (Phase 3B)", () => {
     const tooMany = Array.from({ length: 10001 }, (_, i) => `(${i},0)`).join(",");
     expect(messagesFor(`scene { size:(100,100) line l { position:(0,0), thickness: 2, points: [${tooMany}] } }`))
       .toEqual([
-        "[TYPE_POLYGON_TOO_LARGE] 'line' object 'l': 'line' exceeds the maximum safe limit of 10,000 points.",
+        "In 'line' object 'l': A list of 10,001 values exceeds the maximum list length of 10,000.",
       ]);
   });
 });

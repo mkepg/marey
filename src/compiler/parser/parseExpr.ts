@@ -40,6 +40,26 @@ const MAX_STRUCTURAL_DEPTH = 50;
 const MAX_TOTAL_DEPTH = 400;
 
 /**
+ * Design 8: one ceiling for list literals and ranges alike.
+ *
+ * This number is shared in effect, not in code, with `languageContract.ts`'s
+ * two `listOf` constraints that declare `max: 10000` (`polygon.points`,
+ * `line.points`) — parsing always finishes before type-checking starts, so
+ * this ceiling throws first for any oversized `points:` list literal, and
+ * `typeChecker/validator.ts`'s own `listOf` `max` check (which produces the
+ * specific, coded `TYPE_POLYGON_TOO_LARGE` diagnostic) never gets to run.
+ * That is a deliberate, user-approved trade — a generic parse-time message
+ * instead of decoupling the two ceilings with an arbitrary, design-spec-
+ * contradicting second number. There is no way to make TypeScript enforce
+ * this link between a parser numeric literal and a data table's field
+ * directly; changing this constant without checking those two entries (or
+ * vice versa) reopens or closes `TYPE_POLYGON_TOO_LARGE`'s reachability, and
+ * `languageContract.test.ts`'s polygon/line "above the maximum point count"
+ * tests are what stand in for a compiler check that can't exist.
+ */
+const MAX_LIST_LENGTH = 10000;
+
+/**
  * The three budgets, threaded together so an edge cannot advance one and
  * forget another.
  *
@@ -188,15 +208,15 @@ function checkNesting(state: ParserState, ctx: ExprCtx): void {
 }
 
 /**
- * The reserved words that are binary operators — two of the eleven.
+ * The reserved words that are binary operators — three of the eleven.
  *
  * Written as `Extract` from `ExpressionWord` rather than as a bare
- * `"and" | "or"` so the two are tied to the lexer's list: if a word is renamed
- * or dropped in `lexer/constants.ts`, `Extract` drops it here too and the
- * `OPERATORS` row that names it stops compiling, instead of the row surviving
- * against a spelling the lexer no longer produces.
+ * `"and" | "or" | "to"` so the three are tied to the lexer's list: if a word
+ * is renamed or dropped in `lexer/constants.ts`, `Extract` drops it here too
+ * and the `OPERATORS` row that names it stops compiling, instead of the row
+ * surviving against a spelling the lexer no longer produces.
  */
-type OperatorWord = Extract<ExpressionWord, "and" | "or">;
+type OperatorWord = Extract<ExpressionWord, "and" | "or" | "to">;
 
 /**
  * The three words of the conditional, tied to the lexer's list for the same
@@ -230,15 +250,15 @@ type OperatorKey = Exclude<Token["type"], "EXPR_KEYWORD"> | OperatorWord;
  * compile time. `assoc` lives here for the same reason: a separate
  * `NON_ASSOCIATIVE` set is a second list to forget.
  *
- * **How `and` and `or` are keyed, and what it costs.** Task 3 gave all eleven
- * reserved expression words one token type, `EXPR_KEYWORD`, distinguished
- * only by the token's value — so a token type no longer identifies an
- * operator. Keying a row `EXPR_KEYWORD` would make `in`, `to`, `if`, `then`,
- * `else`, `not`, `sin`, `cos` and `length` all bind as whichever operator that
- * row named, silently, in the middle of an expression; `OperatorKey` excludes
- * that type so the mistake does not compile. Word operators are keyed by the
- * word instead, and the two key spaces cannot collide because every token type
- * is upper-case and no reserved word is.
+ * **How `and`, `or`, and `to` are keyed, and what it costs.** Task 3 gave all
+ * eleven reserved expression words one token type, `EXPR_KEYWORD`,
+ * distinguished only by the token's value — so a token type no longer
+ * identifies an operator. Keying a row `EXPR_KEYWORD` would make `in`, `if`,
+ * `then`, `else`, `not`, `sin`, `cos` and `length` all bind as whichever
+ * operator that row named, silently, in the middle of an expression;
+ * `OperatorKey` excludes that type so the mistake does not compile. Word
+ * operators are keyed by the word instead, and the two key spaces cannot
+ * collide because every token type is upper-case and no reserved word is.
  *
  * Excluding the *type* is only half of it, and the half that was missing let
  * the same bug through one row at a time. While the word half of `OperatorKey`
@@ -246,7 +266,7 @@ type OperatorKey = Exclude<Token["type"], "EXPR_KEYWORD"> | OperatorWord;
  * satisfied the constraint and compiled clean, and `let x = 1 if 2` folded to
  * `3` with no diagnostic: `operatorFor` looks a word token up by its value, so
  * any reserved word with a row is an operator, whatever the row's key was
- * meant to mean. `OperatorWord` narrows that half to the two words that are
+ * meant to mean. `OperatorWord` narrows that half to the three words that are
  * operators, which is what makes the guarantee hold in both directions.
  *
  * The cost is that a row's key is no longer a single field of `Token`, so
@@ -256,8 +276,10 @@ type OperatorKey = Exclude<Token["type"], "EXPR_KEYWORD"> | OperatorWord;
  * build is untouched either way: it comes from `name` feeding `applyBinary`'s
  * exhaustive switch, not from the key.
  *
- * Precedence 4 is left free on purpose: `to` takes it in Task 9, between the
- * comparisons and `+`/`-`, per design section 4.2.
+ * `to` is also a legal property name (`animate { to: 0.5 }`), and property
+ * separators are optional, so the operator loop in `parseExpr` breaks before
+ * consuming a `to` immediately followed by `:` rather than reading it as a
+ * range. See that check for why.
  */
 const OPERATORS = {
   or:      { name: "or", prec: 1, assoc: "left" },
@@ -268,6 +290,7 @@ const OPERATORS = {
   GT:      { name: ">",  prec: 3, assoc: "none" },
   LT_EQ:   { name: "<=", prec: 3, assoc: "none" },
   GT_EQ:   { name: ">=", prec: 3, assoc: "none" },
+  to:      { name: "to", prec: 4, assoc: "none" },
   PLUS:    { name: "+",  prec: 5, assoc: "left" },
   MINUS:   { name: "-",  prec: 5, assoc: "left" },
   STAR:    { name: "*",  prec: 6, assoc: "left" },
@@ -297,6 +320,33 @@ type OperatorName = Operator["name"];
  * Read off the table rather than written as `2`, so the two cannot drift.
  */
 const NOT_OPERAND_MIN_PREC: number = OPERATORS.and.prec;
+
+/**
+ * The minimum precedence at which `generate`'s own start bound is parsed.
+ *
+ * `generate i from X to Y { … }` spells its own `to` as a bare reserved word,
+ * with no colon nearby for the property-name lookahead above to key off — the
+ * token after a `generate` start bound's `to` is an ordinary operand (`2`),
+ * indistinguishable at that point from a genuine range's right-hand side. A
+ * start bound parsed at precedence 0 (the general expression path every other
+ * value uses) therefore consumes `to` as a range operator and folds `0 to 2`
+ * into `[0, 1, 2]` — exactly the corpus-breaking collision the `to` row
+ * introduced. Parsing the start bound at this floor instead stops the climb
+ * at `to` (prec 4 <= 4) and leaves it for `parseGenerate` to consume itself,
+ * the same outcome the colon lookahead achieves for property values by a
+ * different mechanism.
+ *
+ * Read off `OPERATORS.to.prec` rather than written as a literal, for the same
+ * reason `NOT_OPERAND_MIN_PREC` is: a future change to `to`'s precedence must
+ * not be able to silently desync from this call site.
+ *
+ * This is a stopgap, not a lasting design choice. Task 10 rewrites
+ * `generate`'s header shape entirely (per this phase's plan), which is
+ * expected to remove the need for this export and its one call site in
+ * `parseGenerate.ts` — a future reader finding it gone should not be
+ * surprised.
+ */
+export const GENERATE_START_MIN_PREC: number = OPERATORS.to.prec;
 
 /** The operator a token denotes, or null if it is not a binary operator. */
 function operatorFor(t: Token): Operator | null {
@@ -487,6 +537,23 @@ function applyBinary(
       }
       return { kind: "boolean", value, ...at };
     }
+
+    case "to": {
+      const from = requireNumber(state, left, op, "left");
+      const until = requireNumber(state, right, op, "right");
+      if (!Number.isInteger(from) || !Number.isInteger(until)) {
+        state.throwError(`In ${state.currentContext}: Range bounds must be whole numbers, but got ${from} and ${until}.`, opTok);
+      }
+      // '5 to 1' is empty, not an error: it is the honest reading of an
+      // inclusive range, and iterating it emits nothing.
+      const count = Math.max(0, until - from + 1);
+      if (count > MAX_LIST_LENGTH) {
+        state.throwError(`In ${state.currentContext}: A range of ${count.toLocaleString("en-US")} values exceeds the maximum list length of ${MAX_LIST_LENGTH.toLocaleString("en-US")}.`, opTok);
+      }
+      const entries: AstValue[] = [];
+      for (let n = from; n <= until; n++) entries.push({ kind: "number", value: n, ...at });
+      return { kind: "list", value: entries, ...at };
+    }
   }
 }
 
@@ -537,6 +604,11 @@ function parseListLiteral(state: ParserState, ctx: ExprCtx): AstValue {
     }
   }
   const endTok = state.consume("RBRACKET");
+  // Design 8: the same ceiling a range's fold enforces in `applyBinary`'s
+  // "to" case, so a literal and a range are bounded by one limit, not two.
+  if (entries.length > MAX_LIST_LENGTH) {
+    state.throwError(`In ${state.currentContext}: A list of ${entries.length.toLocaleString("en-US")} values exceeds the maximum list length of ${MAX_LIST_LENGTH.toLocaleString("en-US")}.`, openTok);
+  }
   return {
     kind: "list",
     value: entries,
@@ -965,6 +1037,14 @@ export function parseExpr(state: ParserState, minPrec: number, ctx: ExprCtx): As
     const op = operatorFor(t);
     if (op === null || op.prec <= minPrec) break;
 
+    // `to` is both an operator and a legal property name, and property
+    // separators are optional (`parseObject.ts:295` consumes commas in a
+    // `while`), so in a comma-free `animate` block the token after a folded
+    // value is the reserved word `to`. Without this the loop takes it as a
+    // range operator and dies on the ':'. Every animate block in `eval/` is
+    // written this way, so the cost of getting it wrong is the whole corpus.
+    if (op.name === "to" && state.peek(1).type === "COLON") break;
+
     state.consume();
     const rightTok = state.peek();
     const right = parseExpr(state, op.prec, intoOperand(ctx));
@@ -980,7 +1060,7 @@ export function parseExpr(state: ParserState, minPrec: number, ctx: ExprCtx): As
       const next = operatorFor(state.peek());
       if (next !== null && next.prec === op.prec) {
         state.throwError(
-          `In ${state.currentContext}: Comparisons cannot be chained. Write 'a ${op.name} b and b ${next.name} c' rather than 'a ${op.name} b ${next.name} c'.`,
+          `In ${state.currentContext}: '${op.name}' cannot be chained. Write 'a ${op.name} b and b ${next.name} c' rather than 'a ${op.name} b ${next.name} c'.`,
           state.peek(),
         );
       }

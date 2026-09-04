@@ -3,6 +3,7 @@ import { ParserState, describeToken, ParseException } from "./state";
 import { parseObject } from "./parseObject";
 import { parseBinding } from "./parseBinding";
 import { parseValue } from "./parseValue";
+import { parseExpr, ROOT_CTX, GENERATE_START_MIN_PREC } from "./parseExpr";
 import { parseUse } from "./parseUse";
 import { rejectLegacyBinding } from "./parseProperty";
 
@@ -23,7 +24,15 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
 
   const prevContext = state.currentContext;
   state.currentContext = `generate block loop bounds`;
-  const startVal = parseValue(state);
+  // Not `parseValue(state)` (which falls through to `parseExpr(state, 0,
+  // ROOT_CTX)` with no `currentKey`): this header's own 'to' keyword must not
+  // be swallowed by the start bound's expression, and unlike a property value
+  // there is no colon here for that lookahead trick to key off. Parsing at
+  // `GENERATE_START_MIN_PREC` instead stops the precedence climb at 'to'
+  // itself, leaving it for the check below to consume. See that export's
+  // comment — this is a deliberately short-lived stopgap that Task 10's
+  // header-shape rewrite is expected to remove, not a lasting design choice.
+  const startVal = parseExpr(state, GENERATE_START_MIN_PREC, ROOT_CTX);
   if (startVal.kind !== "number") {
     state.throwError(`In ${state.currentContext}: Expected a numeric start value, but got ${startVal.kind}.`, state.peek());
   }

@@ -144,6 +144,19 @@ export function validateLocalConstraint(
         if (val.value.length < constraint.min) {
           return error(`${label}: '${typeName}' requires at least ${constraint.min} ${noun}.`);
         }
+        // Currently unreachable through the ordinary parse -> typeCheck
+        // pipeline: `parser/parseExpr.ts`'s `MAX_LIST_LENGTH` (10,000) throws
+        // a parse error for any list literal — or range fold — over that
+        // length before this function ever runs, and it is the identical
+        // number as every `listOf` constraint's `max` in this file
+        // (`polygon.points`, `line.points`; the only two `listOf` constraints
+        // that exist), so a too-large `points:` list is always rejected at
+        // parse time first. Kept rather than deleted, per this codebase's
+        // standing practice for a currently-dead branch (see
+        // `parser/parseExpr.ts` / `parser/state.ts` and
+        // `docs/engineering-lessons.md` §2f): if the two ceilings are
+        // ever changed independently, this is the fallback that still
+        // produces the specific, coded diagnostic instead of a silent gap.
         if (val.value.length > constraint.max) {
           const code = listTooLargeCode(constraint.element);
           return error(`[${code}] ${label}: '${typeName}' exceeds the maximum safe limit of ${formatPointCount(constraint.max)} ${noun}.`);
