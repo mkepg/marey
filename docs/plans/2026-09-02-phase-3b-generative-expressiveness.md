@@ -21,7 +21,9 @@ Every task must respect these. They are not restated per task.
 5. **A moving golden snapshot is a decision, never a re-record.** Only the snapshot changes listed in Task 15 are permitted. `npx vitest run -u` is forbidden.
 6. Run `npx tsc -b --noEmit` before every commit. The build typechecks.
 7. Commit at the end of every task. Work on branch `phase-3b-generative-expressiveness`. Do not merge or push.
-8. **`parseExpr`'s signature is `parseExpr(state, minPrec, ctx: ExprCtx)`.** Every sketch in Tasks 4–9 below was written against `parseExpr(state, minPrec, depth)` and is out of date. **Do not construct a context inline.** Pick one of the named transitions on `ExprCtx` — `intoCoordinate`, `intoGroup`, `intoOperand`, `intoUnary` — so each new recursive edge states its intent. `ROOT_CTX` is the entry value.
+8. **`parseExpr`'s signature is `parseExpr(state, minPrec, ctx: ExprCtx)`.** **Do not construct a context inline.** Pick one of the named transitions on `ExprCtx` — `intoCoordinate`, `intoGroup`, `intoOperand`, `intoUnary` — so each new recursive edge states its intent. `ROOT_CTX` is the entry value.
+
+   Tasks 7–9 were rewritten against `77f9297` and are current. **Tasks 10–16 have not been**, and were drafted before Task 2 introduced `ExprCtx` and before d02320b unified `operatorOf`/`PRECEDENCE`/`NON_ASSOCIATIVE` into one `OPERATORS` table. Treat their code sketches as intent, not as text to paste, and re-derive every signature from source before using one. Rewrite a task's body when it becomes active rather than working around it in place.
 
    `ExprCtx` carries three budgets with deliberately different semantics, all three of which were live defects during Task 2: `expr` **resets at a coordinate** (pre-refactor parity, `de9bf39:parseValue.ts:128,130,166,168`); `struct` bounds point/list nesting and **never resets**; `total` bounds the *product* of the other two and **never resets**, because 50 structural levels each carrying a fresh 50-level expression budget still overflowed the stack at ~5 KB of source. All three are pinned by `parseExpr.test.ts`. Read the block comment above `ExprCtx` before touching any of them.
 
@@ -1274,114 +1276,181 @@ Lifts the conditional cut (roadmap 8.1, R4)."
 
 **Files:**
 - Modify: `src/compiler/parser/parseExpr.ts`
-- Test: `src/compiler/parser/parseExpr.test.ts`, `src/compiler/languageCuts.test.ts:189-198`
+- Test: `src/compiler/parser/parseExpr.test.ts`, `src/compiler/languageCuts.test.ts`
+  (the `describe("Phase 3B: one list kind; indexing still excluded")` block)
+
+**Preconditions, read off `77f9297` rather than off this plan.** Tasks 1–6 changed
+the shapes these steps used to name; what follows is what is actually there.
+
+- `parseExpr(state, minPrec, ctx: ExprCtx)`, and every helper takes `(state, ctx)`.
+  **Never build a context inline.** Use a named transition — `intoGroup`,
+  `intoCoordinate`, `intoOperand`, `intoUnary`. `ROOT_CTX` is the entry value.
+- `length` is already an `EXPR_KEYWORD` (Task 3 reserved all eleven words). This
+  task adds *handling*; there is no lexer work.
+- `parseExpr.test.ts` helpers are `foldOf`, `bindingOf`, `diagnosticsForExpr`,
+  `diagnosticsFor`, `posAt`. There is no `errorsFor` and no `radiusOf`.
+  `languageCuts.test.ts` has `messagesFor`, `diagnosticsFor`, `posAt`.
+
+**The decision this task makes, which nothing else will pin.** Design §4.2 puts
+postfix `[…]` at level 10 and unary `-` at 9, so `-v[0]` means `-(v[0])`. The
+unary-minus branch in `parsePrimary` currently calls `parsePrimary` directly
+(`parseExpr.ts:575`); it must call the postfix wrapper instead, or `-v[0]` tries
+to negate a list. Both readings compile a suite that never writes `-v[0]`, so
+write the test that tells them apart — this is exactly the shape AGENT-LESSONS
+§2d names.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```ts
 describe("indexing and length", () => {
   it("reads an element by index", () => {
-    const result = parse(lex(`let v = [3,7,2] let x = v[1] scene { size:(10,10) }`));
-    expect(result.errors).toEqual([]);
-    expect(result.env.x).toMatchObject({ kind: "number", value: 7 });
+    expect(foldOf("[3,7,2][1]")).toMatchObject({ kind: "number", value: 7 });
   });
 
-  it("indexes a point list, which is the same kind", () => {
-    const result = parse(lex(`let p = [(1,2),(3,4)] let q = p[0] scene { size:(10,10) }`));
-    expect(result.errors).toEqual([]);
-    expect(result.env.q).toMatchObject({ kind: "point", x: 1, y: 2 });
+  it("indexes a point list, which is the same list kind", () => {
+    expect(foldOf("[(1,2),(3,4)][0]")).toMatchObject({ kind: "point", x: 1, y: 2 });
   });
 
   it("chains through nested lists", () => {
-    const result = parse(lex(`let g = [[1,2],[3,4]] let x = g[1][0] scene { size:(10,10) }`));
-    expect(result.errors).toEqual([]);
-    expect(result.env.x).toMatchObject({ kind: "number", value: 3 });
+    expect(foldOf("[[1,2],[3,4]][1][0]")).toMatchObject({ kind: "number", value: 3 });
+  });
+
+  it("indexes a name bound with 'let'", () => {
+    const parsed = parse(lex(`let v = [3,7,2]\nlet x = v[1]\nscene { size: (100, 100) }`));
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.env.x).toMatchObject({ kind: "number", value: 7 });
   });
 
   it("reports length", () => {
-    const result = parse(lex(`let v = [3,7,2] let n = length(v) scene { size:(10,10) }`));
-    expect(result.errors).toEqual([]);
-    expect(result.env.n).toMatchObject({ kind: "number", value: 3 });
+    expect(foldOf("length([3,7,2])")).toMatchObject({ kind: "number", value: 3 });
+  });
+
+  // Design 4.2: postfix binds tighter than unary '-'. If the minus branch calls
+  // parsePrimary instead of parsePostfix this reads as -( [1,2] ) and errors.
+  it("binds tighter than unary minus, so '-v[0]' negates the element", () => {
+    expect(foldOf("-[5,9][1]")).toMatchObject({ kind: "number", value: -9 });
+  });
+
+  // The index is a full expression, and it is a *group*: it does not reset the
+  // expression budget the way a point coordinate does.
+  it("takes a whole expression as the index", () => {
+    expect(foldOf("[10,20,30][1 + 1]")).toMatchObject({ kind: "number", value: 30 });
   });
 
   it("rejects an out-of-range index, naming the index and the length", () => {
-    const msg = parse(lex(`let v = [1,2] let x = v[5] scene { size:(10,10) }`)).errors.map(e => e.message).join();
+    const msg = diagnosticsForExpr("[1,2][5]")[0].message;
     expect(msg).toContain("index 5");
     expect(msg).toContain("length 2");
   });
 
   it("rejects a non-integer index", () => {
-    const msg = parse(lex(`let v = [1,2] let x = v[0.5] scene { size:(10,10) }`)).errors.map(e => e.message).join();
-    expect(msg).toContain("whole number");
+    expect(diagnosticsForExpr("[1,2][0.5]")[0].message).toContain("whole number");
   });
 
   it("rejects a negative index rather than wrapping", () => {
-    const msg = parse(lex(`let v = [1,2] let x = v[-1] scene { size:(10,10) }`)).errors.map(e => e.message).join();
+    const msg = diagnosticsForExpr("[1,2][-1]")[0].message;
     expect(msg).toContain("index -1");
   });
 
-  it("rejects indexing a non-list", () => {
-    const msg = parse(lex(`let v = 5 let x = v[0] scene { size:(10,10) }`)).errors.map(e => e.message).join();
-    expect(msg).toContain("only a list can be indexed");
+  it("rejects indexing a non-list, naming the kind", () => {
+    expect(diagnosticsForExpr("5[0]")[0].message).toContain("only a list can be indexed");
   });
 
-  it("rejects length of a non-list", () => {
-    expect(errorsFor("length(5)").join()).toContain("'length' requires a list");
+  it("rejects length of a non-list, naming the kind", () => {
+    expect(diagnosticsForExpr("length(5)")[0].message).toContain("'length' requires a list");
+  });
+
+  it("anchors an out-of-range index at the '[', not at the end of the expression", () => {
+    const source = bindingOf("[1,2][5]");
+    const diags = diagnosticsFor(source);
+    expect(diags[0]).toMatchObject(posAt(source, "["));
   });
 });
 ```
 
+The last one is not decoration. Task 2's `requireNumber` regression anchored an
+error at `state.peek()` — the token *after* the whole expression — and reported
+on the next line's property. Anchor on the opening bracket and pin it.
+
 - [ ] **Step 2: Run and watch them fail**
 
-Run: `npx vitest run src/compiler/parser/parseExpr.test.ts -t "indexing"`
-Expected: FAIL.
+Run: `npx vitest run src/compiler/parser/parseExpr.test.ts -t "indexing and length"`
+Expected: FAIL, every case.
 
-- [ ] **Step 3: Add the postfix index and the `length` primary**
+- [ ] **Step 3: Add `parsePostfix` and the `length` primary**
 
-Wrap `parsePrimary`'s result in a postfix loop. Add a `parsePostfix` that calls `parsePrimary` then repeatedly consumes `[ expr ]`:
+`parsePostfix` wraps a primary and consumes index brackets in a loop:
 
 ```ts
-function parsePostfix(state: ParserState, depth: number): AstValue {
-  let value = parsePrimary(state, depth);
+/**
+ * `l[i]`, chainable as `grid[r][c]` (design 4.2, level 10).
+ *
+ * A loop rather than recursion, so a chain costs no stack: `ctx` is not
+ * advanced between links, and `v[0][0][0]…` is bounded by source length alone.
+ * Only the index *expression* is a new level, and it takes `intoGroup` — the
+ * bracket is a grouping construct exactly as `(` is, and like a list entry it
+ * does not reset the expression budget the way a point coordinate does.
+ */
+function parsePostfix(state: ParserState, ctx: ExprCtx): AstValue {
+  let value = parsePrimary(state, ctx);
 
   while (state.peek().type === "LBRACKET") {
     const openTok = state.consume("LBRACKET");
-    const indexVal = parseExpr(state, 0, depth + 1);
+    const index = parseExpr(state, 0, intoGroup(ctx));
+
     if (state.peek().type !== "RBRACKET") {
-      state.throwError(`In ${state.currentContext}: Expected ']' to close the index opened at line ${openTok.line}, column ${openTok.col}, but found ${describeToken(state.peek())}.`, state.peek());
+      state.throwError(
+        `In ${state.currentContext}: Expected ']' to close the index opened at line ${openTok.line}, column ${openTok.col}, but found ${describeToken(state.peek())}.`,
+        state.peek(),
+      );
     }
     const closeTok = state.consume("RBRACKET");
 
+    // Every rejection anchors on `openTok`. `state.peek()` is by now the token
+    // after the whole index and reports on the following property — the Task 2
+    // diagnostic regression, which is pinned above.
     if (value.kind !== "list") {
       state.throwError(`In ${state.currentContext}: Cannot index a ${value.kind} — only a list can be indexed.`, openTok);
     }
-    if (indexVal.kind !== "number") {
-      state.throwError(`In ${state.currentContext}: A list index must be a number, but got ${indexVal.kind}.`, openTok);
+    if (index.kind !== "number") {
+      state.throwError(`In ${state.currentContext}: A list index must be a number, but got ${index.kind}.`, openTok);
     }
-    if (!Number.isInteger(indexVal.value)) {
-      state.throwError(`In ${state.currentContext}: A list index must be a whole number, but got ${indexVal.value}.`, openTok);
+    if (!Number.isInteger(index.value)) {
+      state.throwError(`In ${state.currentContext}: A list index must be a whole number, but got ${index.value}.`, openTok);
     }
-    if (indexVal.value < 0 || indexVal.value >= value.value.length) {
-      state.throwError(`In ${state.currentContext}: List index ${indexVal.value} is out of range — index ${indexVal.value} of a list of length ${value.value.length}. Valid indices are 0 to ${value.value.length - 1}.`, openTok);
+    if (index.value < 0 || index.value >= value.value.length) {
+      state.throwError(`In ${state.currentContext}: Index ${index.value} is out of range for a list of length ${value.value.length}. Valid indices run 0 to ${value.value.length - 1}; there is no negative indexing and no wrap-around.`, openTok);
     }
 
-    const element = value.value[indexVal.value];
-    value = { ...element, line: value.line, col: value.col, endLine: closeTok.line, endCol: closeTok.endCol };
+    // The element keeps its own kind but takes the span of the whole index
+    // expression, so a later error about it points at `v[2]` and not at
+    // wherever the list literal was written.
+    value = { ...value.value[index.value], line: value.line, col: value.col, endLine: closeTok.line, endCol: closeTok.endCol };
   }
 
   return value;
 }
 ```
 
-Call `parsePostfix` wherever `parsePrimary` was called from `parseExpr` and from the `not`/unary-minus operand paths.
+Then redirect the two call sites that mean "a primary and its postfixes":
 
-In `parsePrimary`, add the `length` call form beside the other `EXPR_KEYWORD` cases:
+1. `parseExpr`'s `let left = parsePrimary(state, ctx)` → `parsePostfix(state, ctx)`.
+2. `parsePrimary`'s unary-minus branch, `parsePrimary(state, intoUnary(ctx))` →
+   `parsePostfix(state, intoUnary(ctx))`. This is the `-v[0]` decision above.
+
+`not`'s operand is already `parseExpr(state, NOT_OPERAND_MIN_PREC, intoUnary(ctx))`
+and reaches postfix through it — leave it alone.
+
+In `parsePrimary`, add the `length` call beside the `not` branch:
 
 ```ts
   if (t.type === "EXPR_KEYWORD" && t.value === "length") {
     const nameTok = state.consume();
+    if (state.peek().type !== "LPAREN") {
+      state.throwError(`In ${state.currentContext}: 'length' is a function and needs parentheses — write 'length(values)'.`, state.peek());
+    }
     state.consume("LPAREN");
-    const arg = parseExpr(state, 0, depth + 1);
+    const arg = parseExpr(state, 0, intoGroup(ctx));
     const closeTok = state.consume("RPAREN");
     if (arg.kind !== "list") {
       state.throwError(`In ${state.currentContext}: 'length' requires a list, but got ${arg.kind}.`, nameTok);
@@ -1390,11 +1459,27 @@ In `parsePrimary`, add the `length` call form beside the other `EXPR_KEYWORD` ca
   }
 ```
 
-- [ ] **Step 4: Run and invert the lifted cut**
+- [ ] **Step 4: Verify the decisions, not just the behaviour**
 
 Run: `npx vitest run src/compiler/parser/parseExpr.test.ts && npm test && npx tsc -b --noEmit`
 
-The indexing cut at `languageCuts.test.ts:189-198` now fails. Replace it with a permission citing roadmap §8.1 and the design §11 deviation 2 (indexing ships *alongside* direct iteration, for parallel lists):
+Then, per AGENT-LESSONS §2c, delete-and-run each of these separately and report
+the real output. Anything still green is unguarded:
+
+1. The `parsePostfix` call in the unary-minus branch, reverted to `parsePrimary`.
+   Expect the `-v[0]` case to fail. If it does not, that test is not pinning it.
+2. The `index.value < 0` half of the range check. Expect the negative-index case
+   to fail on its own.
+3. The `Number.isInteger` check.
+4. `intoGroup(ctx)` in the index expression, swapped for a bare `ctx`. If nothing
+   fails, the index expression's budget is unpinned — add a nesting case rather
+   than leaving it.
+
+- [ ] **Step 5: Invert the lifted cut**
+
+The indexing cut in `languageCuts.test.ts` now fails. Replace it with a
+permission citing roadmap §8.1 and design §11 deviation 2 — indexing ships
+*alongside* direct iteration, for parallel lists:
 
 ```ts
   it("allows indexing, which Phase 3B lifts for parallel lists", () => {
@@ -1402,17 +1487,21 @@ The indexing cut at `languageCuts.test.ts:189-198` now fails. Replace it with a 
   });
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src/compiler/parser src/compiler/languageCuts.test.ts
 git commit -m "feat(parser): list indexing and length
 
-Postfix [i] chains, so nested lists work. Out-of-range, non-integer and
-negative indices are compile errors naming the index and the length;
-there is no wrap-around. Ships alongside direct iteration rather than
-instead of it (design section 11, deviation 2) because parallel lists —
-values with labels — need it."
+Postfix [i] chains, so nested lists work, and binds tighter than unary
+'-' per design 4.2 — '-v[0]' negates the element. Out-of-range,
+non-integer and negative indices are compile errors naming the index and
+the length; there is no wrap-around. Every rejection anchors on the '[',
+not on the token after the index.
+
+Ships alongside direct iteration rather than instead of it (design
+section 11, deviation 2) because parallel lists — values with labels —
+need it."
 ```
 
 ---
@@ -1421,9 +1510,14 @@ values with labels — need it."
 
 **Files:**
 - Modify: `src/compiler/parser/parseExpr.ts`
-- Test: `src/compiler/parser/parseExpr.test.ts`, `src/compiler/languageCuts.test.ts:163-176`
+- Test: `src/compiler/parser/parseExpr.test.ts`, `src/compiler/languageCuts.test.ts`
+  (the trig cuts)
 
-Degrees, matching `rotation` — the only other angle in the language (`languageContract.ts:111-117`). **No π constant**: spec §11 deviation 1.
+Degrees, matching `rotation` — the only other angle in the language
+(`languageContract.ts:111-117`). **No π constant**: design §11 deviation 1.
+
+`sin` and `cos` are already `EXPR_KEYWORD`s from Task 3. Same precondition list
+as Task 7: `(state, ctx)`, named transitions, real test helpers.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1433,39 +1527,54 @@ describe("trigonometry", () => {
     ["sin(0)", 0], ["sin(90)", 1], ["sin(180)", 0], ["sin(270)", -1],
     ["cos(0)", 1], ["cos(90)", 0], ["cos(180)", -1], ["cos(270)", 0],
   ])("evaluates %s in degrees", (expr, expected) => {
-    expect(radiusOf(`100 + ${expr}`)).toBeCloseTo(100 + expected, 10);
+    expect(foldOf(expr)).toMatchObject({ kind: "number", value: expected });
   });
 
-  it("returns exactly 0 and exactly 1 at the cardinal angles, not 6.1e-17", () => {
-    expect(radiusOf("1 + sin(180)")).toBe(1);
-    expect(radiusOf("1 + cos(90)")).toBe(1);
+  // toMatchObject above is exact equality, which is the point: Math.sin(Math.PI)
+  // is 1.2246e-17, and a naive radian conversion fails these four outright.
+  it("returns exactly 0 and exactly 1 at the cardinal angles", () => {
+    expect((foldOf("sin(180)") as { value: number }).value).toBe(0);
+    expect((foldOf("cos(90)") as { value: number }).value).toBe(0);
+  });
+
+  it("reduces angles outside 0-360 before the cardinal check", () => {
+    expect(foldOf("sin(-90)")).toMatchObject({ value: -1 });
+    expect(foldOf("cos(720)")).toMatchObject({ value: 1 });
+  });
+
+  it("is still approximate off the cardinal angles", () => {
+    expect((foldOf("sin(30)") as { value: number }).value).toBeCloseTo(0.5, 10);
   });
 
   it("places a dot on a circle without hand-computed coordinates", () => {
     // 180 * cos(0) = 180 exactly; the radial-dots case.
-    expect(radiusOf("400 + 180 * cos(0)")).toBe(580);
+    expect(foldOf("400 + 180 * cos(0)")).toMatchObject({ value: 580 });
   });
 
-  it("rejects a non-numeric argument", () => {
-    expect(errorsFor("sin(red)").join()).toContain("requires a number");
+  it("takes a whole expression as the argument", () => {
+    expect(foldOf("sin(45 + 45)")).toMatchObject({ value: 1 });
+  });
+
+  it("rejects a non-numeric argument, naming the kind", () => {
+    expect(diagnosticsForExpr("sin(red)")[0].message).toContain("requires a number");
   });
 
   it("has no pi constant", () => {
-    expect(errorsFor("sin(pi)").join()).toContain("Undefined variable 'pi'");
+    expect(diagnosticsForExpr("sin(pi)")[0].message).toContain("Undefined variable 'pi'");
   });
 });
 ```
 
-The exactness tests matter: `Math.sin(Math.PI)` is `1.22e-16`, so a naive `Math.sin(deg * Math.PI / 180)` puts every radial dot a fraction of a pixel off and makes IR goldens noisy.
+The exactness cases matter beyond tidiness: `Math.sin(Math.PI)` is `1.22e-16`, so
+a plain radian conversion puts every dot in a radial layout a fraction of a pixel
+off and leaves float noise in the committed IR goldens Task 15 has to diff.
 
 - [ ] **Step 2: Run and watch them fail**
 
-Run: `npx vitest run src/compiler/parser/parseExpr.test.ts -t trigo`
+Run: `npx vitest run src/compiler/parser/parseExpr.test.ts -t trigonometry`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement with exact cardinal angles**
-
-Add to `src/compiler/parser/parseExpr.ts`:
 
 ```ts
 /**
@@ -1476,6 +1585,9 @@ Add to `src/compiler/parser/parseExpr.ts`:
  * makes committed IR goldens carry float noise. Reducing the angle modulo 360
  * and returning the exact value at the four cardinal angles avoids that, and
  * matches what an author writing `cos(180)` expects to see.
+ *
+ * The modulo is written twice so a negative input lands in [0, 360): plain
+ * `-90 % 360` is `-90` in JavaScript, which would miss the `270` arm.
  */
 function sinDegrees(deg: number): number {
   const d = ((deg % 360) + 360) % 360;
@@ -1486,34 +1598,48 @@ function sinDegrees(deg: number): number {
   return Math.sin((d * Math.PI) / 180);
 }
 
+/** cos(d) = sin(d + 90); the reduction inside `sinDegrees` handles the wrap. */
 function cosDegrees(deg: number): number {
   return sinDegrees(deg + 90);
 }
 ```
 
-and a primary branch beside `length`:
+and one primary branch handling both, beside `length`:
 
 ```ts
   if (t.type === "EXPR_KEYWORD" && (t.value === "sin" || t.value === "cos")) {
     const nameTok = state.consume();
-    const fn = nameTok.value as string;
+    const fn = nameTok.value as "sin" | "cos";
+    if (state.peek().type !== "LPAREN") {
+      state.throwError(`In ${state.currentContext}: '${fn}' is a function and needs parentheses — write '${fn}(45)'.`, state.peek());
+    }
     state.consume("LPAREN");
-    const arg = parseExpr(state, 0, depth + 1);
+    const arg = parseExpr(state, 0, intoGroup(ctx));
     const closeTok = state.consume("RPAREN");
     if (arg.kind !== "number") {
       state.throwError(`In ${state.currentContext}: '${fn}' requires a number of degrees, but got ${arg.kind}.`, nameTok);
     }
-    const value = fn === "sin" ? sinDegrees(arg.value) : cosDegrees(arg.value);
-    return { kind: "number", value, line: nameTok.line, col: nameTok.col, endLine: closeTok.line, endCol: closeTok.endCol };
+    return { kind: "number", value: fn === "sin" ? sinDegrees(arg.value) : cosDegrees(arg.value), line: nameTok.line, col: nameTok.col, endLine: closeTok.line, endCol: closeTok.endCol };
   }
-
 ```
 
-- [ ] **Step 4: Run and invert the lifted cut**
+- [ ] **Step 4: Verify the decisions**
 
 Run: `npx vitest run src/compiler/parser/parseExpr.test.ts && npm test && npx tsc -b --noEmit`
 
-Replace the trig rejections at `languageCuts.test.ts:163-176` with a permission plus a retained cut for the constant:
+Then, separately, and report the output of each:
+
+1. Replace `sinDegrees`'s body with the bare `Math.sin((deg * Math.PI) / 180)`.
+   Expect the cardinal cases to fail. If they pass, the exactness is unguarded
+   and the goldens in Task 15 will carry noise nothing explains.
+2. Delete the `((d % 360) + 360) % 360` correction, leaving `deg % 360`. Expect
+   `sin(-90)` to fail.
+3. Change `cosDegrees` to `sinDegrees(deg - 90)`. Expect the `cos` rows to fail.
+
+- [ ] **Step 5: Invert the lifted cut**
+
+Replace the trig rejections in `languageCuts.test.ts` with a permission plus a
+retained cut for the constant:
 
 ```ts
   // Lifted by Phase 3B (roadmap 8.1, R5). Angles are in DEGREES, matching
@@ -1532,7 +1658,11 @@ Replace the trig rejections at `languageCuts.test.ts:163-176` with a permission 
   });
 ```
 
-- [ ] **Step 5: Commit**
+Those cuts currently assert `Undefined variable 'sin'`, which no longer reaches
+that path (see the note at this plan's line 639). Run them, read the real
+messages, and assert what they say.
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src/compiler/parser src/compiler/languageCuts.test.ts
@@ -1556,51 +1686,116 @@ Lifts the trig cut (roadmap 8.1, R5)."
 ## Task 9: The `A to B` range
 
 **Files:**
-- Modify: `src/compiler/parser/parseExpr.ts`
+- Modify: `src/compiler/parser/parseExpr.ts`, `src/compiler/parser/state.ts`
 - Test: `src/compiler/parser/parseExpr.test.ts`
 
-`to` sits between comparison (3) and additive (5) at precedence 4, so `0 to count - 1` reads as `0 to (count - 1)`. It is non-associative.
+`to` sits at precedence 4 — between the comparisons (3) and additive (5) — so
+`0 to count - 1` reads as `0 to (count - 1)`. It is non-associative. Level 4 was
+left free in `OPERATORS` for exactly this.
+
+### The blocking problem: `to` is also a property name
+
+**Resolve this before writing any code.** `animate { to: … }` is a real property,
+and property separators are *optional*: `parseObject.ts:295` consumes commas in a
+`while` loop, so zero commas is well-formed. Every `animate` block in the
+protected `eval/` corpus is written without them —
+
+```declare
+animate {
+  property: alpha
+  to: 0.0
+  duration: 2.0
+}
+```
+
+Once `to` has a row in `OPERATORS`, parsing the value of `property:` folds
+`alpha`, then `parseExpr`'s loop peeks `to`, finds precedence 4 > 0, consumes it
+as a range operator, and fails on the `:`. **That breaks every animate block in
+`eval/`**, which is protected material.
+
+The plan's earlier test for this — `animate { property: position, to: (10,10) }` —
+passes anyway, because it was written *with* commas. It is a test shaped to its
+fixture (AGENT-LESSONS §2a) and it would have shipped the break.
+
+**Recommended resolution: one token of lookahead.** A `to` followed by `:` is a
+property name, not an operator. `ParserState.peek()` takes no offset today, so add
+one:
+
+```ts
+  peek(offset = 0): Token {
+    return this.tokens[this.pos + offset] || this.tokens[this.tokens.length - 1];
+  }
+```
+
+and break out of the operator loop before consuming:
+
+```ts
+    // `to` is both an operator and a legal property name, and property
+    // separators are optional (`parseObject.ts:295` consumes commas in a
+    // `while`), so in a comma-free `animate` block the token after a folded
+    // value is the reserved word `to`. Without this the loop takes it as a
+    // range operator and dies on the ':'. Every animate block in `eval/` is
+    // written this way, so the cost of getting it wrong is the whole corpus.
+    if (op.name === "to" && state.peek(1).type === "COLON") break;
+```
+
+This is a judgment call with a plausible alternative — parsing property values at
+a minimum precedence above 4, which would instead forbid ranges in property
+position. Per AGENT-LESSONS §2d, implement one, flip to the other, and confirm the
+suite distinguishes them. If it does not, the test below is not doing its job.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```ts
 describe("range", () => {
   it("builds an inclusive list of integers", () => {
-    const result = parse(lex(`let r = 0 to 3 scene { size:(10,10) }`));
-    expect(result.errors).toEqual([]);
-    expect(result.env.r).toMatchObject({ kind: "list" });
-    expect((result.env.r as { value: Array<{ value: number }> }).value.map((v) => v.value))
-      .toEqual([0, 1, 2, 3]);
+    const r = foldOf("0 to 3") as { kind: string; value: Array<{ value: number }> };
+    expect(r.kind).toBe("list");
+    expect(r.value.map((v) => v.value)).toEqual([0, 1, 2, 3]);
   });
 
   it("binds looser than subtraction, so '0 to n - 1' is a range of n items", () => {
-    const result = parse(lex(`let n = 12 let r = 0 to n - 1 scene { size:(10,10) }`));
-    expect(result.errors).toEqual([]);
-    expect((result.env.r as { value: unknown[] }).value).toHaveLength(12);
+    const parsed = parse(lex(`let n = 12\nlet r = 0 to n - 1\nscene { size: (100, 100) }`));
+    expect(parsed.errors).toEqual([]);
+    expect((parsed.env.r as { value: unknown[] }).value).toHaveLength(12);
+  });
+
+  it("binds tighter than comparison, so '0 to 3 == x' compares the list", () => {
+    // Precedence 4 sits below comparison at 3, so the range folds first and the
+    // '==' then rejects a list operand. The diagnostic naming 'list' is what
+    // distinguishes this from 'to' having been given precedence 2.
+    expect(diagnosticsForExpr("0 to 3 == 1")[0].message).toContain("list");
   });
 
   it("yields the empty list when the end precedes the start", () => {
-    const result = parse(lex(`let r = 5 to 1 scene { size:(10,10) }`));
-    expect(result.errors).toEqual([]);
-    expect((result.env.r as { value: unknown[] }).value).toHaveLength(0);
+    expect((foldOf("5 to 1") as { value: unknown[] }).value).toHaveLength(0);
   });
 
   it("rejects non-integer bounds", () => {
-    expect(parse(lex(`let r = 0 to 2.5 scene { size:(10,10) }`)).errors.map(e => e.message).join())
-      .toContain("must be whole numbers");
+    expect(diagnosticsForExpr("0 to 2.5")[0].message).toContain("whole numbers");
   });
 
   it("rejects a range longer than the list ceiling", () => {
-    expect(parse(lex(`let r = 0 to 10001 scene { size:(10,10) }`)).errors.map(e => e.message).join())
-      .toContain("10,000");
+    expect(diagnosticsForExpr("0 to 10001")[0].message).toContain("10,000");
+  });
+
+  it("applies the same ceiling to a list literal", () => {
+    const literal = `[${Array.from({ length: 10001 }, (_, i) => i).join(",")}]`;
+    expect(diagnosticsForExpr(literal)[0].message).toContain("10,000");
   });
 
   it("rejects a chained range rather than regrouping it", () => {
-    expect(parse(lex(`let r = 0 to 3 to 5 scene { size:(10,10) }`)).errors.map(e => e.message).join())
-      .toContain("cannot be chained");
+    expect(diagnosticsForExpr("0 to 3 to 5")[0].message).toContain("cannot be chained");
   });
 
-  it("still allows 'to' as an animate property name", () => {
+  // The corpus shape. Commas between properties are optional and no .eval scene
+  // uses them, so this — not the comma'd version — is what protects the corpus.
+  it("still allows 'to' as a property name with no separating comma", () => {
+    const src = `scene { size:(100,100)\n circle c { position:(0,0)\n radius:5\n animate {\n property: alpha\n to: 0.5\n duration: 1\n } } }`;
+    expect(parse(lex(src)).errors).toEqual([]);
+  });
+
+  it("still allows 'to' as a property name with a comma", () => {
     const src = `scene { size:(100,100) circle c { position:(0,0), radius:5 animate { property: position, to: (10,10), duration: 1 } } }`;
     expect(parse(lex(src)).errors).toEqual([]);
   });
@@ -1614,44 +1809,85 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement**
 
-Add `"to"` to `operatorOf`'s `EXPR_KEYWORD` case, `to: 4` to `PRECEDENCE`, and `"to"` to `NON_ASSOCIATIVE`. Add to `applyBinary`, before the numeric branch:
+There is no `operatorOf`, no `PRECEDENCE` and no `NON_ASSOCIATIVE` any more —
+d02320b unified all three into `OPERATORS`, and `OperatorWord` narrows the word
+half of the key space to the words that really are operators. So:
+
+1. Widen the key type to admit the word:
+   `type OperatorWord = Extract<ExpressionWord, "and" | "or" | "to">;`
+2. Add one row: `to: { name: "to", prec: 4, assoc: "none" },`
+3. Add `MAX_LIST_LENGTH` beside the depth budgets and enforce it in
+   `parseListLiteral` as well as here — design §8 makes it one ceiling for
+   literals and ranges alike, which is what lets `parseGenerate.ts:47-49`'s
+   separate `end - start > 10000` check fold into it in Task 10:
 
 ```ts
-  if (op === "to") {
-    const from = requireNumber(state, left, op, "left", opTok);
-    const until = requireNumber(state, right, op, "right", opTok);
-    if (!Number.isInteger(from) || !Number.isInteger(until)) {
-      state.throwError(`In ${state.currentContext}: Range bounds must be whole numbers, but got ${from} and ${until}.`, opTok);
-    }
-    const count = until - from + 1;
-    if (count > MAX_LIST_LENGTH) {
-      state.throwError(`In ${state.currentContext}: A range of ${count.toLocaleString("en-US")} values exceeds the maximum list length of ${MAX_LIST_LENGTH.toLocaleString("en-US")}.`, opTok);
-    }
-    const entries: AstValue[] = [];
-    for (let n = from; n <= until; n++) {
-      entries.push({ kind: "number", value: n, ...at });
-    }
-    return { kind: "list", value: entries, ...at };
-  }
+/** Design 8: one ceiling for list literals and ranges alike. */
+const MAX_LIST_LENGTH = 10000;
 ```
 
-Export `export const MAX_LIST_LENGTH = 10000;` from `parseExpr.ts` and enforce it on list literals too, in `parseListLiteral`, with the message `A list of N entries exceeds the maximum list length of 10,000.`
+4. Add a `case` to `applyBinary`'s switch — not an `if` before it. The switch is
+   exhaustive over `OperatorName` with no default, which is what makes a row
+   without a handler fail the build; adding an early `if` would forfeit that.
+   Note `requireNumber` takes four arguments, `(state, operand, op, side)`:
 
-The non-associativity check written in Task 5 already covers `to`, since it keys off `NON_ASSOCIATIVE` and equal precedence. Adjust its message so it is not comparison-specific:
+```ts
+    case "to": {
+      const from = requireNumber(state, left, op, "left");
+      const until = requireNumber(state, right, op, "right");
+      if (!Number.isInteger(from) || !Number.isInteger(until)) {
+        state.throwError(`In ${state.currentContext}: Range bounds must be whole numbers, but got ${from} and ${until}.`, opTok);
+      }
+      // '5 to 1' is empty, not an error: it is the honest reading of an
+      // inclusive range, and iterating it emits nothing.
+      const count = Math.max(0, until - from + 1);
+      if (count > MAX_LIST_LENGTH) {
+        state.throwError(`In ${state.currentContext}: A range of ${count.toLocaleString("en-US")} values exceeds the maximum list length of ${MAX_LIST_LENGTH.toLocaleString("en-US")}.`, opTok);
+      }
+      const entries: AstValue[] = [];
+      for (let n = from; n <= until; n++) entries.push({ kind: "number", value: n, ...at });
+      return { kind: "list", value: entries, ...at };
+    }
+```
+
+5. Apply the property-name lookahead from the section above.
+
+6. Generalise the non-associativity message. The check at `parseExpr.ts:780-788`
+   already covers `to` — it keys off `assoc === "none"` and equal precedence —
+   but its text is comparison-specific and reads wrong for a range:
 
 ```ts
         state.throwError(
-          `In ${state.currentContext}: '${op}' cannot be chained. Write it as two separate expressions instead of 'a ${op} b ${next} c'.`,
+          `In ${state.currentContext}: '${op.name}' cannot be chained. Write 'a ${op.name} b and b ${next.name} c' rather than 'a ${op.name} b ${next.name} c'.`,
           state.peek(),
         );
 ```
 
-Then update Task 5's chained-comparison assertion if its wording no longer matches — read the output, assert what it says.
+   `to` and the comparisons are at different precedence levels, so they never
+   pair with each other and the `and` phrasing stays true for the only chains
+   that can reach this branch. If that changes, split the message.
 
-- [ ] **Step 4: Run everything**
+   `parseExpr.test.ts:627` asserts the old wording, `"Comparisons cannot be
+   chained."`. Run it, read the real output, and assert what it says.
+
+- [ ] **Step 4: Verify the decisions**
 
 Run: `npm test && npx tsc -b --noEmit`
-Expected: pass.
+
+Then, separately, reporting each result:
+
+1. **Confirm the corpus is intact.** `git diff --stat -- eval/` must be empty —
+   *not* `git status --porcelain`, which reports phantom modifications on this
+   machine (`core.autocrlf=true`, no `.gitattributes`; AGENT-LESSONS §6).
+   Then re-run the `.eval` harness and diff the reports.
+2. Delete the `op.name === "to" && peek(1) is COLON` guard. Expect the comma-free
+   animate test to fail. If it passes, that test is not protecting the corpus and
+   the guard is unpinned.
+3. Change the row to `prec: 2`. Expect the two precedence tests to fail.
+4. Change `assoc` to `"left"`. Expect the chaining test to fail.
+5. Drop the `Math.max(0, …)`. Expect nothing to fail on `5 to 1` — the loop is
+   already empty — which is why the count matters only for the ceiling check.
+   Confirm that reading rather than assuming it.
 
 - [ ] **Step 5: Commit**
 
@@ -1662,6 +1898,11 @@ git commit -m "feat(parser): 'A to B' builds an inclusive integer list
 Precedence 4, between comparison and additive, so '0 to n - 1' reads as
 '0 to (n - 1)' — the form every rewritten scene uses. Non-associative.
 '5 to 1' is the empty list, the honest reading of an inclusive range.
+
+'to' is also a property name and property separators are optional, so a
+comma-free 'animate { property: alpha  to: 0.5 }' — the shape every
+.eval scene uses — would otherwise parse 'to' as a range operator and
+fail on the colon. A 'to' followed by ':' is a property name.
 
 Making a range an ordinary list value is what lets generate have one
 header shape instead of two, and folds parseGenerate's separate
@@ -2472,3 +2713,15 @@ and must confirm or correct every line below before promoting any of it.
   content-identical files. Changed to `git diff --stat` in `44f8221`.
 - Task 2 dropped `parseListLiteral`'s `depth` parameter as unused; Task 4 generalises
   list entries and reopens the question. Recorded into Task 4 in `4f24edd`.
+- **Task 9's `to` operator would have broken every `animate` block in `eval/`, and
+  its own test would have passed anyway.** Property separators are optional —
+  `parseObject.ts:295` consumes commas in a `while` loop — and no `.eval` scene uses
+  them, so `property: alpha` / newline / `to: 0.0` puts the reserved word `to`
+  directly after a folded value. Giving `to` a row in `OPERATORS` makes the
+  precedence loop consume it as a range operator and fail on the `:`. The plan's
+  guard test wrote `animate { property: position, to: (10,10) }` **with** commas, so
+  it exercised a shape the corpus never uses and would have stayed green through the
+  break — rung 3 of the weak-test scale (AGENT-LESSONS §2a). Found by reading
+  `parseObject.ts` while rewriting Tasks 7–9 against current source, not by running
+  anything. Task 9 now names the problem, proposes one-token lookahead, and requires
+  a comma-free test drawn from the corpus shape.
