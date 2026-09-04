@@ -273,7 +273,8 @@ message where you substitute for it.
 
 ## 5. Hand-synced lists come back
 
-`AGENTS.md`'s "One property contract, not four hand-synced lists" exists because
+`docs/architecture/language-contract.md`'s "One property contract, not four
+hand-synced lists" exists because
 four copies of the property metadata had drifted. Phase 3B re-introduced the same
 anti-pattern twice, in miniature, within days of that being written:
 

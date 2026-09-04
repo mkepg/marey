@@ -79,7 +79,8 @@ function property(
 
 // Every visual is wrapped in a container whose pivot is its bounding box's
 // centre — but that coincides with the shape's *geometric* centre only for
-// circle, rectangle and text (AGENTS.md, decision D15). Polygon and line
+// circle, rectangle and text (docs/architecture/renderer.md, decision D15).
+// Polygon and line
 // share a distinct description because for an asymmetric shape the
 // bounding-box midpoint is not the centroid.
 const centerPosition = property(
@@ -342,7 +343,8 @@ const physicsProperties = Object.freeze({
 });
 
 // A group's pivot is its local origin and is never derived from where its
-// children sit (AGENTS.md decision D16) — a distinct description from
+// children sit (docs/architecture/renderer.md, decision D16) — a distinct
+// description from
 // centerPosition/bboxMidpointPosition above, both of which describe a pivot
 // computed from the object's own visual extent.
 const groupPosition = property(
@@ -432,7 +434,7 @@ export const LIST_ELEMENT_NOUN_PLURAL: Readonly<Record<ValueKind, string>> = {
  * *future* non-point `listOf` constraint: instead of silently inheriting a
  * code whose name claims the offending object is a polygon, it gets an
  * honest generic code. A confidently wrong diagnostic is worse than a merely
- * generic one — see AGENTS.md's process rules for this project.
+ * generic one — see docs/architecture/README.md's process rules.
  */
 export function listTooLargeCode(element: ValueKind): string {
   return element === "point" ? "TYPE_POLYGON_TOO_LARGE" : "TYPE_LIST_TOO_LARGE";

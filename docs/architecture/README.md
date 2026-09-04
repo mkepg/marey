@@ -1,0 +1,131 @@
+# Shared agent guidance
+
+This directory is the single source of project guidance for every coding agent
+working in this repository. `AGENTS.md` are identical
+entrypoints to this document.
+
+## Required reading order
+
+1. Read this document in full before doing any work.
+2. Read `docs/engineering-lessons.md` in full before doing any work.
+3. Before changing a subsystem, read every applicable topic document from the
+   directory map below.
+4. Before starting a roadmap phase, read the prior phase's execution notes and
+   the authoritative specs identified in `roadmap-and-process.md`.
+5. For browser-visible behavior, read
+   `tools/visual-check/SKILL.md` before running a visual check. The
+   skill's procedure and scripts are tool-neutral despite their location.
+
+Do not rely on an agent-specific forwarding file as the source of project
+truth. Update the documents in this directory, and keep forwarding files as
+pointers only.
+
+## Commands
+
+```bash
+npm run dev          # Vite dev server
+npm run build        # tsc -b && vite build — typecheck is part of the build
+npm test             # vitest run (single pass)
+npm run test:watch   # vitest watch
+
+npx tsc -b --noEmit                          # typecheck alone
+npx vitest run src/compiler/renderer/clock.test.ts       # one file
+npx vitest run -t "advances two ticks"                   # one test by name
+```
+
+The test suite is headless by design and **cannot see a canvas**. For anything
+that needs one — does a scene actually render, does the ticker stop, does a
+scene replay identically across a page reload — follow the browser procedure in
+`tools/visual-check/SKILL.md`.
+
+```bash
+npx playwright install chromium            # once, if you have not already
+npx vite --port 5199 --strictPort          # leave this running
+node tools/visual-check/check.mjs \
+  --scene tools/visual-check/scenes/pile.declare \
+  --at 300,1500,4000 --settle 9000 --out .visual-check/pile
+node tools/visual-check/smoke.mjs # if captures come back blank
+```
+
+Use `--strictPort`: without it Vite walks forward to the next free port when
+5199 is taken, while `check.mjs` still defaults to 5199. A stale server from an
+earlier run then absorbs every capture and the check reports a confident pass
+without exercising your code at all. That has happened twice. The check itself
+found a determinism bug the whole headless suite missed, and `SKILL.md` records
+two traps worth knowing before writing any browser check of your own.
+
+TypeScript is strict with `noUnusedLocals`, `noUnusedParameters`, and
+`verbatimModuleSyntax` (type-only imports need the `type` keyword).
+
+## What this is
+
+Declare is a declarative scene DSL that compiles to a PixiJS scene graph, with
+a browser IDE (Monaco editor, live preview, terminal) around it. You write a
+`scene { ... }` block of shapes with `animate`, `physics`, and `sequence`
+blocks; it renders and plays.
+
+The project is being taken in a **motion-graphics** direction — a small,
+readable, diffable text format for 2D motion — rather than a game/simulation
+direction. That decision shapes what gets built and what gets cut. See
+`docs/specs/` before proposing physics or animation features.
+
+**Declare has never been released publicly. There are no external users and no
+third-party `.declare` files anywhere.** Every `.declare` file that exists is
+first-party and lives in this repository — the default scene, the language
+reference's examples, the `eval/` corpora, and the visual-check fixtures.
+So *backward compatibility is not a design constraint*: a breaking syntax
+change costs a migration of first-party files and nothing else, and "this
+would break shipped scenes" is not an argument against a language change.
+Weigh proposals on which language is better to live with once distribution
+starts (roadmap Phase 5B), not on what is cheapest to migrate to. This is
+also why Phase 3A landed `let`/`handoff`/`fit`/`layer` with no compatibility
+aliases rather than a deprecation window — see roadmap decision R1.
+
+## Architecture and directory map
+
+`lex → parse → typeCheck → buildIR → render`. Entry point is
+`src/compiler/index.ts`, but compilation actually runs in
+`src/compiler/compiler.worker.ts` (a Web Worker) so the editor stays
+responsive. The worker returns the Scene IR as a JSON string; the main thread
+parses it and hands it to the renderer.
+
+`src/compiler/sceneIR.ts` is the contract between compiler and renderer.
+Everything is `readonly` and frozen. Durations here are in **seconds**. It
+also owns `TICK_HZ` and `secondsToTicks` — its first behavioural (function)
+export, not just types — so the type checker and the renderer share exactly
+one seconds-to-ticks conversion instead of the type checker reaching
+backwards into `renderer/clock.ts`, which now just re-exports both.
+
+- **`src/compiler/lexer/`, `parser/`, `typeChecker/`, and
+  `determinism.test.ts`** — read `parser-and-metaprogramming.md`.
+- **`src/compiler/renderer/`, `sceneIR.ts`, and renderer-related validation** —
+  read `renderer.md`.
+- **`src/compiler/languageContract.ts` and its compiler/editor consumers** —
+  read `language-contract.md`.
+- **`src/lib/share.ts`** — read `share-links.md`.
+- **`docs/` and `docs/LANGUAGE.md`** — read
+  `roadmap-and-process.md`.
+
+When a change crosses boundaries, read all matching documents. The path lists
+in `scoped rule files` exist only to make Claude load these same shared documents
+at the right time; they do not contain separate project guidance.
+
+## Process
+
+`docs/engineering-lessons.md` is the cross-phase record of *process*
+mistakes and the patterns behind them. **Read it before starting work.** It
+accumulates, every entry cites concrete evidence, and it exists because the
+same few mistakes keep recurring: reports that overstate their own work,
+green suites that guard less than they appear to, hand-synced lists growing
+back, and `git status` misreporting modification on this machine because
+`core.autocrlf` is on with no `.gitattributes`. Add to it when you make a
+mistake worth someone else avoiding.
+
+The authoritative roadmap is
+`docs/specs/2026-09-01-declare-product-roadmap-design.md`.
+Current phase: **3B — generative expressiveness** (lists/iteration, indexing
+or length, modulo, comparison, a conditional value expression, and trig).
+Full phase history and prior decisions (D1–D18, R1) are in
+`roadmap-and-process.md`.
+
+Work on a branch, not `main`.

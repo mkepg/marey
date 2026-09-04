@@ -82,7 +82,8 @@ function lerp(a: number, b: number, t: number): number {
 
 /**
  * Paint-phase counterpart of `SceneRuntime.tickAnim`, and the other half of
- * AGENTS.md's invariant 2: `tickAnim` advances state and fires completion side
+ * docs/architecture/renderer.md's invariant 2: `tickAnim` advances state and
+ * fires completion side
  * effects, `applyAnim` only writes display properties. It sits outside the
  * class purely because it never touches the world.
  */
@@ -405,7 +406,7 @@ export class SceneRuntime {
    * Everything that changes scene state lives here and takes no time argument,
    * so an export driver can call it in a bare loop with no wall clock involved.
    * The order of the six phases below is load-bearing; see the class comment
-   * and AGENTS.md's renderer invariants.
+   * and docs/architecture/renderer.md's invariants.
    */
   advanceOneTick(): void {
     // A runner that completed is not spliced until the paint phase, so without
