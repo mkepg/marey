@@ -43,6 +43,12 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
   if (collection.kind !== "list") {
     state.throwError(`In ${state.currentContext}: 'generate' requires a list to iterate, but got ${collection.kind}. Write a list literal, a range such as '0 to 9', or a 'let' bound to one.`, inTok);
   }
+  if (collection.conditionalResult) {
+    state.throwError(
+      `[PARSE_GENERATE_CONDITIONAL_COLLECTION] In ${state.currentContext}: 'generate' cannot iterate a list selected by 'if'. A conditional may choose element values inside a literal list, but not the collection itself, because literal structure must determine emitted object shape.`,
+      inTok,
+    );
+  }
   const items = collection.value;
 
   const braceTok = state.consume("LBRACE");

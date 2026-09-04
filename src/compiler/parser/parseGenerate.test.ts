@@ -49,4 +49,19 @@ describe("generate ... in", () => {
       .errors.map((e) => e.message).join();
     expect(msg).toContain("requires a list");
   });
+
+  it("rejects a direct conditional collection", () => {
+    const result = parse(lex(`scene { size:(10,10) generate v in if true then [1] else [1,2] { circle d { position:(0,0), radius:v } } }`));
+    expect(result.errors[0].message).toContain("[PARSE_GENERATE_CONDITIONAL_COLLECTION]");
+  });
+
+  it("rejects a conditional list through a let alias", () => {
+    const result = parse(lex(`let xs = if true then [1] else [1,2] scene { size:(10,10) generate v in xs { circle d { position:(0,0), radius:v } } }`));
+    expect(result.errors[0].message).toContain("[PARSE_GENERATE_CONDITIONAL_COLLECTION]");
+  });
+
+  it("allows conditionals inside elements of a fixed-length collection", () => {
+    expect(namesOf(`scene { size:(10,10) generate v in [if true then 1 else 2, if false then 3 else 4] { circle d { position:(0,0), radius:v } } }`))
+      .toEqual(["d_0", "d_1"]);
+  });
 });

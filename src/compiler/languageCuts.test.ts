@@ -342,14 +342,10 @@ describe("Phase 3B lift: conditional value expression", () => {
 });
 
 describe("Phase 3B reservation regression: parseGenerate's 'in' collection recovery", () => {
-  // parseGenerate used to read the loop-bound 'to' via consume("IDENT"),
-  // which threw *without* advancing on a mismatch. Reserving 'to' broke
-  // that (it no longer lexes as IDENT), so this switched to an untyped
-  // consume() — but consume() with no expected type always advances `pos`
-  // (parser/state.ts), even on a value mismatch, which moved where
-  // synchronize() resumes and produced a spurious extra diagnostic for a
-  // malformed 'generate' followed by a sibling object. Pinning the count so
-  // that regression can't come back silently.
+  // A valid `in` header reaches collection parsing, where the rejected `}`
+  // must remain unconsumed before recovery. Consuming it would move
+  // synchronize() past the group close and create a spurious third diagnostic
+  // before the following sibling can be parsed.
   it("reports exactly two diagnostics for a 'generate' missing its collection, not three", () => {
     const source = `scene { size:(10,10) group g { generate i in } circle ok { position:(0,0), radius:5 } } }`;
     const diags = diagnosticsFor(source);

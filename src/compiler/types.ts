@@ -80,6 +80,8 @@ export interface PointValue {
 export interface ListValue {
   readonly kind: "list";
   readonly value: ReadonlyArray<AstValue>;
+  /** True only when an if-expression selected this list. */
+  readonly conditionalResult?: true;
   readonly line: number;
   readonly col: number;
   readonly endLine: number;

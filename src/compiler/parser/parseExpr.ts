@@ -976,7 +976,14 @@ function parseConditional(state: ParserState, ctx: ExprCtx): AstValue {
   const chosen = condition.value ? whenTrue : whenFalse;
   // The span covers the whole construct, the way a parenthesised expression
   // takes its brackets' span rather than the inner value's.
-  return { ...chosen, line: ifTok.line, col: ifTok.col, endLine: whenFalse.endLine, endCol: whenFalse.endCol };
+  return {
+    ...chosen,
+    ...(chosen.kind === "list" ? { conditionalResult: true as const } : {}),
+    line: ifTok.line,
+    col: ifTok.col,
+    endLine: whenFalse.endLine,
+    endCol: whenFalse.endCol,
+  };
 }
 
 export function parseExpr(state: ParserState, minPrec: number, ctx: ExprCtx): AstValue {
