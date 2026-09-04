@@ -106,9 +106,12 @@ backwards into `renderer/clock.ts`, which now just re-exports both.
 - **`docs/` and `docs/LANGUAGE.md`** — read
   `roadmap-and-process.md`.
 
-When a change crosses boundaries, read all matching documents. The path lists
-in `scoped rule files` exist only to make Claude load these same shared documents
-at the right time; they do not contain separate project guidance.
+When a change crosses boundaries, read all matching documents. These files are
+the only home for this guidance — there is no agent-specific copy. A
+path-scoped `scoped rule files` split was tried in `b59d70a` and reverted in
+`4c70781`: it gave Claude lazy loading that Codex has no equivalent for, so the
+two agents ended up reading different guidance. One set everyone reads beats a
+smaller one only some agents get.
 
 ## Process
 
