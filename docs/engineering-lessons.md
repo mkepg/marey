@@ -250,6 +250,59 @@ worst documentation defects.
 
 ---
 
+### 3b. A dispatch that contradicts itself gets resolved without you
+
+**Phase 3B Task 7, controller error.** The implementer dispatch carried both of
+these, about forty lines apart:
+
+- *"Implement exactly what the brief specifies. Nothing more."*
+- *"For every behaviour this task requires, delete the line that implements it and
+  run the suite. Anything still green is untested."*
+
+They collide precisely when the check succeeds. The implementer ran it on
+`parseExpr.ts`'s `index.kind !== "number"` guard, found **518/518 still green**,
+correctly identified a required behaviour that no fixture exercised — and then
+declined to add the fixture, citing the first instruction as the reason and
+flagging the gap instead. That was a defensible reading of a prompt that gave two
+answers, and it cost a full fix round plus a scoped re-review for a one-line test.
+
+The dispatch never said which instruction wins. Neither does a plan's "implement
+exactly what is specified" boilerplate, which is why this will recur.
+
+**Do instead:** when a dispatch carries both a scope limit and a verification
+method, state the tie-break in the same message. The rule that resolves this one:
+*a gap the delete-and-run check finds in a behaviour the task **requires** is in
+scope; a gap it finds in an adjacent behaviour is filed, not fixed.* A check whose
+result you have pre-forbidden acting on is not a check — it is a way of generating
+a finding nobody is allowed to close.
+
+Two things kept this cheap, and both are worth copying. The implementer **said what
+it had not done and why**, in the §2f shape, rather than quietly skipping the check
+or quietly widening scope — so the conflict was visible in the report instead of
+invisible in the diff. And the controller owned the contradiction as its own when
+ruling on it, rather than filing it as an implementer error; the implementer had
+followed the prompt it was given.
+
+**A related observation from the same task, on where defects were actually found.**
+A pre-flight scan of the task body against the source found three contradictions
+between the task's own Step 1 tests and its own Step 3 code — two case-sensitive
+`toContain` assertions that could never match the message they targeted, and a
+`posAt(source, "[")` locator that resolved to the list literal's bracket rather than
+the index's. All three were found by reading, before any code was written.
+
+The fourth was not findable that way. The same anchor test was a **false green**: with
+no indexing support, the trailing `[5]` is unparsed top-level input, and the parser's
+existing "must begin with the 'scene' keyword" recovery diagnostic lands on exactly
+the column the fixture computes — so the position assertion passed with zero
+implementation present. Only *running the RED step and reading the output* exposed it.
+
+*Do instead:* keep doing the pre-flight read — it is cheap and it caught three real
+defects here. But do not let it stand in for running RED and looking at what the
+failure actually says. Reading finds contradictions; only execution finds
+coincidences.
+
+---
+
 ## 4. Name workflow deviations up front
 
 **Phase 3B, controller error.** Executing under subagent-driven development,
