@@ -113,9 +113,10 @@ relative to `position`. It must have at least 3 points.
 and `thickness`, which must be greater than 0.
 
 Each coordinate inside a point list follows the same rules as any other
-numeric value: it may be a number literal, a `let`-bound name, or an
-arithmetic expression combining them. See the worked example under
-"Reuse" for a `polygon` whose points are computed this way.
+numeric value: it may be a number literal, a `let`-bound name, or any
+expression combining them that evaluates to a number. See "Expressions"
+for the operators available, and the worked example under "Reuse" for a
+`polygon` whose points are computed this way.
 
 `text` requires `position` and `content`, a quoted string of at most 500
 characters. `fontSize` is optional and defaults to `16`. A scene may contain
@@ -664,7 +665,7 @@ the time an error is reported, `let` names have been substituted and
 
 `let name = value` binds `name` to a single value in the current scope. The
 right-hand side accepts any value kind the parser produces: number, color,
-string, point, point list, boolean, easing, or `fit`.
+string, point, list, boolean, easing, or `fit`.
 
 A binding is immutable: redefining the same name in the same scope is a
 compile error ("already defined in this immediate scope"). Shadowing an
@@ -687,30 +688,113 @@ type, not as identifiers, so `let cyan = #00ffff` is a parse error before it
 ever reaches scope checking — the parser is looking for a variable name and
 finds a colour literal instead.
 
-### Arithmetic
+### Expressions
 
-Numeric value positions accept `+`, `-`, `*`, and `/`, with conventional
-precedence: `*` and `/` bind tighter than `+` and `-`. Unary `-` is
-supported. Parentheses group and may nest. Division by zero is a compile
-error, not `Infinity`. There is no modulo operator, no exponent, and no
-comparison operator. An operand may be a number literal or a `let`-bound
-name; a name bound to a non-number value used in a math expression is a
-compile error.
+Every value position takes an *expression*, not only a literal — the one
+exception is `animate`'s `property`, which names a property rather than
+computing a value. An operand may be a number or other literal, a `let`-bound
+name, or another expression.
+
+**Expressions are evaluated once, while the file is parsed, down to a single
+value.** By the time the type checker runs there are no operators left, only
+the value each expression produced. A `let`-bound data list consumed by
+`generate` or by indexing is erased at parse time; the only lists that reach
+the rendered scene are the point lists `polygon` and `line` declare.
+
+**Numbers.** `+`, `-`, `*`, `/`, and `%` take two numbers; unary `-` negates
+one. Parentheses group and may nest. Division by zero and modulo by zero are
+both compile errors, not `Infinity` or `NaN`. There is no exponent operator.
+A name bound to a non-number value used as an arithmetic operand is a compile
+error naming the kind it actually holds.
+
+**Lists.** `[a, b, c]` is a list, its elements may be any values, and lists
+may nest — `[[1, 2], [3, 4]]`. `A to B` is a range: the list of whole numbers
+from `A` to `B` with both ends included, so `0 to 4` is `[0, 1, 2, 3, 4]`.
+Range bounds must be whole numbers, and a descending range such as `5 to 1`
+is the empty list rather than an error — iterating it emits nothing, which is
+the honest reading of "inclusive from 5 to 1". `length(l)` is a list's
+element count. `l[i]` is its element at the 0-based index `i`, and indexing
+chains: `grid[r][c]`. The index must be a whole number from `0` to
+`length(l) - 1`; **there is no negative indexing and no wrap-around**, and an
+out-of-range index is a compile error stating both the index and the length.
+
+**There is one list kind.** The point list a `polygon` or `line` takes is an
+ordinary list whose elements happen to be points, so `tri[0]` and
+`length(tri)` work on it. "Every element must be a point" is not a rule about
+lists; it is a requirement `points` declares, reported against the offending
+element.
+
+**Comparison and booleans.** `==` and `!=` compare two values of the same
+kind; `<`, `>`, `<=`, and `>=` take two numbers. `and`, `or`, and `not` take
+booleans. **There is no truthiness** — `1 and true` is a compile error, not a
+shorthand. Comparing two *different* kinds is also a compile error rather
+than `false`, so a mismatch is something you read at compile time instead of
+something that renders wrong. Equality is defined over numbers, strings,
+booleans, and colours only; points and lists cannot be compared. A named
+colour compares as the hex it stands for, so `red == #ff0000` is true.
+
+Neither the comparisons nor `to` chain. `a < b < c` and `a to b to c` are
+compile errors naming the chain, rather than silently regrouping into
+something that then fails for a different reason.
+
+**The conditional.** `if C then A else B` is a value, not a statement. `C`
+must be a boolean, and **`A` and `B` must be the same kind** — both branches
+are evaluated and kind-checked whichever one the condition selects, so a
+value's kind never depends on data. It is the loosest construct in the
+grammar, so `if c then 1 else 2 + 3` reads as `if c then 1 else (2 + 3)`.
+`else if` chains, each `else` belonging to the nearest unclosed `if`.
+
+**Trigonometry.** `sin(d)` and `cos(d)` take a number of **degrees** — the
+same unit as `rotation`, the only other angle in the language — and return a
+number. They are exact at multiples of 90: `sin(180)` is `0`, not the
+`1.2e-16` a plain conversion to radians would give, so a radial layout does
+not carry float noise a fraction of a pixel wide. There is no π constant; see
+"Where expressions stop" below for why.
+
+`sin`, `cos`, and `length` are operators that happen to be spelled like
+calls. There is no call syntax over names you choose.
+
+Precedence, loosest to tightest:
+
+1. `if … then … else …`
+2. `or`
+3. `and`
+4. `not`
+5. `==` `!=` `<` `>` `<=` `>=` — non-associative
+6. `to` — non-associative
+7. `+` `-`
+8. `*` `/` `%`
+9. unary `-`
+10. `[…]` indexing
+11. a number, a list literal, a name, `(…)`, `sin(…)`, `cos(…)`, `length(…)`
+
+`to` sitting between the comparisons and `+`/`-` is what makes
+`0 to count - 1` read as `0 to (count - 1)`, the form every range over a
+computed length takes. `not` sitting looser than the comparisons is what
+makes `not a == b` read as `not (a == b)`, the only useful reading, while
+`not a and b` still reads as `(not a) and b`.
 
 **The right-hand side of a `let` is a full value expression, not only a
-literal.** It may be arithmetic, and it may reference an earlier `let` in
-scope:
+literal.** It may use any of the above, and it may reference an earlier `let`
+in scope:
 
 ```declare
-let base    = 20
-let spacing = base * 2 + 10
+let radii = [12, 18, 12, 24]
+let count = length(radii)
+let ring  = 180
 
 scene {
   size: (800, 600)
-  circle c {
-    position: (spacing, 300)
-    radius: base
-    color: cyan
+  background: #0a0e1a
+
+  generate i in 0 to count - 1 {
+    let angle = i * 360 / count
+    let major = i % 2 == 0
+    circle dot {
+      position: (400 + ring * cos(angle), 300 + ring * sin(angle))
+      radius: radii[i]
+      color: if major then orange else cyan
+    }
   }
 }
 ```
@@ -735,15 +819,49 @@ emits two objects, so its shape remains literal.
 
 Every object created inside the loop has its declared name suffixed with
 the 0-based ordinal: a `rectangle tick` inside `generate k in 0 to 9` produces
-`tick_0` through `tick_9`. `generate` blocks may nest. Each level of nesting
-appends its own suffix, innermost first — an object named `dot` inside an
-inner loop bound to `j` nested in an outer loop bound to `i` is named
-`dot_<j>_<i>`.
+`tick_0` through `tick_9`. **The suffix is the element's position in the list,
+never the element's value** — `generate v in [4, 9]` produces `bar_0` and
+`bar_1`, not `bar_4` and `bar_9`. `generate` blocks may nest. Each level of
+nesting appends its own suffix, innermost first: a `dot` in an inner loop
+nested inside an outer one is named `dot_<inner ordinal>_<outer ordinal>`.
 
-`generate` is allowed at the top level of the scene, inside a `group`, and
-inside a `template` body. It is not allowed inside a shape (`circle`,
-`rectangle`, `polygon`, `line`, `text`) — those cannot contain child objects
-or blocks of any kind.
+`generate` is allowed at the top level of the scene, inside a `group`, inside
+a `template` body, and inside a `use` instance's body. It is not allowed
+inside a shape (`circle`, `rectangle`, `polygon`, `line`, `text`) — those
+cannot contain child objects or blocks of any kind.
+
+### A data-driven example
+
+A chart is one literal list, one loop, and a conditional. The data decides
+every bar's height and colour; the source decides that there are exactly as
+many bars as there are numbers written down.
+
+```declare
+let values   = [3, 7, 2, 9, 5, 8, 4]
+let scale    = 30
+let baseline = 500
+let step     = 700 / length(values)
+let peak     = 8
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate v, i in values {
+    rectangle bar {
+      position: (70 + i * step, baseline - (v * scale) / 2)
+      size: (step - 30, v * scale)
+      color: if v >= peak then orange else cyan
+    }
+  }
+}
+```
+
+`v` is the element and `i` is its ordinal, so `v` sets each bar's height while
+`i` places it. The bars are named `bar_0` through `bar_6`. Adding an eighth
+bar means adding one number to `values`: the loop, the spacing (`step` is
+computed from `length(values)`), and the highlight rule all follow from the
+list.
 
 ### `template` and `use`
 
@@ -820,31 +938,64 @@ scene {
 arithmetic (`halfBase` is itself `gap / 5`) — the same rule as any other
 numeric value, stated under "Shapes" above.
 
-### Current limits (as of v0.3.x)
+### Where expressions stop
 
-These are known gaps in the reuse layer, not deliberate design positions.
-This section is expected to shrink as later phases close them.
+The expression layer described above covers lists and ranges, indexing and
+`length`, arithmetic including `%`, the six comparisons, `and`/`or`/`not`, a
+conditional value expression, and degree-based `sin`/`cos`. What it does
+*not* cover is a design position, not a gap waiting to be filled, and one
+rule draws the boundary:
 
-**No arrays or indexing.** There is no way to write a list of values and
-loop over it. A point list such as `[(0, -30), (26, 15), (-26, 15)]` exists,
-but only as a literal property value for `polygon` and `line`. It can be
-bound to a name with `let` and passed around as a whole — but its elements
-cannot be read individually, indexed, or iterated. It is not a
-general-purpose array. A chart driven by seven data values must still be
-written as seven separate `rectangle` blocks.
+**Data determines *values*. The source's literal structure determines
+*shape*.**
 
-**No trigonometry.** The arithmetic above has no `sin` or `cos`. A radial or
-circular layout — dots evenly spaced around a circle — cannot be produced by
-`generate`; every coordinate has to be computed by hand and written as a
-literal.
+Reading the source alone, without evaluating a single predicate, tells you
+how many objects a program emits and what they are named. Data freely decides
+a bar's height, a tick's thickness, or a dot's colour; no predicate ever
+decides whether an object exists. A list's *length* deciding an object count
+is not an exception — the list is written down in the source, and
+`generate v, i in values` emits exactly one object per element, named `bar_0`
+through `bar_6`, a map you can read without running anything.
 
-**No modulo and no conditionals.** "Every fifth tick is taller" cannot be
-expressed inside a single `generate` loop, because there is no way to branch
-on the loop variable. The workaround is two overlapping `generate` loops:
-one draws the common case, and a second, at the wider stride, draws over it.
+What follows from that rule:
 
-`generate` handles "N of the same thing, spaced by arithmetic on the loop
-variable." It does not handle data.
+**A conditional is a value, never a guard.** `thickness: if major then 3
+else 2` is the whole of what `if` does. There is no `if c { circle x { } }`
+construct, no filter clause on `generate`, and no `while`, `break`, or
+`continue`. For the same reason `generate` refuses to iterate a list whose
+*length* came from an `if` (`PARSE_GENERATE_CONDITIONAL_COLLECTION`), while a
+conditional choosing element *values* inside a fixed literal list is fine.
+
+**There is no user-definable abstraction.** `sin`, `cos`, and `length` are
+operators that happen to be spelled like calls. There is no call syntax over
+names you choose, no first-class function value, and no way to define an
+operator — writing `f(2)` for a `let`-bound `f` is a parse error, not a call.
+`template` and `use` remain the only abstraction, and remain macro expansion
+with cycle detection.
+
+**Nothing mutates.** A binding cannot be redefined in its own scope, there is
+no assignment statement, and a list element cannot be assigned to. There are
+no maps and no I/O. Because every expression is folded to a literal at parse
+time there is nothing to short-circuit either: `false and (1 / 0 > 1)` is
+still a division-by-zero error, exactly as it would be outside the `and`.
+
+**There is no π constant.** `sin` and `cos` take degrees, matching
+`rotation` — the only other angle in the language — and a π constant beside
+degree-based trig is a trap: `sin(pi)` would be `0.0548`, not `0`. Writing
+`pi` is an undefined-variable error. One angle unit throughout is a stronger
+guarantee that angle units are explicit than a constant that contradicts
+them.
+
+**Strings compare and nothing else.** `"a" + "b"` is a compile error;
+equality is the only string operation.
+
+**Colours neither animate nor do arithmetic.** `animate`'s `property`
+accepts only `position`, `rotation`, `scale`, and `alpha`; see "Not covered
+here" below.
+
+There is also no `sqrt`, `atan2`, `pow`, `abs`, `min`, `max`, `floor`, or
+`round`. None is needed by the scenes this layer was built for, and adding
+operators nothing demands is how a small language stops being small.
 
 ## Limits the compiler enforces
 
@@ -859,11 +1010,12 @@ runtime warning or a silent clamp.
   exceeding 10,000 points. Each of these is declared once, per property, as
   a `constraint` on that property's entry in `languageContract.ts`, and
   enforced by one generic function, `validateLocalConstraint`
-  (`typeChecker/validator.ts:31-101`), rather than by a separate hand-written
+  (`typeChecker/validator.ts:47-172`), rather than by a separate hand-written
   check for each property.
 - `text` content is capped at 500 characters (the same generic constraint
-  mechanism, `[TYPE_TEXT_TOO_LONG]`), and a scene may contain at most 500
-  `text` objects in total (`typeChecker/validator.ts:105`, `130-140`).
+  mechanism, `[TYPE_TEXT_TOO_LONG]`, `typeChecker/validator.ts:113`), and a
+  scene may contain at most 500 `text` objects in total
+  (`typeChecker/validator.ts:176`, `202-208`).
 - A scene's physics cost is capped at 500 bodies and 2,000 collision parts
   (`MAX_PHYSICS_BODIES`, `MAX_PHYSICS_PARTS` in
   `typeChecker/physicsCost.ts:3-4`). A "body" is any object or group that
@@ -871,25 +1023,31 @@ runtime warning or a silent clamp.
   collision primitive that body is built from — one for a single shape, one
   per welded child for a compound `group`. Crossing either ceiling is
   `[TYPE_PHYSICS_BODY_LIMIT]` or `[TYPE_PHYSICS_PART_LIMIT]`
-  (`typeChecker/validator.ts:459-479`).
+  (`typeChecker/validator.ts:587-606`).
 - Type checking stops reporting once 50 errors have accumulated
-  (`typeChecker/validator.ts:114`). Parsing enforces the same 50-error ceiling
+  (`typeChecker/validator.ts:185`). Parsing enforces the same 50-error ceiling
   but aborts outright on reaching it rather than continuing
-  (`parser/state.ts:99-101`), so a badly malformed file can report fewer than
+  (`parser/state.ts:112-114`), so a badly malformed file can report fewer than
   50 errors in total.
-- A literal list or range cannot exceed 10,000 elements (`parser/parseValue.ts`),
-  so a `generate` iteration has the same ceiling.
+- A literal list or range cannot exceed 10,000 elements (`MAX_LIST_LENGTH`,
+  `parser/parseExpr.ts:71`), so a `generate` iteration has the same ceiling.
 - A file-wide counter shared by every parsed object, every `use` expansion,
   and every `generate` iteration is capped at 15,000
   (`parser/parseObject.ts:148-150`, `parser/parseUse.ts:13-14`,
-  `parser/parseGenerate.ts:82-83`). Exceeding it aborts compilation — even a
+  `parser/parseGenerate.ts:114-116`). Exceeding it aborts compilation — even a
   file with few real objects can hit the ceiling if it has enough loop
   iterations, since each iteration consumes one unit of the budget before its
   body is parsed.
-- Parenthesised math expressions nest to a depth of 50
-  (`parser/parseValue.ts:6-8`, `47-49`).
-- Division by zero in a math expression is a compile error, not `Infinity`
-  (`parser/parseValue.ts:69`).
+- Nesting inside a single value is bounded three ways at once
+  (`MAX_EXPR_DEPTH`, `MAX_STRUCTURAL_DEPTH`, `MAX_TOTAL_DEPTH` in
+  `parser/parseExpr.ts:43-45`, all checked by `checkNesting` at
+  `parser/parseExpr.ts:209-219`): one expression's own operator and
+  parenthesis nesting is limited to 50 levels, points and lists may nest 50
+  deep inside one another, and the stack depth of the two combined is capped
+  at 400. A point *coordinate* restarts the expression budget while charging
+  the structural one; a list entry and a parenthesised sub-expression do not.
+- Division by zero and modulo by zero are compile errors, not `Infinity` or
+  `NaN` (`parser/parseExpr.ts:472-482`).
 
 ## Not covered here
 
@@ -903,9 +1061,9 @@ lands, the editor's own completions and hovers are the authority on which
 properties a given object accepts.
 
 Colour animation is not supported. `animate`'s `property` accepts only the
-four names in `ANIMATABLE_PROPERTIES` (`languageContract.ts:33`) —
+four names in `ANIMATABLE_PROPERTIES` (`languageContract.ts:52`) —
 `position`, `rotation`, `scale`, and `alpha` — checked at
-`typeChecker/validator.ts:316`; naming any other property, including a
+`typeChecker/validator.ts:410`; naming any other property, including a
 colour, is a compile error (`[TYPE_ANIM_PROP]`).
 
 For the design rationale behind these decisions, see
