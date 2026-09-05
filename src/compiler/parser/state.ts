@@ -116,6 +116,30 @@ export class ParserState {
     throw new ParseException(errorObj);
   }
 
+  // Same error-object shape as `throwError`, but records it and returns
+  // instead of unwinding the stack. For a construct that has already
+  // computed its own exact recovery boundary (e.g. `parseGenerate` scanning
+  // to its block's matching '}'), throwing would hand control to a generic
+  // `catch { ...; synchronize(); }` at some outer call site — and
+  // `synchronize()` unconditionally advances `pos` by at least one token
+  // before it starts scanning, which corrupts a boundary that was already
+  // correct. Pushing here and letting the caller reposition `pos` itself
+  // keeps that boundary intact.
+  pushError(message: string, token: Token = this.peek()): void {
+    const errorObj: CompilerError = {
+      phase: "PARSE",
+      message,
+      line: token.line,
+      col: token.col,
+      endLine: token.line,
+      endCol: token.endCol,
+    };
+    if (this.errors.length >= 50) {
+      throw new Error("Maximum error limit reached. Further parsing aborted.");
+    }
+    this.errors.push(errorObj);
+  }
+
   synchronize(): void {
     let t = this.peek();
     if (t.type === "RBRACE" || t.type === "EOF") return;

@@ -1,4 +1,4 @@
-import type { ObjectNode, Token } from "../types";
+import type { AstValue, ObjectNode, Token } from "../types";
 import { ParserState, describeToken, ParseException } from "./state";
 import { parseObject } from "./parseObject";
 import { parseBinding } from "./parseBinding";
@@ -9,6 +9,7 @@ import {
   carryPredicateDerivedCardinality,
   hasPredicateDerivedCardinality,
 } from "./cardinalityProvenance";
+import { isDryRunPlaceholder, markDryRunPlaceholder } from "./dryRunPlaceholder";
 
 export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
   state.consume("KEYWORD");
@@ -48,16 +49,22 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
   state.currentContext = "generate block collection";
   const collection = parseValue(state);
   state.currentContext = prevContext;
-  if (collection.kind !== "list") {
+
+  let items: ReadonlyArray<AstValue>;
+  if (collection.kind === "list") {
+    items = collection.value;
+  } else if (isDryRunPlaceholder(collection)) {
+    // `parseTemplate.ts`'s dry run binds every parameter to a numeric
+    // placeholder before a real argument exists, so a list-valued parameter
+    // (direct, aliased through 'let', or reached by indexing) looks like a
+    // number here. Rejecting it would fail template *definition* for a
+    // header a real list argument makes perfectly legal at 'use' expansion.
+    // One synthesized element is enough for the loop below to walk the body
+    // once and still catch a genuine syntax defect inside it.
+    items = [markDryRunPlaceholder<AstValue>({ kind: "number", value: 0, line: inTok.line, col: inTok.col, endLine: inTok.line, endCol: inTok.endCol })];
+  } else {
     state.throwError(`In ${state.currentContext}: 'generate' requires a list to iterate, but got ${collection.kind}. Write a list literal, a range such as '0 to 9', or a 'let' bound to one.`, inTok);
   }
-  if (hasPredicateDerivedCardinality(collection)) {
-    state.throwError(
-      `[PARSE_GENERATE_CONDITIONAL_COLLECTION] In ${state.currentContext}: 'generate' cannot iterate a list whose cardinality is derived from 'if'. A conditional may choose element values inside a fixed literal list, but cannot influence the iterable's length because literal structure must determine emitted object shape.`,
-      inTok,
-    );
-  }
-  const items = collection.value;
 
   const braceTok = state.consume("LBRACE");
   const blockStartPos = state.pos;
@@ -75,12 +82,28 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
   if (nesting !== 0) {
     state.throwError(`In ${state.currentContext}: 'generate' block was not closed before end of file. Add a closing '}'.`, braceTok);
   }
-  if (duplicateBinderTok !== null) {
-    // The enclosing parser synchronizes at an opening brace. Throwing while
-    // still in the header would therefore resume at this rejected block and
-    // reinterpret its contents, producing a cascade of unrelated errors.
+
+  // Both rejections below have already scanned this construct's own closing
+  // '}' (`blockEndPos`), so each records its diagnostic and repositions `pos`
+  // itself, then returns normally instead of throwing. A caller's
+  // `catch { state.errors.push(...); state.synchronize(); }` would otherwise
+  // run on top of an already-correct position: `synchronize()`
+  // unconditionally advances `pos` by at least one token before it starts
+  // scanning, which — when the very next token is a sibling's leading
+  // keyword — consumes exactly the sibling this position was already
+  // pointing at correctly.
+  if (hasPredicateDerivedCardinality(collection)) {
     state.pos = blockEndPos + 1;
-    state.throwError(`In ${state.currentContext}: The element and ordinal variable names in 'generate' must be different.`, duplicateBinderTok);
+    state.pushError(
+      `[PARSE_GENERATE_CONDITIONAL_COLLECTION] In ${state.currentContext}: 'generate' cannot iterate a list whose cardinality is derived from 'if'. A conditional may choose element values inside a fixed literal list, but cannot influence the iterable's length because literal structure must determine emitted object shape.`,
+      inTok,
+    );
+    return [];
+  }
+  if (duplicateBinderTok !== null) {
+    state.pos = blockEndPos + 1;
+    state.pushError(`In ${state.currentContext}: The element and ordinal variable names in 'generate' must be different.`, duplicateBinderTok);
+    return [];
   }
 
   const generatedNodes: ObjectNode[] = [];

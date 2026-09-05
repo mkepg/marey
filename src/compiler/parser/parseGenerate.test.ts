@@ -128,3 +128,115 @@ describe("generate ... in", () => {
     expect(JSON.stringify(result.ast)).not.toContain("conditionalResult");
   });
 });
+
+describe("rejected generate recovery", () => {
+  it("preserves a scene sibling after duplicate binders", () => {
+    const source = `scene { size:(10,10) generate v, v in [1] { circle rejected { position:(0,0), radius:1 } } circle good { position:(0,0), radius:1 } }`;
+    const result = parse(lex(source));
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toMatchObject({ line: 1, col: source.indexOf(", v") + 3 });
+    expect(result.errors[0].message).toContain("element and ordinal variable names in 'generate' must be different");
+    expect(result.ast!.children.map((child) => child.name)).toEqual(["good"]);
+  });
+
+  it("preserves a group sibling after duplicate binders", () => {
+    const source = `scene { size:(10,10) group holder { generate v, v in [1] { circle rejected { position:(0,0), radius:1 } } circle good { position:(0,0), radius:1 } } }`;
+    const result = parse(lex(source));
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toMatchObject({ line: 1, col: source.indexOf(", v") + 3 });
+    expect(result.ast!.children[0].children.map((child) => child.name)).toEqual(["good"]);
+  });
+
+  it("preserves an outer-generate sibling after duplicate binders", () => {
+    const source = `scene { size:(10,10) generate outer in [7] { generate v, v in [1] { circle rejected { position:(0,0), radius:1 } } circle good { position:(0,0), radius:1 } } }`;
+    const result = parse(lex(source));
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toMatchObject({ line: 1, col: source.indexOf(", v") + 3 });
+    expect(result.ast!.children.map((child) => child.name)).toEqual(["good_0"]);
+  });
+
+  it("preserves a following template-body sibling after duplicate binders", () => {
+    // A definition-time-only fixture cannot tell correct recovery apart from
+    // a cascade here: `parseTemplate`'s dry run discards its walk and only
+    // keeps `startPos`/`endPos` for later re-parsing, so neither the error
+    // count nor `result.ast` (which never sees inside an unused template)
+    // reveals whether the dry run's position ended up correct or corrupted —
+    // confirmed by reverting the fix, which left this exact fixture still
+    // reporting 1 error and a non-null ast. `use`-ing the template forces a
+    // second, independent parse of the same tokens from the stored
+    // boundary, which does show the difference: reverting the fix turns this
+    // into 5 errors with 'inst' losing 'good' entirely, because recovery
+    // desyncs mid-object instead of resuming at the next statement.
+    const source = `template Broken() { generate v, v in [1] { circle rejected { position:(0,0), radius:1 } } circle good { position:(0,0), radius:1 } } scene { size:(10,10) use Broken() inst }`;
+    const result = parse(lex(source));
+    expect(result.errors).toHaveLength(2);
+    for (const err of result.errors) {
+      expect(err).toMatchObject({ line: 1, col: source.indexOf(", v") + 3 });
+      expect(err.message).toContain("element and ordinal variable names in 'generate' must be different");
+    }
+    expect(result.ast!.children[0].children.map((child) => child.name)).toEqual(["good"]);
+  });
+
+  it("records one conditional-cardinality error and preserves a scene sibling", () => {
+    const source = `scene { size:(10,10) generate v in if true then [1] else [1,2] { circle rejected { position:(0,0), radius:1 } } circle good { position:(0,0), radius:1 } }`;
+    const result = parse(lex(source));
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].message).toContain("[PARSE_GENERATE_CONDITIONAL_COLLECTION]");
+    expect(result.ast!.children.map((child) => child.name)).toEqual(["good"]);
+  });
+
+  it("records one conditional-cardinality error for a final generate", () => {
+    const result = parse(lex(`scene { size:(10,10) generate v in if true then [1] else [1,2] { circle rejected { position:(0,0), radius:1 } } }`));
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].message).toContain("[PARSE_GENERATE_CONDITIONAL_COLLECTION]");
+    expect(result.ast).not.toBeNull();
+  });
+
+  it("records one conditional-cardinality error and preserves a nested sibling", () => {
+    const source = `scene { size:(10,10) generate outer in [7] { generate v in if true then [1] else [1,2] { circle rejected { position:(0,0), radius:1 } } circle good { position:(0,0), radius:1 } } }`;
+    const result = parse(lex(source));
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].message).toContain("[PARSE_GENERATE_CONDITIONAL_COLLECTION]");
+    expect(result.ast!.children.map((child) => child.name)).toEqual(["good_0"]);
+  });
+});
+
+describe("generate with list-valued template parameters", () => {
+  it("expands a direct list parameter", () => {
+    const source = `template Rows(values) { generate value in values { circle dot { position:(0,0), radius:value } } } scene { size:(10,10) use Rows([7,8]) row }`;
+    const result = parse(lex(source));
+    expect(result.errors).toEqual([]);
+    expect(result.ast!.children[0].children.map((child) => child.name)).toEqual(["dot_0", "dot_1"]);
+  });
+
+  it("expands a list parameter through a let alias", () => {
+    const source = `template Rows(values) { let items = values generate value in items { circle dot { position:(0,0), radius:value } } } scene { size:(10,10) use Rows([7,8]) row }`;
+    const result = parse(lex(source));
+    expect(result.errors).toEqual([]);
+    expect(result.ast!.children[0].children.map((child) => child.name)).toEqual(["dot_0", "dot_1"]);
+  });
+
+  it("supports indexed list selection through template parameters", () => {
+    const source = `template Rows(rows, selected) { generate value in rows[selected] { circle dot { position:(0,0), radius:value } } } scene { size:(10,10) use Rows([[7],[8,9]], 1) row }`;
+    const result = parse(lex(source));
+    expect(result.errors).toEqual([]);
+    expect(result.ast!.children[0].children.map((child) => child.name)).toEqual(["dot_0", "dot_1"]);
+  });
+
+  it("rejects a conditional-list argument once at real template expansion and preserves siblings", () => {
+    const source = `template Rows(values) { generate value in values { circle rejected { position:(0,0), radius:value } } circle kept { position:(0,0), radius:1 } } scene { size:(10,10) use Rows(if true then [7] else [8,9]) row circle good { position:(0,0), radius:1 } }`;
+    const result = parse(lex(source));
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].message).toContain("[PARSE_GENERATE_CONDITIONAL_COLLECTION]");
+    expect(result.ast!.children.map((child) => child.name)).toEqual(["row", "good"]);
+    expect(result.ast!.children[0].children.map((child) => child.name)).toEqual(["kept"]);
+  });
+
+  it("still validates syntax inside an unused parameter-driven generate", () => {
+    const source = `template Broken(values) { generate value in values { circle bad { position:(0,0), radius: } } } scene { size:(10,10) }`;
+    const result = parse(lex(source));
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].message).toContain("Unexpected '}' where a property value was expected");
+    expect(result.ast).not.toBeNull();
+  });
+});

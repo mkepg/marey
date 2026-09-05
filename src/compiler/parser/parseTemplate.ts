@@ -5,6 +5,7 @@ import { parseBinding } from "./parseBinding";
 import { parseGenerate } from "./parseGenerate";
 import { parseUse } from "./parseUse";
 import { rejectLegacyBinding } from "./parseProperty";
+import { markDryRunPlaceholder } from "./dryRunPlaceholder";
 
 export function parseTemplate(state: ParserState): void {
   state.consume("KEYWORD");
@@ -44,8 +45,12 @@ export function parseTemplate(state: ParserState): void {
   // --- NEW: Dry-Run Syntax Validation ---
   const snapshot = { pos: state.pos, env: state.env, count: state.globalNodeCount };
   state.env = Object.create(state.env);
-  params.forEach(p => { 
-    state.env[p] = { kind: "number", value: 0, line: 0, col: 0, endLine: 0, endCol: 0 }; 
+  params.forEach(p => {
+    // Marked so a list-valued use (`generate`'s collection, or indexing) can
+    // treat this as a placeholder instead of a genuine type mismatch — see
+    // dryRunPlaceholder.ts. Real `use` expansion overwrites this binding with
+    // the real evaluated argument and never applies the marker.
+    state.env[p] = markDryRunPlaceholder({ kind: "number", value: 0, line: 0, col: 0, endLine: 0, endCol: 0 });
   });
 
   let nesting = 1;

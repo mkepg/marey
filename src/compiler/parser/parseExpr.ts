@@ -5,6 +5,7 @@ import {
   carryPredicateDerivedCardinality,
   markPredicateDerivedCardinality,
 } from "./cardinalityProvenance";
+import { carryDryRunPlaceholder, isDryRunPlaceholder, markDryRunPlaceholder } from "./dryRunPlaceholder";
 
 /**
  * Nesting budgets.
@@ -829,7 +830,15 @@ function parsePrimary(state: ParserState, ctx: ExprCtx): AstValue {
     if (!(varName in state.env)) {
       state.throwError(`In ${state.currentContext}: Undefined variable '${varName}'. Bare names cannot be used as values unless they are declared with 'let'. Variables defined inside 'generate' blocks are strictly block-scoped and cannot be accessed outside of them.`, nameTok);
     }
-    return carryPredicateDerivedCardinality({ ...state.env[varName], line, col, endLine: line, endCol: nameTok.endCol }, state.env[varName]);
+    const bound = state.env[varName];
+    // `let x = param` copies `param`'s dry-run-placeholder marker forward the
+    // same way it already copies predicate-derived cardinality: `parseBinding`
+    // stores this exact spread copy by reference, so a template parameter
+    // aliased through 'let' still reads as a placeholder wherever it is used.
+    return carryPredicateDerivedCardinality(
+      carryDryRunPlaceholder({ ...bound, line, col, endLine: line, endCol: nameTok.endCol }, bound),
+      bound,
+    );
   }
 
   if (t.type === "KEYWORD") {
@@ -867,6 +876,20 @@ function parsePostfix(state: ParserState, ctx: ExprCtx): AstValue {
     // after the whole index and reports on the following property — the Task 2
     // diagnostic regression, which is pinned above.
     if (value.kind !== "list") {
+      if (isDryRunPlaceholder(value)) {
+        // `value` is a template parameter's dry-run placeholder (or one
+        // carried from it) — its real kind is unknown until a real argument
+        // arrives at `use` expansion, which never applies this marker. Treat
+        // indexing it as producing another placeholder instead of rejecting a
+        // use a real list argument would make legal, so a chain like
+        // `rows[selected]` keeps validating rather than failing template
+        // definition outright.
+        value = markDryRunPlaceholder({
+          kind: "number", value: 0,
+          line: value.line, col: value.col, endLine: closeTok.line, endCol: closeTok.endCol,
+        });
+        continue;
+      }
       state.throwError(`In ${state.currentContext}: Cannot index a ${value.kind} — only a list can be indexed.`, openTok);
     }
     if (index.kind !== "number") {
