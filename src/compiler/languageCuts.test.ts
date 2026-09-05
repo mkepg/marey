@@ -190,7 +190,14 @@ describe("Phase 3B lift: trig", () => {
   });
 });
 
-describe("Phase 3B: one list kind; indexing still excluded", () => {
+describe("Phase 3B lift: one list kind", () => {
+  // Staleness fix (Task 12): this block's title used to end "; indexing
+  // still excluded". The indexing test that justified that clause was moved
+  // out to its own "Phase 3B lift: indexing" block below (see that block's
+  // comment), which made the clause both untested here and false anyway —
+  // indexing is lifted, not excluded. Renamed to match the sibling
+  // "Phase 3B lift: X" blocks instead of leaving the vacated half of the
+  // title behind.
   // Lifted by Phase 3B (roadmap 8.1): [...] is a general list.
   it("allows a bare number list, which Phase 3B lifts", () => {
     expect(messagesFor(`let nums = [1,2,3] scene { size:(10,10) }`)).toEqual([]);
@@ -576,5 +583,169 @@ describe("Phase 3A permission neighbors", () => {
       }
     `;
     expect(messagesFor(source)).toEqual([]);
+  });
+});
+
+describe("Phase 3B line: data determines values, source structure determines shape", () => {
+  // Design section 2.1. Reading the source alone tells you how many objects a
+  // program emits and what they are named. A predicate may never gate emission.
+  //
+  // Every assertion below was verified by running the fixture and reading
+  // the real diagnostic (not guessed) — see task-12-report.md for the raw
+  // output. Two cases below (the function definition and the list-element
+  // assignment) turn out to be caught by a pre-existing, unrelated gate
+  // rather than anything connected to section 2's rule; that is called out
+  // at each of them rather than silently assumed away.
+
+  it("rejects a conditional used as an emission guard", () => {
+    // 'if' is EXPR_KEYWORD, which the property-name grammar admits as a
+    // token that could start a property name, so parsing fails expecting
+    // ':' where it finds 'true' instead — a generic property-syntax error,
+    // not an invented semantic "no emission guards" message. Same mechanism
+    // and message as "still rejects 'if' as an emission guard inside the
+    // scene" in the "Phase 3B lift: conditional value expression" block
+    // above; kept here too so section 2's rejection matrix is complete in
+    // one place. diags[1..3] are recovery walking out of the block
+    // 'if true {' opened (same shape that test's own comment describes).
+    // Only diags[0] is pinned, matching that sibling test's own convention:
+    // the cascade count is recovery behaviour, not a language rule, and
+    // pinning it would make this test fragile to unrelated recovery changes.
+    const source = `scene { size:(10,10) if true { circle c { position:(0,0), radius:1 } } }`;
+    const diags = diagnosticsFor(source);
+    expect(diags[0].message).toBe(
+      "In the scene: Expected ':' after the property name, but found token 'true'.",
+    );
+    const pos = posAt(source, "true");
+    expect(diags[0].line).toBe(pos.line);
+    expect(diags[0].col).toBe(pos.col);
+  });
+
+  it("rejects a filter clause on generate", () => {
+    // No 'where' grammar exists at all: parseGenerate expects '{' right
+    // after the collection expression ('0 to 4') and finds the identifier
+    // 'where' instead. Same recovery shape as the case above — diags[1..3]
+    // are the parser walking back out of the partially-opened block. Only
+    // diags[0] is pinned, for the same reason as that case: the cascade
+    // count is recovery behaviour, not a language rule.
+    const source = `scene { size:(10,10) generate i in 0 to 4 where i % 2 == 0 { circle c { position:(0,0), radius:1 } } }`;
+    const diags = diagnosticsFor(source);
+    expect(diags[0].message).toBe(
+      "In the scene: Expected '{' to open a block, but found identifier 'where'.",
+    );
+    const pos = posAt(source, "where");
+    expect(diags[0].line).toBe(pos.line);
+    expect(diags[0].col).toBe(pos.col);
+  });
+
+  // 'while' is not a recognized keyword, so 'generate's body-parsing loop
+  // rejects it as an unexpected token where an object definition, 'let',
+  // 'use', or 'generate' was expected. It additionally leaves its own stray
+  // '{' behind: recovery skips past 'while' and 'true' and stops at the
+  // '{', which the loop then rejects as a second unexpected token before it
+  // reaches the '}' that closes the while-body and ends the loop. That
+  // second diagnostic is recovery noise, not the rule under test — the same
+  // cascade-count fragility the two cases above deliberately don't pin — so,
+  // like them, only diags[0] is asserted here rather than a total count.
+  it("rejects the loop-control construct 'while'", () => {
+    const word = "while";
+    const source = `scene { size:(10,10) generate i in 0 to 1 { while true { } } }`;
+    const diags = diagnosticsFor(source);
+    expect(diags[0].message).toBe(
+      `In 'generate' block: Expected an object definition, 'let', 'use', or 'generate', but found identifier '${word}'.`,
+    );
+    const pos = posAt(source, word);
+    expect(diags[0].line).toBe(pos.line);
+    expect(diags[0].col).toBe(pos.col);
+  });
+
+  // 'break' and 'continue' are likewise unrecognized, but neither leaves a
+  // trailing brace behind, so each produces exactly one diagnostic — not a
+  // cascade, so pinning the count here isn't the fragility 'while' has above.
+  const loopControlCases: Array<[word: string, stmt: string]> = [
+    ["break", "break"],
+    ["continue", "continue"],
+  ];
+  it.each(loopControlCases)(
+    "rejects the loop-control construct '%s'",
+    (word, stmt) => {
+      const source = `scene { size:(10,10) generate i in 0 to 1 { ${stmt} } }`;
+      const diags = diagnosticsFor(source);
+      expect(diags).toHaveLength(1);
+      expect(diags[0].message).toBe(
+        `In 'generate' block: Expected an object definition, 'let', 'use', or 'generate', but found identifier '${word}'.`,
+      );
+      const pos = posAt(source, word);
+      expect(diags[0].line).toBe(pos.line);
+      expect(diags[0].col).toBe(pos.col);
+    },
+  );
+
+  it("rejects calling a 'let'-bound name as if it were a function", () => {
+    // No call syntax exists over arbitrary names: 'f' resolves as a bare
+    // variable reference, and the trailing '(2)' is leftover syntax the
+    // property-parsing loop rejects as an unexpected token where the next
+    // property name was expected.
+    const source = `let f = 5 scene { size:(10,10) circle c { position:(0,0), radius: f(2) } }`;
+    const diags = diagnosticsFor(source);
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toBe(
+      "In 'circle' object 'c': Expected a property name, but found '('.",
+    );
+    const pos = posAt(source, "(2)");
+    expect(diags[0].line).toBe(pos.line);
+    expect(diags[0].col).toBe(pos.col);
+  });
+
+  // Both of the next two are caught by the pre-existing top-level "must
+  // begin with 'scene'" gate (parser/index.ts) — the same mechanism and
+  // message template already exercised, with different words, by "roadmap
+  // cut: user-defined functions, scripting runtime, plugin system, world"
+  // above. 'function' and 'v' are ordinary identifiers where 'scene' is
+  // required, so parsing never reaches a point where a function-definition-
+  // specific or list-mutation-specific rule could apply. Neither case
+  // actually exercises anything connected to section 2's predicate-gates-
+  // emission rule — both are kept because Step 1 of the task brief names
+  // them explicitly, and flagged here per Step 2's instruction to report a
+  // case that is not really testing the line it was written for. The
+  // 'function' case below is additionally a near-duplicate of that other
+  // block's own ["function", "function greet() { }"] row — same word, same
+  // mechanism, same message template — disclosed here the same way case 1
+  // above discloses its duplication of the emission-guard test.
+  it("rejects defining an operator or function", () => {
+    const source = `function double(x) { } scene { size:(10,10) }`;
+    const diags = diagnosticsFor(source);
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toBe(
+      "A Declare program must begin with the 'scene' keyword, but found identifier 'function'. Did you forget to open with 'scene {'?",
+    );
+    const pos = posAt(source, "function");
+    expect(diags[0].line).toBe(pos.line);
+    expect(diags[0].col).toBe(pos.col);
+  });
+
+  it("rejects assigning to a list element", () => {
+    const source = `let v = [1,2] v[0] = 5 scene { size:(10,10) }`;
+    const diags = diagnosticsFor(source);
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toBe(
+      "A Declare program must begin with the 'scene' keyword, but found identifier 'v'. Did you forget to open with 'scene {'?",
+    );
+    const pos = posAt(source, "v[0]");
+    expect(diags[0].line).toBe(pos.line);
+    expect(diags[0].col).toBe(pos.col);
+  });
+
+  it("rejects rebinding a list, since bindings stay immutable", () => {
+    const source = `let v = [1,2] let v = [3,4] scene { size:(10,10) }`;
+    const diags = diagnosticsFor(source);
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toContain("already defined in this immediate scope");
+  });
+
+  it("still rejects string concatenation", () => {
+    const source = `scene { size:(10,10) text t { position:(0,0), content: "a" + "b" } }`;
+    const diags = diagnosticsFor(source);
+    expect(diags).toHaveLength(1);
+    expect(diags[0].message).toContain("String concatenation using '+' is not supported.");
   });
 });
