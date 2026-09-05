@@ -735,3 +735,53 @@ describe("listOf's generic path (Fix 1)", () => {
     expect(err).toBeUndefined();
   });
 });
+
+describe("TYPE_ONE_PHYSICS", () => {
+  it("rejects a second direct physics block instead of silently dropping it", () => {
+    const src = `
+      scene {
+        size: (100, 100)
+        circle c {
+          position: (0, 0)
+          radius: 10
+          physics { duration: 1 }
+          physics { duration: 2 }
+        }
+      }
+    `;
+    const errors = diagnosticsFor(src);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toContain("[TYPE_ONE_PHYSICS]");
+    expect(errors[0].message).toContain("maximum of one 'physics' block");
+  });
+
+  it("fires with no handoff anywhere — the existing rule only covers the handoff shape", () => {
+    const src = `
+      scene {
+        size: (100, 100)
+        rectangle r {
+          position: (0, 0)
+          size: (10, 10)
+          physics { duration: 1 }
+          physics { duration: 1 }
+        }
+      }
+    `;
+    expect(errorsFor(src).join()).toContain("[TYPE_ONE_PHYSICS]");
+  });
+
+  it("still allows one direct physics block alongside a sequence that also has one", () => {
+    const src = `
+      scene {
+        size: (100, 100)
+        circle c {
+          position: (0, 0)
+          radius: 10
+          physics { duration: 5 }
+          sequence { physics { duration: 1 } }
+        }
+      }
+    `;
+    expect(errorsFor(src)).toEqual([]);
+  });
+});

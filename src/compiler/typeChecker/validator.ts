@@ -219,6 +219,32 @@ export function collectErrors(ast: AstNode): CompilerError[] {
       });
     }
 
+    // Only the first direct 'physics' child reaches the IR — typeChecker/builder.ts
+    // uses `.find` for physics where it uses `.filter` for animate — so a second
+    // one is silent data loss, not a runtime race. The existing
+    // TYPE_HANDOFF_SCHEDULE_AMBIGUOUS rule covers only the shape where a
+    // handoff animation is also present; this covers the general case.
+    // Sequences and parallels are excluded: they legitimately have multiple physics
+    // children for handoff targeting, and other rules check for that pattern's validity.
+    // Suppress this rule when there's a handoff animation, as TYPE_HANDOFF_SCHEDULE_AMBIGUOUS
+    // already reports the conflict more specifically.
+    if (typeName !== "sequence" && typeName !== "parallel") {
+      const hasHandoff = (node.children as ObjectNode[]).some(
+        (c) => c.type === "animate" && c.props?.handoff?.kind === "boolean" && c.props.handoff.value === true
+      );
+      if (!hasHandoff) {
+        const directPhysics = node.children.filter((c) => c.type === "physics");
+        if (directPhysics.length > 1) {
+          errors.push({
+            phase: "TYPE",
+            message: `[TYPE_ONE_PHYSICS] An object can have a maximum of one 'physics' block. Found ${directPhysics.length} on '${nodeName}'. Only the first would simulate; the rest would be silently discarded.`,
+            line: directPhysics[1].line, col: directPhysics[1].col,
+            endLine: directPhysics[1].endLine, endCol: directPhysics[1].endCol,
+          });
+        }
+      }
+    }
+
     if (typeName === "sequence" || typeName === "parallel") {
       const isParallel = typeName === "parallel";
 
