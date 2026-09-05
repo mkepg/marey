@@ -725,6 +725,14 @@ may contain up to 10,000 elements; a file-wide counter shared by every object,
 `use` expansion, and `generate` iteration is capped at 15,000; see "Limits
 the compiler enforces" below for the exact mechanics.
 
+The iterable's cardinality must be determined by literal source structure,
+without evaluating an `if`. This restriction follows conditional provenance
+through aliases, indexing, `length`, arithmetic, unary and function folds, and
+range construction, so each of those routes is rejected when it can change how
+many objects `generate` emits. A conditional may still choose element values
+inside a fixed literal list: `generate v in [if flag then 1 else 2, 3]` always
+emits two objects, so its shape remains literal.
+
 Every object created inside the loop has its declared name suffixed with
 the 0-based ordinal: a `rectangle tick` inside `generate k in 0 to 9` produces
 `tick_0` through `tick_9`. `generate` blocks may nest. Each level of nesting

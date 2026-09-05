@@ -1,10 +1,14 @@
-import type { ObjectNode } from "../types";
+import type { ObjectNode, Token } from "../types";
 import { ParserState, describeToken, ParseException } from "./state";
 import { parseObject } from "./parseObject";
 import { parseBinding } from "./parseBinding";
 import { parseValue } from "./parseValue";
 import { parseUse } from "./parseUse";
 import { rejectLegacyBinding } from "./parseProperty";
+import {
+  carryPredicateDerivedCardinality,
+  hasPredicateDerivedCardinality,
+} from "./cardinalityProvenance";
 
 export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
   state.consume("KEYWORD");
@@ -16,12 +20,16 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
   const loopVar = loopVarTok.value as string;
 
   let indexVar: string | null = null;
+  let duplicateBinderTok: Token | null = null;
   if (state.peek().type === "COMMA") {
     state.consume("COMMA");
     if (state.peek().type !== "IDENT") {
       state.throwError(`In ${state.currentContext}: Expected an index variable name after ',', but found ${describeToken(state.peek())}.`, state.peek());
     }
     indexVar = state.consume("IDENT").value as string;
+    if (indexVar === loopVar) {
+      duplicateBinderTok = state.tokens[state.pos - 1];
+    }
   }
 
   const inTok = state.peek();
@@ -43,9 +51,9 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
   if (collection.kind !== "list") {
     state.throwError(`In ${state.currentContext}: 'generate' requires a list to iterate, but got ${collection.kind}. Write a list literal, a range such as '0 to 9', or a 'let' bound to one.`, inTok);
   }
-  if (collection.conditionalResult) {
+  if (hasPredicateDerivedCardinality(collection)) {
     state.throwError(
-      `[PARSE_GENERATE_CONDITIONAL_COLLECTION] In ${state.currentContext}: 'generate' cannot iterate a list selected by 'if'. A conditional may choose element values inside a literal list, but not the collection itself, because literal structure must determine emitted object shape.`,
+      `[PARSE_GENERATE_CONDITIONAL_COLLECTION] In ${state.currentContext}: 'generate' cannot iterate a list whose cardinality is derived from 'if'. A conditional may choose element values inside a fixed literal list, but cannot influence the iterable's length because literal structure must determine emitted object shape.`,
       inTok,
     );
   }
@@ -67,6 +75,13 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
   if (nesting !== 0) {
     state.throwError(`In ${state.currentContext}: 'generate' block was not closed before end of file. Add a closing '}'.`, braceTok);
   }
+  if (duplicateBinderTok !== null) {
+    // The enclosing parser synchronizes at an opening brace. Throwing while
+    // still in the header would therefore resume at this rejected block and
+    // reinterpret its contents, producing a cascade of unrelated errors.
+    state.pos = blockEndPos + 1;
+    state.throwError(`In ${state.currentContext}: The element and ordinal variable names in 'generate' must be different.`, duplicateBinderTok);
+  }
 
   const generatedNodes: ObjectNode[] = [];
   const prevEnv = state.env;
@@ -79,7 +94,10 @@ export function parseGenerate(state: ParserState, depth: number): ObjectNode[] {
     }
     state.pos = blockStartPos;
     state.env = Object.create(prevEnv);
-    state.env[loopVar] = { ...items[ordinal], line: loopVarTok.line, col: loopVarTok.col, endLine: loopVarTok.line, endCol: loopVarTok.endCol };
+    state.env[loopVar] = carryPredicateDerivedCardinality(
+      { ...items[ordinal], line: loopVarTok.line, col: loopVarTok.col, endLine: loopVarTok.line, endCol: loopVarTok.endCol },
+      items[ordinal],
+    );
     if (indexVar !== null) {
       state.env[indexVar] = { kind: "number", value: ordinal, line: loopVarTok.line, col: loopVarTok.col, endLine: loopVarTok.line, endCol: loopVarTok.endCol };
     }

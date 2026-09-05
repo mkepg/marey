@@ -1,6 +1,10 @@
 import type { AstValue, FitMode, Token } from "../types";
 import { NAMED_COLORS, type ExpressionWord } from "../lexer";
 import { ParserState, describeToken } from "./state";
+import {
+  carryPredicateDerivedCardinality,
+  markPredicateDerivedCardinality,
+} from "./cardinalityProvenance";
 
 /**
  * Nesting budgets.
@@ -476,7 +480,7 @@ function applyBinary(
           value = l % r;
           break;
       }
-      return { kind: "number", value, ...at };
+      return carryPredicateDerivedCardinality({ kind: "number", value, ...at }, left.value, right.value);
     }
 
     case "<": case ">": case "<=": case ">=": {
@@ -489,7 +493,7 @@ function applyBinary(
         case "<=": value = l <= r; break;
         case ">=": value = l >= r; break;
       }
-      return { kind: "boolean", value, ...at };
+      return carryPredicateDerivedCardinality({ kind: "boolean", value, ...at }, left.value, right.value);
     }
 
     case "==": case "!=": {
@@ -499,7 +503,7 @@ function applyBinary(
         case "==": value = equal; break;
         case "!=": value = !equal; break;
       }
-      return { kind: "boolean", value, ...at };
+      return carryPredicateDerivedCardinality({ kind: "boolean", value, ...at }, left.value, right.value);
     }
 
     case "and": case "or": {
@@ -514,7 +518,7 @@ function applyBinary(
         case "and": value = l && r; break;
         case "or":  value = l || r; break;
       }
-      return { kind: "boolean", value, ...at };
+      return carryPredicateDerivedCardinality({ kind: "boolean", value, ...at }, left.value, right.value);
     }
 
     case "to": {
@@ -531,7 +535,7 @@ function applyBinary(
       }
       const entries: AstValue[] = [];
       for (let n = from; n <= until; n++) entries.push({ kind: "number", value: n, ...at });
-      return { kind: "list", value: entries, ...at };
+      return carryPredicateDerivedCardinality({ kind: "list", value: entries, ...at }, left.value, right.value);
     }
   }
 }
@@ -655,7 +659,7 @@ function parseParenOrPoint(state: ParserState, ctx: ExprCtx): AstValue {
   const closeTok = state.consume("RPAREN");
   // The span covers the brackets themselves, matching the pre-refactor
   // `parseValue.ts:187`, which ended a parenthesised value at its ')'.
-  return { ...inner, line: openTok.line, col: openTok.col, endLine: closeTok.line, endCol: closeTok.endCol };
+  return carryPredicateDerivedCardinality({ ...inner, line: openTok.line, col: openTok.col, endLine: closeTok.line, endCol: closeTok.endCol }, inner);
 }
 
 /**
@@ -716,7 +720,7 @@ function parsePrimary(state: ParserState, ctx: ExprCtx): AstValue {
         notTok,
       );
     }
-    return { kind: "boolean", value: !operand.value, line: notTok.line, col: notTok.col, endLine: operand.endLine, endCol: operand.endCol };
+    return carryPredicateDerivedCardinality({ kind: "boolean", value: !operand.value, line: notTok.line, col: notTok.col, endLine: operand.endLine, endCol: operand.endCol }, operand);
   }
 
   if (t.type === "EXPR_KEYWORD" && t.value === "length") {
@@ -730,7 +734,7 @@ function parsePrimary(state: ParserState, ctx: ExprCtx): AstValue {
     if (arg.kind !== "list") {
       state.throwError(`In ${state.currentContext}: 'length' requires a list, but got ${arg.kind}.`, nameTok);
     }
-    return { kind: "number", value: arg.value.length, line: nameTok.line, col: nameTok.col, endLine: closeTok.line, endCol: closeTok.endCol };
+    return carryPredicateDerivedCardinality({ kind: "number", value: arg.value.length, line: nameTok.line, col: nameTok.col, endLine: closeTok.line, endCol: closeTok.endCol }, arg);
   }
 
   if (t.type === "EXPR_KEYWORD" && (t.value === "sin" || t.value === "cos")) {
@@ -767,7 +771,7 @@ function parsePrimary(state: ParserState, ctx: ExprCtx): AstValue {
     if (!Number.isFinite(arg.value)) {
       state.throwError(`In ${state.currentContext}: '${fn}' requires a finite number of degrees, but got ${arg.value}.`, nameTok);
     }
-    return { kind: "number", value: fn === "sin" ? sinDegrees(arg.value) : cosDegrees(arg.value), line: nameTok.line, col: nameTok.col, endLine: closeTok.line, endCol: closeTok.endCol };
+    return carryPredicateDerivedCardinality({ kind: "number", value: fn === "sin" ? sinDegrees(arg.value) : cosDegrees(arg.value), line: nameTok.line, col: nameTok.col, endLine: closeTok.line, endCol: closeTok.endCol }, arg);
   }
 
   if (t.type === "MINUS") {
@@ -776,7 +780,7 @@ function parsePrimary(state: ParserState, ctx: ExprCtx): AstValue {
     if (operand.kind !== "number") {
       state.throwError(`In ${state.currentContext}: Unary '-' requires a number, but got ${operand.kind}.`, minusTok);
     }
-    return { kind: "number", value: -operand.value, line: minusTok.line, col: minusTok.col, endLine: operand.endLine, endCol: operand.endCol };
+    return carryPredicateDerivedCardinality({ kind: "number", value: -operand.value, line: minusTok.line, col: minusTok.col, endLine: operand.endLine, endCol: operand.endCol }, operand);
   }
 
   if (t.type === "NUMBER") {
@@ -825,7 +829,7 @@ function parsePrimary(state: ParserState, ctx: ExprCtx): AstValue {
     if (!(varName in state.env)) {
       state.throwError(`In ${state.currentContext}: Undefined variable '${varName}'. Bare names cannot be used as values unless they are declared with 'let'. Variables defined inside 'generate' blocks are strictly block-scoped and cannot be accessed outside of them.`, nameTok);
     }
-    return { ...state.env[varName], line, col, endLine: line, endCol: nameTok.endCol };
+    return carryPredicateDerivedCardinality({ ...state.env[varName], line, col, endLine: line, endCol: nameTok.endCol }, state.env[varName]);
   }
 
   if (t.type === "KEYWORD") {
@@ -879,7 +883,15 @@ function parsePostfix(state: ParserState, ctx: ExprCtx): AstValue {
     // expression — from the base's own start through this closing ']' — so a
     // later error about it points at `v[2]` and not at wherever the list
     // literal was written.
-    value = { ...value.value[index.value], line: value.line, col: value.col, endLine: closeTok.line, endCol: closeTok.endCol };
+    const base = value;
+    const entry = base.value[index.value];
+    value = carryPredicateDerivedCardinality({
+      ...entry,
+      line: base.line,
+      col: base.col,
+      endLine: closeTok.line,
+      endCol: closeTok.endCol,
+    }, entry, base, index);
   }
 
   return value;
@@ -976,14 +988,13 @@ function parseConditional(state: ParserState, ctx: ExprCtx): AstValue {
   const chosen = condition.value ? whenTrue : whenFalse;
   // The span covers the whole construct, the way a parenthesised expression
   // takes its brackets' span rather than the inner value's.
-  return {
+  return markPredicateDerivedCardinality({
     ...chosen,
-    ...(chosen.kind === "list" ? { conditionalResult: true as const } : {}),
     line: ifTok.line,
     col: ifTok.col,
     endLine: whenFalse.endLine,
     endCol: whenFalse.endCol,
-  };
+  });
 }
 
 export function parseExpr(state: ParserState, minPrec: number, ctx: ExprCtx): AstValue {
