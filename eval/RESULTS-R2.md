@@ -12,6 +12,30 @@ readable set. Same 20 briefs, same batching, four fresh authors, round 1 blind.
 > (`let`, `handoff`, `fit`, `layer`); the quotes, findings, and conclusions
 > below are untouched and their conclusions are unchanged by the rename.
 
+> **Phase 3B note, 2026-09-07:** Phase 3B removed `generate NAME from A to B`
+> in favour of `generate NAME [, INDEX] in LIST`, and six fixtures in
+> `eval/scenes-r2/` were migrated `from` → `in`. That rename is the **only**
+> edit this corpus has received: no other line in it changed, and no fixture
+> uses the new expression layer. Every migrated header starts at 0, so the
+> generated object names are unchanged and `report-r2.json` is byte-identical.
+> The quotes, findings, and conclusions below are untouched and unchanged by
+> the rename, exactly as for the Phase 3A note above.
+>
+> The `bar-chart`, `radial-dots` and `timeline-ticks` fixtures are
+> **deliberately** left hand-unrolled — seven separate `rectangle` blocks,
+> twelve literal coordinate pairs, two overlapping `generate` loops — together
+> with the author comments explaining why they were written that way,
+> including the one that cites `docs/LANGUAGE.md`'s "Current limits" by name.
+> That repetition is the measurement. It is the "before" that
+> `eval/RESULTS-3B.md` measures Phase 3B's rewrites against, and rewriting it
+> here would destroy the comparison. The rewrites live in a separate corpus,
+> `eval/scenes-3b/`.
+>
+> The headline row *"Data-driven scenes needing hand-unrolling: 3 — unchanged,
+> byte-for-byte structure"* below therefore still describes this corpus
+> accurately. What changed is that the language no longer requires it; see
+> `eval/RESULTS-3B.md`.
+
 Re-run with:
 
 ```bash

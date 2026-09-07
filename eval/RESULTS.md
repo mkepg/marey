@@ -11,6 +11,23 @@ the plans or `AGENTS.md`. Round 1 written blind, nothing compiled until all 20 e
 > `handoff`, `fit`, `layer`); the quotes, findings, and conclusions below are
 > untouched and their conclusions are unchanged by the rename.
 
+> **Phase 3B note, 2026-09-07:** Phase 3B removed `generate NAME from A to B`
+> in favour of `generate NAME [, INDEX] in LIST`, and six fixtures in
+> `eval/scenes/` were migrated `from` → `in`. That rename is the **only**
+> edit this corpus has received: no other line in it changed, and no fixture
+> uses the new expression layer. Every migrated header starts at 0, so the
+> generated object names are unchanged and `report.json` is byte-identical.
+> The quotes, findings, and conclusions below are untouched and unchanged by
+> the rename, exactly as for the Phase 3A note above.
+>
+> The `bar-chart`, `radial-dots` and `timeline-ticks` fixtures are
+> **deliberately** left hand-unrolled — seven separate `rectangle` blocks,
+> twelve literal coordinate pairs, two overlapping `generate` loops — together
+> with the author comments explaining why they were written that way. That
+> repetition is the measurement. It is the "before" that `eval/RESULTS-3B.md`
+> measures Phase 3B's rewrites against, and rewriting it here would destroy
+> the comparison. The rewrites live in a separate corpus, `eval/scenes-3b/`.
+
 Re-run with:
 
 ```bash

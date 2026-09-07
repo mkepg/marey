@@ -1,0 +1,42 @@
+// Bar chart of seven values: 3, 7, 2, 9, 5, 8, 4. One literal list, one loop:
+// `generate v, i in values` emits bar_0 through bar_6, `v` deciding each
+// height and `i` its place, with spacing and bar width from `length(values)`.
+// The R1 and R2 baselines write all seven rectangles by hand — RESULTS-3B.md.
+
+let ink = #e2e8f0
+let dim = #64748b
+let sky = #38bdf8
+
+let values   = [3, 7, 2, 9, 5, 8, 4]
+let count    = length(values)
+let scale    = 30
+let baseline = 500
+let step     = 800 / (count + 1)
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  fit: contain
+
+  text title {
+    position: (400, 40)
+    content: "bar chart"
+    fontSize: 20
+    color: ink
+  }
+
+  line baselineRule {
+    position: (400, baseline)
+    points: [(-320, 0), (320, 0)]
+    thickness: 2
+    color: dim
+  }
+
+  generate v, i in values {
+    rectangle bar {
+      position: (step * (i + 1), baseline - (v * scale) / 2)
+      size: (step - 30, v * scale)
+      color: sky
+    }
+  }
+}

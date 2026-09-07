@@ -1,0 +1,23 @@
+[
+  {
+    "file": "bar-chart.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 9
+  },
+  {
+    "file": "radial-dots.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 13
+  },
+  {
+    "file": "timeline-ticks.declare",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 13
+  }
+]

@@ -1,0 +1,47 @@
+// A horizontal axis with eleven evenly spaced ticks; every fifth — 0, 5, 10 —
+// is taller, thicker and amber. One loop, not two: `%` picks the major ticks
+// and three conditional values read that one boolean, so a tall tick is the
+// same object as a short one and nothing needs `layer` to draw over anything.
+
+let ink   = #e2e8f0
+let dim   = #64748b
+let sky   = #38bdf8
+let amber = #fbbf24
+
+let count   = 11
+let period  = 5
+let startX  = 100
+let span    = 600
+let spacing = span / (count - 1)
+let axisY   = 300
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  fit: contain
+
+  text title {
+    position: (400, 40)
+    content: "timeline ticks"
+    fontSize: 20
+    color: ink
+  }
+
+  line axis {
+    position: (400, axisY)
+    points: [(-span / 2, 0), (span / 2, 0)]
+    thickness: 2
+    color: dim
+  }
+
+  generate i in 0 to count - 1 {
+    let major = i % period == 0
+    let half  = if major then 14 else 6
+    line tick {
+      position: (startX + i * spacing, axisY)
+      points: [(0, -half), (0, half)]
+      thickness: if major then 3 else 2
+      color: if major then amber else sky
+    }
+  }
+}

@@ -1,0 +1,28 @@
+// Twelve dots spaced evenly around a circle of radius 180 centred in the
+// scene. One loop and not a single hand-computed coordinate: `angle` is the
+// dot's share of the turn, and `cos`/`sin` take degrees. Both baselines list
+// twelve literal (x, y) pairs instead. Neither has a title; nor does this.
+
+let dim   = #64748b
+let amber = #fbbf24
+
+let count = 12
+let ring  = 180
+let dotR  = 9
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  fit: contain
+
+  circle center { position: (400, 300), radius: 3, color: dim, alpha: 0.5 }
+
+  generate i in 0 to count - 1 {
+    let angle = i * 360 / count
+    circle dot {
+      position: (400 + ring * cos(angle), 300 + ring * sin(angle))
+      radius: dotR
+      color: amber
+    }
+  }
+}
