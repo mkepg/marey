@@ -57,16 +57,31 @@ accepted or silently dropped.
 - **`sin`/`cos` are exact at the four cardinal angles on purpose, not by
   accident.** `sinDegrees` (`parser/parseExpr.ts:692`) reduces the angle modulo
   360 and returns `0`/`1`/`0`/`-1` outright at 0/90/180/270 instead of calling
-  `Math.sin`, because `Math.sin(Math.PI)` is `1.2246e-16`, not `0` — a plain
-  radian conversion never lands a dot in a radial layout exactly on its axis,
-  and bakes that noise into the committed IR goldens, where it is a permanent
-  eyesore rather than a rounding error. Its own doc comment
+  `Math.sin`, because `Math.sin(Math.PI)` is `1.2246e-16`, not `0`. Under a
+  plain radian conversion **three of the four axis dots** in a radial layout
+  miss their axis — `Math.cos(π/2)` is `6.12e-17`, `Math.sin(π)` is
+  `1.22e-16`, `Math.cos(3π/2)` is `-1.84e-16`; only the 0° dot is exact in both
+  coordinates — and that noise reaches a committed IR golden as a permanent
+  eyesore rather than a rounding error wherever the centre offset is small
+  enough not to round it away. Its own doc comment
   records the trade-off, including the cost: *off* the cardinal angles the
   reduction is slightly **less** accurate than a plain conversion —
   `sinDegrees(-30)` is `-0.5000000000000004` against `Math.sin(-30 * Math.PI /
   180)`'s `-0.49999999999999994` — because the two feed a different `d` into
-  the same `Math.sin`. The regression test is
-  `determinism.test.ts`'s "places twelve dots on a circle of radius 180" —
-  and note that only its *per-index* assertion discriminates a sign error;
-  the distance-from-centre and distinct-point checks survive one, because
-  negating the fallback reflects a 30°-spaced sample onto itself.
+  the same `Math.sin`. The pin for the exactness is the `it.each` table
+  `"evaluates %s in degrees"` (`parser/parseExpr.test.ts:1132-1137`), whose
+  `toMatchObject` compares primitives by exact equality: delete the four
+  early-return lines and `sin(180)` and `cos(90)` go red, along with the
+  `sin(-180)` row of `"reduces angles outside 0-360 before the cardinal check"`
+  (`:1161`). **Nothing else in the suite catches it** — that mutation was run:
+  3 failed / 599 passed, and `determinism.test.ts` stayed **6/6, including the
+  Phase 3B IR golden**. In particular `determinism.test.ts`'s "places twelve
+  dots on a circle of radius 180" does *not* pin cardinal exactness: at radius
+  180 about (400, 300) the mutation moves nothing at all — all twelve `(x, y)`
+  pairs are bit-identical either way, because `180 × 1.2246e-16` is under half
+  a ULP of a coordinate near 300 — and its `toBeCloseTo(…, 9)` tolerance
+  (5e-10) is four orders of magnitude past that noise regardless. What that
+  test does pin is the *sign* of the fallback, and only through its *per-index*
+  assertion; the distance-from-centre and distinct-point checks survive a sign
+  error, because negating the fallback reflects a 30°-spaced sample onto
+  itself.

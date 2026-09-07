@@ -2817,9 +2817,9 @@ connection refused).
 | 2 | `radial-dots`: one loop, zero hand-computed coordinates | one `generate`; one `circle dot` against R1's 12. Two literal coordinate pairs remain in the whole file — `size: (800, 600)` and the centre marker's `position: (400, 300)` — and **neither is a dot position**; R1 hand-writes 13 `position: (…)` literals. Every dot coordinate is `400 + ring * cos(angle)` / `300 + ring * sin(angle)` |
 | 3 | `timeline-ticks`: one loop, not two | one `generate` against R1's 2. `grep -n layer` on the 3B scene matches only a comment saying nothing needs it; R1 has a real `layer: 1` at `:53` — the overdraw the second loop existed to fix |
 | 4 | Materially shorter, with the change cost recorded | Re-derived by `wc -l`: 3B 42 / 28 / 47 against R1 76 / 40 / 56 (**−45% / −30% / −16%**) and R2 45 / 26 / 47 (**−7% / +8% / 0%**). Met against R1 in all three. **Not met against R2 on raw lines for `radial-dots`** — see "The spec-versus-implementation conflict" below. `eval/RESULTS-3B.md` records all of it, including the column that reads badly |
-| 5 | Corpora differ by nothing but the `from` → `in` rename; both compile 20/20; reports byte-unchanged | `git diff aa4ba0f..HEAD -- eval/scenes eval/scenes-r2` is **32 lines: 16 removed, 16 added, every pair identical but for `from`→`in`**, same variable, same bounds. Every start bound is `0`, so the ordinal suffix equals the old loop value and no object name changed. Both report JSONs content-identical after a fresh run |
-| 6 | Every `declare` fence compiles; "Current limits" no longer claims closed gaps | `languageDocs.test.ts` 41/41 within the full suite; Task 13 rewrote the section and 11 drifted citations besides |
-| 7 | Lifted cuts have permission tests; retained cuts keep rejections; §2's line has a rejection per clause | `languageCuts.test.ts` is +501 lines across the branch, 81 tests in the file |
+| 5 | Corpora differ by nothing but the `from` → `in` rename; both compile 20/20; reports byte-unchanged; **no fixture uses the new expression layer** | `git diff aa4ba0f..HEAD -- eval/scenes eval/scenes-r2` is **32 lines: 16 removed, 16 added, every pair identical but for `from`→`in`**, same variable, same bounds. Every start bound is `0`, so the ordinal suffix equals the old loop value and no object name changed. Both report JSONs content-identical after a fresh run. Fourth conjunct checked separately: no fixture in either corpus contains `sin(`, `cos(`, `length(`, `%`, `if`, or a comparison operator, and the only `[…]` literals are pre-existing `points:` point-lists on `polygon`/`line` |
+| 6 | Every `declare` fence compiles; "Current limits" no longer claims closed gaps | `languageDocs.test.ts` 41/41 within the full suite; Task 13 rewrote the section and 11 drifted citations besides — and, in the same pass, shipped one false prose claim that took a fix round to remove (`c976295`); see plan defect 16 |
+| 7 | Lifted cuts have permission tests; retained cuts keep rejections; §2's line has a rejection per clause | `languageCuts.test.ts` is **+449 / −52** across the branch (`git diff --numstat aa4ba0f..1645cef`), 81 tests in the file |
 | 8 | `TYPE_ONE_PHYSICS` mutation-verified against reverted code | Re-run first-hand at Task 16 — see "Mutation tests", rows 1 and 2 |
 | 9 | `sin`/`cos` proven by an IR-level assertion, confirmed by a Chromium capture | Re-run first-hand at Task 16 — see "Mutation tests", rows 3 and 4, plus the Chromium table above |
 | 10 | Typecheck, build, suite, doc tests green | Table above |
@@ -2930,9 +2930,22 @@ All reproduced first-hand at Task 16 unless marked otherwise.
    { checkNode(...) }` are identical, so the condition does nothing.
    Pre-existing; untouched by this phase's diff.
 8. **The physics silent-drop defect itself** (design §9) — Phase 3A found it and
-   deferred it; this phase fixed it as Task 11. Recorded here because the
-   deferral was judged wrong in Phase 3A's own external review, and it is the
-   one item on this list that *was* closed.
+   deferred it; this phase fixed it as Task 11. **Unlike the seven items above,
+   this one was never beyond the plan:** design §9 and Task 11 are the plan's
+   own stated scope for it, and it is the one item on this list that *was*
+   closed. It is kept here as the "was it deferred correctly this time" bookend
+   to `docs/engineering-lessons.md` §7, not as a novel out-of-scope
+   finding. What settled it was §7's *general* argument — deferring a
+   silent-drop defect once is a decision, twice is a habit; state precisely what
+   makes it harmless today, and if the answer is "nothing, it is just small,"
+   fix it — and **no external review ever ruled on this particular deferral.**
+   Phase 3A's external reviewer judged a *different* deferral wrong: the
+   handoff seconds-versus-ticks duration gap, finding 2 of its four
+   (`docs/plans/2026-09-01-phase-3a-language-foundations.md`,
+   "Post-completion external review"). The physics defect appears in that same
+   file under a separate later heading, "A newly found, pre-existing,
+   deliberately deferred defect" — found by Phase 3A's final whole-branch gate
+   and recorded as a follow-up with no verdict attached at all.
 
 ### Defects found in this plan
 
@@ -3037,6 +3050,30 @@ finished code, not by a pre-flight scan of the task text:
     keep recording that `from` was removed), historical plans, and the
     deliberate legacy-rejection fixture. A mechanical sweep would have erased
     the evidence and rewritten a test into asserting a lie.
+16. **Task 13 published a false claim about the language — appended here, and it
+    belongs with items 13–15 above** (found by a reviewer reading finished work,
+    not by any pre-flight scan). `220a2ef` added a fourth clause to
+    `docs/LANGUAGE.md`'s `generate` allowed-locations sentence: that `generate`
+    is legal inside a `use` instance's own body, on the strength of
+    `parseUse.ts:124-125`. That citation is a misread of which of two
+    structurally different loops those lines sit in. `parseUse.ts:112`'s
+    `while (state.pos < template.endPos)` walks the **template body's** own
+    tokens during expansion — which the sentence's third clause already covered
+    — while the instance's own `{ }` block is `:63-96`, gated by
+    `isPropertyNameStart`, whose token set contains no `KEYWORD`. So
+    `use T(10) inst { generate i in 0 to 2 { … } }` is *rejected*: *"In 'use'
+    instance 'inst': Expected a property name, but found keyword 'generate'."*
+    The claim survived the implementer's own read **and** the controller's
+    citation spot-check, which confirmed `parseUse.ts:124` does contain a
+    `generate` branch — true, and beside the point. It was caught by Task 13's
+    own task review, by a reviewer who **compiled the counter-example** rather
+    than re-reading the cited lines, and fixed in `c976295` (`+9/−5`), whose own
+    message corrects for the record what `220a2ef`'s message had repeated (it
+    asserts the same false clause, citing the same two lines, and a commit
+    message cannot be un-written). This is the
+    one defect in the phase whose finished artefact was a *published statement
+    about the language*: `languageDocs.test.ts` compiles every fence, and this
+    was prose, so no test could have failed on it.
 
 ### Deliberate gaps and deferrals
 
@@ -3130,8 +3167,8 @@ and looking at what actually failed.
   test for task sizing: if a single task needs more than two implementer rounds,
   it should have been two tasks.
 - **Every language-behaviour ambiguity was surfaced rather than guessed.** The
-  ledger records four occasions explicitly: the `to`-as-property-name collision,
-  the `generate` `from`/`to` collision, the
+  ledger records **five occasions across four recurring topics**: the
+  `to`-as-property-name collision, the `generate` `from`/`to` collision, the
   `MAX_LIST_LENGTH`/`TYPE_POLYGON_TOO_LARGE` diagnostic loss, and the
   conditional-collection cardinality rule (twice — the narrow list-only version,
   then the general provenance closure). The dividing line that held every time —
