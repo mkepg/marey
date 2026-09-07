@@ -1,5 +1,295 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`compiler determinism > keeps list, indexed generate, modulo, comparison, conditional, and trig IR stable 1`] = `
+{
+  "background": "#0a0e1a",
+  "children": [
+    {
+      "children": [],
+      "id": "scene.dot_0",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "color": "#ffa500",
+        "kind": "circle",
+        "layer": 0,
+        "physics": undefined,
+        "position": {
+          "x": 620,
+          "y": 300,
+        },
+        "radius": 20,
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+      },
+    },
+    {
+      "children": [],
+      "id": "scene.dot_1",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "color": "#00ffff",
+        "kind": "circle",
+        "layer": 0,
+        "physics": undefined,
+        "position": {
+          "x": 510,
+          "y": 490.5255888325765,
+        },
+        "radius": 17.5,
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+      },
+    },
+    {
+      "children": [],
+      "id": "scene.dot_2",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "color": "#ffa500",
+        "kind": "circle",
+        "layer": 0,
+        "physics": undefined,
+        "position": {
+          "x": 290,
+          "y": 490.52558883257655,
+        },
+        "radius": 20,
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+      },
+    },
+    {
+      "children": [],
+      "id": "scene.dot_3",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "color": "#00ffff",
+        "kind": "circle",
+        "layer": 0,
+        "physics": undefined,
+        "position": {
+          "x": 180,
+          "y": 300,
+        },
+        "radius": 17.5,
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+      },
+    },
+    {
+      "children": [],
+      "id": "scene.dot_4",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "color": "#ffa500",
+        "kind": "circle",
+        "layer": 0,
+        "physics": undefined,
+        "position": {
+          "x": 289.9999999999999,
+          "y": 109.47441116742354,
+        },
+        "radius": 20,
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+      },
+    },
+    {
+      "children": [],
+      "id": "scene.dot_5",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "color": "#00ffff",
+        "kind": "circle",
+        "layer": 0,
+        "physics": undefined,
+        "position": {
+          "x": 510,
+          "y": 109.47441116742351,
+        },
+        "radius": 17.5,
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+      },
+    },
+  ],
+  "fit": "contain",
+  "height": 600,
+  "kind": "scene",
+  "registry": {
+    "scene.dot_0": {
+      "children": [],
+      "id": "scene.dot_0",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "color": "#ffa500",
+        "kind": "circle",
+        "layer": 0,
+        "physics": undefined,
+        "position": {
+          "x": 620,
+          "y": 300,
+        },
+        "radius": 20,
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+      },
+    },
+    "scene.dot_1": {
+      "children": [],
+      "id": "scene.dot_1",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "color": "#00ffff",
+        "kind": "circle",
+        "layer": 0,
+        "physics": undefined,
+        "position": {
+          "x": 510,
+          "y": 490.5255888325765,
+        },
+        "radius": 17.5,
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+      },
+    },
+    "scene.dot_2": {
+      "children": [],
+      "id": "scene.dot_2",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "color": "#ffa500",
+        "kind": "circle",
+        "layer": 0,
+        "physics": undefined,
+        "position": {
+          "x": 290,
+          "y": 490.52558883257655,
+        },
+        "radius": 20,
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+      },
+    },
+    "scene.dot_3": {
+      "children": [],
+      "id": "scene.dot_3",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "color": "#00ffff",
+        "kind": "circle",
+        "layer": 0,
+        "physics": undefined,
+        "position": {
+          "x": 180,
+          "y": 300,
+        },
+        "radius": 17.5,
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+      },
+    },
+    "scene.dot_4": {
+      "children": [],
+      "id": "scene.dot_4",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "color": "#ffa500",
+        "kind": "circle",
+        "layer": 0,
+        "physics": undefined,
+        "position": {
+          "x": 289.9999999999999,
+          "y": 109.47441116742354,
+        },
+        "radius": 20,
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+      },
+    },
+    "scene.dot_5": {
+      "children": [],
+      "id": "scene.dot_5",
+      "props": {
+        "alpha": 1,
+        "animations": [],
+        "color": "#00ffff",
+        "kind": "circle",
+        "layer": 0,
+        "physics": undefined,
+        "position": {
+          "x": 510,
+          "y": 109.47441116742351,
+        },
+        "radius": 17.5,
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1,
+        },
+        "sequences": [],
+      },
+    },
+  },
+  "width": 800,
+}
+`;
+
 exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR stable 1`] = `
 {
   "background": "#000000",

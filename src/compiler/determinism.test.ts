@@ -142,6 +142,28 @@ scene {
 }
 `;
 
+const PHASE_3B_GOLDEN_SOURCE = `
+let radii = [20, 35, 20, 35, 20, 35]
+let tones = [orange, cyan]
+let count = length(radii)
+let ring  = 220
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate r, i in radii {
+    let major = i % 2 == 0
+    let angle = i * 360 / count
+    circle dot {
+      position: (400 + ring * cos(angle), 300 + ring * sin(angle))
+      radius: if major then r else r / 2
+      color: tones[i % 2]
+    }
+  }
+}
+`;
+
 describe("compiler determinism", () => {
   it("produces identical AST and IR on repeated compilation", () => {
     const parses = Array.from({ length: 20 }, () => parse(lex(COMPLEX_SOURCE)));
@@ -168,5 +190,44 @@ describe("compiler determinism", () => {
 
   it("keeps macro, sequence, parallel, and physics IR stable", () => {
     expect(irFor(MACRO_GOLDEN_SOURCE)).toMatchSnapshot();
+  });
+
+  it("keeps list, indexed generate, modulo, comparison, conditional, and trig IR stable", () => {
+    expect(irFor(PHASE_3B_GOLDEN_SOURCE)).toMatchSnapshot();
+  });
+});
+
+describe("trigonometry produces the coordinates it claims", () => {
+  it("places twelve dots on a circle of radius 180 about (400, 300)", () => {
+    const src = `
+      scene {
+        size: (800, 600)
+        generate i in 0 to 11 {
+          let angle = i * 30
+          circle dot {
+            position: (400 + 180 * cos(angle), 300 + 180 * sin(angle))
+            radius: 9
+          }
+        }
+      }
+    `;
+    const ir = irFor(src);
+    const positions = ir!.children.map((c) => (c.props as { position: { x: number; y: number } }).position);
+    expect(positions).toHaveLength(12);
+
+    // Computed here from first principles, not read out of the compiler.
+    for (let i = 0; i < 12; i++) {
+      const rad = (i * 30 * Math.PI) / 180;
+      expect(positions[i].x).toBeCloseTo(400 + 180 * Math.cos(rad), 9);
+      expect(positions[i].y).toBeCloseTo(300 + 180 * Math.sin(rad), 9);
+    }
+
+    // Every dot is exactly 180 from the centre — the property a sign error breaks.
+    for (const p of positions) {
+      expect(Math.hypot(p.x - 400, p.y - 300)).toBeCloseTo(180, 9);
+    }
+
+    // ...and they are twelve distinct points, not one point twelve times.
+    expect(new Set(positions.map((p) => `${p.x},${p.y}`)).size).toBe(12);
   });
 });
