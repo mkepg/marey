@@ -825,10 +825,12 @@ never the element's value** — `generate v in [4, 9]` produces `bar_0` and
 nesting appends its own suffix, innermost first: a `dot` in an inner loop
 nested inside an outer one is named `dot_<inner ordinal>_<outer ordinal>`.
 
-`generate` is allowed at the top level of the scene, inside a `group`, inside
-a `template` body, and inside a `use` instance's body. It is not allowed
-inside a shape (`circle`, `rectangle`, `polygon`, `line`, `text`) — those
-cannot contain child objects or blocks of any kind.
+`generate` is allowed at the top level of the scene, inside a `group`, and
+inside a `template` body. It is not allowed inside a shape (`circle`,
+`rectangle`, `polygon`, `line`, `text`) — those cannot contain child objects
+or blocks of any kind. Nor is it allowed in a `use` instance's own `{ }`
+block, which takes properties for the expansion's wrapper group and nothing
+else.
 
 ### A data-driven example
 
@@ -991,7 +993,9 @@ equality is the only string operation.
 
 **Colours neither animate nor do arithmetic.** `animate`'s `property`
 accepts only `position`, `rotation`, `scale`, and `alpha`; see "Not covered
-here" below.
+here" below. And a colour is not a number, so it cannot be an arithmetic
+operand: `red + blue` is a compile error naming the kind it found, under the
+same rule that rejects any other non-number operand.
 
 There is also no `sqrt`, `atan2`, `pow`, `abs`, `min`, `max`, `floor`, or
 `round`. None is needed by the scenes this layer was built for, and adding
