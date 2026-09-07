@@ -24,10 +24,11 @@ rather than quietly deviating.
   `(0, 0)`. It also found and fixed three defects in the tick/paint seam that
   had nothing to do with groups; **read its execution notes before Phase 3**,
   particularly the note on why invariant 3's old wording caught none of them.
-- **Phase 3A — language foundations, cuts, and renames: in review** on
-  `phase-3a-language-foundations`. Unified the four hand-synced property
-  lists into one contract, `LANGUAGE_CONTRACT` in `languageContract.ts`;
-  removed its ghost reservations (`anchor`, `width`, `height`); landed `let`,
+- **Phase 3A — language foundations, cuts, and renames: done** on
+  `phase-3a-language-foundations`, merged at `aa4ba0f`. Unified the four
+  hand-synced property lists into one contract, `LANGUAGE_CONTRACT` in
+  `languageContract.ts`; removed its ghost reservations (`anchor`, `width`,
+  `height`); landed `let`,
   `handoff`, `fit`, and `layer` with no compatibility aliases — the old
   spellings are now a named parse error, not silently accepted; retained the
   deliberate language cuts under an executable regression matrix; and fixed
@@ -35,11 +36,26 @@ rather than quietly deviating.
   rejection, handoff duration), yoyo-completion, and evaluation-harness
   (R1/R2 report-clobbering) defects. Migrated every first-party `.declare`
   fixture, corpus, and this guidance to the final vocabulary. Browser-checked
-  across seven Chromium scenes and production-built; not yet merged.
-- **Phase 3B — generative expressiveness.** Lists/iteration, indexing or length,
-  modulo, comparison, a conditional value expression, and trig must eliminate
-  hand-unrolling in `bar-chart`, `radial-dots`, and `timeline-ticks` before a
-  new major subsystem begins.
+  across seven Chromium scenes and production-built.
+- **Phase 3B — generative expressiveness: in review** on
+  `phase-3b-generative-expressiveness`. Gave the language an expression layer:
+  list literals (nestable), an inclusive `A to B` range, indexing and
+  `length`, `%`, the six comparisons, `and`/`or`/`not`, `if C then A else B`
+  in **value position only**, and `sin`/`cos` in **degrees**. `generate NAME
+  from A to B` is removed in favour of `generate NAME [, INDEX] in LIST`, with
+  generated names suffixed by the 0-based ordinal rather than the loop value.
+  `pointList` folded into one `list` value kind with a `listOf` constraint, so
+  indexing and `length` work on a point list without specifying every list
+  operation twice. Every expression still folds to a literal during parsing, so
+  `sceneIR.ts` is untouched by the whole phase. It also fixed the pre-existing
+  physics silent-drop defect Phase 3A deferred (`TYPE_ONE_PHYSICS`), made the
+  design's "data decides values, source structure decides shape" line
+  executable in `languageCuts.test.ts`, and added `eval/scenes-3b/` — a
+  demonstration corpus rewriting the three hand-unrolled acceptance scenes,
+  measured in `eval/RESULTS-3B.md`. Both authorability corpora keep their
+  evidence: the only edit in either is the mechanical `from` → `in` header
+  rename, and both report JSONs are byte-unchanged. Browser-checked in
+  Chromium and production-built; not yet merged.
 - **Phases 4–5 — export and distribution.** Build one deterministic frame
   sampler, then PNG, a baked-Lottie subset, video, public compiler/CLI surfaces,
   CI integration, and embeddable output. Export moves ahead of more physics

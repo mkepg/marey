@@ -2656,11 +2656,25 @@ Checked after writing, against the spec:
 
 ---
 
-## Running observation log (UNVERIFIED — Task 16 must confirm each against the diff)
+## Running observation log (CHECKED by Task 16 — see "Execution notes" below)
 
 These are claims collected from task reports and reviews as execution proceeded.
-**They are not evidence.** Task 16 writes the real execution notes from `git diff`,
-and must confirm or correct every line below before promoting any of it.
+**They were not evidence when written.** Task 16 wrote the real execution notes
+from `git diff` and the SDD ledger, and checked every line below against source
+before promoting any of it.
+
+**Result of that check: no line below was found false.** Four were confirmed
+first-hand at HEAD `1645cef` rather than taken on the log's word, because they
+are the ones a reader is most likely to rely on — the unpinned allowed-symbols
+string (still unpinned: `git grep "may only contain letters" -- "*.test.ts"`
+returns nothing), the doubled `ch + state.peek(1)` (still doubled,
+`lexer/index.ts:35,37`), `de9bf39`'s commit message saying "the two
+languageCuts cases" while its diff changes three (`%`, `<`, and the `=`→`==`
+property-name case), and the computed-`Infinity` gap (still open through `*`;
+`Number.isFinite` appears exactly once in `parseExpr.ts`, at `:772`, in the
+trig branch only, with a comment at `:765-771` explaining why it was guarded
+there and not at `*`). The section below is the record; this log is kept as
+the trail that led to it, not as a second source of truth.
 
 ### Task 1 — lexer operators (`de9bf39`)
 - Quality review raised two Minors, both accepted, neither fixed: the allowed-symbols
@@ -2745,3 +2759,390 @@ and must confirm or correct every line below before promoting any of it.
   `parseObject.ts` while rewriting Tasks 7–9 against current source, not by running
   anything. Task 9 now names the problem, proposes one-token lookahead, and requires
   a comma-free test drawn from the corpus shape.
+
+---
+
+## Execution notes
+
+Written 2026-09-08 at the close of Task 16, from `git diff aa4ba0f..HEAD` and
+the SDD ledger
+(`.sdd/2026-09-02-phase-3b-generative-expressiveness/progress.md`,
+the controller-maintained record that already reflects independent verification
+at every step) — **not** from any individual task's self-report. Every number in
+"Final evidence" was re-derived on a clean tree at HEAD `1645cef` while writing
+this, not carried forward. Where a claim below is quoted from the ledger rather
+than re-run here, it says so.
+
+### Final evidence
+
+| Check | Command | Result |
+|---|---|---|
+| Unit suite | `npm test` | **20 files / 602 tests / exit 0** |
+| Typecheck | `npx tsc -b --noEmit` | exit 0 |
+| Production build | `npm run build` | exit 0; only the pre-existing >500 kB chunk-size advisory and the `vite:preact-jsx` esbuild-deprecation notice |
+| Demonstration corpus | `EVAL_DIR=eval/scenes-3b npx vitest run --config eval/vitest.config.ts` | 5/5 harness tests; **3/3 scenes compiled clean (100%)** — 9, 13, 13 IR nodes |
+| R1 corpus | `npx vitest run --config eval/vitest.config.ts` | **20/20 compiled clean (100%)** |
+| R2 corpus | `EVAL_DIR=eval/scenes-r2 npx vitest run --config eval/vitest.config.ts` | **20/20 compiled clean (100%)** |
+| Reports unmoved | `git diff --stat -- eval/report.json eval/report-r2.json eval/report-3b.json` | empty — checked **after** all three corpus runs had regenerated all three files |
+| Tree | `git status --porcelain -uall`; `find src -iname "*probe*" -o -iname "*scratch*"` | empty; none |
+
+Branch shape: **62 commits**, `aa4ba0f..1645cef`, **75 files, +12,594 / −1,101**.
+`src/compiler/sceneIR.ts` does not appear in that diffstat at all — design §3.2's
+"no IR change" is a property of the diff, not a claim about it.
+
+**Chromium** (`visual-check`, headless Chromium on SwiftShader, dev server
+started with `npx vite --port 5199 --strictPort`):
+
+| Scene | compiled | rendered | consoleErrors | pageErrors | deterministic across a cold reload |
+|---|---|---|---|---|---|
+| `default` | true | true | 0 / 0 (runs A, B) | 0 / 0 | n/a — `loop: true` animations never come to rest, so the measure is meaningless here (`SKILL.md` says so) |
+| `eval/scenes-3b/radial-dots.declare` | true | true | 0 / 0 | 0 / 0 | **true** — rest frame `1ee6c18a44ab3cb6` in both runs; `cpu at rest` 0.018 s over a 2 s wall window, so the ticker genuinely stopped |
+
+The PNGs were looked at, not just the JSON. `radial-dots` renders twelve evenly
+spaced amber dots on a ring around the dim centre marker, radius visually
+uniform; the default card renders its four easing tracks, the bar row, the
+handoff square and ball, and the circle-and-triangle group, with the letterboxing
+`fit: contain` implies. This is
+the check that earns its keep for this phase specifically: a sign error in
+`sin`/`cos` still compiles, still type-checks, and still produces thirteen IR
+nodes — it is only visible in the geometry. The Vite server was killed
+afterwards and the port confirmed free (no `LISTENING` socket on 5199; `curl`
+connection refused).
+
+### Exit criteria (design §12), each with the evidence that settles it
+
+| # | Criterion | Evidence |
+|---|---|---|
+| 1 | `bar-chart`: one data list, one loop, zero hand-unrolled rectangles | `grep -cE '^\s*generate ' ` → 1; `grep -c "rectangle bar"` → 1 (inside the loop), against R1's 7 |
+| 2 | `radial-dots`: one loop, zero hand-computed coordinates | one `generate`; one `circle dot` against R1's 12. Two literal coordinate pairs remain in the whole file — `size: (800, 600)` and the centre marker's `position: (400, 300)` — and **neither is a dot position**; R1 hand-writes 13 `position: (…)` literals. Every dot coordinate is `400 + ring * cos(angle)` / `300 + ring * sin(angle)` |
+| 3 | `timeline-ticks`: one loop, not two | one `generate` against R1's 2. `grep -n layer` on the 3B scene matches only a comment saying nothing needs it; R1 has a real `layer: 1` at `:53` — the overdraw the second loop existed to fix |
+| 4 | Materially shorter, with the change cost recorded | Re-derived by `wc -l`: 3B 42 / 28 / 47 against R1 76 / 40 / 56 (**−45% / −30% / −16%**) and R2 45 / 26 / 47 (**−7% / +8% / 0%**). Met against R1 in all three. **Not met against R2 on raw lines for `radial-dots`** — see "The spec-versus-implementation conflict" below. `eval/RESULTS-3B.md` records all of it, including the column that reads badly |
+| 5 | Corpora differ by nothing but the `from` → `in` rename; both compile 20/20; reports byte-unchanged | `git diff aa4ba0f..HEAD -- eval/scenes eval/scenes-r2` is **32 lines: 16 removed, 16 added, every pair identical but for `from`→`in`**, same variable, same bounds. Every start bound is `0`, so the ordinal suffix equals the old loop value and no object name changed. Both report JSONs content-identical after a fresh run |
+| 6 | Every `declare` fence compiles; "Current limits" no longer claims closed gaps | `languageDocs.test.ts` 41/41 within the full suite; Task 13 rewrote the section and 11 drifted citations besides |
+| 7 | Lifted cuts have permission tests; retained cuts keep rejections; §2's line has a rejection per clause | `languageCuts.test.ts` is +501 lines across the branch, 81 tests in the file |
+| 8 | `TYPE_ONE_PHYSICS` mutation-verified against reverted code | Re-run first-hand at Task 16 — see "Mutation tests", rows 1 and 2 |
+| 9 | `sin`/`cos` proven by an IR-level assertion, confirmed by a Chromium capture | Re-run first-hand at Task 16 — see "Mutation tests", rows 3 and 4, plus the Chromium table above |
+| 10 | Typecheck, build, suite, doc tests green | Table above |
+| 11 | Repeat compilation deterministic; every moved golden listed in §10.2 | `determinism.test.ts` 6/6. **No golden moved** — see "Goldens" |
+
+### The spec-versus-implementation conflict
+
+Step 4 of Task 16 asks for "the spec-versus-implementation conflict from Task 14
+Step 5." That citation is stale: Task 14's actual Step 5 is "record the
+vocabulary migration on both corpora," a documentation step with no conflict in
+it. There are two real candidates. **Both are recorded here, because they are
+different kinds of conflict and a reader needs both** — but if the bullet meant
+one, it meant the second: it sits in a list of things found *during* execution,
+and the second is the only one that could not have existed when the plan was
+drafted.
+
+**(a) "Byte-frozen corpora" versus a header rename Task 10 could not avoid —
+a plan-drafting-time conflict, resolved before execution began.** The plan's
+first draft declared both `.eval` corpora byte-frozen while Task 10 removes the
+`generate ... from` header twelve of their fixtures use, so spec §12 item 5
+(both corpora compile 20/20) and §10.1 (edit nothing) could not both hold.
+Resolved from Phase 3A's precedent — that phase migrated the same fixtures for
+`def`→`let` and recorded it at `eval/RESULTS.md:7-12` — by separating
+**mechanical vocabulary migration** (allowed) from **semantic rewriting**
+(forbidden, because the hand-unrolled repetition *is* the measurement). The full
+resolution is in this plan's own "Self-review" section. Task 16 confirms the
+resolution held in practice, and that it was provably evidence-preserving: the
+migration is 16 header tokens and nothing else, and all three report JSONs are
+content-identical (exit criterion 5 above).
+
+**(b) Design §12.4's "materially shorter than its baseline" versus the R2
+numbers — a conflict that emerged during Task 14's actual execution.** §12.4
+says each rewrite must be "materially shorter than its baseline." There are two
+baselines, written blind by different authors with different conventions, and
+the criterion holds cleanly against R1 for all three scenes (−45% / −30% /
+−16%) but **not against R2 on raw source lines for `radial-dots`, which is 2
+lines *longer* (+8%)**. Re-derived first-hand by `wc -l` at Task 16; the figures
+match `eval/RESULTS-3B.md` exactly.
+
+Resolved as follows, and the reasoning is worth keeping because the tempting
+resolutions are all worse. §12.4 says "materially shorter than **its**
+baseline," singular, and every worked example in design §7 is demonstrably
+modelled on R1's specific parameters — R1's `scale`/`baseline` naming, radius
+180 with dot radius 9, the amber/sky thickness-3/2 styling — not R2's `unit`,
+radius 200, or monochrome ticks. So "its baseline" for these rewrites is R1, and
+the criterion is met. The R2 shortfall is a real, reported fact about formatting
+convention (R2 has no titles, no centre marker, no `let` bindings in
+`radial-dots`, writes one object per line, and carries much larger comment
+blocks), not a defect in the rewrite. Three ways to make the number disappear
+were identified and rejected: compressing the rewrite, deleting R2's
+explanatory comment, and reporting only the R1 column. The decisive argument
+against the most tempting one — adding a title to `radial-dots` so its line
+count rises on both sides — is that it would push the scene to 14 emitted
+objects against R1's 13 and break the object-count equivalence `RESULTS-3B.md`
+uses as its *primary* faithfulness evidence. Two independent parties reached the
+same conclusion by different routes (design-citation tracing, and object-count
+reasoning) before it was accepted.
+
+**The honest residual:** design §12.4 is worded for one baseline and this phase
+has two. That is a defect in the criterion, not in the work, and it is recorded
+here rather than smoothed over. Measure 4 in `RESULTS-3B.md` — the diff size for
+one representative change — is the measure that holds against *both* baselines,
+and is the better criterion for a future phase to write.
+
+### Defects found in source beyond the plan
+
+All reproduced first-hand at Task 16 unless marked otherwise.
+
+1. **`parseParenOrPoint` misreads a parenthesised list literal as a point.**
+   `let x = ([1,2,3])` → *"In variable declaration 'x': A point coordinate must
+   be a number, but got list."* The point-detection forward scan counts
+   `LPAREN`/`RPAREN` only, so a list's internal comma at `nesting === 1` sets
+   `isPoint`. **Pre-existing**, not introduced by this phase — but indexing makes
+   `([1,2,3])[0]` a natural thing to write, so it is now far more reachable.
+2. **The generalised non-associativity message gives invalid advice for a
+   `to`-`to` chain.** `let x = 1 to 2 to 3` → *"'to' cannot be chained. Write 'a
+   to b and b to c' rather than 'a to b to c'."* — but `and` requires booleans,
+   so the suggested rewrite does not compile. Introduced by Task 9's
+   generalisation of a message that was previously comparison-only, where the
+   advice was correct.
+3. **`[][0]` reports a nonsensical valid range.** *"Index 0 is out of range for
+   a list of length 0. Valid indices run 0 to -1…"*. Correct rejection, absurd
+   hint.
+4. **Three missing-parens diagnostics are correct and completely untested.**
+   `length [1,2]`, `sin 45`, `cos 45` each produce a good message (*"'length' is
+   a function and needs parentheses — write 'length(values)'."*), and
+   `git grep "is a function and needs parentheses" -- "*.test.ts"` returns
+   nothing. Rung 4 of AGENT-LESSONS §2c: there is nothing in the diff to read.
+5. **Three editor-autocomplete defects at
+   `src/components/Editor/MonacoEditor/scanner.ts:88.`** The line still reads
+   `else if (expectingGenName && word !== "from" && word !== "to")`. It (i) sets
+   `expectingGenName = false` after one word, so the ordinal binder in
+   `generate v, i in list` never gets a scope entry; (ii) still filters `from`, a
+   word the new grammar does not use here and which was **never reserved**
+   (design §6.1 reserves `to`, not `from`), so an author naming their element
+   variable `from` has it skipped and the reserved `in` registered as a variable
+   in its place; (iii) writes into `scopes[scopes.length - 1]`, the *enclosing*
+   scope. None reaches compiled output — editor autocomplete only.
+6. **Computed `Infinity` still reaches the IR silently.** The lexer rejects an
+   infinite literal and scientific notation, but no binary path checks
+   `isFinite` on a *result*, so repeated multiplication of long literals
+   overflows unnoticed. `Number.isFinite` occurs exactly once in `parseExpr.ts`
+   (`:772`), in the trig branch, with a comment at `:765-771` stating that
+   guarding `*` is a wider numeric-limits decision than that task owned.
+   **Verified pre-existing** at `de9bf39`.
+7. **A dead conditional in `validator.ts:576-580`,** where both arms of
+   `if (c.type !== "sequence" && c.type !== "parallel") { checkNode(...) } else
+   { checkNode(...) }` are identical, so the condition does nothing.
+   Pre-existing; untouched by this phase's diff.
+8. **The physics silent-drop defect itself** (design §9) — Phase 3A found it and
+   deferred it; this phase fixed it as Task 11. Recorded here because the
+   deferral was judged wrong in Phase 3A's own external review, and it is the
+   one item on this list that *was* closed.
+
+### Defects found in this plan
+
+Where the plan's own premise did not hold. Most were caught by a pre-flight scan
+of the task body against current source *before* dispatch — cheap, and it worked
+repeatedly. The two most expensive ones were not findable that way, and are
+grouped last.
+
+**Fixture and assertion defects — caught by reading:**
+
+1. Task 7's Step 1 asserted `toContain("index 5")` and `toContain("index -1")`
+   against a message its own Step 3 spells `Index 5 is out of range…`.
+   `toContain` is case-sensitive; neither assertion could hold.
+2. Task 7's anchor test located the bracket with `posAt(source, "[")` on
+   `let value = [1,2][5]`, which `indexOf` resolves to the **list literal's**
+   bracket at col 13, while the implementation anchors on the **index's** at col
+   18 — and the plan's own prose two lines below says the point is the index
+   bracket.
+3. Task 11's Step 1 fixtures called `.message` on the result of `errorsFor`,
+   which returns `string[]`, not objects. One fixture would have thrown; the
+   other mapped every string to `undefined` and **could never pass under any
+   implementation**.
+4. Task 13's Steps 2 and 5 (rewrite the `generate` docs; rewrite the Monaco
+   hover) were **already done** — Task 10's own commits had to update both to
+   keep `languageDocs.test.ts` green through its grammar rewrite. Treating a
+   stale brief as pending work risks regressing text two reviewers had already
+   verified.
+5. Task 16's own Step 3 named `AGENTS.md`/`AGENTS.md` as its edit targets. Commit
+   `4c70781`, landed *within this phase* and before Task 7 started, had reduced
+   both to byte-identical 8-line forwarding stubs; none of Step 3's literal
+   targets existed in them any more. (The corrected brief said "9 lines"; `wc
+   -l` says 8. Immaterial, corrected here for the record.)
+6. Task 16's Step 4 cited "the spec-versus-implementation conflict from Task 14
+   Step 5"; Task 14's Step 5 is a documentation step containing no conflict. See
+   the section above.
+
+**Verification steps that could not have failed — the more dangerous class:**
+
+7. Seven verification steps used `git status --porcelain` to prove `eval/` was
+   unchanged. With `core.autocrlf=true` and no `.gitattributes`, that reports
+   modification on content-identical files. Changed to `git diff --stat` in
+   `44f8221` and promoted to Global Constraint 9.
+8. Task 8's Step 4 said "delete the `+360` correction, expect `sin(-90)` to
+   fail." `Math.sin(-Math.PI/2)` is exactly `-1`, so the reverted code returns
+   the right answer; `cos(720)` survives for a different reason (`810 % 360` is
+   already positive). **Both** rows of that test were green against the code
+   they existed to catch. `sin(-180)` discriminates and was added.
+9. Task 9's Step 4 claimed a `prec: 2` mutation would break both precedence
+   tests. It breaks the comparison one; the "binds looser than subtraction" one
+   does not discriminate, because `-` is precedence 5 and folds inside `to`'s
+   right-hand parse at any floor below 5. A `prec: 5` mutation does discriminate
+   — though by a different mechanism than predicted (the non-associativity chain
+   check fires first).
+10. Task 15's Step 1 shipped the comment *"Every dot is exactly 180 from the
+    centre — the property a sign error breaks."* Task 16 re-ran the canonical
+    sign-error mutation and confirmed **that property survives it untouched**.
+    The comment is false as written; only the per-index assertion catches the
+    mutation. Filed, not fixed (cosmetic, and the commit message and report
+    already carry the correction).
+
+**Design and sequencing gaps the plan did not anticipate.** Items 11 and 12 are
+the two that no amount of reading would have found — both surfaced only because
+a mandated verification step was actually run (the corpus regression, and the
+full suite). Items 13–15 were found by reading, but by a *reviewer* reading the
+finished code, not by a pre-flight scan of the task text:
+
+11. **`generate i from X to Y` breaks the moment `to` becomes an operator, and
+    nothing in the plan named it.** The header's bounds parse through
+    `parseValue` with no `currentKey`, falling through to
+    `parseExpr(state, 0, ROOT_CTX)` — and unlike the property-name collision the
+    plan *did* anticipate, there is no `COLON` for the lookahead fix to key off.
+    `0 to 2` folds to `[0,1,2]` as the whole start bound. Blast radius: six
+    scenes per corpus plus `src/store/defaultScene.ts`. Found by Task 9's
+    mandated corpus-regression run, not by any pre-flight scan — the file was
+    never in Task 9's stated file list.
+12. **Task 9's own new `MAX_LIST_LENGTH` silently preempted an existing coded
+    diagnostic.** Design §8 deliberately unified the list ceiling with the
+    point-list ceiling at 10,000 — but parsing precedes type-checking, so the
+    parser's ceiling now fires first and `[TYPE_POLYGON_TOO_LARGE]` became
+    **permanently** unreachable through the ordinary pipeline. The two numbers
+    were unified on purpose; the layering consequence of unifying them was
+    traced by nobody until it broke two tests.
+13. **Task 10's grammar opened a design-boundary hole the plan did not see.**
+    `generate v in if flag then [1] else [1,2] { … }` makes the emitted object
+    count depend on a predicate — a direct violation of design §2.1, reachable
+    the moment `generate` accepts a general collection expression. The first fix
+    (reject conditionally-selected *lists*) was itself only partial: cardinality
+    can be laundered through a range bound, `length`, arithmetic, an index, or a
+    `let` alias. It took a second round to close it under the whole expression
+    graph.
+14. **Task 11's Step 3 contained complete, verbatim, and *wrong* code.** The
+    unconditional `directPhysics.length > 1` rule, inserted exactly where
+    instructed, rejects a legitimate `sequence { physics {…} physics {…} }` —
+    two sequential physics phases, which `buildSequencesFromChildren` has always
+    built correctly, because the `.find` truncation that motivates the whole
+    rule lives only in `buildObjectNode`. Task 16 confirmed this first-hand:
+    deleting the sequence/parallel exclusion fails **6 tests, four of them
+    pre-existing Phase 3A handoff tests**. A brief containing complete code is
+    not a brief whose code is correct.
+15. Task 10's Step 5 instructed a sweep of "every hit" of the old `from` syntax.
+    Read literally that is 41 matches, including the design spec (which must
+    keep recording that `from` was removed), historical plans, and the
+    deliberate legacy-rejection fixture. A mechanical sweep would have erased
+    the evidence and rewritten a test into asserting a lie.
+
+### Deliberate gaps and deferrals
+
+Each with what makes it harmless *today*, per AGENT-LESSONS §7 — not merely
+inconvenient to fix.
+
+| Deferred | Why it is safe to defer |
+|---|---|
+| `parseParenOrPoint`'s `([1,2,3])` misread | It is a **spurious rejection with a position**, not silent data loss: the author sees an error rather than wrong output. This is exactly the distinction §7 draws against the physics case, which had no runtime signal at all. Should not defer indefinitely — indexing made it more reachable. Proposed as a follow-up task, not an in-place fix |
+| The `to`-`to` chain message's invalid advice | Wrong *hint* on a correctly rejected program. Cosmetic in consequence, though embarrassing |
+| `[][0]`'s "Valid indices run 0 to -1" | Same shape: correct rejection, absurd hint. Suppressing the clause for an empty list is a behaviour change beyond any task's brief |
+| Untested missing-parens diagnostics (`length`, `sin`, `cos`) | The messages are correct and were read from source; only the pins are missing. Adjacent-behaviour gap, filed rather than fixed under the standing scope rule |
+| `scanner.ts:88`'s three autocomplete defects | None reaches compiled output. A proper fix (register the ordinal's type; handle an element variable named `from`; stop leaking into the enclosing scope) is a small design decision in its own right, in a file outside every task's stated scope |
+| Computed `Infinity` through `*` | Pre-existing, verified at `de9bf39`. Reaching it needs ~160-digit literals multiplied — the lexer rejects scientific notation and any single literal evaluating to `Infinity`. Guarding `*` would make `Infinity` an error for the first time, which is a numeric-limits decision, not a trig one |
+| `[TYPE_POLYGON_TOO_LARGE]`'s unreachability | **A decision, not an oversight.** The alternative was decoupling the two 10,000 ceilings by inventing a larger arbitrary number, contradicting design §8's explicit "matching the existing point-list ceiling." The check is kept with a comment marking it defensively unreachable — the same precedent as this codebase's unreachable-`consume` arms |
+| Nested ranges amplifying list-literal node counts ~1000× | Matters only for scenes the playground did not author locally. No corpus scene, acceptance scene or default scene comes near it |
+| Task 10's dry-run-placeholder residue (a parameter-driven `generate` nested one level deeper; a malformed index inside a never-`use`d template) | Both are loud parse-time rejections one level past the three flows the round required. Nothing in the corpora, the default scene, or the three acceptance scenes writes either construct |
+| `validator.ts:576-580`'s dead conditional | Pre-existing, behaviour-neutral (both arms identical) |
+| No π constant; no `sqrt`/`atan2`/`pow`/`abs`/`min`/`max`/`floor`/`round`; no semantic layout; no R3 blind-author round; no string ops beyond equality; no colour arithmetic | Design §11.1 and §13 — deliberate scope, argued there. In particular the π deviation is *strengthened* by degree-based trig, not weakened: `sin(pi)` would be `0.0548`, not `0` (re-derived: `0.054803665148789524`) |
+
+### Goldens
+
+**No golden snapshot moved.** `git diff aa4ba0f..HEAD --
+src/compiler/__snapshots__/determinism.test.ts.snap` contains **zero deleted
+lines** across the entire phase, so both pre-existing goldens — "keeps macro,
+sequence, parallel, and physics IR stable" and "keeps primitive defaults and
+layer order in the Scene IR" — are byte-unchanged. The file gained exactly one
+new entry, `keeps list, indexed generate, modulo, comparison, conditional, and
+trig IR stable`, added by Task 15.
+
+That is the outcome design §10.2 required, and it is load-bearing rather than
+lucky: the phase added a whole expression layer, so an unchanged golden is the
+strongest available evidence that nothing new reaches the IR. `generate`'s move
+from loop-value to ordinal name suffixing could have moved a golden, and did
+not, for the reason §10.2 recorded in advance: at design time the only
+non-zero-start range header anywhere in the repo sat inside a Monaco hover
+string, not in a compiled scene — so the ordinal and the old loop value agree
+everywhere a snapshot could see them.
+
+`npx vitest run -u` was never run.
+
+### Mutation tests
+
+Rows 1–4 were re-run first-hand while writing these notes, on a clean tree at
+`1645cef`, with both mutated files restored and `git diff --stat` confirmed
+empty afterwards. Rows 5 onward are the ledger's record of checks performed
+during the tasks themselves.
+
+| # | Mutation | Observed |
+|---|---|---|
+| 1 | Neutralise the `TYPE_ONE_PHYSICS` rule (`directPhysics.length > 1` → `false`) | **4 failed / 46 passed.** The fourth failure is the informative one: `expected '[TYPE_HANDOFF_SCHEDULE_AMBIGUOUS] Thi…' to contain '[TYPE_ONE_PHYSICS]'` — proving the pre-existing handoff rule does *not* already cover the case, exactly as design §9 claims |
+| 2 | Delete the sequence/parallel exclusion from the same rule | **6 failed / 44 passed**, including four *pre-existing Phase 3A* handoff tests (`picks the first later physics step…`, `allows a sequence handoff with two later physics steps…`). This is the evidence that the plan's own literal Step 3 code was wrong |
+| 3 | Negate `sinDegrees`'s fallback line only (`return -Math.sin(...)`), leaving the four cardinal early-returns intact | **2 failed / 4 passed.** `AssertionError: expected 244.11542731880104 to be close to 555.884572681199, received difference is 311.7691453623979` at `determinism.test.ts:221`, plus the Phase 3B golden going red on `"x": 510 → 290`, `"y": 109.47… → 490.52…` |
+| 4 | Same mutation, with the per-index assertion removed | **1 passed.** The distance-from-centre and twelve-distinct-points assertions **do not discriminate a sign error** — negating the fallback reflects each non-cardinal point through the scene centre, and a 30°-spaced sample maps onto itself under that reflection, preserving both magnitude and cardinality. Only the per-index comparison against independently computed `Math.cos`/`Math.sin` catches it |
+| 5 | *(ledger)* Swap the index expression's and `length` argument's `ExprCtx` transition `intoGroup` → bare `ctx` | 516/516 and 518/518 **still green** — the decision was unpinned. Two boundary fixtures added, each then shown to catch its own revert |
+| 6 | *(ledger)* Delete `parseExpr.ts`'s `index.kind !== "number"` guard | 518/518 **still green** — a required behaviour with no fixture at all (rung 4). Fixture added; the guard was then reverted two ways (message neutralised, then whole guard deleted, which falls through to `Number.isInteger` and a different wrong message — no crash, no false pass) |
+| 7 | *(ledger)* Delete the `+360` angle correction | Only the newly added `sin(-180)` row failed; the brief's own `sin(-90)` and `cos(720)` rows stayed **green** — see plan defect 8 |
+| 8 | *(ledger)* `ExprCtx` flips on the trig argument | `intoOperand` 536/536, `intoUnary` 536/536 (**unobservable** — identical bodies, proved rather than tested), `intoCoordinate` 535/536, bare `ctx` 535/536. Both observable alternatives pinned by one new boundary fixture |
+| 9 | *(ledger)* `to`'s precedence 4 → 2, then 4 → 5 | prec 2: only the comparison test red. prec 5: discriminates, via the non-associativity chain check rather than the predicted `requireNumber`-on-list path |
+| 10 | *(ledger)* Delete the `generate` start-bound stopgap | Exactly the 16 `generate`-collision failures, and no others |
+| 11 | *(ledger)* Revert `GENERATE_START_MIN_PREC` to test the conditional-bound limitation | **The check is impossible.** `parseConditional` bypasses `minPrec` entirely, so the fixture was never protected by the constant — which is precisely why it is pinned as a *known limitation* rather than a fix. Reported as an impossible verification (AGENT-LESSONS §2f) instead of a passing one |
+| 12 | *(ledger)* Task 10 fix round 3, each of three findings mutated out separately | Finding 1 alone → exactly its 4 tests; finding 2 alone → exactly 3 (correctly excluding the already-working final-child case); finding 3's three sub-parts each → exactly the tests requiring them |
+| 13 | *(ledger)* Mutation-testing a *proposed test*, not the code | "preserves a following template-body sibling after duplicate binders" **could not discriminate** on its definition-only fixture (1 error and a non-null AST either way, for unrelated reasons). Rewritten with a real `use` expansion: 5 errors / empty children reverted, versus 2 errors / `["good"]` fixed |
+| 14 | *(observation log, Task 2)* Re-introduce the coordinate-depth narrowing in `parseListLiteral` alone | **All 370 tests passed.** The point-coordinate test did not guard the list path — half a fix, shipped unguarded |
+| 15 | *(observation log, Task 2)* Mis-thread the recursion counter | Exactly **one test in 378** stood between the defect and a green suite |
+| 16 | *(AGENT-LESSONS §2d)* Swap the list-entry recursion budget to the other defensible rule | **411/411 green.** The suite had no opinion about a choice that halves how deeply lists and points may nest — a missing test for a *decision*, not for a behaviour |
+
+The pattern across all sixteen: **reading finds contradictions; only execution
+finds coincidences.** Rows 4, 5, 6, 7, 11, 13, 14 and 16 — half the table — are
+cases where the check that already existed, or the check the plan itself
+specified, was **green against the very defect it existed to catch**. None of
+them was found by reading the code; every one was found by running the mutation
+and looking at what actually failed.
+
+### Process, for the next phase
+
+- **Cost.** ~4,700 subagent tokens per net implementation line, measured twice
+  under different context-routing regimes and statistically flat between them.
+  The lever is fix-loop compression, not input routing: one Task 7 fix round
+  cost 282,971 tokens against a `+37/−5` diff, because each round pays a full
+  context reload regardless of how small the fix is. Written up in
+  `docs/harness/2026-09-04-context-routing-experiment-result.md`.
+- **Tiering worked where it was applied.** Task 1 (a six-line token-map change)
+  originally received the same ceremony as Task 2 (a full expression-evaluator
+  rewrite). The Mechanical/Integration/Architecture tiering adopted mid-phase
+  held for Tasks 7–15 — with one instructive miss: Task 11 was tiered Mechanical
+  because its brief contained complete code, and that code was wrong.
+- **Task 2 should have been two or three tasks.** "Refactor the math parser into
+  a general expression parser" ran five rounds, consumed 1.04M tokens, and forced
+  Tasks 4–9 to be re-briefed twice as its signature moved underneath them. The
+  test for task sizing: if a single task needs more than two implementer rounds,
+  it should have been two tasks.
+- **Every language-behaviour ambiguity was surfaced rather than guessed.** The
+  ledger records four occasions explicitly: the `to`-as-property-name collision,
+  the `generate` `from`/`to` collision, the
+  `MAX_LIST_LENGTH`/`TYPE_POLYGON_TOO_LARGE` diagnostic loss, and the
+  conditional-collection cardinality rule (twice — the narrow list-only version,
+  then the general provenance closure). The dividing line that held every time —
+  *if the resolution changes what a Declare author can write or see, ask; if it
+  is purely implementation sequencing, rule on it and record why* — is worth
+  carrying forward verbatim.
+- **What is still owed:** an independent whole-branch review by someone with no
+  stake in the prior reasoning — this plan's own Task 16 Step 5, and
+  AGENT-LESSONS §8. Phase 3A passed eleven task reviews and a whole-branch
+  review and *then* an outside reviewer found four Important defects, two of
+  which made published exit criteria false. That review is deliberately **not**
+  part of Task 16's own dispatch (an implementer reviewing its own branch is not
+  independent of the reasoning that produced it) and had not run when these
+  notes were written. **Phase 3B is not done until it has.**

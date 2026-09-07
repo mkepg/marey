@@ -43,3 +43,30 @@ accepted or silently dropped.
   snapshots in that same file do **not** pin this — `IRAnimation`/`IRPhysics`
   carry no `name` field, so `animate`/`physics` node names never reach the
   IR and the snapshots pass no matter how those nodes are named.
+- **Every expression is folded to a literal at parse time, so no expression
+  reaches the Scene IR.** `parseExpr` returns an `AstValue`
+  (`parser/parseExpr.ts:1023`) — a literal union, not a node — so a list, an
+  index, a comparison, a conditional, or a `sin`/`cos` call is gone by the time
+  the type checker runs. `sceneIR.ts`'s only list type is `IRPointList`
+  (`sceneIR.ts:28`), reachable through `polygon.points` and `line.points` and
+  nothing else. This is why Phase 3B added a whole expression layer without
+  touching `sceneIR.ts`, and why a committed IR golden is a real assertion
+  about arithmetic rather than about the grammar. Do not add an IR node for an
+  operator; if a construct cannot be evaluated during parsing, it does not fit
+  the language as it currently works.
+- **`sin`/`cos` are exact at the four cardinal angles on purpose, not by
+  accident.** `sinDegrees` (`parser/parseExpr.ts:692`) reduces the angle modulo
+  360 and returns `0`/`1`/`0`/`-1` outright at 0/90/180/270 instead of calling
+  `Math.sin`, because `Math.sin(Math.PI)` is `1.2246e-16`, not `0` — a plain
+  radian conversion never lands a dot in a radial layout exactly on its axis,
+  and bakes that noise into the committed IR goldens, where it is a permanent
+  eyesore rather than a rounding error. Its own doc comment
+  records the trade-off, including the cost: *off* the cardinal angles the
+  reduction is slightly **less** accurate than a plain conversion —
+  `sinDegrees(-30)` is `-0.5000000000000004` against `Math.sin(-30 * Math.PI /
+  180)`'s `-0.49999999999999994` — because the two feed a different `d` into
+  the same `Math.sin`. The regression test is
+  `determinism.test.ts`'s "places twelve dots on a circle of radius 180" —
+  and note that only its *per-index* assertion discriminates a sign error;
+  the distance-from-centre and distinct-point checks survive one, because
+  negating the fallback reflects a 30°-spaced sample onto itself.
