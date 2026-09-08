@@ -38,7 +38,7 @@ Not a claim — the emitted object counts, read from the three committed
 reports:
 
 ```bash
-node -e "for (const [n,f] of [['R1','./eval/report.json'],['R2','./eval/report-r2.json'],['3B','./eval/report-3b.json']]) { const r = require(f).filter(x=>['bar-chart.declare','radial-dots.declare','timeline-ticks.declare'].includes(x.file)); console.log(n, r.map(x=>x.file.replace('.declare','')+'='+x.nodeCount).join('  ')); }"
+node -e "for (const [n,f] of [['R1','./eval/report.json'],['R2','./eval/report-r2.json'],['3B','./eval/report-3b.json']]) { const r = require(f).filter(x=>['bar-chart.marey','radial-dots.marey','timeline-ticks.marey'].includes(x.file)); console.log(n, r.map(x=>x.file.replace('.marey','')+'='+x.nodeCount).join('  ')); }"
 ```
 
 | Scene | R1 objects | R2 objects | 3B objects |
@@ -68,7 +68,7 @@ title` object (R2's `bar-chart` and `timeline-ticks`) or no centre marker
 ## Measure 1 — source lines
 
 ```bash
-wc -l eval/scenes/<scene>.declare eval/scenes-r2/<scene>.declare eval/scenes-3b/<scene>.declare
+wc -l eval/scenes/<scene>.marey eval/scenes-r2/<scene>.marey eval/scenes-3b/<scene>.marey
 ```
 
 and, controlling for the corpora's very different commenting habits,
@@ -155,11 +155,11 @@ of the baseline rule — identical to R1's four.
 ## Measure 3 — hand-unrolled objects
 
 ```bash
-grep -c "rectangle bar" eval/scenes/bar-chart.declare eval/scenes-r2/bar-chart.declare eval/scenes-3b/bar-chart.declare
-grep -cE '^let v[0-9]+ =' eval/scenes/bar-chart.declare
-grep -c "circle dot" eval/scenes/radial-dots.declare eval/scenes-r2/radial-dots.declare eval/scenes-3b/radial-dots.declare
-grep -cE '^[[:space:]]*generate ' eval/scenes/timeline-ticks.declare eval/scenes-r2/timeline-ticks.declare eval/scenes-3b/timeline-ticks.declare
-grep -cE '^[[:space:]]*line ' eval/scenes/timeline-ticks.declare eval/scenes-r2/timeline-ticks.declare eval/scenes-3b/timeline-ticks.declare
+grep -c "rectangle bar" eval/scenes/bar-chart.marey eval/scenes-r2/bar-chart.marey eval/scenes-3b/bar-chart.marey
+grep -cE '^let v[0-9]+ =' eval/scenes/bar-chart.marey
+grep -c "circle dot" eval/scenes/radial-dots.marey eval/scenes-r2/radial-dots.marey eval/scenes-3b/radial-dots.marey
+grep -cE '^[[:space:]]*generate ' eval/scenes/timeline-ticks.marey eval/scenes-r2/timeline-ticks.marey eval/scenes-3b/timeline-ticks.marey
+grep -cE '^[[:space:]]*line ' eval/scenes/timeline-ticks.marey eval/scenes-r2/timeline-ticks.marey eval/scenes-3b/timeline-ticks.marey
 ```
 
 | Scene | What is counted | R1 | R2 | **3B** |
@@ -201,8 +201,8 @@ For the new corpus, the file was staged, edited, measured, and reverted:
 ```bash
 git add eval/scenes-3b
 #  edit the one line
-git diff --numstat -- eval/scenes-3b/<scene>.declare
-git checkout -- eval/scenes-3b/<scene>.declare
+git diff --numstat -- eval/scenes-3b/<scene>.marey
+git checkout -- eval/scenes-3b/<scene>.marey
 ```
 
 The baselines were **not touched**. Their committed blobs were extracted to a
@@ -210,9 +210,9 @@ temporary directory outside the repository, edited there, and diffed with
 `--no-index`:
 
 ```bash
-git show HEAD:eval/scenes/<scene>.declare > $TMP/before/<scene>.declare
+git show HEAD:eval/scenes/<scene>.marey > $TMP/before/<scene>.marey
 #  apply the equivalent change to a copy in $TMP/after/
-git diff --no-index --numstat $TMP/before/<scene>.declare $TMP/after/<scene>.declare
+git diff --no-index --numstat $TMP/before/<scene>.marey $TMP/after/<scene>.marey
 ```
 
 | Scene | Change | R1 | R2 | **3B** |

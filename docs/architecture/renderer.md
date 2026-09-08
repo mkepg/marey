@@ -23,7 +23,7 @@ someone reaching for `Graphics` or `Ticker`; every `pixi.js` import in them is
 - **`timeline.ts`** — `AnimTime`/`PhysicsTime` state, advanced one tick at a
   time. Durations are converted from IR seconds to ticks at runner creation.
 - **`physicsWorld.ts`** — `MatterWorld`, the shared Matter world. Owns every
-  Declare↔Matter unit conversion, so callers pass px/s and radians and never
+  Marey↔Matter unit conversion, so callers pass px/s and radians and never
   see `_baseDelta`. Two non-obvious things live here: gravity is injected as a
   **velocity delta, never a force** (a force is still in the buffer when
   Matter's sleeping pass reads it, so nothing would ever sleep), and the

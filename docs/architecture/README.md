@@ -42,7 +42,7 @@ scene replay identically across a page reload — follow the browser procedure i
 npx playwright install chromium            # once, if you have not already
 npx vite --port 5199 --strictPort          # leave this running
 node tools/visual-check/check.mjs \
-  --scene tools/visual-check/scenes/pile.declare \
+  --scene tools/visual-check/scenes/pile.marey \
   --at 300,1500,4000 --settle 9000 --out .visual-check/pile
 node tools/visual-check/smoke.mjs # if captures come back blank
 ```
@@ -59,7 +59,7 @@ TypeScript is strict with `noUnusedLocals`, `noUnusedParameters`, and
 
 ## What this is
 
-Declare is a declarative scene DSL that compiles to a PixiJS scene graph, with
+Marey is a declarative scene DSL that compiles to a PixiJS scene graph, with
 a browser IDE (Monaco editor, live preview, terminal) around it. You write a
 `scene { ... }` block of shapes with `animate`, `physics`, and `sequence`
 blocks; it renders and plays.
@@ -69,8 +69,8 @@ readable, diffable text format for 2D motion — rather than a game/simulation
 direction. That decision shapes what gets built and what gets cut. See
 `docs/specs/` before proposing physics or animation features.
 
-**Declare has never been released publicly. There are no external users and no
-third-party `.declare` files anywhere.** Every `.declare` file that exists is
+**Marey has never been released publicly. There are no external users and no
+third-party `.marey` files anywhere.** Every `.marey` file that exists is
 first-party and lives in this repository — the default scene, the language
 reference's examples, the `eval/` corpora, and the visual-check fixtures.
 So *backward compatibility is not a design constraint*: a breaking syntax
@@ -125,7 +125,7 @@ back, and `git status` misreporting modification on this machine because
 mistake worth someone else avoiding.
 
 The authoritative roadmap is
-`docs/specs/2026-09-01-declare-product-roadmap-design.md`.
+`docs/specs/2026-09-01-marey-product-roadmap-design.md`.
 Current phase: **3B — generative expressiveness** (lists/iteration, indexing
 or length, modulo, comparison, a conditional value expression, and trig).
 Full phase history and prior decisions (D1–D18, R1) are in

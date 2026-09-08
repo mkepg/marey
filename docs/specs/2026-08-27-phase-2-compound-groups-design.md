@@ -46,7 +46,7 @@ reference point is the bounding-box centre and a group's is not.
 
 ### 1.2 Defect B — `physics` inside a group simulates at local coordinates
 
-Not mentioned in §7. `bindPhysicsBodies` reads `container.__declareLayout.currentPos`
+Not mentioned in §7. `bindPhysicsBodies` reads `container.__mareyLayout.currentPos`
 and passes it to `world.addBody` as a scene coordinate. For a child of a group
 that value is a **local** coordinate, and no ancestor transform is applied.
 `syncWorldToContainers` then writes world coordinates back into the same local
@@ -54,7 +54,7 @@ field, so the error compounds in both directions.
 
 Measured, through the real compiler, parser and builder:
 
-```declare
+```marey
 template Ball(tone) {
   circle b {
     position: (0, 0)
@@ -229,7 +229,7 @@ either way and would have hidden the effect.
 A new module `renderer/sceneRuntime.ts` takes everything from `adapter.ts` that
 mutates or paints scene state. Like `physicsSync.ts`, every PixiJS import is
 `import type` — `applyAnim` and `tickAnim` touch only `container.alpha`,
-`container.rotation` and `__declareLayout`, none of which need the runtime
+`container.rotation` and `__mareyLayout`, none of which need the runtime
 library — so the module is headlessly testable.
 
 ```

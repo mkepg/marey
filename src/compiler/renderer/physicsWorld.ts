@@ -43,7 +43,7 @@ export const MATTER_DELTA_MS = 1000 / TICK_HZ;
 const MATTER_BASE_HZ = 60;
 
 /**
- * Declare's `airDrag` is 0 = vacuum, 1 = maximum resistance, and was defined by
+ * Marey's `airDrag` is 0 = vacuum, 1 = maximum resistance, and was defined by
  * the old engine as `pow(1 - airDrag, 1/60)` applied once per tick.
  *
  * Matter damps by `1 - frictionAir * MATTER_R` once per tick. Matching one
@@ -54,18 +54,18 @@ export function airDragToFrictionAir(airDrag: number): number {
   return (1 - Math.pow(1 - clamped, MATTER_R)) / MATTER_R;
 }
 
-/** px/s (Declare) → px per 1/60s (Matter's `Body.setVelocity`). */
+/** px/s (Marey) → px per 1/60s (Matter's `Body.setVelocity`). */
 export function pxPerSecToMatter(pxPerSec: number): number {
   return pxPerSec / MATTER_BASE_HZ;
 }
 
-/** px per 1/60s (Matter) → px/s (Declare). */
+/** px per 1/60s (Matter) → px/s (Marey). */
 export function matterToPxPerSec(matterVel: number): number {
   return matterVel * MATTER_BASE_HZ;
 }
 
 /**
- * px/s^2 (Declare) → the velocity delta, in Matter units, to add once per tick.
+ * px/s^2 (Marey) → the velocity delta, in Matter units, to add once per tick.
  *
  * This is deliberately not a force. See spec 6.4: a force set before
  * `Engine.update` is still in the buffer when Matter's sleeping pass reads it,
@@ -133,7 +133,7 @@ export type BodyGeometry =
   | { readonly kind: "polygon"; readonly points: ReadonlyArray<LocalPoint> }
   | { readonly kind: "compound"; readonly parts: ReadonlyArray<BodyPart> };
 
-/** Declare's physics properties, in Declare's units. px/s, px/s^2, 0..1. */
+/** Marey's physics properties, in Marey's units. px/s, px/s^2, 0..1. */
 export interface PhysicsParams {
   readonly gravityX: number;
   readonly gravityY: number;
@@ -291,7 +291,7 @@ export class MatterWorld implements IPhysicsWorld {
     Matter.Common._seed = 0;
 
     this.engine = Matter.Engine.create();
-    // Declare's gravity is per object, so the world has none of its own.
+    // Marey's gravity is per object, so the world has none of its own.
     this.engine.gravity.scale = 0;
     // We run the sleeping pass ourselves; see step() and spec 6.4.
     this.engine.enableSleeping = false;

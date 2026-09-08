@@ -278,7 +278,7 @@ describe("Phase 3B lift: modulo and comparisons", () => {
     const diags = diagnosticsFor(`let x = 1 and true scene { size:(10,10) }`);
     expect(diags).toHaveLength(1);
     expect(diags[0].message).toContain(
-      "The left operand of 'and' must be a boolean, but got number. Declare has no truthiness — write an explicit comparison.",
+      "The left operand of 'and' must be a boolean, but got number. Marey has no truthiness — write an explicit comparison.",
     );
   });
 });
@@ -329,7 +329,7 @@ describe("Phase 3B lift: conditional value expression", () => {
     const diags = diagnosticsFor(`let x = if 1 then 2 else 3 scene { size:(10,10) }`);
     expect(diags).toHaveLength(1);
     expect(diags[0].message).toContain(
-      "An 'if' condition must be a boolean, but got number. Declare has no truthiness — write an explicit comparison such as 'i % 5 == 0'.",
+      "An 'if' condition must be a boolean, but got number. Marey has no truthiness — write an explicit comparison such as 'i % 5 == 0'.",
     );
   });
 
@@ -596,7 +596,7 @@ describe("Phase 3B line: data determines values, source structure determines sha
   // behind the function-definition and list-element-assignment cases, whose
   // fixtures moved inside the scene block after the originals were found to
   // be intercepted by an unrelated top-level gate. Every fixture here now
-  // places its construct somewhere ordinary Declare content is allowed, so
+  // places its construct somewhere ordinary Marey content is allowed, so
   // the diagnostic asserted is caused by the construct under test.
 
   it("rejects a conditional used as an emission guard", () => {
@@ -706,7 +706,7 @@ describe("Phase 3B line: data determines values, source structure determines sha
   // message (the same one "roadmap cut: user-defined functions, scripting
   // runtime, plugin system, world" above already pins) and would have stayed
   // green if a later phase added either construct *inside* a scene body.
-  // Both now put the construct inside the scene, where ordinary Declare
+  // Both now put the construct inside the scene, where ordinary Marey
   // content lives, so what is being rejected is the construct itself.
 
   // Inside a scene body, 'function' and 'operator' are ordinary identifiers
@@ -734,7 +734,7 @@ describe("Phase 3B line: data determines values, source structure determines sha
     },
   );
 
-  // Reading an element is valid Declare as of Phase 3B (see "Phase 3B lift:
+  // Reading an element is valid Marey as of Phase 3B (see "Phase 3B lift:
   // indexing" above), so what these fixtures reject is the *assignment*, not
   // the index expression: the same scene with 'radius: v[0]' in place of the
   // assignment compiles with zero diagnostics. 'v' is a genuinely bound list

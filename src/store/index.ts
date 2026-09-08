@@ -45,7 +45,7 @@ export interface AppState {
   setIsCompiling: (val: boolean) => void;
 }
 
-const THEME_STORAGE_KEY = "declare_theme";
+const THEME_STORAGE_KEY = "marey_theme";
 
 function getInitialTheme(): Theme {
   try {

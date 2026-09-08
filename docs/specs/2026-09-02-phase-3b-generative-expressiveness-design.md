@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-02
 **Status:** Approved design.
-**Executes:** §8 of `2026-09-01-declare-product-roadmap-design.md`, which remains
+**Executes:** §8 of `2026-09-01-marey-product-roadmap-design.md`, which remains
 authoritative for capability and success criteria. That document states the
 syntax "receives its own phase design"; this is that design.
 **Depends on:** Phase 3A (`2026-09-01-phase-3a-language-foundations-design.md`),
@@ -24,8 +24,8 @@ and they are the acceptance test:
 | `timeline-ticks` | Two overlapping `generate` loops, the wider one drawing over the narrower | No modulo, no conditional |
 
 Both rounds independently reached the same workarounds, and both authors wrote
-comments explaining *why* they were hand-unrolling — `eval/scenes/radial-dots.declare:4-11`
-and `eval/scenes-r2/timeline-ticks.declare:4-9` name the missing feature
+comments explaining *why* they were hand-unrolling — `eval/scenes/radial-dots.marey:4-11`
+and `eval/scenes-r2/timeline-ticks.marey:4-9` name the missing feature
 directly. The exit criterion is that those comments become deletable.
 
 This is the first phase measured by authoring compression rather than
@@ -101,7 +101,7 @@ and it costs the property that a reader can see a program's shape.
 
 ### 3.1 The pipeline fact this design rests on
 
-Declare has no expression layer. Everything is evaluated during parsing:
+Marey has no expression layer. Everything is evaluated during parsing:
 
 - `parseMathExpr` returns a JavaScript `number`, not a node
   (`parser/parseValue.ts:46-75`). `let spacing = base * 2 + 10` stores
@@ -145,7 +145,7 @@ case is written. §4.3 adds exactly one constraint kind.
 
 ### 4.1 Values and operators
 
-```declare
+```marey
 let values = [3, 7, 2, 9, 5, 8, 4]     // list literal
 let n      = length(values)             // 7
 let ring   = 0 to n - 1                 // [0,1,2,3,4,5,6] — inclusive
@@ -213,7 +213,7 @@ rather than silently regrouping.
 
 `generate` gains one header shape and loses the old one:
 
-```declare
+```marey
 generate i in 0 to 10 { … }            // range: a list of integers
 generate v in values { … }             // each element
 generate v, i in values { … }          // element and 0-based ordinal
@@ -296,7 +296,7 @@ and `EASING` for exactly this reason. The new class joins that list.
 
 ### 6.2 Migration cost of reserving them
 
-Verified across all 52 tracked `.declare` files, `src/store/defaultScene.ts`,
+Verified across all 52 tracked `.marey` files, `src/store/defaultScene.ts`,
 and `docs/LANGUAGE.md`: **no first-party source uses any of these words as an
 identifier**, in a binding, an object name, or a value reference. The only
 occurrences are in prose comments.
@@ -314,7 +314,7 @@ each must be materially shorter and cheaper to modify than its baseline.
 
 ### 7.1 `bar-chart` — one list, one loop
 
-```declare
+```marey
 let values   = [3, 7, 2, 9, 5, 8, 4]
 let scale    = 30
 let baseline = 500
@@ -332,7 +332,7 @@ Adding an eighth bar becomes a one-token diff.
 
 ### 7.2 `radial-dots` — one loop, no hand-computed coordinates
 
-```declare
+```marey
 let count = 12
 generate i in 0 to count - 1 {
   let angle = i * 360 / count
@@ -349,7 +349,7 @@ pairs and the eight-line apology comment both disappear.
 
 ### 7.3 `timeline-ticks` — one loop, not two overlapping ones
 
-```declare
+```marey
 generate i in 0 to 10 {
   let major = i % 5 == 0
   let half  = if major then 14 else 6
@@ -511,7 +511,7 @@ is largely deleted. Its replacement states the new capability *and* §2's line,
 because a reader needs to know what the language will not do as much as what it
 will.
 
-`languageDocs.test.ts` compiles every `declare` fence in the reference, so the
+`languageDocs.test.ts` compiles every `marey` fence in the reference, so the
 reference cannot describe syntax that does not work. It does **not** check
 prose, which is how three false statements survived a green suite in Phase 3A
 — so the prose needs reading, not just a green run.
@@ -552,11 +552,11 @@ followed, and are recorded here rather than quietly dropped.
 
 Roadmap §8.3's criteria, made checkable:
 
-1. `eval/scenes-3b/bar-chart.declare` uses **one** literal data list and
+1. `eval/scenes-3b/bar-chart.marey` uses **one** literal data list and
    **one** loop, with zero hand-unrolled `rectangle` blocks.
-2. `eval/scenes-3b/radial-dots.declare` uses **one** loop and **zero**
+2. `eval/scenes-3b/radial-dots.marey` uses **one** loop and **zero**
    hand-computed coordinate literals.
-3. `eval/scenes-3b/timeline-ticks.declare` uses **one** loop, not two.
+3. `eval/scenes-3b/timeline-ticks.marey` uses **one** loop, not two.
 4. Each is materially shorter than its baseline, with the reduction and the
    representative-change diff size recorded in `eval/RESULTS-3B.md`.
 5. `eval/scenes/` and `eval/scenes-r2/` differ from their committed state by
@@ -565,7 +565,7 @@ Roadmap §8.3's criteria, made checkable:
    other changed line. Both compile 20/20, and `report.json` /
    `report-r2.json` are **byte-unchanged** after a re-run, the same clean-`git
    status` proof Phase 3A used. No fixture uses the new expression layer.
-6. Every `declare` fence in `docs/LANGUAGE.md` compiles, and the "Current
+6. Every `marey` fence in `docs/LANGUAGE.md` compiles, and the "Current
    limits" section no longer claims gaps that are closed.
 7. Every lifted cut has a permission test; every retained cut keeps its
    rejection test; §2's line has a rejection test per clause (§10.3).

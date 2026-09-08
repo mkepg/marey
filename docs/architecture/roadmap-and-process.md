@@ -1,6 +1,6 @@
 # Roadmap and process detail
 
-`docs/specs/2026-09-01-declare-product-roadmap-design.md` is the
+`docs/specs/2026-09-01-marey-product-roadmap-design.md` is the
 authoritative product roadmap from Phase 3 onward. The earlier
 `2026-08-26-physics-shared-world-design.md` remains authoritative for the
 motion-graphics direction, decisions D1–D18, and completed Phases 0–2; its
@@ -34,7 +34,7 @@ rather than quietly deviating.
   deliberate language cuts under an executable regression matrix; and fixed
   the deterministic-AST, validator (physics cost ceilings, physical-line
   rejection, handoff duration), yoyo-completion, and evaluation-harness
-  (R1/R2 report-clobbering) defects. Migrated every first-party `.declare`
+  (R1/R2 report-clobbering) defects. Migrated every first-party `.marey`
   fixture, corpus, and this guidance to the final vocabulary. Browser-checked
   across seven Chromium scenes and production-built.
 - **Phase 3B — generative expressiveness: in review** on
@@ -82,7 +82,7 @@ fifth hand-synced list. Its examples are compiled by
 green while the reference still spells it the old way** — that is the
 intended failure, not an obstacle; it is what forced Phase 3A's renames to
 reach every example in the reference rather than leaving any behind. That
-test also rejects any fence tag other than `declare` or `text`, because a
+test also rejects any fence tag other than `marey` or `text`, because a
 mistagged fence would otherwise be skipped silently and report green.
 
 `docs/plans/` holds step-by-step implementation plans. Each has an

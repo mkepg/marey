@@ -1,5 +1,5 @@
 /**
- * Drive the Declare playground in a real browser and capture what it renders.
+ * Drive the Marey playground in a real browser and capture what it renders.
  *
  * The renderer's unit tests are headless by design and cannot see a canvas, so
  * this covers what they structurally cannot: that a scene renders at all, that
@@ -8,7 +8,7 @@
  *
  * Usage:
  *   node tools/visual-check/check.mjs \
- *     --scene tools/visual-check/scenes/pile.declare \
+ *     --scene tools/visual-check/scenes/pile.marey \
  *     --at 300,1500,4000 --settle 9000 --out .visual-check/pile
  *
  *   --url <origin>    dev server origin (default http://localhost:5199)

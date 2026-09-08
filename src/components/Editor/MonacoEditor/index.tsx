@@ -13,7 +13,7 @@ interface MonacoEditorProps {
 }
 
 const EDITOR_OPTIONS: MonacoEditorNS.IStandaloneEditorConstructionOptions = {
-  language: "Declare",
+  language: "Marey",
   fontFamily: "'JetBrains Mono', 'Consolas', 'Courier New', monospace",
   fontSize: 13,
   lineHeight: 22,
@@ -71,7 +71,7 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
       const editor = monaco.editor.create(containerRef.current, {
         ...EDITOR_OPTIONS,
         value: codeRef.current,
-        theme: themeRef.current === "dark" ? "Declare-dark" : "Declare-light",
+        theme: themeRef.current === "dark" ? "Marey-dark" : "Marey-light",
       });
 
       decorationsRef.current = editor.createDecorationsCollection([]);
@@ -94,7 +94,7 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
 
   useEffect(() => {
     if (!editorRef.current || !monaco) return;
-    monaco.editor.setTheme(theme === "dark" ? "Declare-dark" : "Declare-light");
+    monaco.editor.setTheme(theme === "dark" ? "Marey-dark" : "Marey-light");
   }, [theme, monaco]);
 
   useEffect(() => {
@@ -110,7 +110,7 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
     if (prevFileId.current !== fileId) {
       prevFileId.current = fileId;
       const oldModel = editorRef.current.getModel();
-      const newModel = monaco.editor.createModel(codeRef.current, "Declare");
+      const newModel = monaco.editor.createModel(codeRef.current, "Marey");
       editorRef.current.setModel(newModel);
       if (oldModel) {
         oldModel.dispose();
@@ -136,15 +136,15 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
         endColumn: err.endCol ?? (err.col ? err.col + 1 : 100),
       }));
 
-      monaco.editor.setModelMarkers(model, "declare-compiler", markers);
+      monaco.editor.setModelMarkers(model, "marey", markers);
 
       if (decorationsRef.current) {
         const decorations: MonacoEditorNS.IModelDeltaDecoration[] = liveErrors.map((err) => ({
           range: new monaco.Range(err.line ?? 1, 1, err.endLine ?? err.line ?? 1, 1),
           options: {
             isWholeLine: true,
-            className: "declare-error-line",
-            linesDecorationsClassName: "declare-error-gutter",
+            className: "marey-error-line",
+            linesDecorationsClassName: "marey-error-gutter",
           },
         }));
         decorationsRef.current.set(decorations);

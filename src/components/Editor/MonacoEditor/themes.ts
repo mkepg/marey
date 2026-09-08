@@ -1,5 +1,5 @@
 export function defineThemes(monaco: typeof import("monaco-editor")): void {
-  monaco.editor.defineTheme("Declare-dark", {
+  monaco.editor.defineTheme("Marey-dark", {
     base: "vs-dark",
     inherit: true,
     rules: [
@@ -28,7 +28,7 @@ export function defineThemes(monaco: typeof import("monaco-editor")): void {
     },
   });
 
-  monaco.editor.defineTheme("Declare-light", {
+  monaco.editor.defineTheme("Marey-light", {
     base: "vs",
     inherit: true,
     rules: [

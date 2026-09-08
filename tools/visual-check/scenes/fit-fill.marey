@@ -1,12 +1,13 @@
-// fit: none — no scaling and no centring. Expect the 400x400 scene drawn 1:1
-// in the top-left corner of the preview, with the rest of the panel empty.
-// The disc is round and smaller than under every other mode.
+// fit: fill — scale each axis independently so the scene exactly fills the
+// preview, at the origin. Expect no letterbox bars, all four corner markers
+// visible, and the disc stretched into an ellipse. The ellipse is the tell:
+// it is the only mode that does not preserve aspect ratio.
 //
-// Same geometry as fit-contain.declare; only `fit` differs.
+// Same geometry as fit-contain.marey; only `fit` differs.
 scene {
   size: (400, 400)
   background: #101827
-  fit: none
+  fit: fill
 
   circle disc {
     position: (200, 200)

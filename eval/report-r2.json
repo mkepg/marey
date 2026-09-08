@@ -1,139 +1,139 @@
 [
   {
-    "file": "arc-row.declare",
+    "file": "arc-row.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 20
   },
   {
-    "file": "bar-chart.declare",
+    "file": "bar-chart.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 8
   },
   {
-    "file": "collide-stack.declare",
+    "file": "collide-stack.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 4
   },
   {
-    "file": "cross-fade.declare",
+    "file": "cross-fade.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 2
   },
   {
-    "file": "drop-ball.declare",
+    "file": "drop-ball.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 2
   },
   {
-    "file": "fade-then-drop.declare",
+    "file": "fade-then-drop.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 1
   },
   {
-    "file": "fade-title.declare",
+    "file": "fade-title.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 1
   },
   {
-    "file": "freeze-mid.declare",
+    "file": "freeze-mid.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 3
   },
   {
-    "file": "grid-16.declare",
+    "file": "grid-16.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 16
   },
   {
-    "file": "param-easing.declare",
+    "file": "param-easing.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 8
   },
   {
-    "file": "pulse-dot.declare",
+    "file": "pulse-dot.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 1
   },
   {
-    "file": "radial-dots.declare",
+    "file": "radial-dots.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 12
   },
   {
-    "file": "repeated-badge.declare",
+    "file": "repeated-badge.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 15
   },
   {
-    "file": "scale-ramp.declare",
+    "file": "scale-ramp.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 9
   },
   {
-    "file": "slide-card.declare",
+    "file": "slide-card.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 1
   },
   {
-    "file": "spin-triangle.declare",
+    "file": "spin-triangle.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 2
   },
   {
-    "file": "stagger-bars.declare",
+    "file": "stagger-bars.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 10
   },
   {
-    "file": "three-act.declare",
+    "file": "three-act.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 1
   },
   {
-    "file": "throw-arc.declare",
+    "file": "throw-arc.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 1
   },
   {
-    "file": "timeline-ticks.declare",
+    "file": "timeline-ticks.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],

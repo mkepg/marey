@@ -3,7 +3,7 @@ import { propertyHoverMarkdown, physicsSnippet } from "./constants";
 import { sequenceSnippet } from "./language";
 import { analyzeContext } from "./scanner";
 
-describe("Declare editor guidance", () => {
+describe("Marey editor guidance", () => {
   it("describes bounce as shared-world collision behavior", () => {
     const hover = propertyHoverMarkdown("bounce")!;
     expect(hover).toContain("other objects");

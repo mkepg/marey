@@ -1,6 +1,6 @@
 ---
 name: visual-check
-description: Run the Declare playground in a real browser and capture what it renders. Use when verifying a renderer or physics change, checking that a scene settles where it should, that the ticker stops, or that a scene replays identically across a page reload — anything the headless Vitest suite structurally cannot see.
+description: Run the Marey playground in a real browser and capture what it renders. Use when verifying a renderer or physics change, checking that a scene settles where it should, that the ticker stops, or that a scene replays identically across a page reload — anything the headless Vitest suite structurally cannot see.
 ---
 
 # Visual check
@@ -37,13 +37,13 @@ Then:
 
 ```bash
 node tools/visual-check/check.mjs \
-  --scene tools/visual-check/scenes/pile.declare \
+  --scene tools/visual-check/scenes/pile.marey \
   --at 300,1500,4000 --settle 9000 --out .visual-check/pile
 ```
 
 | Flag | Meaning |
 |---|---|
-| `--scene <path>` | A `.declare` file, or `default` for the app's built-in test card |
+| `--scene <path>` | A `.marey` file, or `default` for the app's built-in test card |
 | `--at a,b,c` | Milliseconds after load to capture, comma-separated |
 | `--settle <ms>` | How long to wait before the at-rest capture (default 9000) |
 | `--url <origin>` | Dev server origin (default `http://localhost:5199`) |
@@ -84,7 +84,7 @@ pile converging on a stable resting configuration reaches the same fixed point
 even if the trajectory diverged, so at-rest equality can hide real
 non-determinism. To test a *trajectory*, use a scene that freezes mid-motion —
 `physics { duration: 0.5 }` on a falling object — so the capture lands on a
-transient state. `scenes/freeze.declare` does exactly this, which is how the
+transient state. `scenes/freeze.marey` does exactly this, which is how the
 `f9de4a9` bug surfaced.
 
 A scene with `loop: true` animations never comes to rest at all, so
@@ -98,18 +98,18 @@ for determinism.
 
 | Scene | Property |
 |---|---|
-| `pile.declare` | Five boxes stack without interpenetrating — the headline Phase 1 feature |
-| `idle.declare` | A ball settles and the ticker stops |
-| `ghost.declare` | A ball falls **through** a ledge that has no `physics` block (decision D13) |
-| `tumble.declare` | A polygon rotates on impact, and its drawn shape stays on its collision shape (D15) |
-| `freeze.declare` | `duration` expiry freezes a settling pile mid-motion, reproducibly |
-| `freeze-midair.declare` | Minimal repro of the `f9de4a9` bug: one box, no contacts, frozen in free fall. The tightest determinism check here — nothing else can absorb a divergence. |
-| `logo.declare` | A three-bar group welds into one compound body and tumbles rigidly, settling on its own arms (Phase 2, D16). If the bars ever separate, the welding has stopped happening. |
-| `logo-freeze.declare` | The same idea frozen mid-tumble in free air — determinism on a transient state rather than at rest. |
-| `fit-contain.declare` | `fit: contain` — letterboxed, aspect preserved, all four corner markers visible (Phase 3A, `sceneFit → fit` rename). |
-| `fit-cover.declare` | `fit: cover` — no letterbox, aspect preserved, corner markers cropped off the short axis. |
-| `fit-fill.declare` | `fit: fill` — no letterbox, aspect **not** preserved; the disc renders as an ellipse. |
-| `fit-none.declare` | `fit: none` — unscaled, anchored top-left, smallest disc of the four. |
+| `pile.marey` | Five boxes stack without interpenetrating — the headline Phase 1 feature |
+| `idle.marey` | A ball settles and the ticker stops |
+| `ghost.marey` | A ball falls **through** a ledge that has no `physics` block (decision D13) |
+| `tumble.marey` | A polygon rotates on impact, and its drawn shape stays on its collision shape (D15) |
+| `freeze.marey` | `duration` expiry freezes a settling pile mid-motion, reproducibly |
+| `freeze-midair.marey` | Minimal repro of the `f9de4a9` bug: one box, no contacts, frozen in free fall. The tightest determinism check here — nothing else can absorb a divergence. |
+| `logo.marey` | A three-bar group welds into one compound body and tumbles rigidly, settling on its own arms (Phase 2, D16). If the bars ever separate, the welding has stopped happening. |
+| `logo-freeze.marey` | The same idea frozen mid-tumble in free air — determinism on a transient state rather than at rest. |
+| `fit-contain.marey` | `fit: contain` — letterboxed, aspect preserved, all four corner markers visible (Phase 3A, `sceneFit → fit` rename). |
+| `fit-cover.marey` | `fit: cover` — no letterbox, aspect preserved, corner markers cropped off the short axis. |
+| `fit-fill.marey` | `fit: fill` — no letterbox, aspect **not** preserved; the disc renders as an ellipse. |
+| `fit-none.marey` | `fit: none` — unscaled, anchored top-left, smallest disc of the four. |
 
 Add a scene rather than editing one when checking something new — these are
 regression checks, and their expected images are their value.

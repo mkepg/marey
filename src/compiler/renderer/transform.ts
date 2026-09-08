@@ -6,7 +6,7 @@
  * its own module because two callers need the identical composition and a
  * second copy would drift.
  *
- * `rot` is in radians, matching `Container.rotation`. Declare source writes
+ * `rot` is in radians, matching `Container.rotation`. Marey source writes
  * degrees; `builder.ts` converts on the way in.
  */
 export interface LocalTransform {

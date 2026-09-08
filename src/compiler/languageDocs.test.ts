@@ -7,10 +7,10 @@
  * final vocabulary changes, every example here stops compiling and the
  * build goes red, rather than the document quietly going stale.
  *
- * Fences tagged ```declare are compiled. Fences tagged ```text are prose
+ * Fences tagged ```marey are compiled. Fences tagged ```text are prose
  * fragments and are skipped deliberately. Any other tag — including an empty
  * one — is treated as a mistake, not tolerated: `extractExamples` throws
- * naming the bad tag and its line, so a typo like ```Declare loses coverage
+ * naming the bad tag and its line, so a typo like ```Marey loses coverage
  * loudly instead of silently. A four-or-more-backtick fence also throws:
  * this extractor is a line scanner, not a nested-fence parser, so a block
  * that displays fence syntax literally must not be attempted.
@@ -45,7 +45,7 @@ interface Example {
   source: string;
 }
 
-const RECOGNISED_TAGS = new Set(["declare", "text"]);
+const RECOGNISED_TAGS = new Set(["marey", "text"]);
 
 export function extractExamples(markdown: string): Example[] {
   const lines = markdown.split(/\r?\n/);
@@ -69,7 +69,7 @@ export function extractExamples(markdown: string): Example[] {
         const tag = fenceMatch[1].trim();
         if (!RECOGNISED_TAGS.has(tag)) {
           throw new Error(
-            `Unrecognised fence tag "${tag}" at line ${i + 1}. Use \`\`\`declare for a compiled example or \`\`\`text for a prose fragment.`
+            `Unrecognised fence tag "${tag}" at line ${i + 1}. Use \`\`\`marey for a compiled example or \`\`\`text for a prose fragment.`
           );
         }
         open = { line: i + 1, tag, body: [] };
@@ -78,7 +78,7 @@ export function extractExamples(markdown: string): Example[] {
     }
 
     if (fenceMatch) {
-      if (open.tag === "declare") {
+      if (open.tag === "marey") {
         examples.push({ line: open.line, source: open.body.join("\n") });
       }
       open = null;
@@ -137,19 +137,19 @@ describe("docs/LANGUAGE.md examples", () => {
 });
 
 describe("extractExamples", () => {
-  it("extracts a single declare fence and reports the fence marker's line", () => {
-    const md = ["prose", "```declare", "scene { }", "```", "more prose"].join("\n");
+  it("extracts a single marey fence and reports the fence marker's line", () => {
+    const md = ["prose", "```marey", "scene { }", "```", "more prose"].join("\n");
     expect(extractExamples(md)).toEqual([{ line: 2, source: "scene { }" }]);
   });
 
   it("extracts two fences and reports both line numbers correctly", () => {
     const md = [
       "# heading",
-      "```declare",
+      "```marey",
       "scene { A }",
       "```",
       "text between",
-      "```declare",
+      "```marey",
       "scene { B }",
       "```",
     ].join("\n");
@@ -160,36 +160,36 @@ describe("extractExamples", () => {
   });
 
   it("skips a text fence — it does not appear in the results", () => {
-    const md = ["```text", "this is prose, not code", "```", "```declare", "scene { }", "```"].join(
+    const md = ["```text", "this is prose, not code", "```", "```marey", "scene { }", "```"].join(
       "\n"
     );
     const result = extractExamples(md);
     expect(result).toEqual([{ line: 4, source: "scene { }" }]);
   });
 
-  it("throws on an unclosed declare fence, naming the opening line", () => {
-    const md = ["intro", "```declare", "scene { }"].join("\n");
+  it("throws on an unclosed marey fence, naming the opening line", () => {
+    const md = ["intro", "```marey", "scene { }"].join("\n");
     expect(() => extractExamples(md)).toThrow(
-      "Unclosed ```declare fence opened at line 2"
+      "Unclosed ```marey fence opened at line 2"
     );
   });
 
-  it("throws on an unrecognised tag such as Declare, naming the tag", () => {
-    const md = ["```Declare", "scene { }", "```"].join("\n");
+  it("throws on an unrecognised tag such as Marey, naming the tag", () => {
+    const md = ["```Marey", "scene { }", "```"].join("\n");
     expect(() => extractExamples(md)).toThrow(
-      'Unrecognised fence tag "Declare" at line 1.'
+      'Unrecognised fence tag "Marey" at line 1.'
     );
   });
 
   it("throws on a four-backtick fence", () => {
-    const md = ["````declare", "scene { }", "````"].join("\n");
+    const md = ["````marey", "scene { }", "````"].join("\n");
     expect(() => extractExamples(md)).toThrow(
       "Four-backtick fence at line 1 is not supported by this extractor."
     );
   });
 
   it("handles CRLF line endings, producing the same result as LF", () => {
-    const lf = ["```declare", "scene { }", "```"].join("\n");
+    const lf = ["```marey", "scene { }", "```"].join("\n");
     const crlf = lf.replace(/\n/g, "\r\n");
     expect(extractExamples(crlf)).toEqual(extractExamples(lf));
   });

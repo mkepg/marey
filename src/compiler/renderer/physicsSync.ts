@@ -79,7 +79,7 @@ export function bindPhysicsBodies(root: Container, world: IPhysicsWorld): Physic
   let nextId = 0;
 
   const visit = (container: Container, t: LocalTransform, movingAncestor: boolean): void => {
-    const layout = container.__declareLayout;
+    const layout = container.__mareyLayout;
 
     if (hasPhysicsAnywhere(container) && container.__bodyShape && layout) {
       const id = `b${nextId++}`;
@@ -192,7 +192,7 @@ export function syncWorldToContainers(
     if (world.isPinned(id)) continue;
     const state = world.readState(id, alpha);
     if (!state) continue;
-    const layout = container.__declareLayout;
+    const layout = container.__mareyLayout;
     if (!layout) continue;
     const t = bodyTransformOf(container);
     const local = toLocal(t, state.x, state.y);
@@ -222,7 +222,7 @@ export function snapContainerToBody(container: Container, world: IPhysicsWorld):
   const id = container.__body;
   if (!id) return;
   const state = world.readState(id, 1);
-  const layout = container.__declareLayout;
+  const layout = container.__mareyLayout;
   if (!state || !layout) return;
   const t = bodyTransformOf(container);
   const local = toLocal(t, state.x, state.y);

@@ -208,7 +208,7 @@ describe("MatterWorld walls", () => {
 });
 
 /**
- * Declare-unit velocity of a body, measured from one tick to the next.
+ * Marey-unit velocity of a body, measured from one tick to the next.
  *
  * Note this advances the world by one tick. To measure the velocity at tick N,
  * step N-1 times first.

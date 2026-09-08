@@ -53,7 +53,7 @@ were semantically correct, not merely compilable: `arc-row` (parabola), `bar-cha
 ## What this does and does not support
 
 It supports: **the grammar is not the bottleneck for machine authorship.** A model with zero
-training data on Declare, given only the default scene and the IDE's completions, wrote
+training data on Marey, given only the default scene and the IDE's completions, wrote
 twenty non-trivial scenes that all compiled and rendered correctly. Several things the
 authors were nervous about turned out to work — nested `generate`, grouped arithmetic like
 `(i - 9.5) * (i - 9.5)`, reusing one object name across all iterations of a loop, `use`

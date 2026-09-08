@@ -1,8 +1,8 @@
 /**
- * Compile every .declare file in eval/scenes and report the result.
+ * Compile every .marey file in eval/scenes and report the result.
  *
  * Baseline for the machine-authorability question: how reliably can a model
- * with no training data on Declare produce a scene that compiles? Captured
+ * with no training data on Marey produce a scene that compiles? Captured
  * before phase 3 rewrites the grammar and the error messages, so there is a
  * before-number to compare against afterwards.
  */
@@ -58,7 +58,7 @@ describe("reportPathForEvalDir", () => {
 });
 
 it("compiles every scene and writes a report", () => {
-  const files = readdirSync(DIR).filter((f) => f.endsWith(".declare")).sort();
+  const files = readdirSync(DIR).filter((f) => f.endsWith(".marey")).sort();
   const results = files.map((f) => {
     const src = readFileSync(`${DIR}/${f}`, "utf8");
     let parseErrors: string[] = [];

@@ -1,5 +1,5 @@
 {
-  "name": "declare-compiler",
+  "name": "marey",
   "private": true,
   "version": "0.3.1",
   "type": "module",

@@ -1,4 +1,4 @@
-# Declare Product Roadmap — From Motion DSL to Distributed Artifact
+# Marey Product Roadmap — From Motion DSL to Distributed Artifact
 
 **Date:** 2026-09-01
 **Status:** Approved roadmap.
@@ -11,12 +11,12 @@ completed deterministic-clock, shared-world, and compound-group work.
 
 ## 1. Product statement
 
-Declare is a text-first compiler for generative, deterministic 2D motion
+Marey is a text-first compiler for generative, deterministic 2D motion
 graphics. It lets developers and machine authors describe, parameterize,
 simulate, review, and version motion as readable source, then compile it into
-portable artifacts that do not require the Declare runtime.
+portable artifacts that do not require the Marey runtime.
 
-Declare is not trying to become:
+Marey is not trying to become:
 
 - a more general animation API than GSAP;
 - a visual design and interactive-state-machine editor like Rive;
@@ -34,20 +34,20 @@ implementation machinery, not the product identity.
 Phases 0–2 established a strong renderer: fixed-tick determinism, shared rigid
 bodies, interpolation, compound groups, and a tested tick/paint boundary. More
 physics breadth would now improve an already-credible subsystem without proving
-that Declare's authoring model is valuable.
+that Marey's authoring model is valuable.
 
 Two measured gaps are more urgent:
 
 1. `eval/RESULTS.md` found that three of four data-driven briefs required
    hand-unrolling. The macro layer handles repetition but not data.
-2. Declare has no export, embed, public package, or CLI. A user can create a
+2. Marey has no export, embed, public package, or CLI. A user can create a
    scene in the playground but cannot put its output into a production
    workflow.
 
 Mermaid supplies the useful adoption analogy. Its success did not come from
 text syntax alone. It combines semantic compression with distribution: short
 source renders inside GitHub, GitLab, documentation tools, editors, and CI.
-Declare cannot depend on native host support at first, but it can reproduce the
+Marey cannot depend on native host support at first, but it can reproduce the
 workflow through portable output, a CLI, CI integration, and embeddable
 artifacts. Evidence for the analogy is recorded in GitHub's
 [native Mermaid announcement](https://github.blog/developer-skills/github/include-diagrams-markdown-files-mermaid/),
@@ -75,14 +75,14 @@ add motion and physics breadth
 | # | Decision | Rationale |
 |---|---|---|
 | R1 | Complete the language cleanup and breaking renames before adding capability. | Every later example, export fixture, integration, and documentation page should use the final vocabulary. |
-| R2 | Keep the deliberate physics-language cuts and make them regression-tested. | Declare is a motion-graphics language, not a simulation-authoring surface. |
+| R2 | Keep the deliberate physics-language cuts and make them regression-tested. | Marey is a motion-graphics language, not a simulation-authoring surface. |
 | R3 | Expand the macro milestone until it passes all three measured data-driven briefs without hand-unrolling. | A stated differentiator that fails its own examples is not a differentiator. |
 | R4 | Modulo alone is insufficient; Phase 3B includes comparison and conditional capability. | “Every fifth item differs” requires a decision as well as a remainder. |
 | R5 | Trigonometry is required, not optional, for the current radial-layout success criterion. | Otherwise `radial-dots` still needs hand-computed coordinates. |
 | R6 | Pull export ahead of additional physics syntax. | Source-to-artifact compilation validates the product thesis; more solver controls do not. |
 | R7 | Separate deterministic frame sampling from output encoders. | PNG, Lottie, and video must share one simulation and frame-selection path. |
-| R8 | After PNG proves the driver, prioritize a baked-Lottie subset before broad video-format polish. | Lottie proves portable playback without the Declare runtime and is the strategic target. |
-| R9 | Distribution is a first-class roadmap phase, not an assumption attached to export. | Mermaid-like adoption requires Declare to appear in workflows users already have. |
+| R8 | After PNG proves the driver, prioritize a baked-Lottie subset before broad video-format polish. | Lottie proves portable playback without the Marey runtime and is the strategic target. |
+| R9 | Distribution is a first-class roadmap phase, not an assumption attached to export. | Mermaid-like adoption requires Marey to appear in workflows users already have. |
 | R10 | Measure semantic compression, not only compilation success. | Text is useful only when it removes meaningful authoring and maintenance work. |
 | R11 | Investigate high-level layout primitives only after the expanded authorability evaluation. | Repeated coordinate arithmetic may justify `row`, `grid`, or `radial`; do not add syntax before observing the need. |
 | R12 | Retain D13's explicit-body rule unless user evidence overturns it. | Visible physicality supports readable diffs; implicit colliders hide consequential behavior. |
@@ -131,7 +131,7 @@ eventually justify a semantic layout construct.
 ### 5.3 Physics-driven compound logo
 
 A multi-part visual animates into a deterministic shared-world simulation and
-exports as baked transforms. It tests the unusual combination Declare already
+exports as baked transforms. It tests the unusual combination Marey already
 owns: readable choreography, rigid-body motion, and runtime-independent output.
 
 For every canonical scene, record:
@@ -278,7 +278,7 @@ general expressions do.
 Introduce one deterministic sampler above `SceneRuntime`:
 
 ```text
-Declare source
+Marey source
     ↓
 Scene IR
     ↓
@@ -296,7 +296,7 @@ simulation themselves and never see a wall clock.
 
 - Export a PNG sequence, initially from the browser.
 - Expose a pure compiler surface that is not coupled to the Web Worker.
-- Add `declare check`, or an equivalent CLI validation command, before a full
+- Add `marey check`, or an equivalent CLI validation command, before a full
   rendering CLI.
 
 ### 9.4 Exit criteria — Product Gate B
@@ -318,11 +318,11 @@ After PNG validates the sampler, emit a deliberately bounded Lottie subset:
 - static circle, rectangle, polygon, and group geometry;
 - baked position, rotation, scale, and alpha keyframes;
 - fixed duration and frame rate;
-- baked physics with no Matter.js or Declare dependency at playback.
+- baked physics with no Matter.js or Marey dependency at playback.
 
 Unsupported features fail explicitly rather than disappearing or degrading
 silently. Validate output in an independent Lottie player and compare selected
-frames against Declare within documented tolerances.
+frames against Marey within documented tolerances.
 
 ### 10.2 Video
 
@@ -341,31 +341,31 @@ Export is not adoption until it fits existing workflows.
 ### 11.1 Adoption ladder
 
 1. Try a share link without an account.
-2. Store a `.declare` file in a repository.
+2. Store a `.marey` file in a repository.
 3. Preview locally.
 4. Validate in CI.
 5. Compile to a portable artifact.
-6. Embed the artifact without the Declare runtime.
+6. Embed the artifact without the Marey runtime.
 
 ### 11.2 Deliverables
 
 - A public compiler package and explicit open-source license.
 - A root README with a five-minute example.
-- `declare check` and `declare export` CLI commands.
-- A GitHub Action that validates and exports changed `.declare` files.
+- `marey check` and `marey export` CLI commands.
+- A GitHub Action that validates and exports changed `.marey` files.
 - A small embeddable player or web component where a runtime preview is useful.
 - One or two documentation integrations chosen from actual demand, initially
   likely MDX, Docusaurus, or VitePress.
 
-Native GitHub rendering is not an initial dependency. A checked-in `.declare`
+Native GitHub rendering is not an initial dependency. A checked-in `.marey`
 file can be compiled by CI to Lottie, video, or an image referenced by ordinary
 Markdown.
 
 ### 11.3 Exit criteria — Product Gate C
 
 A new user can clone a repository, edit one canonical scene, receive a CI
-validation result, and embed the generated artifact without opening the Declare
-IDE or loading the Declare runtime in production.
+validation result, and embed the generated artifact without opening the Marey
+IDE or loading the Marey runtime in production.
 
 ---
 
@@ -428,14 +428,14 @@ can link directly to editable source in the playground.
 
 ## 15. Success criteria for the product direction
 
-Declare has validated its niche when this workflow is routine:
+Marey has validated its niche when this workflow is routine:
 
-1. A developer or machine author writes a short `.declare` file.
+1. A developer or machine author writes a short `.marey` file.
 2. The editor previews it immediately.
 3. CI validates it.
 4. A pull request shows a readable source diff.
 5. CI compiles it into Lottie, video, or frames.
-6. The output embeds without Declare.
+6. The output embeds without Marey.
 7. A useful variant requires a small source change rather than hand-unrolling.
 
 Track:

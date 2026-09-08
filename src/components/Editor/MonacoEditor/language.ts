@@ -26,11 +26,11 @@ const animationSnippet = (): string => `animate {\n\tproperty: \${1:${propertyPl
 export const sequenceSnippet = (): string => `sequence {\n\t\${1:animate {\n\t\tproperty: ${propertyPlaceholder("animate", "property")}\n\t\tto: ${propertyPlaceholder("animate", "to")}\n\t\tduration: \${2:${propertyPlaceholder("animate", "duration")}}\n\t\teasing: ${propertyPlaceholder("animate", "easing")}\n\t}}\n}`;
 
 export function registerLanguage(monaco: typeof import("monaco-editor")): void {
-  if (monaco.languages.getLanguages().some((l) => l.id === "Declare")) return;
+  if (monaco.languages.getLanguages().some((l) => l.id === "Marey")) return;
 
-  monaco.languages.register({ id: "Declare" });
+  monaco.languages.register({ id: "Marey" });
 
-  monaco.languages.setMonarchTokensProvider("Declare", {
+  monaco.languages.setMonarchTokensProvider("Marey", {
     keywords:    ["scene", "circle", "rectangle", "polygon", "line", "text", "group", "generate", "template", "use", "animate", "physics", "sequence", "parallel"],
     letKeyword:  ["let"],
     booleanValues: [...BOOLEAN_VALUES],
@@ -66,7 +66,7 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
     },
   });
 
-  monaco.languages.registerColorProvider("Declare", {
+  monaco.languages.registerColorProvider("Marey", {
     provideDocumentColors: (model) => {
       const text = model.getValue();
       const colors: MonacoLanguagesNS.IColorInformation[] = [];
@@ -108,7 +108,7 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
     },
   });
 
-  monaco.languages.registerHoverProvider("Declare", {
+  monaco.languages.registerHoverProvider("Marey", {
     provideHover: (model, position) => {
       const word = model.getWordAtPosition(position);
       if (!word) return null;
@@ -162,7 +162,7 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
     },
   });
 
-  monaco.languages.registerCompletionItemProvider("Declare", {
+  monaco.languages.registerCompletionItemProvider("Marey", {
     triggerCharacters: [":"],
     provideCompletionItems: (model, position) => {
       const textUntilPosition = model.getValueInRange({
@@ -365,7 +365,7 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
             kind: monaco.languages.CompletionItemKind.Keyword,
             insertText: `let \${1:varName} = \${2:value}`,
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-            detail: "Declare a constant variable",
+            detail: "Marey a constant variable",
             range,
           });
 

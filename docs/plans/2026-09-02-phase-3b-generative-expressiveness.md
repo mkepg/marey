@@ -1,8 +1,8 @@
 # Phase 3B — Generative Expressiveness Implementation Plan
 
-**Goal:** Give Declare lists, iteration over them, indexing, `length`, modulo, comparison, boolean combinators, a conditional value expression, and degree-based `sin`/`cos`, so that `bar-chart`, `radial-dots` and `timeline-ticks` stop being hand-unrolled.
+**Goal:** Give Marey lists, iteration over them, indexing, `length`, modulo, comparison, boolean combinators, a conditional value expression, and degree-based `sin`/`cos`, so that `bar-chart`, `radial-dots` and `timeline-ticks` stop being hand-unrolled.
 
-**Architecture:** Declare has no expression layer — the parser evaluates everything to a literal `AstValue` at parse time (`parser/parseValue.ts:46-75`), and `generate` re-parses its body with a rebound environment (`parser/parseGenerate.ts:87-98`). Every construct here is therefore a *parse-time* addition: the type checker and the Scene IR see only folded literals, so `sceneIR.ts` is untouched. The one type-system change that reaches the contract is folding `pointList` into a single `list` value kind with a `listOf` constraint.
+**Architecture:** Marey has no expression layer — the parser evaluates everything to a literal `AstValue` at parse time (`parser/parseValue.ts:46-75`), and `generate` re-parses its body with a rebound environment (`parser/parseGenerate.ts:87-98`). Every construct here is therefore a *parse-time* addition: the type checker and the Scene IR see only folded literals, so `sceneIR.ts` is untouched. The one type-system change that reaches the contract is folding `pointList` into a single `list` value kind with a `listOf` constraint.
 
 **Tech Stack:** TypeScript (strict, `noUnusedLocals`, `noUnusedParameters`, `verbatimModuleSyntax`), Vitest, Vite, PixiJS, Matter.js 0.20.0.
 
@@ -54,9 +54,9 @@ EVAL_DIR=eval/scenes-r2 npx vitest run --config eval/vitest.config.ts   # R2 cor
 |---|---|
 | `src/compiler/parser/parseExpr.ts` | The whole expression grammar: precedence climbing, unary, postfix index, primary, and typed binary/unary application. Owns every new operator. |
 | `src/compiler/parser/parseExpr.test.ts` | Unit tests for the expression parser, driven through `lex`/`parse`. |
-| `eval/scenes-3b/bar-chart.declare` | Rewritten acceptance scene. |
-| `eval/scenes-3b/radial-dots.declare` | Rewritten acceptance scene. |
-| `eval/scenes-3b/timeline-ticks.declare` | Rewritten acceptance scene. |
+| `eval/scenes-3b/bar-chart.marey` | Rewritten acceptance scene. |
+| `eval/scenes-3b/radial-dots.marey` | Rewritten acceptance scene. |
+| `eval/scenes-3b/timeline-ticks.marey` | Rewritten acceptance scene. |
 | `eval/scenes-3b/README.md` | States this is a demonstration corpus, not an authorability round. |
 | `eval/RESULTS-3B.md` | Before/after metrics against the hand-unrolled baselines. |
 
@@ -188,7 +188,7 @@ In `src/compiler/lexer/index.ts`, import `TWO_CHAR_MAP` alongside `SINGLE_CHAR_M
     }
 
     if (ch === "!") {
-      state.err("Unexpected character '!'. Declare has no '!' operator — write '!=' for inequality, or 'not' to negate a condition.");
+      state.err("Unexpected character '!'. Marey has no '!' operator — write '!=' for inequality, or 'not' to negate a condition.");
     }
 ```
 
@@ -199,7 +199,7 @@ In `src/compiler/lexer/index.ts`, import `TWO_CHAR_MAP` alongside `SINGLE_CHAR_M
 `src/compiler/lexer/index.ts:64` enumerates the legal symbols and is user-facing. Replace its trailing list:
 
 ```ts
-    state.err(`Unexpected character ${display}. Declare source may only contain letters, digits, and the following symbols: # " { } [ ] ( ) : , // + - * / % = == != < > <= >=`);
+    state.err(`Unexpected character ${display}. Marey source may only contain letters, digits, and the following symbols: # " { } [ ] ( ) : , // + - * / % = == != < > <= >=`);
 ```
 
 - [ ] **Step 7: Describe the new tokens in parser diagnostics**
@@ -514,7 +514,7 @@ and both eval corpora reproduce their committed reports byte for byte."
 - Modify: `src/compiler/parser/parseUse.ts:73`
 - Test: `src/compiler/languageCuts.test.ts:163-176`, `:234-242`, `:340-353`
 
-Reserving `in to if then else and or not sin cos length` is the phase's breaking change. It is verified zero-cost across the corpus: no `.declare` file, and no non-comment line of `src/store/defaultScene.ts`, uses any of them as an identifier.
+Reserving `in to if then else and or not sin cos length` is the phase's breaking change. It is verified zero-cost across the corpus: no `.marey` file, and no non-comment line of `src/store/defaultScene.ts`, uses any of them as an identifier.
 
 They must **not** join `KEYWORDS` (`lexer/constants.ts:11`), which means "names a block" — `parseValue` reports any `KEYWORD` in value position as *"is an object keyword"* (`parser/parseValue.ts:208-210`), which would be false for `if`.
 
@@ -1060,7 +1060,7 @@ function applyBinary(state, op, left, right, opTok): AstValue {
 }
 ```
 
-Add `requireBoolean` beside `requireNumber`, with the message `The ${side} operand of '${op}' must be a boolean, but got ${v.kind}. Declare has no truthiness — write an explicit comparison.` Both helpers take `opTok` and report at the operator, not at `state.peek()`, so the position is stable.
+Add `requireBoolean` beside `requireNumber`, with the message `The ${side} operand of '${op}' must be a boolean, but got ${v.kind}. Marey has no truthiness — write an explicit comparison.` Both helpers take `opTok` and report at the operator, not at `state.peek()`, so the position is stable.
 
 - [ ] **Step 5: Enforce non-associativity and add `not`**
 
@@ -1210,7 +1210,7 @@ function parseConditional(state: ParserState, depth: number): AstValue {
   const condition = parseExpr(state, 0, depth + 1);
   if (condition.kind !== "boolean") {
     state.throwError(
-      `In ${state.currentContext}: An 'if' condition must be a boolean, but got ${condition.kind}. Declare has no truthiness — write an explicit comparison such as 'i % 5 == 0'.`,
+      `In ${state.currentContext}: An 'if' condition must be a boolean, but got ${condition.kind}. Marey has no truthiness — write an explicit comparison such as 'i % 5 == 0'.`,
       ifTok,
     );
   }
@@ -1668,7 +1668,7 @@ messages, and assert what they say.
 git add src/compiler/parser src/compiler/languageCuts.test.ts
 git commit -m "feat(parser): sin and cos in degrees
 
-Degrees match rotation, the only other angle in the language, so Declare
+Degrees match rotation, the only other angle in the language, so Marey
 has exactly one angle unit. No pi constant — a deliberate deviation from
 roadmap 8.1, recorded in the design's section 11: sin(pi) would be
 0.0548, not 0, which is a trap sitting next to the functions it looks
@@ -1700,7 +1700,7 @@ and property separators are *optional*: `parseObject.ts:295` consumes commas in 
 `while` loop, so zero commas is well-formed. Every `animate` block in the
 protected `eval/` corpus is written without them —
 
-```declare
+```marey
 animate {
   property: alpha
   to: 0.0
@@ -1915,7 +1915,7 @@ header shape instead of two, and folds parseGenerate's separate
 
 **Files:**
 - Modify: `src/compiler/parser/parseGenerate.ts` (whole header + loop)
-- Modify: `eval/scenes-3b/` is not yet created; migrate `tools/visual-check/scenes/*.declare`, `src/store/defaultScene.ts`, `docs/LANGUAGE.md`, `src/components/Editor/MonacoEditor/constants.ts:35`
+- Modify: `eval/scenes-3b/` is not yet created; migrate `tools/visual-check/scenes/*.marey`, `src/store/defaultScene.ts`, `docs/LANGUAGE.md`, `src/components/Editor/MonacoEditor/constants.ts:35`
 - Test: `src/compiler/parser/parseGenerate.test.ts` (create if absent)
 
 **Twelve `.eval` fixtures use `from` and must be migrated in this task** — six in `eval/scenes/`, six in `eval/scenes-r2/`. This is the one permitted edit to either corpus in the whole phase: a mechanical `from` → `in` rename and nothing else, matching the vocabulary migration Phase 3A performed and recorded at `eval/RESULTS.md:7-12`. **Do not touch anything else in those files** — not the hand-unrolled rectangles, not the literal coordinates, not the author comments explaining why they were written that way. Every affected header starts at 0, so no object name changes and both report JSONs must stay byte-identical.
@@ -2066,10 +2066,10 @@ Change the three suffix sites at `:117`, `:124` and `:130` from `` `${sn.name}_$
 Every `generate X from A to B` becomes `generate X in A to B`. Find them:
 
 ```bash
-grep -rn "generate [a-zA-Z_][a-zA-Z0-9_]* from" --include=*.declare --include=*.ts --include=*.md . | grep -v node_modules
+grep -rn "generate [a-zA-Z_][a-zA-Z0-9_]* from" --include=*.marey --include=*.ts --include=*.md . | grep -v node_modules
 ```
 
-Fix every hit, **including** the twelve under `eval/` — that rename and nothing else. Also covered: `tools/visual-check/scenes/*.declare`, `src/store/defaultScene.ts`, `docs/LANGUAGE.md`, and the `generate` hover string at `src/components/Editor/MonacoEditor/constants.ts:35` — whose prose says *"Required Elements: `variable | from | startValue | to | endValue`"* and must be rewritten for the new header, including its example.
+Fix every hit, **including** the twelve under `eval/` — that rename and nothing else. Also covered: `tools/visual-check/scenes/*.marey`, `src/store/defaultScene.ts`, `docs/LANGUAGE.md`, and the `generate` hover string at `src/components/Editor/MonacoEditor/constants.ts:35` — whose prose says *"Required Elements: `variable | from | startValue | to | endValue`"* and must be rewritten for the new header, including its example.
 
 - [ ] **Step 5b: Prove the `.eval` diff is the rename and nothing else**
 
@@ -2347,11 +2347,11 @@ to prevent."
 - Modify: `src/components/Editor/MonacoEditor/constants.ts`
 - Test: `src/compiler/languageDocs.test.ts`
 
-`languageDocs.test.ts` compiles every `declare` fence in the reference and rejects any fence tag but `declare` or `text`. It does **not** check prose — three false statements survived a green suite in Phase 3A. Read the prose.
+`languageDocs.test.ts` compiles every `marey` fence in the reference and rejects any fence tag but `marey` or `text`. It does **not** check prose — three false statements survived a green suite in Phase 3A. Read the prose.
 
 - [ ] **Step 1: Replace the "Arithmetic" section**
 
-`docs/LANGUAGE.md:690-698` currently says *"There is no modulo operator, no exponent, and no comparison operator."* Two thirds of that is now false. Rewrite the section to cover the full operator set and the precedence table from spec §4.2, with a worked `declare` example that compiles.
+`docs/LANGUAGE.md:690-698` currently says *"There is no modulo operator, no exponent, and no comparison operator."* Two thirds of that is now false. Rewrite the section to cover the full operator set and the precedence table from spec §4.2, with a worked `marey` example that compiles.
 
 - [ ] **Step 2: Replace the `generate` section**
 
@@ -2366,7 +2366,7 @@ to prevent."
 
 - [ ] **Step 4: Add a worked data-driven example**
 
-Add one `declare` fence showing the bar-chart pattern end to end — a literal list, `generate v, i in values`, and a conditional colour. It compiles as part of `languageDocs.test.ts`, so it cannot rot.
+Add one `marey` fence showing the bar-chart pattern end to end — a literal list, `generate v, i in values`, and a conditional colour. It compiles as part of `languageDocs.test.ts`, so it cannot rot.
 
 - [ ] **Step 5: Update Monaco**
 
@@ -2405,7 +2405,7 @@ Arithmetic and generate are rewritten for the new operator set and the
 ## Task 14: The three acceptance scenes and the evidence
 
 **Files:**
-- Create: `eval/scenes-3b/{bar-chart,radial-dots,timeline-ticks}.declare`, `eval/scenes-3b/README.md`, `eval/RESULTS-3B.md`
+- Create: `eval/scenes-3b/{bar-chart,radial-dots,timeline-ticks}.marey`, `eval/scenes-3b/README.md`, `eval/RESULTS-3B.md`
 - Modify: `eval/RESULTS.md`, `eval/RESULTS-R2.md` (a dated note only)
 - **Do not modify** `eval/scenes/`, `eval/scenes-r2/`, `eval/report.json`, `eval/report-r2.json`
 
@@ -2461,8 +2461,8 @@ State plainly in the note that the hand-unrolled `bar-chart`, `radial-dots` and 
 ```bash
 git diff HEAD~N --stat eval/scenes eval/scenes-r2     # N = commits back to before Task 10
 git diff --stat -- eval/report.json eval/report-r2.json    # content check, NOT git status
-grep -c "rectangle bar" eval/scenes/bar-chart.declare   # expect 7 — still hand-unrolled
-grep -c "circle dot" eval/scenes-r2/radial-dots.declare # expect 12 — still hand-unrolled
+grep -c "rectangle bar" eval/scenes/bar-chart.marey   # expect 7 — still hand-unrolled
+grep -c "circle dot" eval/scenes-r2/radial-dots.marey # expect 12 — still hand-unrolled
 ```
 Expected: the report JSONs are unmodified, and both baselines still contain their full hand-unrolled repetition. Paste the actual output into the task report.
 
@@ -2796,7 +2796,7 @@ started with `npx vite --port 5199 --strictPort`):
 | Scene | compiled | rendered | consoleErrors | pageErrors | deterministic across a cold reload |
 |---|---|---|---|---|---|
 | `default` | true | true | 0 / 0 (runs A, B) | 0 / 0 | n/a — `loop: true` animations never come to rest, so the measure is meaningless here (`SKILL.md` says so) |
-| `eval/scenes-3b/radial-dots.declare` | true | true | 0 / 0 | 0 / 0 | **true** — rest frame `1ee6c18a44ab3cb6` in both runs; `cpu at rest` 0.018 s over a 2 s wall window, so the ticker genuinely stopped |
+| `eval/scenes-3b/radial-dots.marey` | true | true | 0 / 0 | 0 / 0 | **true** — rest frame `1ee6c18a44ab3cb6` in both runs; `cpu at rest` 0.018 s over a 2 s wall window, so the ticker genuinely stopped |
 
 The PNGs were looked at, not just the JSON. `radial-dots` renders twelve evenly
 spaced amber dots on a ring around the dim centre marker, radius visually
@@ -2818,7 +2818,7 @@ connection refused).
 | 3 | `timeline-ticks`: one loop, not two | one `generate` against R1's 2. `grep -n layer` on the 3B scene matches only a comment saying nothing needs it; R1 has a real `layer: 1` at `:53` — the overdraw the second loop existed to fix |
 | 4 | Materially shorter, with the change cost recorded | Re-derived by `wc -l`: 3B 42 / 28 / 47 against R1 76 / 40 / 56 (**−45% / −30% / −16%**) and R2 45 / 26 / 47 (**−7% / +8% / 0%**). Met against R1 in all three. **Not met against R2 on raw lines for `radial-dots`** — see "The spec-versus-implementation conflict" below. `eval/RESULTS-3B.md` records all of it, including the column that reads badly |
 | 5 | Corpora differ by nothing but the `from` → `in` rename; both compile 20/20; reports byte-unchanged; **no fixture uses the new expression layer** | `git diff aa4ba0f..HEAD -- eval/scenes eval/scenes-r2` is **32 lines: 16 removed, 16 added, every pair identical but for `from`→`in`**, same variable, same bounds. Every start bound is `0`, so the ordinal suffix equals the old loop value and no object name changed. Both report JSONs content-identical after a fresh run. Fourth conjunct checked separately: no fixture in either corpus contains `sin(`, `cos(`, `length(`, `%`, `if`, or a comparison operator, and the only `[…]` literals are pre-existing `points:` point-lists on `polygon`/`line` |
-| 6 | Every `declare` fence compiles; "Current limits" no longer claims closed gaps | `languageDocs.test.ts` 41/41 within the full suite; Task 13 rewrote the section and 11 drifted citations besides — and, in the same pass, shipped one false prose claim that took a fix round to remove (`c976295`); see plan defect 16 |
+| 6 | Every `marey` fence compiles; "Current limits" no longer claims closed gaps | `languageDocs.test.ts` 41/41 within the full suite; Task 13 rewrote the section and 11 drifted citations besides — and, in the same pass, shipped one false prose claim that took a fix round to remove (`c976295`); see plan defect 16 |
 | 7 | Lifted cuts have permission tests; retained cuts keep rejections; §2's line has a rejection per clause | `languageCuts.test.ts` is **+449 / −52** across the branch (`git diff --numstat aa4ba0f..1645cef`), 81 tests in the file |
 | 8 | `TYPE_ONE_PHYSICS` mutation-verified against reverted code | Re-run first-hand at Task 16 — see "Mutation tests", rows 1 and 2 |
 | 9 | `sin`/`cos` proven by an IR-level assertion, confirmed by a Chromium capture | Re-run first-hand at Task 16 — see "Mutation tests", rows 3 and 4, plus the Chromium table above |
@@ -3172,7 +3172,7 @@ and looking at what actually failed.
   `MAX_LIST_LENGTH`/`TYPE_POLYGON_TOO_LARGE` diagnostic loss, and the
   conditional-collection cardinality rule (twice — the narrow list-only version,
   then the general provenance closure). The dividing line that held every time —
-  *if the resolution changes what a Declare author can write or see, ask; if it
+  *if the resolution changes what a Marey author can write or see, ask; if it
   is purely implementation sequencing, rule on it and record why* — is worth
   carrying forward verbatim.
 - **What is still owed:** an independent whole-branch review by someone with no

@@ -1,4 +1,4 @@
-/** The value categories understood by the Declare type checker. */
+/** The value categories understood by the Marey type checker. */
 export type ValueKind =
   | "number" | "color" | "string" | "point" | "list"
   | "fit" | "boolean" | "easing" | "animProperty" | "indefinitely";

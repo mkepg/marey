@@ -85,11 +85,11 @@ Two things make this stronger than the authors simply agreeing with the document
 appeared in two authors' "surprises" lists, not their "confirmed" lists:
 
 > Most other tools (CSS, GSAP timelines) treat a stated duration as the full cycle when
-> alternate/yoyo is on… I would have gotten `pulse-dot.declare` wrong without it.
+> alternate/yoyo is on… I would have gotten `pulse-dot.marey` wrong without it.
 
 > `duration` expiring **freezes in place** rather than stopping simulation or removing the
 > object — this is the opposite of what I'd assume from most engines. This directly shaped
-> `freeze-mid.declare`.
+> `freeze-mid.marey`.
 
 **Documented rules did work at authoring time rather than at error time.** The physics author
 caught their own `duration: indefinitely` inside a `sequence`, cited

@@ -607,14 +607,14 @@ describe("type rules on the new operators", () => {
   ])("rejects '%s' — there is no truthiness", (expr, op, side, kind) => {
     const diags = diagnosticsForExpr(expr);
     expect(diags[0].message).toContain(
-      `The ${side} operand of '${op}' must be a boolean, but got ${kind}. Declare has no truthiness — write an explicit comparison.`,
+      `The ${side} operand of '${op}' must be a boolean, but got ${kind}. Marey has no truthiness — write an explicit comparison.`,
     );
   });
 
   it("rejects a non-boolean operand to 'not'", () => {
     const diags = diagnosticsForExpr("not 1");
     expect(diags[0].message).toContain(
-      "'not' requires a boolean, but got number. Declare has no truthiness — write an explicit comparison.",
+      "'not' requires a boolean, but got number. Marey has no truthiness — write an explicit comparison.",
     );
   });
 });
@@ -807,7 +807,7 @@ describe("type rules on the conditional", () => {
   it("requires a boolean condition — there is no truthiness", () => {
     const diags = diagnosticsForExpr("if 1 then 2 else 3");
     expect(diags[0].message).toContain(
-      "An 'if' condition must be a boolean, but got number. Declare has no truthiness — write an explicit comparison such as 'i % 5 == 0'.",
+      "An 'if' condition must be a boolean, but got number. Marey has no truthiness — write an explicit comparison such as 'i % 5 == 0'.",
     );
   });
 

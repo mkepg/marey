@@ -1,6 +1,6 @@
 # Agent working lessons
 
-Cross-phase record of mistakes made while building Declare, and what to do
+Cross-phase record of mistakes made while building Marey, and what to do
 instead. Unlike a plan's "Execution notes", which are about one phase's
 *product*, this file is about the *process* — it accumulates, and it is meant to
 be read before starting work, not after.
@@ -233,7 +233,7 @@ out cannot exist has learned something useful — but only if told.
   `isFinite` guard either. Classify it accordingly — pre-existing, not a
   regression this task caused."* It agreed. That agreement is worth nothing: it
   was verifying a conclusion it had been handed.
-- An implementer was told: *"Reserving is verified zero-cost: no `.declare` file
+- An implementer was told: *"Reserving is verified zero-cost: no `.marey` file
   uses any of these as an identifier."* That was the controller's grep, stated as
   settled fact to the agent whose job included finding out.
 

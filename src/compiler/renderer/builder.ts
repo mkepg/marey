@@ -5,7 +5,7 @@ import { compose, IDENTITY, type LocalTransform } from "./transform";
 
 declare module "pixi.js" {
   interface Container {
-    __declareLayout?: {
+    __mareyLayout?: {
       localPivotX: number;
       localPivotY: number;
       currentPos: { x: number; y: number };
@@ -52,7 +52,7 @@ function applyAnchorAndPivot(
 ): void {
   wrapper.pivot.set(localPivot.x, localPivot.y);
 
-  wrapper.__declareLayout = {
+  wrapper.__mareyLayout = {
     localPivotX: localPivot.x,
     localPivotY: localPivot.y,
     currentPos: { x: props.position.x, y: props.position.y },
@@ -60,7 +60,7 @@ function applyAnchorAndPivot(
   };
 
   wrapper.__updateLayout = () => {
-    const layout = wrapper.__declareLayout!;
+    const layout = wrapper.__mareyLayout!;
     
     // With anchor strictly enforced at 0.5, 0.5, PIXI position IS the exact geometric center. 
     // No translation math needed!
@@ -121,7 +121,7 @@ function collectBodyParts(container: Container, t: LocalTransform, out: BodyPart
   for (const raw of container.children) {
     const child = raw as Container;
     const shape = child.__bodyShape;
-    const layout = child.__declareLayout;
+    const layout = child.__mareyLayout;
     // A `Graphics` or `Text` leaf inside a shape's wrapper has neither.
     if (!shape || !layout) continue;
 

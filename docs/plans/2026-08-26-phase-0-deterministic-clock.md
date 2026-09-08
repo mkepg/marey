@@ -1,6 +1,6 @@
 # Phase 0: Deterministic Clock Implementation Plan
 
-**Goal:** Convert Declare's renderer from wall-clock milliseconds to a fixed 120Hz frame-indexed clock, so the same scene produces an identical state sequence on every run.
+**Goal:** Convert Marey's renderer from wall-clock milliseconds to a fixed 120Hz frame-indexed clock, so the same scene produces an identical state sequence on every run.
 
 **Architecture:** Two new pure modules with no PixiJS or DOM dependency — `clock.ts` (tick constants and the wall-clock-to-tick driver) and `timeline.ts` (frame-indexed advancement for animation and physics runners). `adapter.ts` is rewired to advance state a whole number of fixed ticks per rendered frame instead of integrating a variable delta. Behavior is preserved; only the clock changes.
 
@@ -12,7 +12,7 @@
 
 ## Background for the implementer
 
-Declare compiles a scene DSL to a PixiJS scene graph. `src/compiler/renderer/adapter.ts`
+Marey compiles a scene DSL to a PixiJS scene graph. `src/compiler/renderer/adapter.ts`
 runs the animation and physics loop from PixiJS's ticker, integrating `ticker.deltaMS`
 directly. Every accumulator in that file is in milliseconds.
 
@@ -687,8 +687,8 @@ function applyAnim(ra: RunningAnim, alpha: number, justCompleted: boolean): void
     ra.container.alpha = lerp(ra.startVal as number, ra.targetVal as number, e);
   } else if (ra.anim.property === "rotation") {
     ra.container.rotation = lerp(ra.startVal as number, ra.targetVal as number, e) * (Math.PI / 180);
-  } else if (ra.anim.property === "position" && ra.container.__declareLayout) {
-    const layout = ra.container.__declareLayout;
+  } else if (ra.anim.property === "position" && ra.container.__mareyLayout) {
+    const layout = ra.container.__mareyLayout;
     const startPt = ra.startVal as IRPoint;
     const targetPt = ra.targetVal as IRPoint;
 
@@ -714,8 +714,8 @@ function applyAnim(ra: RunningAnim, alpha: number, justCompleted: boolean): void
     }
 
     ra.container.__updateLayout?.();
-  } else if (ra.anim.property === "scale" && ra.container.__declareLayout) {
-    const layout = ra.container.__declareLayout;
+  } else if (ra.anim.property === "scale" && ra.container.__mareyLayout) {
+    const layout = ra.container.__mareyLayout;
     const startPt = ra.startVal as IRPoint;
     const targetPt = ra.targetVal as IRPoint;
     layout.currentScale.x = lerp(startPt.x, targetPt.x, e);
@@ -841,7 +841,7 @@ export class NativePhysicsEngine implements IPhysicsEngine {
 
     const p = container.__physics!;
     const s = container.__physicsState!;
-    const layout = container.__declareLayout;
+    const layout = container.__mareyLayout;
     if (!layout) return justCompleted;
 
     // One fixed tick of integration. Previously this was an accumulator loop

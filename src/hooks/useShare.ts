@@ -7,7 +7,7 @@ function downloadCode(code: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "scene.declare";
+  a.download = "scene.marey";
   a.click();
   URL.revokeObjectURL(url);
 }

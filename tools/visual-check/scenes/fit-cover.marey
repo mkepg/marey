@@ -2,7 +2,7 @@
 // preview, then centre it. Expect no letterbox bars, a still-round disc (bigger
 // than under `contain`), and corner markers cropped off the short axis.
 //
-// Same geometry as fit-contain.declare; only `fit` differs.
+// Same geometry as fit-contain.marey; only `fit` differs.
 scene {
   size: (400, 400)
   background: #101827

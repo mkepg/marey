@@ -4,32 +4,32 @@
 **Status:** Approved physics design. Phases 0–2 implemented. Sections 8–12 are
 historical and superseded.
 **Supersedes:** `physics-upgrade-plan-custom.txt`, `physics-upgrade-plan-matter.txt`
-**Current roadmap:** `2026-09-01-declare-product-roadmap-design.md` supersedes
+**Current roadmap:** `2026-09-01-marey-product-roadmap-design.md` supersedes
 Sections 8–12 while preserving Decisions D1–D18 and Sections 1–7.
 
 ---
 
 ## 1. Context
 
-Declare compiles a declarative scene DSL to a PixiJS scene graph. Physics today is
+Marey compiles a declarative scene DSL to a PixiJS scene graph. Physics today is
 `NativePhysicsEngine` in `src/compiler/renderer/adapter.ts`: per-object trajectory
 integration with bounds collision. Objects do not see each other.
 
 Two prior plans proposed replacing this with rigid-body simulation — one custom-built,
-one on Matter.js. Both were written assuming Declare is a **simulation** language. This
+one on Matter.js. Both were written assuming Marey is a **simulation** language. This
 design records a decision that it is a **motion-graphics** language, and re-scopes the
 work accordingly.
 
 ### 1.1 Direction
 
-Declare is a small, readable, diffable text format for declarative 2D motion, sitting in
+Marey is a small, readable, diffable text format for declarative 2D motion, sitting in
 a gap the existing tools leave open:
 
 - **GSAP** is a JS library you call, not a format you write. No macro system, no physics.
 - **Lottie** is a format, but machine-generated from After Effects and not hand-writable.
 - **Rive** is the closest product, but GUI-authored and proprietary.
 
-Declare's `template`/`use`/`generate` layer over a diffable text file is a real position
+Marey's `template`/`use`/`generate` layer over a diffable text file is a real position
 between them. Physics is valuable here as a source of *believable motion*, not as
 simulation fidelity.
 
@@ -60,7 +60,7 @@ impossible.
 | D11 | Renames of existing properties break old share links; no aliases | Deliberate, accepted at v0.3.x. Keeps the parser free of legacy spellings. |
 | D12 | Mass is left to Matter's area × density default | A motion designer thinks "heavy," not "500kg." |
 | D13 | A body exists only for an object that declares `physics` — directly or inside a `sequence` | Physicality stays visible in the diff, which is the whole position in §1.1. The alternative makes a bare `rectangle` a silent collider with no opt-out, since §3 cut collision filtering as syntax. Revisited in Phase 4 (§9). |
-| D14 | Declare's per-body gravity is injected as a velocity delta, and the sleeping pass is driven manually | `Sleeping.update` force-wakes any body carrying a force, and runs *before* gravity inside `Engine.update`. Applying gravity as `body.force` therefore stops anything ever sleeping, which removes both §6.7's frozen-vs-asleep distinction and §6.9's idle detection. See §6.4. |
+| D14 | Marey's per-body gravity is injected as a velocity delta, and the sleeping pass is driven manually | `Sleeping.update` force-wakes any body carrying a force, and runs *before* gravity inside `Engine.update`. Applying gravity as `body.force` therefore stops anything ever sleeping, which removes both §6.7's frozen-vs-asleep distinction and §6.9's idle detection. See §6.4. |
 | D15 | The centroid-vs-bbox-centre offset lands in Phase 1, not Phase 2 | §7's rationale — "zero for every symmetric shape" — does not hold for `polygon`, and Phase 1 is the first time physics rotates anything. Without it a tumbling triangle renders visibly off its own collision shape. |
 | D16 | A group's collision **reference point is its local origin**, not its content bbox centre. The stored offset generalises to `pivot − centreOfMass`, subsuming D15. | Pivot-at-origin is documented behaviour and is what gives `use Template() x { position: … }` a stable anchor. Moving the visual pivot to the content centre would silently change every existing rotating or scaling group scene. Fix the body, not the visual. See §7.1. |
 | D17 | `physics` is allowed under a group **iff every ancestor group is static** — declares no `physics`, `animate` or `sequence`. The ancestor transform composes at bind time. | A static ancestor chain is a constant transform, so composing it involves no `alpha` and cannot make the simulation frame-rate dependent (§6.9's invariant). An animating ancestor would. This is what makes a `template` carry physics correctly — today every instance of one simulates at `(0, 0)`. |
@@ -101,7 +101,7 @@ makes them one-place edits instead of four-place ones.
 
 | Current | New | Reason |
 |---|---|---|
-| `isStatic` | `lockPosition` | The `is` prefix is a JS/Matter convention no other Declare property uses. Pairs with `lockRotation`. |
+| `isStatic` | `lockPosition` | The `is` prefix is a JS/Matter convention no other Marey property uses. Pairs with `lockRotation`. |
 | `angularVelocity` | `spin` | A third the length; pairs with `velocity` as angular-to-linear. |
 | `handOff` | `handoff` | "Handoff" is one word. Every other camelCase property joins two genuine words (`airDrag`, `collideBounds`, `fontSize`). |
 | `sceneFit` | `fit` | Inside a `scene` block the prefix is redundant. |
@@ -216,7 +216,7 @@ IPhysicsWorld
 
 Per D9, this module takes plain geometry in and plain transforms out. It must not import
 from `pixi.js`, so it stays testable headlessly in Node (§6.10). All conversion between
-Declare units and Matter units happens behind this interface — a caller passes px/s and
+Marey units and Matter units happens behind this interface — a caller passes px/s and
 radians and never sees `_baseDelta`.
 
 Two modules sit above and below it:
@@ -252,7 +252,7 @@ Matter 0.19 semantics. Matter 0.20.0 normalises both velocity and air friction a
 
 Let `r = TICK_MS / Common._baseDelta = 60 / TICK_HZ`, which is `0.5` at 120Hz.
 
-| Declare | Matter 0.20 | Conversion |
+| Marey | Matter 0.20 | Conversion |
 |---|---|---|
 | `gravity` (per object, px/s²) | velocity delta added once per tick, in the px-per-1/60 s units of the row below | `÷ (TICK_HZ × 60)` = `÷ 7200`. `engine.gravity.scale = 0`; see §6.4 for why this is a velocity delta and not a force. |
 | `velocity` (px/s) | `Body.setVelocity`, px per 1/60 s | `÷ 60`. Convert at spawn **and** at handoff. |
@@ -282,7 +282,7 @@ correction at `0.5`.
 
 ### 6.4 Step ordering, gravity, and sleeping (D14)
 
-Declare's gravity is per-block; Matter's is per-world. The obvious translation is to zero
+Marey's gravity is per-block; Matter's is per-world. The obvious translation is to zero
 `engine.gravity` and push a per-body force instead. **That silently disables sleeping.**
 
 `Engine.update` runs its phases in this order:
@@ -419,7 +419,7 @@ identical everywhere by construction.
 - Previous-state buffer and `alpha` interpolation for rendered physics positions. This also
   closes the judder deferred out of Phase 0 — see that plan's execution notes.
 - **Centroid offset (D15).** `Bodies.fromVertices` places a body's centre of mass at the
-  given point, while a Declare container's pivot is its bounding-box centre. Store
+  given point, while a Marey container's pivot is its bounding-box centre. Store
   `bboxCentre − centroid` in body-local space and rotate it by `body.angle` on read-back.
   Zero for `circle` and `rectangle`; non-zero for `polygon`, which this phase tumbles.
 - Culling of bodies beyond a margin outside the scene, checked before freeze (§6.7).
@@ -463,7 +463,7 @@ flat landing has no torque, so it should NOT tumble"* — but this section was n
 stale prediction was still being cited as an oracle while scoping Phase 2. It caused a Phase 2
 plan step to instruct an implementer to go looking for a bug that did not exist, and put a
 false claim into commit `25c655b`'s message. Rotation on impact is real and is demonstrable —
-see `tools/visual-check/scenes/`, whose `tumble.declare` and Phase 2's `logo.declare`
+see `tools/visual-check/scenes/`, whose `tumble.marey` and Phase 2's `logo.marey`
 exercise it deliberately — but `stepper` was never the case that shows it.
 
 The card's header comment currently reads *"falling objects pass through each other and
@@ -521,7 +521,7 @@ itself touches `adapter.ts` not at all — `__bodyShape` has exactly one consume
 > **Superseded on 2026-09-01.** The remainder of this document records the
 > roadmap that originally followed Phase 2. It is retained as decision history,
 > not current sequencing. See
-> `2026-09-01-declare-product-roadmap-design.md` for the authoritative Phase 3+
+> `2026-09-01-marey-product-roadmap-design.md` for the authoritative Phase 3+
 > roadmap. Decisions D1–D18 and Sections 1–7 above remain authoritative.
 
 ### 8.1 Historical Phase 3 — Foundations and renames
@@ -579,7 +579,7 @@ precisely the work the layer exists to eliminate:
 | No trigonometry | A radial layout of twelve dots could not be looped. All twelve coordinates were hand-computed. Any radial, circular or wave layout is out of reach. |
 | No modulo, no conditionals | "Every fifth tick is longer" needed two overlapping `generate` loops, drawing short ticks underneath long ones. |
 
-**Why this matters more than its size suggests.** §1.1 stakes Declare's whole position
+**Why this matters more than its size suggests.** §1.1 stakes Marey's whole position
 on `template`/`use`/`generate` over a diffable text file being a real gap between GSAP,
 Lottie and Rive. A macro layer that cannot iterate data does not differentiate. This is
 the roadmap's only item that defends the stated position directly.
@@ -625,7 +625,7 @@ finding 1, and unlike compile rate it is not already at ceiling.
 
 **New subsystem. The adoption unlock.**
 
-Declare currently has no way to get output out — no export, embed, package, or CLI. Other
+Marey currently has no way to get output out — no export, embed, package, or CLI. Other
 developers can only view it in the playground. This is arguably a larger barrier than any
 feature discussed above.
 
@@ -646,7 +646,7 @@ No wall clock. Frame-accurate by construction, given Phase 0.
   as keyframes but can be *baked* into them: run the deterministic sim, record each
   object's position/rotation/scale/opacity per frame, emit Lottie keyframes — exactly the
   properties Lottie expresses. Output plays in every existing Lottie player on web, iOS,
-  and Android with no Declare runtime. Lottie has no physics; After Effects only fakes it.
+  and Android with no Marey runtime. Lottie has no physics; After Effects only fakes it.
   Reachable only because the simulation is frame-deterministic.
 
 GIF is easy and looks poor. SVG/SMIL cannot carry baked per-frame data at reasonable size.
@@ -657,7 +657,7 @@ GIF is easy and looks poor. SVG/SMIL cannot carry baked per-frame data at reason
 push as §10: this roadmap had no documentation or adoption track at all, which is the
 gap being closed.*
 
-The Declare website is today only the playground IDE. It becomes a full documentation
+The Marey website is today only the playground IDE. It becomes a full documentation
 site — tutorials, guides, examples, getting-started — structured along the lines of the
 Matter.js site, **https://brm.io/matter-js/**.
 
@@ -674,7 +674,7 @@ break. A site built before both is rewritten after them, and unlike `docs/LANGUA
 has no compiled-examples test to make that rewrite a red build rather than a slow rot.
 
 **Why it is cheaper than it looks.** The bulk of the Matter.js site is a live demo gallery.
-Declare's share links already carry an entire scene in the URL hash fragment, so a gallery
+Marey's share links already carry an entire scene in the URL hash fragment, so a gallery
 entry is a link rather than a build artifact. The expensive half is already paid for.
 
 `docs/LANGUAGE.md` — specified in `2026-08-27-language-reference-design.md` and written

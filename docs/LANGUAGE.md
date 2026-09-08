@@ -1,6 +1,6 @@
-# The Declare Language
+# The Marey Language
 
-A reference for Declare, a declarative scene format that compiles to a PixiJS
+A reference for Marey, a declarative scene format that compiles to a PixiJS
 scene graph. This document describes **behaviour**: what each construct does,
 in what units, and what happens at its edges.
 
@@ -11,7 +11,7 @@ the current product roadmap.
 Every example below is compiled by the test suite, so nothing here can silently
 stop being true.
 
-```declare
+```marey
 scene {
   size: (800, 600)
   background: #0a0e1a
@@ -126,7 +126,7 @@ at most 500 `text` objects in total.
 objects** — nesting a shape inside a `circle`, `rectangle`, `polygon`,
 `line`, or `text` is a compile error.
 
-```declare
+```marey
 scene {
   size: (800, 600)
   background: #0a0e1a
@@ -175,7 +175,7 @@ so they run concurrently from scene start — a second `animate` block does not
 wait for the first to finish. To run animations one after another, use a
 `sequence` block, covered in a later section.
 
-```declare
+```marey
 scene {
   size: (800, 600)
 
@@ -231,7 +231,7 @@ from then on, from the position it started at.
 Pairing the two gives the continuous form — a shape that breathes for as long
 as the scene runs:
 
-```declare
+```marey
 scene {
   size: (800, 600)
 
@@ -258,7 +258,7 @@ it would occupy the timeline for twice the `duration` written beside it, so a
 reader could not see when the following step starts. Write the return leg as
 its own step instead:
 
-```declare
+```marey
 scene {
   size: (800, 600)
 
@@ -309,7 +309,7 @@ sets `duration: indefinitely`, that object may not also have a `sequence`
 block, because the sequence could never activate after a simulation that
 never finishes. This is a compile error (`TYPE_INDEFINITELY_WITH_SEQ`).
 
-```declare
+```marey
 scene {
   size: (800, 600)
 
@@ -384,7 +384,7 @@ Six rules govern `handoff: true`, each a compile error when broken:
   already over by the time the momentum arrives (`TYPE_HANDOFF_DURATION`).
   The runtime compared against is `2 × duration` for a `yoyo` animation.
 
-```declare
+```marey
 scene {
   size: (800, 600)
 
@@ -522,7 +522,7 @@ interpreted relative to the group as everywhere else. This includes the group
 that a `use` expansion wraps around a template, so a template may carry a
 `physics` block:
 
-```declare
+```marey
 template Ball(tone) {
   circle b {
     position: (0, 0)
@@ -555,7 +555,7 @@ it allows a logo to tumble as one rigid object while something inside it
 animates — but it means a large animation inside a physics group will drift
 visibly away from what the object actually collides with.
 
-```declare
+```marey
 scene {
   size: (800, 600)
   background: #0a0e1a
@@ -616,7 +616,7 @@ as the animation progresses.
 When an animation finishes, the object returns to full physics control on
 whichever property the animation was driving.
 
-```declare
+```marey
 scene {
   size: (800, 600)
   background: #0a0e1a
@@ -637,7 +637,7 @@ scene {
 }
 ```
 
-```declare
+```marey
 scene {
   size: (800, 600)
 
@@ -778,7 +778,7 @@ makes `not a == b` read as `not (a == b)`, the only useful reading, while
 literal.** It may use any of the above, and it may reference an earlier `let`
 in scope:
 
-```declare
+```marey
 let radii = [12, 18, 12, 24]
 let count = length(radii)
 let ring  = 180
@@ -838,7 +838,7 @@ A chart is one literal list, one loop, and a conditional. The data decides
 every bar's height and colour; the source decides that there are exactly as
 many bars as there are numbers written down.
 
-```declare
+```marey
 let values   = [3, 7, 2, 9, 5, 8, 4]
 let scale    = 30
 let baseline = 500
@@ -888,7 +888,7 @@ Recursive templates are rejected: expanding a template that is already being
 expanded, either directly or through a cycle of other templates, is a
 compile error.
 
-```declare
+```marey
 let ink      = #e2e8f0
 let gap      = 120
 let beat     = 1.5
@@ -1072,4 +1072,4 @@ colour, is a compile error (`[TYPE_ANIM_PROP]`).
 
 For the design rationale behind these decisions, see
 `docs/specs/`. The authoritative future sequence is
-`docs/specs/2026-09-01-declare-product-roadmap-design.md`.
+`docs/specs/2026-09-01-marey-product-roadmap-design.md`.

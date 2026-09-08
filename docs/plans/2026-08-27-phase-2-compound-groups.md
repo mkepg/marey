@@ -49,8 +49,8 @@ Read these before Task 1. They are short and each one has already caused a real 
 | `src/compiler/typeChecker/validator.test.ts` | **Create** | The two new rules. The typeChecker has no tests today. |
 | `docs/LANGUAGE.md` | Modify | The collision-shape paragraph, the new compile errors, D18's visual-only note, one new example. |
 | `src/compiler/languageDocs.test.ts` | Modify | Three behavioural assertions locking the new claims. |
-| `tools/visual-check/scenes/logo.declare` | **Create** | A multi-part logo that tumbles as one body. |
-| `tools/visual-check/scenes/logo-freeze.declare` | **Create** | The same logo frozen mid-tumble, for the determinism check. |
+| `tools/visual-check/scenes/logo.marey` | **Create** | A multi-part logo that tumbles as one body. |
+| `tools/visual-check/scenes/logo-freeze.marey` | **Create** | The same logo frozen mid-tumble, for the determinism check. |
 
 ---
 
@@ -81,8 +81,8 @@ Then, in another terminal:
 ```bash
 npx playwright install chromium
 node tools/visual-check/check.mjs --scene default --at 300,1500,4000 --out .visual-check/t1-default-before
-node tools/visual-check/check.mjs --scene tools/visual-check/scenes/freeze-midair.declare --settle 6000 --out .visual-check/t1-freeze-before
-node tools/visual-check/check.mjs --scene tools/visual-check/scenes/pile.declare --settle 9000 --out .visual-check/t1-pile-before
+node tools/visual-check/check.mjs --scene tools/visual-check/scenes/freeze-midair.marey --settle 6000 --out .visual-check/t1-freeze-before
+node tools/visual-check/check.mjs --scene tools/visual-check/scenes/pile.marey --settle 9000 --out .visual-check/t1-pile-before
 ```
 
 Read the PNGs with the Read tool to confirm they are not blank. A blank frame means WebGL failed to initialise, not that the renderer is broken — run `node tools/visual-check/smoke.mjs` to check.
@@ -182,8 +182,8 @@ export function applyAnim(ra: RunningAnim, alpha: number): void {
     ra.container.alpha = lerp(ra.startVal as number, ra.targetVal as number, e);
   } else if (ra.anim.property === "rotation") {
     ra.container.rotation = lerp(ra.startVal as number, ra.targetVal as number, e) * (Math.PI / 180);
-  } else if (ra.anim.property === "position" && ra.container.__declareLayout) {
-    const layout = ra.container.__declareLayout;
+  } else if (ra.anim.property === "position" && ra.container.__mareyLayout) {
+    const layout = ra.container.__mareyLayout;
     const startPt = ra.startVal as IRPoint;
     const targetPt = ra.targetVal as IRPoint;
 
@@ -191,8 +191,8 @@ export function applyAnim(ra: RunningAnim, alpha: number): void {
     layout.currentPos.y = lerp(startPt.y, targetPt.y, e);
 
     ra.container.__updateLayout?.();
-  } else if (ra.anim.property === "scale" && ra.container.__declareLayout) {
-    const layout = ra.container.__declareLayout;
+  } else if (ra.anim.property === "scale" && ra.container.__mareyLayout) {
+    const layout = ra.container.__mareyLayout;
     const startPt = ra.startVal as IRPoint;
     const targetPt = ra.targetVal as IRPoint;
     layout.currentScale.x = lerp(startPt.x, targetPt.x, e);
@@ -203,13 +203,13 @@ export function applyAnim(ra: RunningAnim, alpha: number): void {
 
 export function getCurrentVal(container: Container, prop: string): number | IRPoint {
   if (prop === "position") {
-    return container.__declareLayout
-      ? { x: container.__declareLayout.currentPos.x, y: container.__declareLayout.currentPos.y }
+    return container.__mareyLayout
+      ? { x: container.__mareyLayout.currentPos.x, y: container.__mareyLayout.currentPos.y }
       : (container.__startProps ? { x: container.__startProps.position.x, y: container.__startProps.position.y } : { x: 0, y: 0 });
   }
   if (prop === "scale") {
-    return container.__declareLayout
-      ? { x: container.__declareLayout.currentScale.x, y: container.__declareLayout.currentScale.y }
+    return container.__mareyLayout
+      ? { x: container.__mareyLayout.currentScale.x, y: container.__mareyLayout.currentScale.y }
       : (container.__startProps ? { x: container.__startProps.scale.x, y: container.__startProps.scale.y } : { x: 1, y: 1 });
   }
   if (prop === "rotation") return container.rotation * (180 / Math.PI);
@@ -252,7 +252,7 @@ export class SceneRuntime {
     // Completion side effects are state, not paint, so they must happen on the
     // tick they occur — not once per rendered frame. Deferring them would let
     // physics skip ticks while a stale kinematic count is still set.
-    if (justCompleted && ra.isPosAnim && ra.container.__declareLayout) {
+    if (justCompleted && ra.isPosAnim && ra.container.__mareyLayout) {
       ra.container.__kinematicPosAnimCount = Math.max(0, (ra.container.__kinematicPosAnimCount || 1) - 1);
 
       if (ra.anim.handOff && ra.anim.duration > 0) {
@@ -701,8 +701,8 @@ With the dev server still running:
 
 ```bash
 node tools/visual-check/check.mjs --scene default --at 300,1500,4000 --out .visual-check/t1-default-after
-node tools/visual-check/check.mjs --scene tools/visual-check/scenes/freeze-midair.declare --settle 6000 --out .visual-check/t1-freeze-after
-node tools/visual-check/check.mjs --scene tools/visual-check/scenes/pile.declare --settle 9000 --out .visual-check/t1-pile-after
+node tools/visual-check/check.mjs --scene tools/visual-check/scenes/freeze-midair.marey --settle 6000 --out .visual-check/t1-freeze-after
+node tools/visual-check/check.mjs --scene tools/visual-check/scenes/pile.marey --settle 9000 --out .visual-check/t1-pile-after
 ```
 
 Read the before/after PNGs side by side with the Read tool. Expected: visually identical, and `deterministic: true` still reported for `freeze-midair` and `pile`.
@@ -845,7 +845,7 @@ function makeContainer(over: {
 } = {}): Container {
   const c = new Container();
   const pos = over.position ?? { x: 0, y: 0 };
-  c.__declareLayout = {
+  c.__mareyLayout = {
     localPivotX: 0,
     localPivotY: 0,
     currentPos: { x: pos.x, y: pos.y },
@@ -948,7 +948,7 @@ describe("SceneRuntime · tick phase", () => {
 
     expect(world.positions.get(id)!.x).toBeCloseTo(200 / TICK_HZ, 6);
     // The painted position leads it by up to one tick — that is the documented cost.
-    expect(c.__declareLayout!.currentPos.x).toBeCloseTo((200 * 1.75) / TICK_HZ, 6);
+    expect(c.__mareyLayout!.currentPos.x).toBeCloseTo((200 * 1.75) / TICK_HZ, 6);
   });
 
   it("parks a handOff velocity on the completion tick and flushes it when the last pin lifts", () => {
@@ -1261,7 +1261,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 **The third defect in the same family, and the largest. Found by mutation-testing Task 3, not by scoping.**
 
-`spawnAnim` seeds a new animation's `startVal` from `getCurrentVal(container, prop)`, which reads `__declareLayout.currentPos`, `container.rotation` and `container.alpha`. Every one of those was last written **in the paint phase, at the driver's wall-clock alpha** — by `applyAnim`, or by `syncWorldToContainers`. That `startVal` then flows straight into `pushAnimToWorld` → `world.setPosition`.
+`spawnAnim` seeds a new animation's `startVal` from `getCurrentVal(container, prop)`, which reads `__mareyLayout.currentPos`, `container.rotation` and `container.alpha`. Every one of those was last written **in the paint phase, at the driver's wall-clock alpha** — by `applyAnim`, or by `syncWorldToContainers`. That `startVal` then flows straight into `pushAnimToWorld` → `world.setPosition`.
 
 So the value the physics world receives depends on when the last frame happened to land. This is invariant 3 again, reached by a third route — and again with no `driver.alpha` anywhere in the call chain, which is why the invariant's own wording did not catch it.
 
@@ -1537,7 +1537,7 @@ Create `src/compiler/renderer/transform.ts`:
  * its own module because two callers need the identical composition and a
  * second copy would drift.
  *
- * `rot` is in radians, matching `Container.rotation`. Declare source writes
+ * `rot` is in radians, matching `Container.rotation`. Marey source writes
  * degrees; `builder.ts` converts on the way in.
  */
 export interface LocalTransform {
@@ -2067,7 +2067,7 @@ Add this accessor next to `isAsleep`, for the rotated-part test:
   }
 ```
 
-Declare it on the interface, next to `isAsleep`:
+Marey it on the interface, next to `isAsleep`:
 
 ```ts
   /** A body's world-space AABB. Test-facing; the renderer does not need it. */
@@ -2372,7 +2372,7 @@ function collectBodyParts(container: Container, t: LocalTransform, out: BodyPart
   for (const raw of container.children) {
     const child = raw as Container;
     const shape = child.__bodyShape;
-    const layout = child.__declareLayout;
+    const layout = child.__mareyLayout;
     // A `Graphics` or `Text` leaf inside a shape's wrapper has neither.
     if (!shape || !layout) continue;
 
@@ -2510,8 +2510,8 @@ describe("ancestor transforms (spec D17)", () => {
 
     syncWorldToContainers(bindings, world, 1);
 
-    expect(child.__declareLayout!.currentPos.x).toBeCloseTo(100, 8);
-    expect(child.__declareLayout!.currentPos.y).toBeCloseTo(100, 8);
+    expect(child.__mareyLayout!.currentPos.x).toBeCloseTo(100, 8);
+    expect(child.__mareyLayout!.currentPos.y).toBeCloseTo(100, 8);
   });
 
   it("subtracts the ancestor rotation on write-back", () => {
@@ -2538,8 +2538,8 @@ describe("ancestor transforms (spec D17)", () => {
 
     snapContainerToBody(asContainer(child), world);
 
-    expect(child.__declareLayout!.currentPos.x).toBeCloseTo(50, 8);
-    expect(child.__declareLayout!.currentPos.y).toBeCloseTo(60, 8);
+    expect(child.__mareyLayout!.currentPos.x).toBeCloseTo(50, 8);
+    expect(child.__mareyLayout!.currentPos.y).toBeCloseTo(60, 8);
   });
 
   it("rotates a parked handoff velocity into world space but does not translate it", () => {
@@ -2610,7 +2610,7 @@ function staticGroup(over: {
     rotation: over.rotation ?? 0,
     children: over.children,
     __bodyShape: { kind: "compound", parts: [] },
-    __declareLayout: {
+    __mareyLayout: {
       localPivotX: 0,
       localPivotY: 0,
       currentPos: { x: over.x, y: over.y },
@@ -2631,7 +2631,7 @@ function physicsChild(pos: { x: number; y: number }): MockContainer {
       collideBounds: true,
       duration: 1,
     },
-    __declareLayout: {
+    __mareyLayout: {
       localPivotX: 0,
       localPivotY: 0,
       currentPos: { x: pos.x, y: pos.y },
@@ -2648,7 +2648,7 @@ function physicsChild(pos: { x: number; y: number }): MockContainer {
 Run: `npx vitest run src/compiler/renderer/physicsSync.test.ts`
 Expected: FAIL — the first test reports `x: 10, y: 20` instead of `410, 320`.
 
-- [ ] **Step 3: Declare `__bodyTransform`**
+- [ ] **Step 3: Marey `__bodyTransform`**
 
 In `src/compiler/renderer/builder.ts`, inside the `declare module "pixi.js"` block, after `__body`:
 
@@ -2696,7 +2696,7 @@ export function bindPhysicsBodies(root: Container, world: IPhysicsWorld): Physic
   let nextId = 0;
 
   const visit = (container: Container, t: LocalTransform): void => {
-    const layout = container.__declareLayout;
+    const layout = container.__mareyLayout;
 
     if (hasPhysicsAnywhere(container) && container.__bodyShape && layout) {
       const id = `b${nextId++}`;
@@ -2742,7 +2742,7 @@ export function bindPhysicsBodies(root: Container, world: IPhysicsWorld): Physic
 }
 ```
 
-Note the root itself has no `__declareLayout` — it is the bare `sceneRoot` container from `adapter.ts`. Handle that: the `if (!layout) return;` above would stop the walk at the root. Guard it instead:
+Note the root itself has no `__mareyLayout` — it is the bare `sceneRoot` container from `adapter.ts`. Handle that: the `if (!layout) return;` above would stop the walk at the root. Guard it instead:
 
 ```ts
     const childT = layout
@@ -2777,7 +2777,7 @@ Replace the body of `syncWorldToContainers`'s loop:
     if (world.isPinned(id)) continue;
     const state = world.readState(id, alpha);
     if (!state) continue;
-    const layout = container.__declareLayout;
+    const layout = container.__mareyLayout;
     if (!layout) continue;
     const t = bodyTransformOf(container);
     const local = toLocal(t, state.x, state.y);
@@ -2795,7 +2795,7 @@ export function snapContainerToBody(container: Container, world: IPhysicsWorld):
   const id = container.__body;
   if (!id) return;
   const state = world.readState(id, 1);
-  const layout = container.__declareLayout;
+  const layout = container.__mareyLayout;
   if (!state || !layout) return;
   const t = bodyTransformOf(container);
   const local = toLocal(t, state.x, state.y);
@@ -3270,7 +3270,7 @@ interpreted relative to the group as everywhere else. This includes the group
 that a `use` expansion wraps around a template, so a template may carry a
 `physics` block:
 
-```declare
+```marey
 template Ball(tone) {
   circle b {
     position: (0, 0)
@@ -3309,7 +3309,7 @@ visibly away from what the object actually collides with.
 Immediately after the subsection above, add:
 
 ```markdown
-```declare
+```marey
 scene {
   size: (800, 600)
   background: #0a0e1a
@@ -3494,7 +3494,7 @@ Note the `registry` keys are scope-qualified — `"scene.logo"`, not `"logo"` (`
 - [ ] **Step 5: Run the docs tests**
 
 Run: `npx vitest run src/compiler/languageDocs.test.ts`
-Expected: PASS. Every `declare` fence in `LANGUAGE.md` still compiles, including the two new ones, and the five new assertions pass.
+Expected: PASS. Every `marey` fence in `LANGUAGE.md` still compiles, including the two new ones, and the five new assertions pass.
 
 If the new `use Ball(cyan)` example fails to compile, check that `cyan` is being passed as a template argument and not used as a `def` name — named colours lex as their own token type.
 
@@ -3526,17 +3526,17 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ## Task 11: Browser verification and the eval re-run
 
 **Files:**
-- Create: `tools/visual-check/scenes/logo.declare`
-- Create: `tools/visual-check/scenes/logo-freeze.declare`
+- Create: `tools/visual-check/scenes/logo.marey`
+- Create: `tools/visual-check/scenes/logo-freeze.marey`
 - Modify: `tools/visual-check/SKILL.md` (the scenes table)
 
 The headless suite cannot see a canvas. "A multi-part logo tumbles as one coherent object instead of exploding" is what spec §7 says this phase ships, and only this can check it.
 
 - [ ] **Step 1: Write the tumbling logo scene**
 
-Create `tools/visual-check/scenes/logo.declare`:
+Create `tools/visual-check/scenes/logo.marey`:
 
-```declare
+```marey
 // Phase 2: a multi-part group welded into one compound body.
 // The three bars must stay rigidly attached as the logo tumbles and lands.
 // Before compound groups this collided as one rectangle around all of them.
@@ -3578,9 +3578,9 @@ The `ledge` carries a `physics` block with zero gravity and a long duration so i
 
 - [ ] **Step 2: Write the mid-motion determinism scene**
 
-Create `tools/visual-check/scenes/logo-freeze.declare`:
+Create `tools/visual-check/scenes/logo-freeze.marey`:
 
-```declare
+```marey
 // Phase 2 determinism, checked mid-tumble rather than at rest.
 // A settled pile converges on the same fixed point even when the trajectory
 // diverged, so at-rest equality hides real non-determinism — that is how the
@@ -3613,11 +3613,11 @@ With the dev server running. **Start it as `npx vite --port 5199 --strictPort`, 
 
 ```bash
 node tools/visual-check/check.mjs \
-  --scene tools/visual-check/scenes/logo.declare \
+  --scene tools/visual-check/scenes/logo.marey \
   --at 300,900,1800 --settle 9000 --out .visual-check/t9-logo
 
 node tools/visual-check/check.mjs \
-  --scene tools/visual-check/scenes/logo-freeze.declare \
+  --scene tools/visual-check/scenes/logo-freeze.marey \
   --settle 5000 --out .visual-check/t9-logo-freeze
 ```
 
@@ -3636,8 +3636,8 @@ Expected for `logo-freeze`: `deterministic: true`. This is the strongest check a
 In `tools/visual-check/SKILL.md`, add two rows to the scenes table:
 
 ```markdown
-| `logo.declare` | A multi-part group welds into one compound body and tumbles rigidly (Phase 2, D16) |
-| `logo-freeze.declare` | The same logo frozen mid-tumble — determinism on a transient state, not at rest |
+| `logo.marey` | A multi-part group welds into one compound body and tumbles rigidly (Phase 2, D16) |
+| `logo-freeze.marey` | The same logo frozen mid-tumble — determinism on a transient state, not at rest |
 ```
 
 - [ ] **Step 5: Re-run the authorability eval**
@@ -3651,11 +3651,11 @@ Expected: no regression against `eval/RESULTS-R2.md`. No scene in either corpus 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add tools/visual-check/scenes/logo.declare tools/visual-check/scenes/logo-freeze.declare tools/visual-check/SKILL.md
+git add tools/visual-check/scenes/logo.marey tools/visual-check/scenes/logo-freeze.marey tools/visual-check/SKILL.md
 git commit -m "test(visual): add compound-group tumble and mid-motion determinism scenes
 
-logo.declare checks the headline behaviour spec 7 promises — a multi-part
-logo tumbling as one rigid object. logo-freeze.declare checks determinism on
+logo.marey checks the headline behaviour spec 7 promises — a multi-part
+logo tumbling as one rigid object. logo-freeze.marey checks determinism on
 a transient state rather than at rest, per Phase 1's finding that a settled
 pile converges even when the trajectory diverged.
 

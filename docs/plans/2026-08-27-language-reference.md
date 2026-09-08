@@ -1,8 +1,8 @@
 # Language Reference Implementation Plan
 
-**Goal:** Ship `docs/LANGUAGE.md`, a formal user-facing reference for the Declare language covering behaviour only, with every example compiled by the test suite so it cannot silently drift.
+**Goal:** Ship `docs/LANGUAGE.md`, a formal user-facing reference for the Marey language covering behaviour only, with every example compiled by the test suite so it cannot silently drift.
 
-**Architecture:** One hand-written markdown document plus one test file. The test extracts every ` ```declare ` fenced block from the document, runs it through `lex → parse → typeCheck`, and asserts zero errors. Separate assertions lock the four behavioural facts the document states that a reader cannot otherwise verify. No per-property type tables — Phase 3 generates those from the unified source.
+**Architecture:** One hand-written markdown document plus one test file. The test extracts every ` ```marey ` fenced block from the document, runs it through `lex → parse → typeCheck`, and asserts zero errors. Separate assertions lock the four behavioural facts the document states that a reader cannot otherwise verify. No per-property type tables — Phase 3 generates those from the unified source.
 
 **Tech Stack:** TypeScript, Vitest, Node. No new dependencies.
 
@@ -82,7 +82,7 @@ Create `src/compiler/languageDocs.test.ts`:
  * Phase 3 renames `def` to `let`, every example here stops compiling and the
  * build goes red, rather than the document quietly going stale.
  *
- * Fences tagged ```declare are compiled. Fences tagged ```text are prose
+ * Fences tagged ```marey are compiled. Fences tagged ```text are prose
  * fragments and are skipped deliberately.
  */
 import { describe, it, expect } from "vitest";
@@ -107,7 +107,7 @@ export function extractExamples(markdown: string): Example[] {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (open === null) {
-      if (line.trim() === "```declare") open = { line: i + 1, body: [] };
+      if (line.trim() === "```marey") open = { line: i + 1, body: [] };
     } else if (line.trim() === "```") {
       examples.push({ line: open.line, source: open.body.join("\n") });
       open = null;
@@ -117,7 +117,7 @@ export function extractExamples(markdown: string): Example[] {
   }
 
   if (open !== null) {
-    throw new Error(`Unclosed \`\`\`declare fence opened at line ${open.line}`);
+    throw new Error(`Unclosed \`\`\`marey fence opened at line ${open.line}`);
   }
   return examples;
 }
@@ -160,9 +160,9 @@ Expected: FAIL. The suite errors while collecting, because `docs/LANGUAGE.md` do
 Create `docs/LANGUAGE.md`:
 
 ````markdown
-# The Declare Language
+# The Marey Language
 
-A reference for Declare, a declarative scene format that compiles to a PixiJS
+A reference for Marey, a declarative scene format that compiles to a PixiJS
 scene graph. This document describes **behaviour**: what each construct does,
 in what units, and what happens at its edges.
 
@@ -172,7 +172,7 @@ documentation site.
 Every example below is compiled by the test suite, so nothing here can silently
 stop being true.
 
-```declare
+```marey
 scene {
   size: (800, 600)
   background: #0a0e1a
@@ -423,7 +423,7 @@ State for each shape what it requires. This is deliberately a prose list of *req
 This exact block compiles — it was verified while writing this plan:
 
 ````markdown
-```declare
+```marey
 scene {
   size: (800, 600)
   background: #0a0e1a
@@ -478,7 +478,7 @@ Claims that must appear:
 Verified to compile:
 
 ````markdown
-```declare
+```marey
 scene {
   size: (800, 600)
 
@@ -506,7 +506,7 @@ Claims that must appear:
 - `loop: true` restarts from the beginning on completion, forever.
 - `yoyo: true` reverses direction at the end instead of restarting.
 - **`duration` is the half-cycle.** With `yoyo`, one there-and-back cycle takes `2 × duration`. A dot that should breathe once every two seconds needs `duration: 1.0`.
-- Include this illustration. Tag the fence `text`, not `declare`, so the extractor skips it:
+- Include this illustration. Tag the fence `text`, not `marey`, so the extractor skips it:
 
 ````markdown
 ```text
@@ -528,7 +528,7 @@ progress 0 --------→ 1  ---------→ 0  ---------→ 1
 Verified to compile:
 
 ````markdown
-```declare
+```marey
 scene {
   size: (800, 600)
 
@@ -589,7 +589,7 @@ Claims that must appear:
 Verified to compile:
 
 ````markdown
-```declare
+```marey
 scene {
   size: (800, 600)
 
@@ -637,7 +637,7 @@ Claims that must appear:
 Verified to compile:
 
 ````markdown
-```declare
+```marey
 scene {
   size: (800, 600)
 
@@ -725,7 +725,7 @@ The eval recorded this as guessed rather than known.
 Both verified to compile. The first demonstrates the headline claim.
 
 ````markdown
-```declare
+```marey
 scene {
   size: (800, 600)
   background: #0a0e1a
@@ -748,7 +748,7 @@ scene {
 ````
 
 ````markdown
-```declare
+```marey
 scene {
   size: (800, 600)
 
@@ -803,7 +803,7 @@ frozen vs asleep, airDrag's inverted range, and collideBounds as scene edges."
 Verified to compile:
 
 ````markdown
-```declare
+```marey
 def ink    = #e2e8f0
 def gap    = 120
 def beat   = 1.5
@@ -908,7 +908,7 @@ Run this to catch the last one:
 grep -nE '\b(let|handoff|layer|fit)\b' docs/LANGUAGE.md
 ```
 
-Expected: matches only inside prose where the word is ordinary English (for example "fit"), never as Declare syntax. `sceneFit` is correct and will match — that is fine.
+Expected: matches only inside prose where the word is ordinary English (for example "fit"), never as Marey syntax. `sceneFit` is correct and will match — that is fine.
 
 - [ ] **Step 5: Commit**
 
@@ -1064,7 +1064,7 @@ npx vitest run src/compiler/languageDocs.test.ts
 ```
 
 Expected: FAIL. If it passes, the metaprogramming example is not tagged
-```declare and the mechanism does not work — fix that before continuing.
+```marey and the mechanism does not work — fix that before continuing.
 
 Restore:
 
@@ -1196,8 +1196,8 @@ say so — an empty section is a finding.)*
 ### Defects found by review
 
 7. **The example extractor silently skipped a mistagged fence.** A typo like
-   ` ```Declare ` (wrong case) or an unrecognised tag would have fallen
-   through both the ` ```declare ` and ` ```text ` branches and produced zero
+   ` ```Marey ` (wrong case) or an unrecognised tag would have fallen
+   through both the ` ```marey ` and ` ```text ` branches and produced zero
    coverage while the suite still reported green — defeating the harness's
    entire purpose, since the whole point of Task 1 is that a broken example
    cannot hide. `extractExamples` (`src/compiler/languageDocs.test.ts`) now
@@ -1259,7 +1259,7 @@ in the metaprogramming example: `ink`, `gap`, `beat`) and re-running
 FAIL  src/compiler/languageDocs.test.ts > docs/LANGUAGE.md examples > the example at LANGUAGE.md line 566 compiles
 AssertionError: expected [ Array(1) ] to deeply equal []
 + [
-+   "LANGUAGE.md:567: A Declare program must begin with the 'scene' keyword, but found identifier 'let'. Did you forget to open with 'scene {'?",
++   "LANGUAGE.md:567: A Marey program must begin with the 'scene' keyword, but found identifier 'let'. Did you forget to open with 'scene {'?",
 + ]
 ```
 

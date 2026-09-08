@@ -12,7 +12,7 @@
 
 ## Background for the implementer
 
-Declare compiles a scene DSL to a PixiJS scene graph. Phase 0 (merged at `717de75`)
+Marey compiles a scene DSL to a PixiJS scene graph. Phase 0 (merged at `717de75`)
 converted the renderer to a fixed 120Hz tick: `adapter.ts` calls `driver.pump(deltaMS)` to
 get a whole number of ticks, runs `advanceOneTick()` that many times, then paints once at
 the leftover fraction `driver.alpha`. Read `docs/plans/2026-08-26-phase-0-deterministic-clock.md`,
@@ -51,7 +51,7 @@ were read out of `../matter-js-master/src` and are why spec §6.3 and §6.4 say 
 Do not "simplify" them away.
 
 - `Body.setVelocity(body, v)` interprets `v` as **px per 1/60 s**, not px per tick
-  (`Body.js:545`). Declare's `velocity` is px/s, so divide by 60.
+  (`Body.js:545`). Marey's `velocity` is px/s, so divide by 60.
 - `Body.update` damps by `1 - body.frictionAir * (deltaTime / Common._baseDelta)`
   (`Body.js:754`). At 120Hz that parenthesis is `0.5`.
 - `Body.create` defaults `body.deltaTime` to `1000/60` (`Body.js:99`). Left alone, the first
@@ -71,7 +71,7 @@ Do not "simplify" them away.
 
 | File | Responsibility |
 |---|---|
-| `src/compiler/renderer/physicsWorld.ts` | **Create.** `IPhysicsWorld`, `MatterWorld`, `BodyGeometry`, all Declare↔Matter unit conversion, walls, the manual sleeping pass, `step()`, interpolated `readState`. **No `pixi.js` import.** |
+| `src/compiler/renderer/physicsWorld.ts` | **Create.** `IPhysicsWorld`, `MatterWorld`, `BodyGeometry`, all Marey↔Matter unit conversion, walls, the manual sleeping pass, `step()`, interpolated `readState`. **No `pixi.js` import.** |
 | `src/compiler/renderer/physicsWorld.test.ts` | **Create.** Headless unit and snapshot tests. No Pixi, no DOM. |
 | `src/compiler/renderer/physicsSync.ts` | **Create.** Container→`BodyGeometry`, `hasPhysicsAnywhere`, pin-reason bookkeeping, read-back onto containers, `Body.scale`, culling. Imports `pixi.js`. |
 | `src/compiler/renderer/builder.ts` | **Modify.** Replace `__physicsState` with `__body` and `__pendingVelocity` in the `declare module` block. |
@@ -311,7 +311,7 @@ export const MATTER_DELTA_MS = 1000 / TICK_HZ;
 const MATTER_BASE_HZ = 60;
 
 /**
- * Declare's `airDrag` is 0 = vacuum, 1 = maximum resistance, and was defined by
+ * Marey's `airDrag` is 0 = vacuum, 1 = maximum resistance, and was defined by
  * the old engine as `pow(1 - airDrag, 1/60)` applied once per tick.
  *
  * Matter damps by `1 - frictionAir * MATTER_R` once per tick. Matching one
@@ -322,18 +322,18 @@ export function airDragToFrictionAir(airDrag: number): number {
   return (1 - Math.pow(1 - clamped, MATTER_R)) / MATTER_R;
 }
 
-/** px/s (Declare) → px per 1/60s (Matter's `Body.setVelocity`). */
+/** px/s (Marey) → px per 1/60s (Matter's `Body.setVelocity`). */
 export function pxPerSecToMatter(pxPerSec: number): number {
   return pxPerSec / MATTER_BASE_HZ;
 }
 
-/** px per 1/60s (Matter) → px/s (Declare). */
+/** px per 1/60s (Matter) → px/s (Marey). */
 export function matterToPxPerSec(matterVel: number): number {
   return matterVel * MATTER_BASE_HZ;
 }
 
 /**
- * px/s^2 (Declare) → the velocity delta, in Matter units, to add once per tick.
+ * px/s^2 (Marey) → the velocity delta, in Matter units, to add once per tick.
  *
  * This is deliberately not a force. See spec 6.4: a force set before
  * `Engine.update` is still in the buffer when Matter's sleeping pass reads it,
@@ -358,7 +358,7 @@ Expected: PASS with no output.
 
 ```bash
 git add src/compiler/renderer/physicsWorld.ts src/compiler/renderer/physicsWorld.test.ts
-git commit -m "feat(renderer): add Declare-to-Matter unit conversions
+git commit -m "feat(renderer): add Marey-to-Matter unit conversions
 
 Both the velocity and airDrag conversions differ from the original spec table,
 which was written against Matter 0.19. 0.20 normalises against Common._baseDelta,
@@ -377,7 +377,7 @@ Tested against the old engine's damping rather than a snapshot."
 Spec §6.1, §6.5, §6.9 (centroid offset, D15).
 
 The offset exists because `Bodies.fromVertices` places a body's **centre of mass** at the
-point you give it, while a Declare container's pivot is its **bounding-box centre**. For a
+point you give it, while a Marey container's pivot is its **bounding-box centre**. For a
 triangle those are about a sixth of its height apart. We store the local vector from
 centroid to bbox centre and rotate it by the body's angle on the way out.
 
@@ -526,7 +526,7 @@ export type BodyGeometry =
       readonly points: ReadonlyArray<{ readonly x: number; readonly y: number }>;
     };
 
-/** Declare's physics properties, in Declare's units. px/s, px/s^2, 0..1. */
+/** Marey's physics properties, in Marey's units. px/s, px/s^2, 0..1. */
 export interface PhysicsParams {
   readonly gravityX: number;
   readonly gravityY: number;
@@ -608,7 +608,7 @@ export class MatterWorld implements IPhysicsWorld {
     Matter.Common._seed = 0;
 
     this.engine = Matter.Engine.create();
-    // Declare's gravity is per object, so the world has none of its own.
+    // Marey's gravity is per object, so the world has none of its own.
     this.engine.gravity.scale = 0;
     // We run the sleeping pass ourselves; see step() and spec 6.4.
     this.engine.enableSleeping = false;
@@ -832,7 +832,7 @@ Un-skip these three from Task 3:
 Then append to `src/compiler/renderer/physicsWorld.test.ts`:
 
 ```typescript
-/** Declare-unit velocity of a body, measured from one tick to the next. */
+/** Marey-unit velocity of a body, measured from one tick to the next. */
 function measureVelocityPxPerSec(w: MatterWorld, id: string): { x: number; y: number } {
   const before = w.readState(id, 1)!;
   w.step();
@@ -1314,7 +1314,7 @@ add the new fields, so the block reads:
 ```typescript
 declare module "pixi.js" {
   interface Container {
-    __declareLayout?: {
+    __mareyLayout?: {
       localPivotX: number;
       localPivotY: number;
       currentPos: { x: number; y: number };
@@ -1526,9 +1526,9 @@ export function bindPhysicsBodies(root: Container, world: IPhysicsWorld): Physic
   let nextId = 0;
 
   const visit = (container: Container): void => {
-    if (hasPhysicsAnywhere(container) && container.__bodyShape && container.__declareLayout) {
+    if (hasPhysicsAnywhere(container) && container.__bodyShape && container.__mareyLayout) {
       const id = `b${nextId++}`;
-      const layout = container.__declareLayout;
+      const layout = container.__mareyLayout;
       const params = container.__physics
         ? physicsParamsFromIR(container.__physics)
         : RESTING_PARAMS;
@@ -1581,7 +1581,7 @@ export function syncWorldToContainers(
     if (world.isPinned(id)) continue;
     const state = world.readState(id, alpha);
     if (!state) continue;
-    const layout = container.__declareLayout;
+    const layout = container.__mareyLayout;
     if (!layout) continue;
     layout.currentPos.x = state.x;
     layout.currentPos.y = state.y;
@@ -1715,7 +1715,7 @@ function tickAnim(ra: RunningAnim): boolean {
   // Completion side effects are state, not paint, so they must happen on the
   // tick they occur — not once per rendered frame. Deferring them would let
   // physics skip ticks while a stale kinematic count is still set.
-  if (justCompleted && ra.isPosAnim && ra.container.__declareLayout) {
+  if (justCompleted && ra.isPosAnim && ra.container.__mareyLayout) {
     ra.container.__kinematicPosAnimCount = Math.max(0, (ra.container.__kinematicPosAnimCount || 1) - 1);
 
     if (ra.anim.handOff && ra.anim.duration > 0) {

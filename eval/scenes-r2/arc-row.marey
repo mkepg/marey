@@ -9,7 +9,7 @@
 // loop variable, which has the same qualitative shape (high in the middle,
 // falling off toward both ends) without needing trigonometry. This is
 // therefore fully generated — no hand-unrolling was needed for this scene,
-// unlike bar-chart.declare and (partially) timeline-ticks.declare.
+// unlike bar-chart.marey and (partially) timeline-ticks.marey.
 //
 // y = baseY - coeff * (i - mid) * (i - mid)
 // At i = mid (the row's centre), the offset is ~0, so y is highest

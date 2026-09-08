@@ -4,14 +4,14 @@
 **Status:** Approved and implemented.
 **Slot:** A small piece of work before Phase 2. Not a roadmap phase.
 **Related:** `2026-08-26-physics-shared-world-design.md` (§4 naming, D4/D5/D6/D8/D13),
-`2026-09-01-declare-product-roadmap-design.md` (current Phase 3+ roadmap),
+`2026-09-01-marey-product-roadmap-design.md` (current Phase 3+ roadmap),
 `eval/RESULTS.md` (the measurement that motivates this)
 
 ---
 
 ## 1. Context
 
-`eval/RESULTS.md` measured whether a model with no training data on Declare can author
+`eval/RESULTS.md` measured whether a model with no training data on Marey can author
 scenes given only what the product shows a user. Twenty of twenty compiled on the first
 pass. The compile rate hit its ceiling and told us little, but the authors' recorded
 uncertainty told us a lot:
@@ -44,7 +44,7 @@ No product change is in scope. The playground gains no docs panel, no link, and 
 
 Recorded here so this reference's scope is understood as deliberate rather than partial.
 
-The Declare website — today only the playground IDE — becomes a full documentation site
+The Marey website — today only the playground IDE — becomes a full documentation site
 carrying tutorials, guides, examples and getting-started material, structured along the
 lines of the Matter.js site:
 
@@ -190,14 +190,14 @@ A new test file, running in the existing suite.
 > also not viable: that project has no DOM lib and `sceneIR.ts` references `HTMLDivElement`.
 > The path below is left as written for the record; the shipping path is the one above.
 
-**Examples are compiled.** Every fenced ` ```declare ` block in `docs/LANGUAGE.md` that is a
+**Examples are compiled.** Every fenced ` ```marey ` block in `docs/LANGUAGE.md` that is a
 complete scene is extracted at test time, run through the compiler, and asserted to produce
 zero errors. The document is the only copy — no parallel fixture directory to fall out of
 sync with it. Fences that are deliberate fragments are marked and skipped.
 
 **Unrecognised fences fail loudly.** Added during execution, after review found that a
-mistagged fence — ` ```Declare ` with a capital D — was silently skipped, producing zero
-coverage while the suite reported green. Any tag other than `declare` or `text`, and any
+mistagged fence — ` ```Marey ` with a capital D — was silently skipped, producing zero
+coverage while the suite reported green. Any tag other than `marey` or `text`, and any
 four-backtick fence, now throws.
 
 **Behavioural claims are asserted.** Each claim in §4.2 gets a test named after the heading

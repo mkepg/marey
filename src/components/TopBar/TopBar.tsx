@@ -113,7 +113,7 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
   return (
     <header className={styles.topBar}>
       <div className={styles.left}>
-        <span className={styles.logo}>Declare</span>
+        <span className={styles.logo}>Marey</span>
       </div>
 
       <div className={styles.right}>

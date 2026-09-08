@@ -94,8 +94,8 @@ function applyAnim(ra: RunningAnim, alpha: number): void {
     ra.container.alpha = lerp(ra.startVal as number, ra.targetVal as number, e);
   } else if (ra.anim.property === "rotation") {
     ra.container.rotation = lerp(ra.startVal as number, ra.targetVal as number, e) * (Math.PI / 180);
-  } else if (ra.anim.property === "position" && ra.container.__declareLayout) {
-    const layout = ra.container.__declareLayout;
+  } else if (ra.anim.property === "position" && ra.container.__mareyLayout) {
+    const layout = ra.container.__mareyLayout;
     const startPt = ra.startVal as IRPoint;
     const targetPt = ra.targetVal as IRPoint;
 
@@ -103,8 +103,8 @@ function applyAnim(ra: RunningAnim, alpha: number): void {
     layout.currentPos.y = lerp(startPt.y, targetPt.y, e);
 
     ra.container.__updateLayout?.();
-  } else if (ra.anim.property === "scale" && ra.container.__declareLayout) {
-    const layout = ra.container.__declareLayout;
+  } else if (ra.anim.property === "scale" && ra.container.__mareyLayout) {
+    const layout = ra.container.__mareyLayout;
     const startPt = ra.startVal as IRPoint;
     const targetPt = ra.targetVal as IRPoint;
     layout.currentScale.x = lerp(startPt.x, targetPt.x, e);
@@ -115,13 +115,13 @@ function applyAnim(ra: RunningAnim, alpha: number): void {
 
 function getCurrentVal(container: Container, prop: string): number | IRPoint {
   if (prop === "position") {
-    return container.__declareLayout
-      ? { x: container.__declareLayout.currentPos.x, y: container.__declareLayout.currentPos.y }
+    return container.__mareyLayout
+      ? { x: container.__mareyLayout.currentPos.x, y: container.__mareyLayout.currentPos.y }
       : (container.__startProps ? { x: container.__startProps.position.x, y: container.__startProps.position.y } : { x: 0, y: 0 });
   }
   if (prop === "scale") {
-    return container.__declareLayout
-      ? { x: container.__declareLayout.currentScale.x, y: container.__declareLayout.currentScale.y }
+    return container.__mareyLayout
+      ? { x: container.__mareyLayout.currentScale.x, y: container.__mareyLayout.currentScale.y }
       : (container.__startProps ? { x: container.__startProps.scale.x, y: container.__startProps.scale.y } : { x: 1, y: 1 });
   }
   if (prop === "rotation") return container.rotation * (180 / Math.PI);
@@ -183,7 +183,7 @@ export class SceneRuntime {
     // Completion side effects are state, not paint, so they must happen on the
     // tick they occur — not once per rendered frame. Deferring them would fire
     // them once per rendered frame instead, silently dropping physics ticks.
-    if (justCompleted && ra.isPosAnim && ra.container.__declareLayout) {
+    if (justCompleted && ra.isPosAnim && ra.container.__mareyLayout) {
       if (ra.anim.handoff && ra.anim.duration > 0) {
         const startPt = ra.startVal as IRPoint;
         const targetPt = ra.targetVal as IRPoint;

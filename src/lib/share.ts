@@ -1,7 +1,7 @@
 import LZString from "lz-string";
 
 const HASH_PREFIX = "code=";
-const STORAGE_KEY = "declare_last_session";
+const STORAGE_KEY = "marey_last_session";
 
 /**
  * Ceiling on the compressed payload we will put in a share link.

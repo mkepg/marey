@@ -9,7 +9,7 @@
  * Kept in its own module so it can be imported without pulling in the store,
  * which touches `window.localStorage` at module load.
  */
-export const DEFAULT_CODE = `// ══ DECLARE · MOTION TEST CARD ═══════════════════════════════
+export const DEFAULT_CODE = `// ══ MAREY · MOTION TEST CARD ═══════════════════════════════
 //
 // What you should see:
 //
@@ -74,7 +74,7 @@ scene {
   // ── Title ───────────────────────────────────────────────────
   text title {
     position: (400, 40)
-    content: "DECLARE"
+    content: "MAREY"
     fontSize: 26
     color: ink
     layer: 2

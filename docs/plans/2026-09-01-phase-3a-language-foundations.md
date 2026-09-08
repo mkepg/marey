@@ -1,6 +1,6 @@
 # Phase 3A Language Foundations Implementation Plan
 
-**Goal:** Replace Declare's drifting language metadata and pre-Phase-3A vocabulary with one authoritative contract, deterministic compilation, bounded physics cost, correct handoff/yoyo lifecycle, and fully migrated first-party sources.
+**Goal:** Replace Marey's drifting language metadata and pre-Phase-3A vocabulary with one authoritative contract, deterministic compilation, bounded physics cost, correct handoff/yoyo lifecycle, and fully migrated first-party sources.
 
 **Architecture:** A pure `src/compiler/languageContract.ts` module owns property and value metadata without importing parser, validator, Monaco, PixiJS, or renderer code. Compiler and editor consumers derive their views from that module; cross-node validation remains in focused type-checker helpers, and renderer lifecycle changes remain in the fixed-tick `SceneRuntime`/timeline boundary.
 
@@ -67,7 +67,7 @@ clean `c3863ca` baseline and will naturally move during implementation.
 - `src/store/defaultScene.ts`, `src/store/defaultScene.test.ts` — final syntax and IR assertions.
 - `src/compiler/languageDocs.test.ts`, `docs/LANGUAGE.md` — final syntax and corrected behavior.
 - `eval/compile.test.ts`, `eval/scenes*/**`, `eval/RESULTS*.md`, `eval/report*.json` — separate reports and migrated corpora.
-- `tools/visual-check/scenes/*.declare` — final syntax.
+- `tools/visual-check/scenes/*.marey` — final syntax.
 - `AGENTS.md`, `AGENTS.md` — current project guidance.
 
 ---
@@ -352,7 +352,7 @@ git commit -m "refactor(language): derive compiler property behavior"
 import { describe, expect, it } from "vitest";
 import { propertyHoverMarkdown, physicsSnippet } from "./constants";
 
-describe("Declare editor guidance", () => {
+describe("Marey editor guidance", () => {
   it("describes bounce as shared-world collision behavior", () => {
     const hover = propertyHoverMarkdown("bounce")!;
     expect(hover).toContain("other objects");
@@ -458,7 +458,7 @@ git commit -m "refactor(editor): derive language guidance"
 - Modify: `src/compiler/renderer/adapter.ts`
 - Modify: `src/compiler/renderer/builder.ts`
 - Modify: `src/compiler/renderer/sceneRuntime.ts`
-- Modify: all existing `src/**/*.test.ts` IR fixtures and Declare source strings
+- Modify: all existing `src/**/*.test.ts` IR fixtures and Marey source strings
 - Modify: `src/components/Editor/MonacoEditor/{constants,language,scanner,themes}.ts`
 - Modify: `src/store/defaultScene.ts`
 - Modify: `docs/LANGUAGE.md`
@@ -570,7 +570,7 @@ all snippets/hovers/completions to final vocabulary. Do not change CSS
 Update:
 
 - `src/store/defaultScene.ts` and default-scene assertions;
-- every Declare source literal under `src/**/*.test.ts`;
+- every Marey source literal under `src/**/*.test.ts`;
 - every compiled fence and current prose in `docs/LANGUAGE.md`;
 - `src/compiler/languageDocs.test.ts` comments and new IR fields.
 
@@ -1028,10 +1028,10 @@ git commit -m "test(language): lock roadmap cuts and deferrals"
 **Files:**
 - Modify: `AGENTS.md`
 - Modify: `AGENTS.md`
-- Modify: `tools/visual-check/scenes/*.declare`
+- Modify: `tools/visual-check/scenes/*.marey`
 - Modify: `eval/compile.test.ts`
-- Modify: `eval/scenes/*.declare`
-- Modify: `eval/scenes-r2/*.declare`
+- Modify: `eval/scenes/*.marey`
+- Modify: `eval/scenes-r2/*.marey`
 - Modify: `eval/RESULTS.md`
 - Modify: `eval/RESULTS-R2.md`
 - Modify: `eval/report.json`
@@ -1079,7 +1079,7 @@ Write results to `reportPathForEvalDir(DIR)`.
 - [ ] **Step 4: Migrate all corpus and visual source files mechanically**
 
 Within `eval/scenes`, `eval/scenes-r2`, and
-`tools/visual-check/scenes`, replace only Declare syntax:
+`tools/visual-check/scenes`, replace only Marey syntax:
 
 - statement `def` → `let`;
 - property `handOff:` → `handoff:`;
@@ -1368,7 +1368,7 @@ tree:
   `LANGUAGE_CONTRACT.physics.properties.airDrag.default`).
 - An unexplained "Visible agent process" section appeared in `AGENTS.md`
   during Task 10 — 14 lines of generic agent-narration instruction with no
-  connection to Declare. The implementer reported no record of drafting it.
+  connection to Marey. The implementer reported no record of drafting it.
   Caught in review and removed.
 - Task 8's six runtime lifecycle tests (yoyo timeline/runtime/pin/physics/
   idle/pacing) never had a genuine RED: the fix landed before the tests were
@@ -1393,7 +1393,7 @@ inside one `parallel`, or as a later `sequence` step — and is covered under
 Sequencing." Left `### handoff` under `## Sequencing`: its five existing
 rules already correctly describe both the concurrent and sequence cases, so
 once the summary line was accurate, promoting the subsection read no better.
-Reverified: `languageDocs.test.ts` (40 tests, compiles every `declare` fence
+Reverified: `languageDocs.test.ts` (40 tests, compiles every `marey` fence
 in the reference) stays green.
 
 **Fix 2 (Minor, but a false claim in project instructions) — the roadmap

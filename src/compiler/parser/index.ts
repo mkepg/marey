@@ -24,7 +24,7 @@ export function parse(tokens: Token[]): ParseResult {
 
     const firstTok = state.peek();
     if (firstTok.type === "EOF") {
-      state.throwError("The file is empty. A Declare program must contain a scene block.", firstTok);
+      state.throwError("The file is empty. A Marey program must contain a scene block.", firstTok);
     }
 
     if (firstTok.type !== "KEYWORD" || firstTok.value !== "scene") {
@@ -33,7 +33,7 @@ export function parse(tokens: Token[]): ParseResult {
         : firstTok.type === "IDENT"
         ? ` Did you forget to open with 'scene {'?` : "";
       
-      state.throwError(`A Declare program must begin with the 'scene' keyword, but found ${describeToken(firstTok)}.${hint}`, firstTok);
+      state.throwError(`A Marey program must begin with the 'scene' keyword, but found ${describeToken(firstTok)}.${hint}`, firstTok);
     }
 
     const sceneTok = state.consume("KEYWORD");

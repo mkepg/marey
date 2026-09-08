@@ -147,7 +147,7 @@ interface MockContainer {
   __physics?: IRPhysics;
   __sequences?: ReadonlyArray<IRSequence>;
   __bodyShape?: BodyGeometry;
-  __declareLayout?: {
+  __mareyLayout?: {
     localPivotX: number;
     localPivotY: number;
     currentPos: { x: number; y: number };
@@ -192,7 +192,7 @@ function staticGroup(over: {
     rotation: over.rotation ?? 0,
     children: over.children,
     __bodyShape: { kind: "compound", parts: [] },
-    __declareLayout: {
+    __mareyLayout: {
       localPivotX: 0,
       localPivotY: 0,
       currentPos: { x: over.x, y: over.y },
@@ -213,7 +213,7 @@ function physicsChild(pos: { x: number; y: number }): MockContainer {
       collideBounds: true,
       duration: 1,
     },
-    __declareLayout: {
+    __mareyLayout: {
       localPivotX: 0,
       localPivotY: 0,
       currentPos: { x: pos.x, y: pos.y },
@@ -302,13 +302,13 @@ describe("bindPhysicsBodies", () => {
     const grandchild = makeContainer({
       __physics: PHYSICS,
       __bodyShape: SHAPE,
-      __declareLayout: layoutAt(1, 1),
+      __mareyLayout: layoutAt(1, 1),
     });
     const decorativeChild = makeContainer(); // no physics anywhere
     const child = makeContainer({
       __physics: PHYSICS,
       __bodyShape: SHAPE,
-      __declareLayout: layoutAt(2, 2),
+      __mareyLayout: layoutAt(2, 2),
       children: [grandchild, decorativeChild],
     });
     const root = makeContainer({ children: [child] });
@@ -324,9 +324,9 @@ describe("bindPhysicsBodies", () => {
   it("assigns ids in deterministic tree order", () => {
     // Determinism is the property the whole phase rests on: two runs over the
     // same tree must produce the same ids in the same order.
-    const first = makeContainer({ __physics: PHYSICS, __bodyShape: SHAPE, __declareLayout: layoutAt(0, 0) });
-    const second = makeContainer({ __physics: PHYSICS, __bodyShape: SHAPE, __declareLayout: layoutAt(0, 0) });
-    const thirdNested = makeContainer({ __physics: PHYSICS, __bodyShape: SHAPE, __declareLayout: layoutAt(0, 0) });
+    const first = makeContainer({ __physics: PHYSICS, __bodyShape: SHAPE, __mareyLayout: layoutAt(0, 0) });
+    const second = makeContainer({ __physics: PHYSICS, __bodyShape: SHAPE, __mareyLayout: layoutAt(0, 0) });
+    const thirdNested = makeContainer({ __physics: PHYSICS, __bodyShape: SHAPE, __mareyLayout: layoutAt(0, 0) });
     const secondsChild = makeContainer({ children: [thirdNested] });
     const root = makeContainer({ children: [first, second, secondsChild] });
 
@@ -340,13 +340,13 @@ describe("bindPhysicsBodies", () => {
   });
 
   it("sets container.__body to the assigned id", () => {
-    const c = makeContainer({ __physics: PHYSICS, __bodyShape: SHAPE, __declareLayout: layoutAt(5, 5) });
+    const c = makeContainer({ __physics: PHYSICS, __bodyShape: SHAPE, __mareyLayout: layoutAt(5, 5) });
     bindPhysicsBodies(asContainer(c), new FakeWorld());
     expect(c.__body).toBe("b0");
   });
 
   it("pins every new body with NO_RUNNER, since no runner has started yet", () => {
-    const c = makeContainer({ __physics: PHYSICS, __bodyShape: SHAPE, __declareLayout: layoutAt(5, 5) });
+    const c = makeContainer({ __physics: PHYSICS, __bodyShape: SHAPE, __mareyLayout: layoutAt(5, 5) });
     const world = new FakeWorld();
     bindPhysicsBodies(asContainer(c), world);
     expect(world.pinCalls).toEqual([{ id: "b0", reason: "NO_RUNNER" }]);
@@ -357,7 +357,7 @@ describe("bindPhysicsBodies", () => {
     const c = makeContainer({
       __physics: PHYSICS,
       __bodyShape: SHAPE,
-      __declareLayout: layoutAt(123, 456, 2, 3),
+      __mareyLayout: layoutAt(123, 456, 2, 3),
       rotation: 1.5,
     });
     const world = new FakeWorld();
@@ -368,14 +368,14 @@ describe("bindPhysicsBodies", () => {
   });
 
   it("skips a qualifying container that has no __bodyShape, rather than throwing", () => {
-    const c = makeContainer({ __physics: PHYSICS, __declareLayout: layoutAt(0, 0) });
+    const c = makeContainer({ __physics: PHYSICS, __mareyLayout: layoutAt(0, 0) });
     const world = new FakeWorld();
     expect(() => bindPhysicsBodies(asContainer(c), world)).not.toThrow();
     expect(world.addCalls).toHaveLength(0);
     expect(c.__body).toBeUndefined();
   });
 
-  it("skips a qualifying container that has no __declareLayout, rather than throwing", () => {
+  it("skips a qualifying container that has no __mareyLayout, rather than throwing", () => {
     const c = makeContainer({ __physics: PHYSICS, __bodyShape: SHAPE });
     const world = new FakeWorld();
     expect(() => bindPhysicsBodies(asContainer(c), world)).not.toThrow();
@@ -387,7 +387,7 @@ describe("bindPhysicsBodies", () => {
     // At bind time, before any runner starts, an object that only becomes
     // physical partway through its sequence must not fall immediately.
     const seq: IRSequence = { steps: [ANIMATION, PHYSICS] };
-    const c = makeContainer({ __sequences: [seq], __bodyShape: SHAPE, __declareLayout: layoutAt(0, 0) });
+    const c = makeContainer({ __sequences: [seq], __bodyShape: SHAPE, __mareyLayout: layoutAt(0, 0) });
     const world = new FakeWorld();
     bindPhysicsBodies(asContainer(c), world);
     expect(world.addCalls[0].params).toEqual({
@@ -402,7 +402,7 @@ describe("bindPhysicsBodies", () => {
 
 describe("syncWorldToContainers", () => {
   it("writes position and rotation onto an unpinned body's container and calls __updateLayout", () => {
-    const c = makeContainer({ __declareLayout: layoutAt(0, 0), __body: "b0" });
+    const c = makeContainer({ __mareyLayout: layoutAt(0, 0), __body: "b0" });
     const world = new FakeWorld();
     world.addBody("b0", SHAPE, 0, 0, 0, physicsParamsFromIR(PHYSICS));
     world.setState("b0", { x: 42, y: 84, angle: 0.3 });
@@ -410,13 +410,13 @@ describe("syncWorldToContainers", () => {
     const bindings: PhysicsBinding[] = [{ id: "b0", container: asContainer(c) }];
     syncWorldToContainers(bindings, world, 1);
 
-    expect(c.__declareLayout!.currentPos).toEqual({ x: 42, y: 84 });
+    expect(c.__mareyLayout!.currentPos).toEqual({ x: 42, y: 84 });
     expect(c.rotation).toBe(0.3);
     expect(c.updateLayoutCalls).toBe(1);
   });
 
   it("skips a pinned body entirely, since the flow for it is container to body", () => {
-    const c = makeContainer({ __declareLayout: layoutAt(1, 2), __body: "b0", rotation: 0.1 });
+    const c = makeContainer({ __mareyLayout: layoutAt(1, 2), __body: "b0", rotation: 0.1 });
     const world = new FakeWorld();
     world.addBody("b0", SHAPE, 1, 2, 0.1, physicsParamsFromIR(PHYSICS));
     world.pin("b0", "POS_ANIM");
@@ -425,20 +425,20 @@ describe("syncWorldToContainers", () => {
     const bindings: PhysicsBinding[] = [{ id: "b0", container: asContainer(c) }];
     syncWorldToContainers(bindings, world, 1);
 
-    expect(c.__declareLayout!.currentPos).toEqual({ x: 1, y: 2 });
+    expect(c.__mareyLayout!.currentPos).toEqual({ x: 1, y: 2 });
     expect(c.rotation).toBe(0.1);
     expect(c.updateLayoutCalls).toBe(0);
   });
 
   it("tolerates readState returning null for a culled body without throwing", () => {
-    const c = makeContainer({ __declareLayout: layoutAt(5, 5), __body: "b0" });
+    const c = makeContainer({ __mareyLayout: layoutAt(5, 5), __body: "b0" });
     const world = new FakeWorld();
     world.addBody("b0", SHAPE, 5, 5, 0, physicsParamsFromIR(PHYSICS));
     world.setState("b0", null);
 
     const bindings: PhysicsBinding[] = [{ id: "b0", container: asContainer(c) }];
     expect(() => syncWorldToContainers(bindings, world, 1)).not.toThrow();
-    expect(c.__declareLayout!.currentPos).toEqual({ x: 5, y: 5 });
+    expect(c.__mareyLayout!.currentPos).toEqual({ x: 5, y: 5 });
     expect(c.updateLayoutCalls).toBe(0);
   });
 });
@@ -576,28 +576,28 @@ describe("snapContainerToBody", () => {
     // last *painted* at, and that paint used the driver's wall-clock alpha, so
     // the object settles a slightly different place on every run.
     const world = new FakeWorld();
-    const c = makeContainer({ __declareLayout: layoutAt(0, 0), __body: "b0" });
+    const c = makeContainer({ __mareyLayout: layoutAt(0, 0), __body: "b0" });
     world.setState("b0", { x: 100, y: 200, angle: 0.5 });
 
     snapContainerToBody(asContainer(c), world);
 
     // A read at alpha 1 is the current tick's state, not a blend with the last.
     expect(world.lastReadAlpha).toBe(1);
-    expect(c.__declareLayout!.currentPos).toEqual({ x: 100, y: 200 });
+    expect(c.__mareyLayout!.currentPos).toEqual({ x: 100, y: 200 });
     expect(c.rotation).toBe(0.5);
     expect(c.updateLayoutCalls).toBe(1);
   });
 
   it("does nothing for a container with no body", () => {
     const world = new FakeWorld();
-    const c = makeContainer({ __declareLayout: layoutAt(0, 0) });
+    const c = makeContainer({ __mareyLayout: layoutAt(0, 0) });
     expect(() => snapContainerToBody(asContainer(c), world)).not.toThrow();
     expect(c.updateLayoutCalls).toBe(0);
   });
 
   it("does nothing when the body has already been culled", () => {
     const world = new FakeWorld();
-    const c = makeContainer({ __declareLayout: layoutAt(0, 0), __body: "gone" });
+    const c = makeContainer({ __mareyLayout: layoutAt(0, 0), __body: "gone" });
     expect(() => snapContainerToBody(asContainer(c), world)).not.toThrow();
     expect(c.updateLayoutCalls).toBe(0);
   });
@@ -646,8 +646,8 @@ describe("ancestor transforms (spec D17)", () => {
 
     syncWorldToContainers(bindings, world, 1);
 
-    expect(child.__declareLayout!.currentPos.x).toBeCloseTo(100, 8);
-    expect(child.__declareLayout!.currentPos.y).toBeCloseTo(100, 8);
+    expect(child.__mareyLayout!.currentPos.x).toBeCloseTo(100, 8);
+    expect(child.__mareyLayout!.currentPos.y).toBeCloseTo(100, 8);
   });
 
   it("subtracts the ancestor rotation on write-back", () => {
@@ -674,8 +674,8 @@ describe("ancestor transforms (spec D17)", () => {
 
     snapContainerToBody(asContainer(child), world);
 
-    expect(child.__declareLayout!.currentPos.x).toBeCloseTo(50, 8);
-    expect(child.__declareLayout!.currentPos.y).toBeCloseTo(60, 8);
+    expect(child.__mareyLayout!.currentPos.x).toBeCloseTo(50, 8);
+    expect(child.__mareyLayout!.currentPos.y).toBeCloseTo(60, 8);
   });
 
   it("rotates a parked handoff velocity into world space but does not translate it", () => {

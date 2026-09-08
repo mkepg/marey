@@ -1,20 +1,20 @@
 [
   {
-    "file": "bar-chart.declare",
+    "file": "bar-chart.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 9
   },
   {
-    "file": "radial-dots.declare",
+    "file": "radial-dots.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],
     "nodeCount": 13
   },
   {
-    "file": "timeline-ticks.declare",
+    "file": "timeline-ticks.marey",
     "ok": true,
     "parseErrors": [],
     "typeErrors": [],

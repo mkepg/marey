@@ -374,7 +374,7 @@ function requireBoolean(state: ParserState, operand: Operand, op: OperatorName, 
   const v = operand.value;
   if (v.kind !== "boolean") {
     state.throwError(
-      `In ${state.currentContext}: The ${side} operand of '${op}' must be a boolean, but got ${v.kind}. Declare has no truthiness — write an explicit comparison.`,
+      `In ${state.currentContext}: The ${side} operand of '${op}' must be a boolean, but got ${v.kind}. Marey has no truthiness — write an explicit comparison.`,
       operand.tok,
     );
   }
@@ -668,7 +668,7 @@ function parseParenOrPoint(state: ParserState, ctx: ExprCtx): AstValue {
  *
  * Degrees, not radians — the only other angle in the language, `rotation`
  * (`languageContract.ts:111-117`), is degrees, and design section 11
- * deviation 1 is explicit that Declare ships no pi constant. `Math.sin`
+ * deviation 1 is explicit that Marey ships no pi constant. `Math.sin`
  * takes radians, so the conversion happens here rather than being pushed
  * onto every call site.
  *
@@ -717,7 +717,7 @@ function parsePrimary(state: ParserState, ctx: ExprCtx): AstValue {
     const operand = parseExpr(state, NOT_OPERAND_MIN_PREC, intoUnary(ctx));
     if (operand.kind !== "boolean") {
       state.throwError(
-        `In ${state.currentContext}: 'not' requires a boolean, but got ${operand.kind}. Declare has no truthiness — write an explicit comparison.`,
+        `In ${state.currentContext}: 'not' requires a boolean, but got ${operand.kind}. Marey has no truthiness — write an explicit comparison.`,
         notTok,
       );
     }
@@ -988,7 +988,7 @@ function parseConditional(state: ParserState, ctx: ExprCtx): AstValue {
   const condition = parseExpr(state, 0, intoOperand(ctx));
   if (condition.kind !== "boolean") {
     state.throwError(
-      `In ${state.currentContext}: An 'if' condition must be a boolean, but got ${condition.kind}. Declare has no truthiness — write an explicit comparison such as 'i % 5 == 0'.`,
+      `In ${state.currentContext}: An 'if' condition must be a boolean, but got ${condition.kind}. Marey has no truthiness — write an explicit comparison such as 'i % 5 == 0'.`,
       condTok,
     );
   }

@@ -110,7 +110,7 @@ function makeContainer(over: {
 } = {}): Container {
   const c = new Container();
   const pos = over.position ?? { x: 0, y: 0 };
-  c.__declareLayout = {
+  c.__mareyLayout = {
     localPivotX: 0,
     localPivotY: 0,
     currentPos: { x: pos.x, y: pos.y },
@@ -212,7 +212,7 @@ describe("SceneRuntime · tick phase", () => {
 
     expect(world.positions.get(id)!.x).toBeCloseTo(200 / TICK_HZ, 6);
     // The painted position leads it by up to one tick — that is the documented cost.
-    expect(c.__declareLayout!.currentPos.x).toBeCloseTo((200 * 1.75) / TICK_HZ, 6);
+    expect(c.__mareyLayout!.currentPos.x).toBeCloseTo((200 * 1.75) / TICK_HZ, 6);
   });
 
   it("parks a handoff velocity on the completion tick and flushes it when the last pin lifts", () => {
@@ -415,12 +415,12 @@ describe("SceneRuntime · tick phase", () => {
     const id = c.__body!;
 
     world.positions.set(id, { x: 777, y: 555 });
-    c.__declareLayout!.currentPos.x = -1;
-    c.__declareLayout!.currentPos.y = -1;
+    c.__mareyLayout!.currentPos.x = -1;
+    c.__mareyLayout!.currentPos.y = -1;
 
     for (let i = 0; i < TICK_HZ; i++) rt.advanceOneTick();
 
-    expect(c.__declareLayout!.currentPos).toEqual({ x: 777, y: 555 });
+    expect(c.__mareyLayout!.currentPos).toEqual({ x: 777, y: 555 });
   });
 });
 

@@ -3,7 +3,7 @@
 **Date:** 2026-09-01
 **Status:** Approved in design discussion; pending written-spec review.
 **Roadmap authority:**
-`2026-09-01-declare-product-roadmap-design.md` §7.
+`2026-09-01-marey-product-roadmap-design.md` §7.
 **Preserves:** Decisions D1–D18 in
 `2026-08-26-physics-shared-world-design.md` and the Phase 2 execution notes.
 **Scope:** Breaking language cleanup across compiler, editor, documentation,
@@ -13,7 +13,7 @@ fixtures, and evaluation. No new authoring capability.
 
 ## 1. Purpose
 
-Phase 3A gives every later Declare artifact one final vocabulary and one
+Phase 3A gives every later Marey artifact one final vocabulary and one
 authoritative property contract before Phase 3B adds language capability and
 Phases 4–5 add export and distribution.
 
