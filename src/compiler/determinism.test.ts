@@ -216,13 +216,30 @@ describe("trigonometry produces the coordinates it claims", () => {
     expect(positions).toHaveLength(12);
 
     // Computed here from first principles, not read out of the compiler.
+    // This per-index comparison is the *only* assertion in this test that
+    // discriminates a sign error in the trig helpers. Verified by mutation:
+    // negating `sinDegrees`'s fallback (`parser/parseExpr.ts`) turns this
+    // loop red at i = 1 — x comes back 244.11542731880104 where
+    // 555.884572681199 is required — while both checks below stay green.
     for (let i = 0; i < 12; i++) {
       const rad = (i * 30 * Math.PI) / 180;
       expect(positions[i].x).toBeCloseTo(400 + 180 * Math.cos(rad), 9);
       expect(positions[i].y).toBeCloseTo(300 + 180 * Math.sin(rad), 9);
     }
 
-    // Every dot is exactly 180 from the centre — the property a sign error breaks.
+    // The next two assertions are invariants a sign error happens to
+    // *preserve*, not properties it breaks. Negating the fallback leaves the
+    // four cardinal dots exactly where they were (0/90/180/270 take
+    // `sinDegrees`'s early-return branch) and reflects the other eight
+    // through the centre. A 30°-spaced ring is centrally symmetric, so those
+    // eight land on each other: the reflected set is the original set,
+    // permuted. Reflection about the centre is an isometry, so every radius
+    // survives; a permutation is a bijection, so the count does too. Both
+    // were run under that mutation and stayed green. They are kept as a
+    // plain statement of the geometry this test is named for — but read them
+    // as documentation, not as the sign guard. The per-index loop above is
+    // strictly the stronger check: anything that moves the radius, shifts the
+    // centre, or collapses the ring fails there first.
     for (const p of positions) {
       expect(Math.hypot(p.x - 400, p.y - 300)).toBeCloseTo(180, 9);
     }

@@ -91,4 +91,15 @@ it("compiles every scene and writes a report", () => {
   const pass = results.filter((r) => r.ok).length;
   console.log(`\n${pass}/${results.length} compiled clean (${results.length ? ((pass / results.length) * 100).toFixed(0) : 0}%)`);
   writeFileSync(reportPathForEvalDir(DIR), JSON.stringify(results, null, 2));
+
+  // The corpora's "N/N compiled clean" figures are cited as phase exit
+  // criteria, so this test has to *fail* on a regression rather than print
+  // FAIL to a stdout nobody reads. Asserting on the failing entries rather
+  // than on a count puts each offending file's own parse/type errors in the
+  // failure output. The report is written first, so a red run still leaves a
+  // report JSON behind to diff.
+  expect(results.filter((r) => !r.ok)).toEqual([]);
+  // Guards the other direction: an empty or mis-pointed EVAL_DIR would make
+  // the assertion above vacuously true, and the corpus claim with it.
+  expect(results.length).toBeGreaterThan(0);
 });

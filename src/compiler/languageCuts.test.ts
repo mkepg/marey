@@ -592,10 +592,12 @@ describe("Phase 3B line: data determines values, source structure determines sha
   //
   // Every assertion below was verified by running the fixture and reading
   // the real diagnostic (not guessed) — see task-12-report.md for the raw
-  // output. Two cases below (the function definition and the list-element
-  // assignment) turn out to be caught by a pre-existing, unrelated gate
-  // rather than anything connected to section 2's rule; that is called out
-  // at each of them rather than silently assumed away.
+  // output, and the whole-branch review fix report for the re-derived output
+  // behind the function-definition and list-element-assignment cases, whose
+  // fixtures moved inside the scene block after the originals were found to
+  // be intercepted by an unrelated top-level gate. Every fixture here now
+  // places its construct somewhere ordinary Declare content is allowed, so
+  // the diagnostic asserted is caused by the construct under test.
 
   it("rejects a conditional used as an emission guard", () => {
     // 'if' is EXPR_KEYWORD, which the property-name grammar admits as a
@@ -696,44 +698,81 @@ describe("Phase 3B line: data determines values, source structure determines sha
     expect(diags[0].col).toBe(pos.col);
   });
 
-  // Both of the next two are caught by the pre-existing top-level "must
-  // begin with 'scene'" gate (parser/index.ts) — the same mechanism and
-  // message template already exercised, with different words, by "roadmap
-  // cut: user-defined functions, scripting runtime, plugin system, world"
-  // above. 'function' and 'v' are ordinary identifiers where 'scene' is
-  // required, so parsing never reaches a point where a function-definition-
-  // specific or list-mutation-specific rule could apply. Neither case
-  // actually exercises anything connected to section 2's predicate-gates-
-  // emission rule — both are kept because Step 1 of the task brief names
-  // them explicitly, and flagged here per Step 2's instruction to report a
-  // case that is not really testing the line it was written for. The
-  // 'function' case below is additionally a near-duplicate of that other
-  // block's own ["function", "function greet() { }"] row — same word, same
-  // mechanism, same message template — disclosed here the same way case 1
-  // above discloses its duplication of the emission-guard test.
-  it("rejects defining an operator or function", () => {
-    const source = `function double(x) { } scene { size:(10,10) }`;
-    const diags = diagnosticsFor(source);
-    expect(diags).toHaveLength(1);
-    expect(diags[0].message).toBe(
-      "A Declare program must begin with the 'scene' keyword, but found identifier 'function'. Did you forget to open with 'scene {'?",
-    );
-    const pos = posAt(source, "function");
-    expect(diags[0].line).toBe(pos.line);
-    expect(diags[0].col).toBe(pos.col);
-  });
+  // Both of the next two used to place their construct at the *top level*,
+  // ahead of the scene block — where the pre-existing "must begin with the
+  // 'scene' keyword" gate (parser/index.ts) intercepts any leading
+  // identifier before parsing can reach a function-definition or
+  // list-mutation rule. They therefore asserted that unrelated gate's
+  // message (the same one "roadmap cut: user-defined functions, scripting
+  // runtime, plugin system, world" above already pins) and would have stayed
+  // green if a later phase added either construct *inside* a scene body.
+  // Both now put the construct inside the scene, where ordinary Declare
+  // content lives, so what is being rejected is the construct itself.
 
-  it("rejects assigning to a list element", () => {
-    const source = `let v = [1,2] v[0] = 5 scene { size:(10,10) }`;
-    const diags = diagnosticsFor(source);
-    expect(diags).toHaveLength(1);
-    expect(diags[0].message).toBe(
-      "A Declare program must begin with the 'scene' keyword, but found identifier 'v'. Did you forget to open with 'scene {'?",
-    );
-    const pos = posAt(source, "v[0]");
-    expect(diags[0].line).toBe(pos.line);
-    expect(diags[0].col).toBe(pos.col);
-  });
+  // Inside a scene body, 'function' and 'operator' are ordinary identifiers
+  // sitting in property-name position, so the property grammar consumes the
+  // word and then demands the ':' that every scene property has. Each fixture
+  // leaves a 3-diagnostic cascade behind — recovery walking back out of the
+  // '{ }' body the fixture opens — so, following this file's convention for
+  // the 'while' and 'where' cases above, only diags[0] is pinned: the cascade
+  // count is recovery behaviour, not a language rule.
+  const definitionCases: Array<[word: string, stmt: string, found: string, needle: string]> = [
+    ["function", "function double(x) { }", "identifier 'double'", "double"],
+    ["operator", "operator +(a, b) { }", "'+'", "+"],
+  ];
+  it.each(definitionCases)(
+    "rejects defining an operator or function ('%s')",
+    (_word, stmt, found, needle) => {
+      const source = `scene { size:(10,10) ${stmt} }`;
+      const diags = diagnosticsFor(source);
+      expect(diags[0].message).toBe(
+        `In the scene: Expected ':' after the property name, but found ${found}.`,
+      );
+      const pos = posAt(source, needle);
+      expect(diags[0].line).toBe(pos.line);
+      expect(diags[0].col).toBe(pos.col);
+    },
+  );
+
+  // Reading an element is valid Declare as of Phase 3B (see "Phase 3B lift:
+  // indexing" above), so what these fixtures reject is the *assignment*, not
+  // the index expression: the same scene with 'radius: v[0]' in place of the
+  // assignment compiles with zero diagnostics. 'v' is a genuinely bound list
+  // in both rows, so neither can be passing for an unknown-identifier error.
+  // The two rows cover the two gates a stray statement can meet inside a
+  // scene — the scene body's property-name grammar, and the 'generate' body's
+  // object/'let'/'use'/'generate' loop — because a mutation rule added to
+  // either one has to be caught. Each produces exactly one diagnostic, so
+  // unlike the cascading cases above the count is pinned here.
+  //
+  // Note the needles: posAt(source, "[") would resolve to the *list
+  // literal's* bracket rather than the index's, so the first row anchors on
+  // "[0]" instead.
+  const listAssignmentCases: Array<[where: string, source: string, message: string, needle: string]> = [
+    [
+      "the scene body",
+      `scene { size:(10,10) let v = [1,2] v[0] = 5 }`,
+      "In the scene: Expected ':' after the property name, but found '['.",
+      "[0]",
+    ],
+    [
+      "a 'generate' body",
+      `scene { size:(10,10) generate i in 0 to 1 { let v = [1,2] v[0] = 5 } }`,
+      "In 'generate' block: Expected an object definition, 'let', 'use', or 'generate', but found identifier 'v'.",
+      "v[0]",
+    ],
+  ];
+  it.each(listAssignmentCases)(
+    "rejects assigning to a list element in %s",
+    (_where, source, message, needle) => {
+      const diags = diagnosticsFor(source);
+      expect(diags).toHaveLength(1);
+      expect(diags[0].message).toBe(message);
+      const pos = posAt(source, needle);
+      expect(diags[0].line).toBe(pos.line);
+      expect(diags[0].col).toBe(pos.col);
+    },
+  );
 
   it("rejects rebinding a list, since bindings stay immutable", () => {
     const source = `let v = [1,2] let v = [3,4] scene { size:(10,10) }`;
