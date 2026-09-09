@@ -6,6 +6,7 @@ import type { LocalTransform } from "./transform";
 import {
   bindPhysicsBodies,
   centreInParent,
+  centreOffsetVector,
   cullEscapedBodies,
   flushPendingVelocity,
   hasPhysicsAnywhere,
@@ -930,6 +931,29 @@ describe("origin through the physics seam · write-back", () => {
 
     expect(child.__mareyLayout!.currentPos.x).toBeCloseTo(0, 8);
     expect(child.__mareyLayout!.currentPos.y).toBeCloseTo(0, 8);
+  });
+});
+
+describe("centreOffsetVector", () => {
+  it("is a vector, not a point: it never picks up the container's position", () => {
+    // Same reason `handoff` velocities go through `rotateScaleVector` — an
+    // offset has a direction and a magnitude, so translation must not leak in.
+    const layout = layoutAt(999, 999, 1, 1, BOTTOM_ORIGIN.x, BOTTOM_ORIGIN.y);
+    expect(centreOffsetVector(layout, 0, layout.currentScale)).toEqual({ x: 0, y: -10 });
+  });
+
+  it("uses the rotation and scale it is passed, not the ones on the layout", () => {
+    // This is what lets a TICK-phase caller stay clear of invariant 3: the
+    // container's rotation, currentPos and currentScale are all last written
+    // by the paint phase at wall-clock alpha, so `pushAnimToWorld` must be
+    // able to supply its own alpha-0 values. If this function reached for
+    // `layout.currentScale` itself, it could not.
+    const layout = layoutAt(0, 0, 5, 5, BOTTOM_ORIGIN.x, BOTTOM_ORIGIN.y);
+    expect(centreOffsetVector(layout, 0, { x: 1, y: 1 })).toEqual({ x: 0, y: -10 });
+
+    const turned = centreOffsetVector(layout, Math.PI / 2, { x: 1, y: 1 });
+    expect(turned.x).toBeCloseTo(10, 8);
+    expect(turned.y).toBeCloseTo(0, 8);
   });
 });
 

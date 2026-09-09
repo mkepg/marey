@@ -23,23 +23,34 @@ export function bodyTransformOf(container: Container): LocalTransform {
 }
 
 /** The layout block a container carries once `builder.ts` has wrapped it. */
-type MareyLayout = NonNullable<Container["__mareyLayout"]>;
+export type MareyLayout = NonNullable<Container["__mareyLayout"]>;
 
 /**
- * The vector from a container's pivot to its bounding-box centre, expressed in
- * the container's PARENT space.
+ * The vector from a container's pivot to its bounding-box centre, rotated and
+ * scaled into the container's PARENT space.
  *
- * `centreOffsetX/Y` are recorded at scale 1 and rotation 0, so they take the
- * container's own rotation and scale — but never its translation, since this
- * is a vector and not a point. That is exactly `rotateScaleVector`, which
+ * `centreOffsetX/Y` are recorded at scale 1 and rotation 0, so the offset takes
+ * the container's rotation and scale — but never its translation, since this is
+ * a vector and not a point. That is exactly `rotateScaleVector`, which
  * `handoff` already uses for velocities.
  *
- * `rot` is passed rather than read off the container because write-back needs
- * it at the body's NEW angle, not the angle the container still holds.
+ * **`rot` and `scale` are parameters, not reads off the container, and that is
+ * load-bearing for invariant 3.** The container's `rotation`, `currentPos` and
+ * `currentScale` are all last written by the *paint* phase at the driver's
+ * wall-clock alpha (`applyAnim`). A tick-phase caller that feeds the world —
+ * `pushAnimToWorld` — must therefore pass the values it is itself computing at
+ * `alpha = 0`, never the container's. The only thing this function reads off
+ * `layout` is `centreOffsetX/Y`, which `builder.ts` writes once at construction
+ * and nothing ever mutates, so there is no route from here to alpha-dependent
+ * state that a caller did not choose.
  */
-function pivotToCentre(layout: MareyLayout, rot: number): { x: number; y: number } {
+export function centreOffsetVector(
+  layout: MareyLayout,
+  rot: number,
+  scale: { x: number; y: number }
+): { x: number; y: number } {
   return rotateScaleVector(
-    { x: 0, y: 0, rot, sx: layout.currentScale.x, sy: layout.currentScale.y },
+    { x: 0, y: 0, rot, sx: scale.x, sy: scale.y },
     layout.centreOffsetX,
     layout.centreOffsetY
   );
@@ -49,20 +60,29 @@ function pivotToCentre(layout: MareyLayout, rot: number): { x: number; y: number
  * Where this container's bounding-box centre sits in its parent's space.
  *
  * `position` places the *pivot*, which `origin` may move anywhere in (or out
- * of) the bounding box; Matter places a body at its **centre of mass**. Every
- * container→body handoff therefore goes through here rather than through
- * `currentPos` directly.
+ * of) the bounding box; Matter places a body at its **centre of mass**, so the
+ * two must be reconciled at every container→body handoff.
  *
  * At the default origin `(0.5, 0.5)` the offset is `(0, 0)` and this returns
  * `currentPos` unchanged, which is why no pre-origin scene moves.
  *
  * A container with no layout — the bare scene root — contributes no offset, the
  * same convention `bodyTransformOf` uses when there is no `__bodyTransform`.
+ *
+ * **Do not call this from the tick phase.** It reads `container.rotation`,
+ * `currentPos` and `currentScale`, every one of which the paint phase last
+ * wrote at the driver's wall-clock alpha; pushing the result into the world
+ * would make the simulation a function of frame rate (invariant 3). It is safe
+ * at its current call sites because they run before any tick (`bindPhysicsBodies`,
+ * from the `SceneRuntime` constructor) or at build time (`collectBodyParts`),
+ * and safe in the paint phase only because write-back never feeds the world.
+ * A tick-phase caller wants `centreOffsetVector` composed onto the position it
+ * is itself computing.
  */
 export function centreInParent(container: Container): { x: number; y: number } {
   const layout = container.__mareyLayout;
   if (!layout) return { x: 0, y: 0 };
-  const v = pivotToCentre(layout, container.rotation);
+  const v = centreOffsetVector(layout, container.rotation, layout.currentScale);
   return { x: layout.currentPos.x + v.x, y: layout.currentPos.y + v.y };
 }
 
@@ -248,7 +268,7 @@ export function syncWorldToContainers(
     // `origin` may have moved off it. The offset is un-rotated by the angle
     // just read — not the one the container is still holding from last tick.
     const rot = state.angle - t.rot;
-    const v = pivotToCentre(layout, rot);
+    const v = centreOffsetVector(layout, rot, layout.currentScale);
     layout.currentPos.x = centre.x - v.x;
     layout.currentPos.y = centre.y - v.y;
     container.rotation = rot;
@@ -284,7 +304,7 @@ export function snapContainerToBody(container: Container, world: IPhysicsWorld):
   // for one rule, and keeping them separate is what makes reverting either one
   // alone show up as a test failure.
   const rot = state.angle - t.rot;
-  const v = pivotToCentre(layout, rot);
+  const v = centreOffsetVector(layout, rot, layout.currentScale);
   layout.currentPos.x = centre.x - v.x;
   layout.currentPos.y = centre.y - v.y;
   container.rotation = rot;
