@@ -13,6 +13,10 @@ exports[`compiler determinism > keeps list, indexed generate, modulo, comparison
         "color": "#ffa500",
         "kind": "circle",
         "layer": 0,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": undefined,
         "position": {
           "x": 620,
@@ -36,6 +40,10 @@ exports[`compiler determinism > keeps list, indexed generate, modulo, comparison
         "color": "#00ffff",
         "kind": "circle",
         "layer": 0,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": undefined,
         "position": {
           "x": 510,
@@ -59,6 +67,10 @@ exports[`compiler determinism > keeps list, indexed generate, modulo, comparison
         "color": "#ffa500",
         "kind": "circle",
         "layer": 0,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": undefined,
         "position": {
           "x": 290,
@@ -82,6 +94,10 @@ exports[`compiler determinism > keeps list, indexed generate, modulo, comparison
         "color": "#00ffff",
         "kind": "circle",
         "layer": 0,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": undefined,
         "position": {
           "x": 180,
@@ -105,6 +121,10 @@ exports[`compiler determinism > keeps list, indexed generate, modulo, comparison
         "color": "#ffa500",
         "kind": "circle",
         "layer": 0,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": undefined,
         "position": {
           "x": 289.9999999999999,
@@ -128,6 +148,10 @@ exports[`compiler determinism > keeps list, indexed generate, modulo, comparison
         "color": "#00ffff",
         "kind": "circle",
         "layer": 0,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": undefined,
         "position": {
           "x": 510,
@@ -156,6 +180,10 @@ exports[`compiler determinism > keeps list, indexed generate, modulo, comparison
         "color": "#ffa500",
         "kind": "circle",
         "layer": 0,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": undefined,
         "position": {
           "x": 620,
@@ -179,6 +207,10 @@ exports[`compiler determinism > keeps list, indexed generate, modulo, comparison
         "color": "#00ffff",
         "kind": "circle",
         "layer": 0,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": undefined,
         "position": {
           "x": 510,
@@ -202,6 +234,10 @@ exports[`compiler determinism > keeps list, indexed generate, modulo, comparison
         "color": "#ffa500",
         "kind": "circle",
         "layer": 0,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": undefined,
         "position": {
           "x": 290,
@@ -225,6 +261,10 @@ exports[`compiler determinism > keeps list, indexed generate, modulo, comparison
         "color": "#00ffff",
         "kind": "circle",
         "layer": 0,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": undefined,
         "position": {
           "x": 180,
@@ -248,6 +288,10 @@ exports[`compiler determinism > keeps list, indexed generate, modulo, comparison
         "color": "#ffa500",
         "kind": "circle",
         "layer": 0,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": undefined,
         "position": {
           "x": 289.9999999999999,
@@ -271,6 +315,10 @@ exports[`compiler determinism > keeps list, indexed generate, modulo, comparison
         "color": "#00ffff",
         "kind": "circle",
         "layer": 0,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": undefined,
         "position": {
           "x": 510,
@@ -319,6 +367,10 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
             "color": "#00ffff",
             "kind": "circle",
             "layer": 0,
+            "origin": {
+              "x": 0.5,
+              "y": 0.5,
+            },
             "physics": {
               "airDrag": 0,
               "bounce": 0.65,
@@ -377,6 +429,10 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
         "color": "#ffffff",
         "kind": "circle",
         "layer": 0,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": {
           "airDrag": 0,
           "bounce": 0.65,
@@ -429,6 +485,10 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
             "color": "#00ffff",
             "kind": "circle",
             "layer": 0,
+            "origin": {
+              "x": 0.5,
+              "y": 0.5,
+            },
             "physics": {
               "airDrag": 0,
               "bounce": 0.65,
@@ -488,6 +548,10 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
         "height": 20,
         "kind": "rectangle",
         "layer": 3,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": undefined,
         "position": {
           "x": 120,
@@ -577,6 +641,10 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
         "color": "#ffffff",
         "kind": "circle",
         "layer": 0,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": {
           "airDrag": 0,
           "bounce": 0.65,
@@ -614,6 +682,10 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
         "height": 20,
         "kind": "rectangle",
         "layer": 3,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": undefined,
         "position": {
           "x": 120,
@@ -714,6 +786,10 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
             "color": "#00ffff",
             "kind": "circle",
             "layer": 0,
+            "origin": {
+              "x": 0.5,
+              "y": 0.5,
+            },
             "physics": {
               "airDrag": 0,
               "bounce": 0.65,
@@ -786,6 +862,10 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
         "color": "#00ffff",
         "kind": "circle",
         "layer": 0,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": {
           "airDrag": 0,
           "bounce": 0.65,
@@ -838,6 +918,10 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
             "color": "#00ffff",
             "kind": "circle",
             "layer": 0,
+            "origin": {
+              "x": 0.5,
+              "y": 0.5,
+            },
             "physics": {
               "airDrag": 0,
               "bounce": 0.65,
@@ -910,6 +994,10 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
         "color": "#00ffff",
         "kind": "circle",
         "layer": 0,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": {
           "airDrag": 0,
           "bounce": 0.65,
@@ -955,6 +1043,10 @@ exports[`compiler determinism > keeps primitive defaults and layer order in the 
         "color": "#00ffff",
         "kind": "circle",
         "layer": -1,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": undefined,
         "position": {
           "x": 80,
@@ -979,6 +1071,10 @@ exports[`compiler determinism > keeps primitive defaults and layer order in the 
         "height": 20,
         "kind": "rectangle",
         "layer": 1,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": undefined,
         "position": {
           "x": 80,
@@ -1004,6 +1100,10 @@ exports[`compiler determinism > keeps primitive defaults and layer order in the 
         "fontSize": 12,
         "kind": "text",
         "layer": 2,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": undefined,
         "position": {
           "x": 80,
@@ -1031,6 +1131,10 @@ exports[`compiler determinism > keeps primitive defaults and layer order in the 
         "color": "#00ffff",
         "kind": "circle",
         "layer": -1,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": undefined,
         "position": {
           "x": 80,
@@ -1055,6 +1159,10 @@ exports[`compiler determinism > keeps primitive defaults and layer order in the 
         "height": 20,
         "kind": "rectangle",
         "layer": 1,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": undefined,
         "position": {
           "x": 80,
@@ -1080,6 +1188,10 @@ exports[`compiler determinism > keeps primitive defaults and layer order in the 
         "fontSize": 12,
         "kind": "text",
         "layer": 2,
+        "origin": {
+          "x": 0.5,
+          "y": 0.5,
+        },
         "physics": undefined,
         "position": {
           "x": 80,

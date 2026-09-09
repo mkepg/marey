@@ -183,6 +183,22 @@ describe("physics inside a group (spec D17)", () => {
   });
 });
 
+describe("origin on a group (D16)", () => {
+  it("rejects origin on a group, explaining D16's local-origin rule", () => {
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  group g {
+    position: (50, 50)
+    origin: (0.5, 1)
+    circle c { position: (0, 0), radius: 5 }
+  }
+}`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("[TYPE_ORIGIN_ON_GROUP]");
+    expect(out[0]).toContain("a group's origin is its own local (0, 0)");
+  });
+});
+
 describe("physical line permissions", () => {
   it("rejects a line with direct physics at the line position", () => {
     const errors = diagnosticsFor(`scene {

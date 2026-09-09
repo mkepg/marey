@@ -114,6 +114,8 @@ function makeContainer(over: {
   c.__mareyLayout = {
     localPivotX: 0,
     localPivotY: 0,
+    centreOffsetX: 0,
+    centreOffsetY: 0,
     currentPos: { x: pos.x, y: pos.y },
     currentScale: { x: 1, y: 1 },
   };

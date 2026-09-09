@@ -20,6 +20,7 @@ function circle(name: string, x: number, y: number, radius: number, over: Partia
     props: {
       kind: "circle", position: { x, y }, radius, color: "#ff0000",
       rotation: 0, scale: { x: 1, y: 1 }, alpha: 1, layer: 0,
+      origin: { x: 0.5, y: 0.5 },
       animations: [], sequences: [],
       ...over,
     } as IRObjectProps,
@@ -33,6 +34,7 @@ function rect(name: string, x: number, y: number, w: number, h: number, over: Pa
     props: {
       kind: "rectangle", position: { x, y }, width: w, height: h, color: "#ff0000",
       rotation: 0, scale: { x: 1, y: 1 }, alpha: 1, layer: 0,
+      origin: { x: 0.5, y: 0.5 },
       animations: [], sequences: [],
       ...over,
     } as IRObjectProps,
@@ -148,6 +150,7 @@ describe("builder · group compound geometry", () => {
         kind: "polygon", position: { x: 40, y: 0 },
         points: [{ x: 0, y: -30 }, { x: 26, y: 15 }, { x: -26, y: 15 }],
         color: "#ff0000", rotation: 0, scale: { x: 1, y: 1 }, alpha: 1, layer: 0,
+        origin: { x: 0.5, y: 0.5 },
         animations: [], sequences: [],
       } as IRObjectProps,
       children: [],
@@ -172,5 +175,83 @@ describe("builder · leaf shapes keep their existing geometry", () => {
     expect(buildNode(rect("r", 0, 0, 30, 40)).__bodyShape).toEqual({
       kind: "rectangle", width: 30, height: 40,
     });
+  });
+});
+
+describe("origin", () => {
+  it("defaults to the bounding-box centre, reproducing the pre-origin pivot", () => {
+    const c = buildNode(rect("r", 0, 0, 40, 20));
+    expect(c.pivot.x).toBe(20);
+    expect(c.pivot.y).toBe(10);
+  });
+
+  it("places the pivot at the bottom-centre for origin (0.5, 1)", () => {
+    const c = buildNode(rect("r", 0, 0, 40, 20, {
+      origin: { x: 0.5, y: 1 },
+    } as Partial<IRObjectProps>));
+    expect(c.pivot.x).toBe(20);
+    expect(c.pivot.y).toBe(20);
+  });
+
+  it("records the pivot-to-centre offset, which is zero at the default origin", () => {
+    const c = buildNode(rect("r", 0, 0, 40, 20));
+    expect(c.__mareyLayout!.centreOffsetX).toBe(0);
+    expect(c.__mareyLayout!.centreOffsetY).toBe(0);
+  });
+
+  it("records a pivot-to-centre offset pointing up from a bottom origin", () => {
+    const c = buildNode(rect("r", 0, 0, 40, 20, {
+      origin: { x: 0.5, y: 1 },
+    } as Partial<IRObjectProps>));
+    expect(c.__mareyLayout!.centreOffsetX).toBe(0);
+    expect(c.__mareyLayout!.centreOffsetY).toBe(-10);
+  });
+
+  it("offsets a circle's pivot within its 2r bounding box", () => {
+    const c = buildNode(circle("c", 0, 0, 10, {
+      origin: { x: 0, y: 0 },
+    } as Partial<IRObjectProps>));
+    expect(c.pivot.x).toBe(0);
+    expect(c.pivot.y).toBe(0);
+    expect(c.__mareyLayout!.centreOffsetX).toBe(10);
+  });
+
+  it("moves a polygon's pivot to its bbox corner for origin (0, 0), leaving its collision shape anchored to the bbox centre", () => {
+    // Same triangle as "expresses a polygon child's points relative to its
+    // own bbox centre" above (bbox centre (0, -7.5), not the centroid). This
+    // is the one shape kind the rest of this file's origin coverage never
+    // exercises with a non-default origin — added after Step 11's revert
+    // check found reverting only the polygon call site to a hard-coded
+    // origin left the whole suite green (622/622).
+    const poly: IRObjectNode = {
+      id: "t",
+      props: {
+        kind: "polygon", position: { x: 0, y: 0 },
+        points: [{ x: 0, y: -30 }, { x: 26, y: 15 }, { x: -26, y: 15 }],
+        color: "#ff0000", rotation: 0, scale: { x: 1, y: 1 }, alpha: 1, layer: 0,
+        origin: { x: 0, y: 0 },
+        animations: [], sequences: [],
+      } as IRObjectProps,
+      children: [],
+    };
+    const c = buildNode(poly);
+    expect(c.pivot.x).toBe(-26);
+    expect(c.pivot.y).toBe(-30);
+    expect(c.__mareyLayout!.centreOffsetX).toBe(26);
+    expect(c.__mareyLayout!.centreOffsetY).toBe(22.5);
+    // The collision shape stays relative to the bbox centre regardless of
+    // origin — identical points to the default-origin case.
+    expect(c.__bodyShape).toEqual({
+      kind: "polygon",
+      points: [{ x: 0, y: -22.5 }, { x: 26, y: 22.5 }, { x: -26, y: 22.5 }],
+    });
+  });
+
+  it("permits an origin outside the bounding box", () => {
+    const c = buildNode(rect("r", 0, 0, 40, 20, {
+      origin: { x: 0.5, y: 2 },
+    } as Partial<IRObjectProps>));
+    expect(c.pivot.y).toBe(40);
+    expect(c.__mareyLayout!.centreOffsetY).toBe(-30);
   });
 });

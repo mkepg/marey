@@ -131,6 +131,13 @@ const layer = property(
   "0",
   { default: 0 },
 );
+const origin = property(
+  "point",
+  "The point that 'position' places, and that 'scale' and 'rotation' act around, as a fraction of the object's bounding box: (0, 0) is its top-left corner, (1, 1) its bottom-right, (0.5, 0.5) its centre. Values outside 0..1 place the origin outside the box.",
+  "origin: (0.5, 1)",
+  "(0.5, 0.5)",
+  { default: point(0.5, 0.5) },
+);
 
 const visualProperties = Object.freeze({
   color,
@@ -138,6 +145,7 @@ const visualProperties = Object.freeze({
   rotation,
   scale,
   layer,
+  origin,
 });
 
 const sceneProperties = Object.freeze({

@@ -531,6 +531,10 @@ export function collectErrors(ast: AstNode): CompilerError[] {
       const errPos = { line: val.line, col: val.col, endLine: val.endLine, endCol: val.endCol };
 
       if (expected === undefined) {
+        if (typeName === "group" && key === "origin") {
+          errors.push({ phase: "TYPE", message: `[TYPE_ORIGIN_ON_GROUP] ${label} cannot set 'origin': a group's origin is its own local (0, 0), not a fraction of a bounding box, so place its children relative to that point instead.`, ...errPos });
+          continue;
+        }
         const knownList = Object.keys(contract).map((k) => `'${k}'`).join(", ");
         errors.push({ phase: "TYPE", message: `${label} has an unknown property '${key}'. Valid properties for '${typeName}' are: ${knownList}.`, ...errPos });
         continue;

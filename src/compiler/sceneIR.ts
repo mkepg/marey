@@ -76,7 +76,7 @@ export interface IRVisualBase {
   readonly position: IRPoint;
   readonly rotation: number;
   readonly scale: IRPoint;
-  // anchor removed
+  readonly origin: IRPoint;
   readonly layer: number;
   readonly animations: ReadonlyArray<IRAnimation>;
   readonly physics?: IRPhysics;

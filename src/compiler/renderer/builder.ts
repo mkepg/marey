@@ -8,6 +8,15 @@ declare module "pixi.js" {
     __mareyLayout?: {
       localPivotX: number;
       localPivotY: number;
+      /**
+       * The local vector FROM the pivot TO the bounding-box centre, at scale
+       * 1 and rotation 0 — `(0, 0)` at the default origin `(0.5, 0.5)`, where
+       * the pivot already sits on the centre. A later task (origin through
+       * physics) reads these to place a body relative to the pivot rather
+       * than the bbox centre it used to assume they coincided with.
+       */
+      centreOffsetX: number;
+      centreOffsetY: number;
       currentPos: { x: number; y: number };
       currentScale: { x: number; y: number };
     };
@@ -40,6 +49,18 @@ declare module "pixi.js" {
   }
 }
 
+/**
+ * A shape's local bounding box, before any origin is applied: `min` is its
+ * top-left corner and `size` its width/height, both in the shape's own
+ * (unrotated, unscaled) local point-space. For circle/rectangle/text this is
+ * the geometric extent; for polygon/line it is the bbox, not the hull's
+ * centroid (D15).
+ */
+interface LocalBBox {
+  readonly min: { x: number; y: number };
+  readonly size: { x: number; y: number };
+}
+
 function applyAnchorAndPivot(
   wrapper: Container,
   props: {
@@ -48,13 +69,25 @@ function applyAnchorAndPivot(
     scale: { x: number; y: number };
     alpha: number;
   },
-  localPivot: { x: number; y: number }
-): void {
+  origin: { x: number; y: number },
+  bbox: LocalBBox
+): { x: number; y: number } {
+  const localPivot = {
+    x: bbox.min.x + origin.x * bbox.size.x,
+    y: bbox.min.y + origin.y * bbox.size.y,
+  };
+  const bboxCentre = {
+    x: bbox.min.x + bbox.size.x / 2,
+    y: bbox.min.y + bbox.size.y / 2,
+  };
+
   wrapper.pivot.set(localPivot.x, localPivot.y);
 
   wrapper.__mareyLayout = {
     localPivotX: localPivot.x,
     localPivotY: localPivot.y,
+    centreOffsetX: bboxCentre.x - localPivot.x,
+    centreOffsetY: bboxCentre.y - localPivot.y,
     currentPos: { x: props.position.x, y: props.position.y },
     currentScale: { x: props.scale.x, y: props.scale.y },
   };
@@ -71,6 +104,8 @@ function applyAnchorAndPivot(
   wrapper.__updateLayout();
   wrapper.rotation = props.rotation * (Math.PI / 180);
   wrapper.alpha = props.alpha;
+
+  return bboxCentre;
 }
 
 /**
@@ -143,9 +178,11 @@ export function buildNode(node: IRObjectNode): Container {
   switch (props.kind) {
     case "circle": {
       wrapper = new Container();
-      const localPivot = { x: props.radius, y: props.radius };
-      applyAnchorAndPivot(wrapper, props, localPivot);
-      
+      applyAnchorAndPivot(wrapper, props, props.origin, {
+        min: { x: 0, y: 0 },
+        size: { x: props.radius * 2, y: props.radius * 2 },
+      });
+
       const gfx = new Graphics()
         .circle(props.radius, props.radius, props.radius)
         .fill(props.color);
@@ -156,9 +193,11 @@ export function buildNode(node: IRObjectNode): Container {
     }
     case "rectangle": {
       wrapper = new Container();
-      const localPivot = { x: props.width / 2, y: props.height / 2 };
-      applyAnchorAndPivot(wrapper, props, localPivot);
-      
+      applyAnchorAndPivot(wrapper, props, props.origin, {
+        min: { x: 0, y: 0 },
+        size: { x: props.width, y: props.height },
+      });
+
       const gfx = new Graphics()
         .rect(0, 0, props.width, props.height)
         .fill(props.color);
@@ -182,8 +221,10 @@ export function buildNode(node: IRObjectNode): Container {
       const w = maxX - minX;
       const h = maxY - minY;
 
-      const localPivot = { x: minX + w / 2, y: minY + h / 2 };
-      applyAnchorAndPivot(wrapper, props, localPivot);
+      const bboxCentre = applyAnchorAndPivot(wrapper, props, props.origin, {
+        min: { x: minX, y: minY },
+        size: { x: w, y: h },
+      });
 
       const flatPoints = new Array(len * 2);
       for (let i = 0; i < len; i++) {
@@ -196,11 +237,14 @@ export function buildNode(node: IRObjectNode): Container {
         .fill(props.color);
       wrapper.addChild(gfx);
       wrapper.__baseSize = { w, h };
+      // Relative to the bounding-box centre, not the pivot: the collision
+      // shape must stay independent of the visual-only `origin` property. At
+      // the default origin the two coincide, so this is a no-op today.
       wrapper.__bodyShape = {
         kind: "polygon",
         points: props.points.map((p) => ({
-          x: p.x - localPivot.x,
-          y: p.y - localPivot.y,
+          x: p.x - bboxCentre.x,
+          y: p.y - bboxCentre.y,
         })),
       };
       break;
@@ -220,8 +264,10 @@ export function buildNode(node: IRObjectNode): Container {
       const w = maxX - minX;
       const h = maxY - minY;
 
-      const localPivot = { x: minX + w / 2, y: minY + h / 2 };
-      applyAnchorAndPivot(wrapper, props, localPivot);
+      applyAnchorAndPivot(wrapper, props, props.origin, {
+        min: { x: minX, y: minY },
+        size: { x: w, y: h },
+      });
 
       const flatPoints = new Array(len * 2);
       for (let i = 0; i < len; i++) {
@@ -250,8 +296,10 @@ export function buildNode(node: IRObjectNode): Container {
       });
       const textObj = new Text({ text: props.content, style });
 
-      const localPivot = { x: textObj.width / 2, y: textObj.height / 2 };
-      applyAnchorAndPivot(wrapper, props, localPivot);
+      applyAnchorAndPivot(wrapper, props, props.origin, {
+        min: { x: 0, y: 0 },
+        size: { x: textObj.width, y: textObj.height },
+      });
 
       wrapper.addChild(textObj);
       wrapper.__baseSize = { w: textObj.width, h: textObj.height };
@@ -268,7 +316,10 @@ export function buildNode(node: IRObjectNode): Container {
         wrapper.addChild(buildNode(child));
       }
 
-      const localPivot = { x: 0, y: 0 };
+      // A group's pivot is always its own local origin (0, 0), never derived
+      // from `origin` — D16. `IRGroupProps` carries no `origin` property (see
+      // languageContract.ts's `groupProperties`), so this passes a fixed
+      // zero-size bbox rather than reading one off `props`.
       applyAnchorAndPivot(
         wrapper,
         {
@@ -277,7 +328,8 @@ export function buildNode(node: IRObjectNode): Container {
           scale: props.transform.scale,
           alpha: props.alpha,
         },
-        localPivot
+        { x: 0, y: 0 },
+        { min: { x: 0, y: 0 }, size: { x: 0, y: 0 } }
       );
       const groupBounds = wrapper.getLocalBounds();
       wrapper.__baseSize = { w: groupBounds.width, h: groupBounds.height };
