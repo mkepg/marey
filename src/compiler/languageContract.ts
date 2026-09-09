@@ -8,6 +8,7 @@ export type ContractDefault = number | string | boolean | Readonly<{ x: number; 
 export type LocalConstraint =
   | Readonly<{ kind: "range"; min: number; max: number }>
   | Readonly<{ kind: "positive" }>
+  | Readonly<{ kind: "nonNegative" }>
   | Readonly<{ kind: "positivePoint" }>
   | Readonly<{ kind: "positiveScale" }>
   | Readonly<{ kind: "maxLength"; max: number }>
@@ -266,6 +267,13 @@ const animateProperties = Object.freeze({
     "duration: 2.5",
     "1.0",
     { required: true, constraint: { kind: "positive" } },
+  ),
+  delay: property(
+    "number",
+    "Seconds to wait before this animation begins. Applied once, before the first iteration -- a looping animation's period stays 'duration'.",
+    "delay: 0.25",
+    "0.25",
+    { default: 0, constraint: { kind: "nonNegative" } },
   ),
   easing: property(
     "easing",

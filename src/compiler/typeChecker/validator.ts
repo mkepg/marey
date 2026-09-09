@@ -78,6 +78,12 @@ export function validateLocalConstraint(
       }
       return undefined;
 
+    case "nonNegative":
+      if (val.kind === "number" && val.value < 0) {
+        return error(`${label}: '${key}' must be 0 or greater, but got ${val.value}.`);
+      }
+      return undefined;
+
     case "positivePoint":
       if (val.kind === "point") {
         if (val.x <= 0 && val.y <= 0) {

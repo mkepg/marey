@@ -306,6 +306,13 @@ export class SceneRuntime {
         completed: false,
         loop: anim.loop,
         yoyo: anim.yoyo,
+        // secondsToTicks(0) === 1 (it floors at one tick), so converting a
+        // default delay of 0 through it would add one tick of delay to every
+        // animation that never asked for one. Short-circuit at 0 instead.
+        // secondsToTicks(0) === 1 (it floors at one tick), so converting a
+        // default delay of 0 through it would add one tick of delay to every
+        // animation that never asked for one. Short-circuit at 0 instead.
+        delayTicks: anim.delay <= 0 ? 0 : secondsToTicks(anim.delay),
       },
       isPosAnim: isPos,
       completedThisTick: false,

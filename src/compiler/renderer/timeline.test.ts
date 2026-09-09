@@ -15,6 +15,7 @@ function makeAnim(over: Partial<AnimTime> = {}): AnimTime {
     completed: false,
     loop: false,
     yoyo: false,
+    delayTicks: 0,
     ...over,
   };
 }
@@ -150,6 +151,71 @@ describe("animProgress", () => {
 
     const high = makeAnim({ durationTicks: 10, elapsedTicks: 10 });
     expect(animProgress(high, 0.9)).toBe(1);
+  });
+});
+
+describe("delay", () => {
+  const delayed = (delayTicks: number, durationTicks = 4): AnimTime => ({
+    elapsedTicks: 0, durationTicks, direction: 1,
+    completed: false, loop: false, yoyo: false, delayTicks,
+  });
+
+  it("does not advance elapsed time while the delay is outstanding", () => {
+    const t = delayed(3);
+    advanceAnimTime(t);
+    advanceAnimTime(t);
+    expect(t.delayTicks).toBe(1);
+    expect(t.elapsedTicks).toBe(0);
+  });
+
+  it("holds progress at exactly 0 during the delay, at any sub-tick alpha", () => {
+    const t = delayed(3);
+    expect(animProgress(t, 0.75)).toBe(0);
+    advanceAnimTime(t);
+    expect(animProgress(t, 0.99)).toBe(0);
+  });
+
+  it("advances normally on the tick after the delay is spent", () => {
+    const t = delayed(2);
+    advanceAnimTime(t);
+    advanceAnimTime(t);
+    expect(t.delayTicks).toBe(0);
+    advanceAnimTime(t);
+    expect(t.elapsedTicks).toBe(1);
+  });
+
+  it("completes a delayed animation delayTicks later than an undelayed one", () => {
+    const plain = delayed(0, 3);
+    const late = delayed(2, 3);
+    let plainDone = -1;
+    let lateDone = -1;
+    for (let i = 0; i < 12; i++) {
+      if (advanceAnimTime(plain)) plainDone = i;
+      if (advanceAnimTime(late)) lateDone = i;
+    }
+    expect(plainDone).toBe(2);
+    expect(lateDone).toBe(4);
+  });
+
+  // The decision, pinned. Roadmap 5.2's phase-offset criterion requires the
+  // delay be spent ONCE. If it were re-armed per iteration the period would
+  // become delay + duration, and varying delay across generated objects would
+  // change period rather than phase -- the exact defect the roadmap records
+  // for varying `duration`. Flip advanceAnimTime to re-arm delayTicks on the
+  // loop branch and this test goes red; nothing else in the suite does.
+  it("spends the delay once, so a looping animation's period stays duration", () => {
+    const t: AnimTime = {
+      elapsedTicks: 0, durationTicks: 4, direction: 1,
+      completed: false, loop: true, yoyo: false, delayTicks: 5,
+    };
+    for (let i = 0; i < 5; i++) advanceAnimTime(t);
+    // Delay spent; now time four ticks of the first cycle, which wraps to 0.
+    for (let i = 0; i < 4; i++) advanceAnimTime(t);
+    expect(t.elapsedTicks).toBe(0);
+    expect(t.delayTicks).toBe(0);
+    // The second cycle starts immediately -- no second delay.
+    advanceAnimTime(t);
+    expect(t.elapsedTicks).toBe(1);
   });
 });
 

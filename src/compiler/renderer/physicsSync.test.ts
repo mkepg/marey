@@ -246,6 +246,7 @@ const ANIMATION: IRAnimation = {
   property: "position",
   to: { x: 10, y: 10 },
   duration: 1,
+  delay: 0,
   easing: "linear",
   loop: false,
   yoyo: false,

@@ -21,7 +21,7 @@ describe("language contract", () => {
   it("derives required and accepted properties from one data object", () => {
     expect(REQUIRED_PROPS.circle).toEqual(["position", "radius"]);
     expect(PROP_TYPES.animate).toEqual({
-      property: "animProperty", to: ["number", "point"], duration: "number",
+      property: "animProperty", to: ["number", "point"], duration: "number", delay: "number",
       easing: "easing", loop: "boolean", yoyo: "boolean", handoff: "boolean",
     });
     expect(Object.keys(LANGUAGE_CONTRACT.scene.properties)).toEqual([
@@ -98,6 +98,40 @@ describe("language contract", () => {
     const group = result.ir!.children[0].props;
     if (group.kind !== "group") throw new Error("Expected a group IR node");
     expect(group.transform.position).toEqual(contractPointDefault("group", "position"));
+  });
+
+  it("resolves an animation's explicit delay into the IR, in seconds", () => {
+    const { ast, errors } = parse(lex(`scene {
+      size: (100, 100)
+      circle c {
+        position: (50, 50)
+        radius: 10
+        animate { property: alpha, to: 0, duration: 1, delay: 0.5 }
+      }
+    }`));
+    expect(errors).toEqual([]);
+    const result = typeCheck(ast!);
+    expect(result.errors).toEqual([]);
+    const circle = result.ir!.children[0].props;
+    if (circle.kind !== "circle") throw new Error("Expected a circle IR node");
+    expect(circle.animations[0].delay).toBe(0.5);
+  });
+
+  it("defaults an animation's delay to the contract's 0 when omitted", () => {
+    const { ast, errors } = parse(lex(`scene {
+      size: (100, 100)
+      circle c {
+        position: (50, 50)
+        radius: 10
+        animate { property: alpha, to: 0, duration: 1 }
+      }
+    }`));
+    expect(errors).toEqual([]);
+    const result = typeCheck(ast!);
+    expect(result.errors).toEqual([]);
+    const circle = result.ir!.children[0].props;
+    if (circle.kind !== "circle") throw new Error("Expected a circle IR node");
+    expect(circle.animations[0].delay).toBe(propertyDefault("animate", "delay"));
   });
 
   it("rejects a missing required animation target when building IR directly", () => {

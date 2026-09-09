@@ -40,6 +40,8 @@ export interface IRAnimation {
   readonly property: string;
   readonly to: number | IRPoint | IRColor;
   readonly duration: number;
+  /** Seconds to wait before this animation begins. */
+  readonly delay: number;
   readonly easing: IREasing;
   readonly loop: boolean;
   readonly yoyo: boolean;

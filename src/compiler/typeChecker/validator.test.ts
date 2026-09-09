@@ -856,3 +856,40 @@ describe("TYPE_ONE_PHYSICS", () => {
     expect(errorsFor(src).join()).toContain("[TYPE_ONE_PHYSICS]");
   });
 });
+
+describe("animate delay", () => {
+  it("accepts a non-negative delay", () => {
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    animate { property: alpha, to: 0, duration: 1, delay: 0.25 }
+  }
+}`)).toEqual([]);
+  });
+
+  it("accepts an explicit zero delay", () => {
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    animate { property: alpha, to: 0, duration: 1, delay: 0 }
+  }
+}`)).toEqual([]);
+  });
+
+  it("rejects a negative delay, naming the value", () => {
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (10, 10)
+    radius: 5
+    animate { property: alpha, to: 0, duration: 1, delay: -0.5 }
+  }
+}`)).toEqual([
+      "The 'animate' block: 'delay' must be 0 or greater, but got -0.5.",
+    ]);
+  });
+});

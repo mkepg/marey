@@ -80,6 +80,7 @@ function anim(over: Partial<IRAnimation> = {}): IRAnimation {
     property: "position",
     to: { x: 200, y: 0 },
     duration: 1,
+    delay: 0,
     easing: "linear",
     loop: false,
     yoyo: false,
@@ -149,6 +150,34 @@ describe("SceneRuntime · tick phase", () => {
     rt.advanceOneTick();
     rt.paint(0);
     expect(c.alpha).toBeCloseTo(1 - 2 / TICK_HZ, 6);
+  });
+
+  it("holds the visual state during a delay, in real tick-converted seconds, then starts on schedule", () => {
+    // Exercises the full source-to-runtime wiring this task adds: the
+    // contract's `delay` (seconds) threaded through builder.ts into
+    // IRAnimation.delay, then converted to AnimTime.delayTicks by
+    // sceneRuntime.ts's spawnAnim -- not just timeline.ts's pure functions,
+    // which are covered directly by timeline.test.ts.
+    const delayTicks = 2;
+    const c = makeContainer({
+      animations: [anim({ property: "alpha", to: 0, delay: delayTicks / TICK_HZ })],
+    });
+    const world = new RecordingWorld();
+    const rt = new SceneRuntime(world, makeRoot(c));
+
+    rt.advanceOneTick();
+    rt.paint(0);
+    expect(c.alpha).toBe(1);
+
+    rt.advanceOneTick();
+    rt.paint(0);
+    expect(c.alpha).toBe(1);
+
+    // Delay spent; behaves exactly like the undelayed case above, offset by
+    // the two ticks just spent.
+    rt.advanceOneTick();
+    rt.paint(0);
+    expect(c.alpha).toBeCloseTo(1 - 1 / TICK_HZ, 6);
   });
 
   it("pins POS_ANIM at spawn and releases it on the completion tick, not on paint", () => {

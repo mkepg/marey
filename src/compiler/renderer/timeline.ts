@@ -12,6 +12,13 @@ export interface AnimTime {
   completed: boolean;
   loop: boolean;
   yoyo: boolean;
+  /**
+   * Remaining delay in ticks; counts down to 0 and is never re-armed. Spent
+   * exactly once, before the first iteration, so a looping animation's period
+   * stays `duration` — roadmap 5.2's phase-offset criterion needs delay to
+   * shift phase, not period, the same defect already avoided for `duration`.
+   */
+  delayTicks: number;
 }
 
 /**
@@ -23,6 +30,11 @@ export interface AnimTime {
  */
 export function advanceAnimTime(t: AnimTime): boolean {
   if (t.completed) return false;
+
+  if (t.delayTicks > 0) {
+    t.delayTicks -= 1;
+    return false;
+  }
 
   t.elapsedTicks += t.direction;
 
@@ -71,6 +83,9 @@ export function advanceAnimTime(t: AnimTime): boolean {
  */
 export function animProgress(t: AnimTime, alpha: number): number {
   if (t.durationTicks <= 0) return 1;
+  // The driver's sub-tick `alpha` must not leak a small positive progress
+  // into a still-delayed animation.
+  if (t.delayTicks > 0) return 0;
 
   const sub = t.completed ? 0 : alpha * t.direction;
   const p = (t.elapsedTicks + sub) / t.durationTicks;

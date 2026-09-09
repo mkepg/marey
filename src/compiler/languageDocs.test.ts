@@ -208,6 +208,7 @@ function mkAnimTime(over: Partial<AnimTime> = {}): AnimTime {
     completed: false,
     loop: false,
     yoyo: false,
+    delayTicks: 0,
     ...over,
   };
 }
@@ -257,6 +258,7 @@ describe("LANGUAGE.md · Animation · loop and yoyo", () => {
       completed: true,
       loop: false,
       yoyo: true,
+      delayTicks: 0,
     });
   });
 
