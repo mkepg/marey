@@ -79,14 +79,16 @@ Three invariants that are easy to break, each of which has caused a real bug:
    world to see identical calls. One lives in `sceneRuntime.test.ts`.
 
 `renderer/builder.ts` turns IR nodes into PixiJS containers. Every visual is
-wrapped in a `Container` whose pivot is the centre of its **bounding box** —
-there is no `anchor` property. Note the precision: that is the geometric centre
-only for `circle`, `rectangle` and `text`. For `polygon` and `line` it is the
-bbox midpoint, **not** the centroid — the same distinction D15 exists to correct
-in the physics layer, and 7.5px apart for the default scene's own triangle. A
-`group`'s pivot is its local origin (`builder.ts:271`) and is never derived from
-where its children sit — that is deliberate (D16), and since Phase 2 its
-collision body is placed to match rather than the other way round. A `group`
+wrapped in a `Container` whose pivot is its `origin` property — a bounding-box
+fraction that **defaults** to (0.5, 0.5), the centre of its **bounding box** —
+there is no `anchor` property. Note the precision: at that default, the pivot
+is the geometric centre only for `circle`, `rectangle` and `text`. For
+`polygon` and `line` it is the bbox midpoint, **not** the centroid — the same
+distinction D15 exists to correct in the physics layer, and 7.5px apart for
+the default scene's own triangle. A `group`'s pivot is its local origin
+(`builder.ts:323`) and is never derived from where its children sit — that is
+deliberate (D16), and since Phase 2 its collision body is placed to match
+rather than the other way round. A `group`
 with `physics` gets a **compound** body, one part per shape inside it, flattened
 across nested groups. Runtime state is attached via
 `__`-prefixed fields declared in a `declare module "pixi.js"` block at the top

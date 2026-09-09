@@ -78,21 +78,24 @@ function property(
   return Object.freeze({ kinds, description, example, placeholder, ...options });
 }
 
-// Every visual is wrapped in a container whose pivot is its bounding box's
-// centre — but that coincides with the shape's *geometric* centre only for
+// Every visual is wrapped in a container whose pivot is its `origin`, a
+// bounding-box fraction that defaults to (0.5, 0.5) — the bounding box's
+// centre, which coincides with the shape's *geometric* centre only for
 // circle, rectangle and text (docs/architecture/renderer.md, decision D15).
 // Polygon and line
 // share a distinct description because for an asymmetric shape the
-// bounding-box midpoint is not the centroid.
+// bounding-box midpoint is not the centroid. `position` places wherever the
+// origin currently is, not unconditionally the centre/midpoint — see the
+// `origin` property just below.
 const centerPosition = property(
   "point",
-  "Sets the (x, y) coordinates of the object's geometric center in the scene.",
+  "Sets the (x, y) scene coordinates the object's origin is placed at, which defaults to its geometric center. 'origin' can move that point elsewhere in the bounding box; 'scale' and 'rotation' always act about wherever it currently is.",
   "position: (100, 200)",
   "(0, 0)",
 );
 const bboxMidpointPosition = property(
   "point",
-  "Sets the (x, y) scene coordinates of the shape's bounding-box midpoint — the point 'points' are positioned around, and about which rotation and scale act. For an asymmetric shape this is not the same as the centroid.",
+  "Sets the (x, y) scene coordinates the object's origin is placed at, which defaults to the shape's bounding-box midpoint — the point 'points' are positioned around by default. For an asymmetric shape this default is not the same as the centroid. 'origin' can move this point elsewhere in the bounding box; 'scale' and 'rotation' always act about wherever it currently is.",
   "position: (100, 200)",
   "(0, 0)",
 );

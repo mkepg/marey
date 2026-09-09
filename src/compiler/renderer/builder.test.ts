@@ -247,6 +247,39 @@ describe("origin", () => {
     });
   });
 
+  it("moves a line's pivot to its bbox corner for origin (0, 0), leaving its collision shape origin-independent", () => {
+    // Points chosen so both minX and minY are nonzero (10, 20), so the
+    // bbox-min term in localPivot = bboxMin + origin*bboxSize is actually
+    // exercised — a line whose bbox started at (0, 0) couldn't distinguish
+    // that term from the size term. Added because `line` (like `text`, which
+    // is untestable headlessly per this file's header comment) had no origin
+    // coverage at all: reverting its origin call site to a hard-coded
+    // (0.5, 0.5) left the whole suite green.
+    const ln: IRObjectNode = {
+      id: "l",
+      props: {
+        kind: "line", position: { x: 0, y: 0 },
+        points: [{ x: 10, y: 20 }, { x: 50, y: 20 }, { x: 30, y: 60 }],
+        thickness: 4,
+        color: "#ff0000", rotation: 0, scale: { x: 1, y: 1 }, alpha: 1, layer: 0,
+        origin: { x: 0, y: 0 },
+        animations: [], sequences: [],
+      } as IRObjectProps,
+      children: [],
+    };
+    const c = buildNode(ln);
+    expect(c.pivot.x).toBe(10);
+    expect(c.pivot.y).toBe(20);
+    expect(c.__mareyLayout!.centreOffsetX).toBe(20);
+    expect(c.__mareyLayout!.centreOffsetY).toBe(20);
+    // The collision shape is a bbox rectangle sized from width/height/
+    // thickness alone — it never reads the pivot, so it must stay identical
+    // to whatever the default-origin case would produce.
+    expect(c.__bodyShape).toEqual({
+      kind: "rectangle", width: 40, height: 40,
+    });
+  });
+
   it("permits an origin outside the bounding box", () => {
     const c = buildNode(rect("r", 0, 0, 40, 20, {
       origin: { x: 0.5, y: 2 },
