@@ -290,8 +290,21 @@ export function syncWorldToContainers(
  *
  * Reading at alpha 1 is what makes it tick-aligned: it returns the current
  * state rather than a blend with the previous one.
+ *
+ * **`tickScale` is a parameter for the same reason `centreOffsetVector`'s is.**
+ * This runs in the TICK phase, and the pivot correction below scales with the
+ * object — so taking `layout.currentScale` would reach straight back into the
+ * value `applyAnim` last wrote at the driver's alpha, and hand this snap the
+ * frame-rate dependence it exists to remove. A caller with a live scale
+ * animation must pass that animation's own `alpha = 0` value; a caller with
+ * none may pass `layout.currentScale`, which is tick-aligned when nothing is
+ * writing it.
  */
-export function snapContainerToBody(container: Container, world: IPhysicsWorld): void {
+export function snapContainerToBody(
+  container: Container,
+  world: IPhysicsWorld,
+  tickScale: { x: number; y: number }
+): void {
   const id = container.__body;
   if (!id) return;
   const state = world.readState(id, 1);
@@ -302,9 +315,10 @@ export function snapContainerToBody(container: Container, world: IPhysicsWorld):
   // Same centre-to-pivot correction as `syncWorldToContainers`. Deliberately
   // written out at both sites rather than shared: they are the two code paths
   // for one rule, and keeping them separate is what makes reverting either one
-  // alone show up as a test failure.
+  // alone show up as a test failure. The scale is where they legitimately
+  // differ — `syncWorldToContainers` paints, so alpha is free there.
   const rot = state.angle - t.rot;
-  const v = centreOffsetVector(layout, rot, layout.currentScale);
+  const v = centreOffsetVector(layout, rot, tickScale);
   layout.currentPos.x = centre.x - v.x;
   layout.currentPos.y = centre.y - v.y;
   container.rotation = rot;

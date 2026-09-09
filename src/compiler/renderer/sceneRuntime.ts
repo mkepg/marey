@@ -38,24 +38,6 @@ export interface RunningAnim {
    * two lifecycle bits — `time.completed` and this — sit on the same object.
    */
   completedThisTick: boolean;
-  /**
-   * For a scale runner only: the local scale the physics world was last told
-   * about, so the next tick can push the *change* in the pivot→centre offset
-   * rather than an absolute placement.
-   *
-   * It has to be remembered rather than recomputed, because the only absolute
-   * pivot available in the tick phase is `layout.currentPos` — which the paint
-   * phase last wrote at the driver's wall-clock alpha (invariant 3). The body's
-   * own centre, read at alpha 1, is tick-aligned; the delta from this value
-   * carries it to where the drawing's centre now is.
-   *
-   * Seeded from the runner's start value, which is exactly what
-   * `bindPhysicsBodies` (or the previous scale runner's final push) already
-   * gave the world. Updated on every tick this runner is pushed, *including*
-   * the ticks a concurrent position animation owns the placement — otherwise
-   * the handover back would replay the whole accumulated growth in one jump.
-   */
-  lastWorldScale?: { x: number; y: number };
 }
 
 export interface PhysicsRunner {
@@ -169,12 +151,40 @@ export class SceneRuntime {
   private readonly runningAnims: RunningAnim[] = [];
   private readonly physicsRunners: PhysicsRunner[] = [];
   private readonly sequenceRunners: SequenceRunner[] = [];
+  /**
+   * The local scale each bound container's body currently carries.
+   *
+   * One entry per body, not per runner: the world holds a single scale per
+   * body, so the pivot→centre offset it needs correcting by is a property of
+   * the container. Keeping it per runner let two concurrent scale animations
+   * each push their own delta onto the same body, so the collider walked off
+   * the drawing by the sum of the two.
+   *
+   * It has to be remembered rather than recomputed, because the only absolute
+   * pivot available in the tick phase is `layout.currentPos` — which the paint
+   * phase last wrote at the driver's wall-clock alpha (invariant 3). The body's
+   * own centre, read at alpha 1, is tick-aligned; the delta from this value
+   * carries it to where the drawing's centre now is.
+   */
+  private readonly worldScale = new Map<Container, { x: number; y: number }>();
 
   constructor(world: IPhysicsWorld, sceneRoot: Container) {
     this.world = world;
     // Bodies exist before any runner does, so an object animating in during a
     // sequence is a pinned static obstacle rather than a ghost (spec D6, D13).
     this.bindings = bindPhysicsBodies(sceneRoot, world);
+    // Seeded here, before any tick and any paint, so it starts from the exact
+    // scale `bindPhysicsBodies` just handed the world rather than from a
+    // `currentScale` an `applyAnim` might since have written at alpha.
+    for (const { container } of this.bindings) {
+      const layout = container.__mareyLayout;
+      if (layout) {
+        this.worldScale.set(container, {
+          x: layout.currentScale.x,
+          y: layout.currentScale.y,
+        });
+      }
+    }
     this.collectData(sceneRoot);
   }
 
@@ -273,37 +283,54 @@ export class SceneRuntime {
   }
 
   /**
+   * The scale runner whose `setScale` the world ends up holding this tick, if
+   * any — the **last** one on this container that still pushes.
+   *
+   * Nothing rejects two `animate scale` blocks on one object: `builder.ts`
+   * `.filter`s animations where it `.find`s physics (`validator.ts:229`), and a
+   * `parallel` step may carry two as well. Both spawn, both push, and
+   * `advanceOneTick` pushes in array order, so the last one is the value the
+   * body actually carries. That makes it the one runner allowed to correct the
+   * centre, and the one whose lerp answers `tickScaleOf`.
+   *
+   * The "completed on an earlier tick" skip is load-bearing here, and this is
+   * the case that makes it so. With runners `[live, completing-this-tick]` the
+   * completing one is still pushing, so it is still last and still owns the
+   * scale; skipping it on `time.completed` alone would hand both answers to the
+   * *live* runner and disagree with the body. It is the same filter
+   * `advanceOneTick` applies before pushing at all.
+   */
+  private scaleOwnerOf(container: Container): RunningAnim | undefined {
+    for (let i = this.runningAnims.length - 1; i >= 0; i--) {
+      const other = this.runningAnims[i];
+      if (other.container !== container || other.anim.property !== "scale") continue;
+      if (other.time.completed && !other.completedThisTick) continue;
+      return other;
+    }
+    return undefined;
+  }
+
+  /** A scale runner's own value for this tick, evaluated at `alpha = 0`. */
+  private scaleOf(ra: RunningAnim): { x: number; y: number } {
+    const e = evaluateEasing(animProgress(ra.time, 0), ra.anim.easing);
+    const s = ra.startVal as IRPoint;
+    const t = ra.targetVal as IRPoint;
+    return { x: lerp(s.x, t.x, e), y: lerp(s.y, t.y, e) };
+  }
+
+  /**
    * The container's local scale as of this tick, never as of the last paint.
    *
    * `applyAnim` writes `layout.currentScale` at the driver's wall-clock alpha,
    * so a scale animation in flight makes that field frame-rate dependent and
-   * invariant 3 forbids feeding it to the world. A live scale runner is asked
-   * for its own `alpha = 0` lerp instead. With no runner in flight the field is
+   * invariant 3 forbids feeding it to the world. The owning runner is asked for
+   * its own `alpha = 0` lerp instead. With no runner in flight the field is
    * tick-aligned by construction — `builder.ts` wrote it once, and `tickAnim`
    * snaps it with `applyAnim(ra, 0)` on the tick a scale animation completes.
-   *
-   * That snap is also why the "completed on an earlier tick" skip below cannot
-   * be pinned by a test, and it was checked rather than assumed: dropping it
-   * leaves the whole suite green. Once a runner has completed, the fallback and
-   * the runner's own lerp are the same number by construction — the snap wrote
-   * one from the other, and `animProgress` drops the sub-tick term thereafter.
-   * The skip is kept so this filter reads identically to `advanceOneTick`'s and
-   * to `hasLivePositionAnim`'s, where it *is* load-bearing.
    */
   private tickScaleOf(container: Container, layout: MareyLayout): { x: number; y: number } {
-    let scale = layout.currentScale;
-    for (let i = 0; i < this.runningAnims.length; i++) {
-      const other = this.runningAnims[i];
-      if (other.container !== container || other.anim.property !== "scale") continue;
-      if (other.time.completed && !other.completedThisTick) continue;
-      // Last live runner wins, matching which `setScale` the world ends up with
-      // when a container improbably carries two of them.
-      const e = evaluateEasing(animProgress(other.time, 0), other.anim.easing);
-      const s = other.startVal as IRPoint;
-      const t = other.targetVal as IRPoint;
-      scale = { x: lerp(s.x, t.x, e), y: lerp(s.y, t.y, e) };
-    }
-    return scale;
+    const owner = this.scaleOwnerOf(container);
+    return owner ? this.scaleOf(owner) : layout.currentScale;
   }
 
   /**
@@ -380,18 +407,28 @@ export class SceneRuntime {
       const sx = lerp(startPt.x, targetPt.x, e);
       const sy = lerp(startPt.y, targetPt.y, e);
 
-      // Read BEFORE the scale lands. `Body.scale` turns about the body's own
-      // centre of mass, so on a compound the reported bbox centre has already
-      // moved by exactly the delta computed below by the time `setScale`
-      // returns; reading afterwards would apply that shift twice.
-      const before: BodyState | null = tracksCentre ? this.world.readState(id, 1) : null;
+      // Exactly one runner corrects the centre per container per tick, and it
+      // is the one whose `setScale` the body ends up carrying. Every scale
+      // runner still pushes its own `setScale`, as before — only the placement
+      // is once per body, because the body has one scale and one centre.
+      const owns = tracksCentre && this.scaleOwnerOf(ra.container) === ra;
+
+      // Read BEFORE this runner's `setScale` lands. `MatterWorld.setScale`
+      // rescales `rec.offsetX/Y`, the body's own **centre-of-mass → bbox-centre**
+      // vector (`physicsWorld.ts:354`, `410-418`) — a different vector from the
+      // pivot→centre offset corrected below. Reading afterwards would carry
+      // that Matter-side shift into the base and add the Marey-side delta on
+      // top of it. It is zero unless the body is a compound.
+      const before: BodyState | null = owns ? this.world.readState(id, 1) : null;
 
       this.world.setScale(id, t.sx * sx, t.sy * sy);
 
-      const previous = ra.lastWorldScale;
-      // Updated even on the ticks a position runner owns the placement, so the
+      if (!owns) return;
+
+      const previous = this.worldScale.get(ra.container);
+      // Recorded even on the ticks a position runner owns the placement, so the
       // handover back is a one-tick delta and not the whole growth at once.
-      ra.lastWorldScale = { x: sx, y: sy };
+      this.worldScale.set(ra.container, { x: sx, y: sy });
 
       if (!before || !previous) return;
       if (this.hasLivePositionAnim(ra.container)) return;
@@ -476,13 +513,6 @@ export class SceneRuntime {
       },
       isPosAnim: isPos,
       completedThisTick: false,
-      // The world's body already carries this scale: `bindPhysicsBodies` set it
-      // at bind time, and any earlier scale runner pushed its own final value
-      // and then snapped `currentScale` to it in the tick phase. Seeding from
-      // anything else would make the first delta a jump.
-      lastWorldScale: anim.property === "scale"
-        ? { x: (sVal as IRPoint).x, y: (sVal as IRPoint).y }
-        : undefined,
     };
     this.runningAnims.push(ra);
     localList.push(ra);
@@ -618,7 +648,17 @@ export class SceneRuntime {
         // skipped by the paint-phase sync, so without this the object keeps
         // the alpha-interpolated position of the last frame painted before
         // it froze — which is wall-clock dependent and differs between runs.
-        snapContainerToBody(pr.container, this.world);
+        //
+        // The snap's own pivot correction scales with the object, so it is
+        // handed this tick's scale rather than left to read `currentScale`:
+        // an object freezing part-way through a scale animation would
+        // otherwise re-import the alpha this snap exists to remove.
+        const frozenLayout = pr.container.__mareyLayout;
+        snapContainerToBody(
+          pr.container,
+          this.world,
+          frozenLayout ? this.tickScaleOf(pr.container, frozenLayout) : { x: 1, y: 1 }
+        );
       }
     }
 
@@ -711,5 +751,6 @@ export class SceneRuntime {
     this.runningAnims.length = 0;
     this.physicsRunners.length = 0;
     this.sequenceRunners.length = 0;
+    this.worldScale.clear();
   }
 }

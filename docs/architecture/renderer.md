@@ -80,11 +80,29 @@ computing. Its two branches differ:
   pivot only exists in paint-phase state — and stands down entirely while a
   position runner is live, which would otherwise count the offset twice.
 
+**The centre correction is once per body per tick, not once per runner.**
+Nothing rejects two `animate scale` blocks on one object (`builder.ts`
+`.filter`s animations where it `.find`s physics), and a `parallel` step may
+carry two as well. Every scale runner pushes its own `setScale`, so the **last**
+one still pushing is the scale the body actually carries — and it is the only
+one allowed to move the centre. A delta per runner sums them and walks the
+collider off the drawing. The same "last one still pushing" rule answers what
+scale the position branch and the freeze snap use, which is why that filter
+must count a runner completing *on this tick* as still live.
+
 Both branches take the container's rotation from the **body** at alpha 1, not
 from `container.rotation`, for the same invariant-3 reason. At the default
 origin the offset is `(0, 0)` and both skip the correction outright, so those
 scenes' call sequences are byte-identical to their pre-`origin` ones — the
-scale branch in particular still pushes no position at all. An
+scale branch in particular still pushes no position at all.
+
+`snapContainerToBody` takes the tick-aligned scale as a **parameter** for the
+same reason `centreOffsetVector` does. Its pivot correction scales with the
+object, so reading `layout.currentScale` there would re-import the wall-clock
+alpha the snap exists to remove: an object freezing part-way through a scale
+animation would settle a frame-rate-dependent distance from its baseline.
+`syncWorldToContainers` is the one write-back that may still read the field,
+because it paints and never feeds the world. An
 object gets a body iff it declares `physics` directly or in a `sequence` (D13);
 animate-only objects are not colliders. Pinning is reason-counted — `NO_RUNNER`,
 `POS_ANIM`, `FROZEN` — and pinned means container → body, so a frozen object

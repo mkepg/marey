@@ -250,6 +250,22 @@ const SHAPE: BodyGeometry = { kind: "circle", radius: 10 };
  * `cx`/`cy` are the pivot-to-bbox-centre offset, zero at the default origin —
  * which is why every pre-existing caller can leave them out.
  */
+/**
+ * The tick-aligned scale to hand `snapContainerToBody`.
+ *
+ * No scale animation runs anywhere in this file, so nothing is writing
+ * `currentScale` at the driver's alpha and the container's own value is
+ * already tick-aligned — the case that function's doc explicitly allows. A
+ * caller with a live scale animation must pass that animation's own alpha-0
+ * value instead, which is what `SceneRuntime`'s freeze path does.
+ */
+function tickScaleOf(c: { __mareyLayout?: { currentScale: { x: number; y: number } } }): {
+  x: number;
+  y: number;
+} {
+  return c.__mareyLayout?.currentScale ?? { x: 1, y: 1 };
+}
+
 function layoutAt(x: number, y: number, sx = 1, sy = 1, cx = 0, cy = 0) {
   return {
     localPivotX: 0,
@@ -608,7 +624,7 @@ describe("snapContainerToBody", () => {
     const c = makeContainer({ __mareyLayout: layoutAt(0, 0), __body: "b0" });
     world.setState("b0", { x: 100, y: 200, angle: 0.5 });
 
-    snapContainerToBody(asContainer(c), world);
+    snapContainerToBody(asContainer(c), world, tickScaleOf(c));
 
     // A read at alpha 1 is the current tick's state, not a blend with the last.
     expect(world.lastReadAlpha).toBe(1);
@@ -620,14 +636,14 @@ describe("snapContainerToBody", () => {
   it("does nothing for a container with no body", () => {
     const world = new FakeWorld();
     const c = makeContainer({ __mareyLayout: layoutAt(0, 0) });
-    expect(() => snapContainerToBody(asContainer(c), world)).not.toThrow();
+    expect(() => snapContainerToBody(asContainer(c), world, tickScaleOf(c))).not.toThrow();
     expect(c.updateLayoutCalls).toBe(0);
   });
 
   it("does nothing when the body has already been culled", () => {
     const world = new FakeWorld();
     const c = makeContainer({ __mareyLayout: layoutAt(0, 0), __body: "gone" });
-    expect(() => snapContainerToBody(asContainer(c), world)).not.toThrow();
+    expect(() => snapContainerToBody(asContainer(c), world, tickScaleOf(c))).not.toThrow();
     expect(c.updateLayoutCalls).toBe(0);
   });
 });
@@ -701,7 +717,7 @@ describe("ancestor transforms (spec D17)", () => {
     bindPhysicsBodies(asContainer(g), world);
     world.setState("b0", { x: 450, y: 360, angle: 0 });
 
-    snapContainerToBody(asContainer(child), world);
+    snapContainerToBody(asContainer(child), world, tickScaleOf(child));
 
     expect(child.__mareyLayout!.currentPos.x).toBeCloseTo(50, 8);
     expect(child.__mareyLayout!.currentPos.y).toBeCloseTo(60, 8);
@@ -863,7 +879,7 @@ describe("origin through the physics seam · write-back", () => {
 
     const placed = world.addCalls[0];
     world.setState(bindings[0].id, { x: placed.x, y: placed.y, angle: placed.angle });
-    snapContainerToBody(asContainer(c), world);
+    snapContainerToBody(asContainer(c), world, tickScaleOf(c));
 
     expect(c.__mareyLayout!.currentPos.x).toBeCloseTo(100, 8);
     expect(c.__mareyLayout!.currentPos.y).toBeCloseTo(500, 8);
@@ -905,7 +921,7 @@ describe("origin through the physics seam · write-back", () => {
     bindPhysicsBodies(asContainer(c), world);
     world.setState(c.__body!, { x: 110, y: 500, angle: Math.PI / 2 });
 
-    snapContainerToBody(asContainer(c), world);
+    snapContainerToBody(asContainer(c), world, tickScaleOf(c));
 
     expect(c.rotation).toBeCloseTo(Math.PI / 2, 8);
     expect(c.__mareyLayout!.currentPos.x).toBeCloseTo(100, 8);

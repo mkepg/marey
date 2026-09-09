@@ -647,6 +647,48 @@ describe("SceneRuntime · origin through the physics seam", () => {
     ]);
   });
 
+  it("corrects the centre once per body when two scale animations run on it", () => {
+    // Nothing rejects two `animate scale` blocks on one object — builder.ts
+    // `.filter`s animations where it `.find`s physics (validator.ts:229) — and
+    // a `parallel` step may carry two as well. Both spawn, both push
+    // `setScale`, and the LAST one is the scale the body actually carries.
+    //
+    // The centre correction is therefore a property of the body, not of the
+    // runner: one delta per tick, from the runner that owns the scale. A delta
+    // per runner sums them, and the collider walks off the drawing by the
+    // amount the losing animation contributed.
+    //
+    // The invariant every row below encodes: the body's centre is 500 plus the
+    // offset at whatever scale the world ends up holding that tick.
+    const c = makeContainer({
+      position: { x: 100, y: 500 },
+      centreOffset: BOTTOM_ORIGIN,
+      animations: [
+        anim({ property: "scale", to: { x: 1, y: 2 }, duration: 4 / TICK_HZ }),
+        anim({ property: "scale", to: { x: 1, y: 3 }, duration: 2 / TICK_HZ }),
+      ],
+      physics: { ...PHYSICS, duration: "indefinitely" },
+    });
+    const world = new RecordingWorld();
+    const rt = new SceneRuntime(world, makeRoot(c));
+
+    for (let i = 0; i < 4; i++) rt.advanceOneTick();
+
+    // Ticks 1-2 the short runner is last and owns the scale (y 2, then 3).
+    // It completes on tick 2 and is still pushing there, so it still owns it —
+    // handing ownership to the live runner on its completion tick would
+    // disagree with the `setScale` the body just took.
+    // Ticks 3-4 the long runner owns it alone (y 1.75, then 2), and resumes
+    // from 3 rather than from its own last value, so the centre tracks the
+    // shrink back.
+    expect(positionPushes(world)).toEqual([
+      "setPosition:b0:100.0000,480.0000",
+      "setPosition:b0:100.0000,470.0000",
+      "setPosition:b0:100.0000,482.5000",
+      "setPosition:b0:100.0000,480.0000",
+    ]);
+  });
+
   it("rotates the offset by the body's tick-aligned angle, not the container's", () => {
     // A free body owns its own angle, and `container.rotation` only catches up
     // in the PAINT phase, at the driver's alpha (`syncWorldToContainers`). The
@@ -866,6 +908,50 @@ describe("SceneRuntime · frame pacing must not reach the world", () => {
     // Ten from the position runner, then twenty more from the scale runner
     // alone — the handover, not one branch doing all the work.
     expect(both).toHaveLength(30);
+  });
+
+  it("freezes a growing bottom-origin object at the same place at every pacing", () => {
+    // The freeze snap's own pivot correction scales with the object, so it
+    // needs a tick-aligned scale like everything else in the tick phase.
+    // Reading `layout.currentScale` there takes whatever `applyAnim` last wrote
+    // at the driver's alpha, and the frozen object lands a frame-rate-dependent
+    // distance from its baseline — defeating the exact determinism the snap
+    // exists to provide.
+    //
+    // Every other pacing subject in this file uses `duration: "indefinitely"`,
+    // so none of them ever reaches `snapContainerToBody` at all. This one
+    // freezes on tick 10, half way through a 20-tick growth.
+    const frozenPivot = (ticksPerFrame: number): { x: number; y: number } => {
+      const c = makeContainer({
+        position: { x: 400, y: 300 },
+        centreOffset: BOTTOM_ORIGIN,
+        animations: [
+          anim({ property: "scale", to: { x: 1, y: 3 }, duration: 20 / TICK_HZ, easing: "easeInOut" }),
+        ],
+        physics: { ...PHYSICS, duration: 10 / TICK_HZ },
+      });
+      const world = new RecordingWorld();
+      const rt = new SceneRuntime(world, makeRoot(c));
+      let done = 0;
+      while (done < 20) {
+        const n = Math.min(ticksPerFrame, 20 - done);
+        for (let i = 0; i < n; i++) rt.advanceOneTick();
+        rt.paint(0.5);
+        done += n;
+      }
+      // A pinned body is skipped by the paint-phase sync, so this is still the
+      // value the snap wrote on tick 10.
+      return { x: c.__mareyLayout!.currentPos.x, y: c.__mareyLayout!.currentPos.y };
+    };
+
+    // The baseline does not move: at tick 10 the object is at scale y 2, its
+    // centre 20px above the pivot, and the pivot is still exactly where the
+    // object was placed.
+    expect(frozenPivot(1).y).toBeCloseTo(300, 6);
+    // 12 is the harder pacing here: no paint has happened at all before the
+    // freeze, so `currentScale` is still the untouched build-time value.
+    expect(frozenPivot(7)).toEqual(frozenPivot(1));
+    expect(frozenPivot(12)).toEqual(frozenPivot(1));
   });
 
   it("starts a sequence's second animation from the first one's exact target", () => {
