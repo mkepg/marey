@@ -126,9 +126,11 @@ mistake worth someone else avoiding.
 
 The authoritative roadmap is
 `docs/specs/2026-09-01-marey-product-roadmap-design.md`.
-Current phase: **3B — generative expressiveness** (lists/iteration, indexing
-or length, modulo, comparison, a conditional value expression, and trig).
-Full phase history and prior decisions (D1–D18, R1) are in
-`roadmap-and-process.md`.
+Current phase: **4 — composition and export foundation** (a finite scene-level
+duration, one deterministic frame sampler above `SceneRuntime`, a PNG sequence,
+a compiler surface decoupled from the Web Worker, and `marey check`). Its
+specification is Section 9 of the roadmap, and Product Gate B is its exit.
+Phase 3B is **done and merged**. Full phase history and prior decisions
+(D1–D18, R1) are in `roadmap-and-process.md`.
 
 Work on a branch, not `main`.

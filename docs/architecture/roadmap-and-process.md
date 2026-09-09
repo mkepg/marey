@@ -37,7 +37,7 @@ rather than quietly deviating.
   (R1/R2 report-clobbering) defects. Migrated every first-party `.marey`
   fixture, corpus, and this guidance to the final vocabulary. Browser-checked
   across seven Chromium scenes and production-built.
-- **Phase 3B — generative expressiveness: in review** on
+- **Phase 3B — generative expressiveness: done** on
   `phase-3b-generative-expressiveness`. Gave the language an expression layer:
   list literals (nestable), an inclusive `A to B` range, indexing and
   `length`, `%`, the six comparisons, `and`/`or`/`not`, `if C then A else B`
@@ -55,7 +55,11 @@ rather than quietly deviating.
   measured in `eval/RESULTS-3B.md`. Both authorability corpora keep their
   evidence: the only edit in either is the mechanical `from` → `in` header
   rename, and both report JSONs are byte-unchanged. Browser-checked in
-  Chromium and production-built; not yet merged.
+  Chromium and production-built. Fast-forwarded onto `main` with no merge
+  commit — the phase's final commit is `1645cef`, and three findings from the
+  whole-branch review landed after it at `e1dcdd8`. **Read its execution notes
+  before Phase 4**: the plan's notes record the frame-selection and
+  determinism evidence that Product Gate B builds on.
 - **Phases 4–5 — export and distribution.** Build one deterministic frame
   sampler, then PNG, a baked-Lottie subset, video, public compiler/CLI surfaces,
   CI integration, and embeddable output. Export moves ahead of more physics

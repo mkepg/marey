@@ -391,6 +391,39 @@ anti-pattern twice, in miniature, within days of that being written:
 and prefer a shape where disagreement is a *type* error. If that is impossible,
 add a test that enumerates both and fails on divergence.
 
+### 5b. Phase status is a hand-synced list too, and it has drifted three times
+
+The same root cause reaches prose. Two files state the current phase —
+`docs/architecture/README.md` ("Current phase: …") and
+`roadmap-and-process.md` (the phase-history bullet) — and nothing pins them to
+each other or to the repository. All three transitions so far shipped stale:
+
+- **Phase 3A.** `docs/harness/2026-09-04-ai-scaling-investigation-report.md:479`
+  has a section titled "Current phase-history contradiction": the README said
+  the current phase was 3B while the roadmap guide still called 3A "in review"
+  on its old branch.
+- **Phase 3A again, the other half.**
+  `docs/plans/2026-09-01-phase-3a-language-foundations.md:1407`
+  records "Chromium scenes and production-built; not yet merged" left behind
+  *identically in both files*.
+- **Phase 3B.** Fixed here. 3B was fast-forwarded onto `main` at `1645cef`,
+  the branch was deleted, and for days afterwards the README still said
+  "Current phase: 3B" while `roadmap-and-process.md` said "in review" and "not
+  yet merged" — pointing at a branch that no longer existed. Any agent
+  following the mandated reading order would have started Phase 4 believing
+  the previous phase was unmerged and needed finishing.
+
+This is worse than a drifted property list, because the mandated reading order
+sends *every* agent through both files before doing anything, so a stale phase
+line misdirects the whole session rather than one edit.
+
+**Do instead:** state the phase in exactly one place and have the other point
+at it, the same way `AGENTS.md` forward here rather than
+restating guidance. Until that lands, treat "update both phase-status
+locations, and delete the branch reference if the branch is gone" as part of
+finishing a phase, not as documentation cleanup afterwards — the evidence is
+that it never happens afterwards.
+
 ---
 
 ## 6. Environment traps on this machine
