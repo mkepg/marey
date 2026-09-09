@@ -4,7 +4,7 @@
 **Status:** Approved and implemented.
 **Slot:** A small piece of work before Phase 2. Not a roadmap phase.
 **Related:** `2026-08-26-physics-shared-world-design.md` (§4 naming, D4/D5/D6/D8/D13),
-`2026-09-01-marey-product-roadmap-design.md` (current Phase 3+ roadmap),
+`2026-09-09-marey-engineering-roadmap-design.md` (current roadmap, Phase 3C+),
 `eval/RESULTS.md` (the measurement that motivates this)
 
 ---

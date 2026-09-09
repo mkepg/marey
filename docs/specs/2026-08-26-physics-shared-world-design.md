@@ -521,8 +521,10 @@ itself touches `adapter.ts` not at all — `__bodyShape` has exactly one consume
 > **Superseded on 2026-09-01.** The remainder of this document records the
 > roadmap that originally followed Phase 2. It is retained as decision history,
 > not current sequencing. See
-> `2026-09-01-marey-product-roadmap-design.md` for the authoritative Phase 3+
-> roadmap. Decisions D1–D18 and Sections 1–7 above remain authoritative.
+> `2026-09-09-marey-engineering-roadmap-design.md` for the authoritative
+> sequence from Phase 3C onward; `2026-09-01-marey-product-roadmap-design.md`
+> is itself now superseded from Phase 4 onward and retained as the record of
+> Phases 3A–3B. Decisions D1–D18 and Sections 1–7 above remain authoritative.
 
 ### 8.1 Historical Phase 3 — Foundations and renames
 

@@ -125,12 +125,16 @@ back, and `git status` misreporting modification on this machine because
 mistake worth someone else avoiding.
 
 The authoritative roadmap is
-`docs/specs/2026-09-01-marey-product-roadmap-design.md`.
-Current phase: **4 — composition and export foundation** (a finite scene-level
-duration, one deterministic frame sampler above `SceneRuntime`, a PNG sequence,
-a compiler surface decoupled from the Web Worker, and `marey check`). Its
-specification is Section 9 of the roadmap, and Product Gate B is its exit.
-Phase 3B is **done and merged**. Full phase history and prior decisions
-(D1–D18, R1) are in `roadmap-and-process.md`.
+`docs/specs/2026-09-09-marey-engineering-roadmap-design.md`.
+It replaced the adoption-oriented roadmap on 2026-09-09: Marey now optimises
+for a **complete, provable engineering artifact with a declarable finish
+line**, and acquisition work moved past that line. Read its §1 before
+proposing anything the old roadmap justified by adoption.
+
+Current phase: **3C — motion primitives** (`delay` on `animate`, an origin or
+anchor property, and a zero-`scale` rule that permits a degenerate start).
+Small, and deliberately ahead of export, because export bakes whatever the
+language can express. Phase 3B is **done and merged**. Full phase history and
+prior decisions (D1–D18, R1) are in `roadmap-and-process.md`.
 
 Work on a branch, not `main`.

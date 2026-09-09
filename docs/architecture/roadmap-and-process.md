@@ -1,12 +1,22 @@
 # Roadmap and process detail
 
-`docs/specs/2026-09-01-marey-product-roadmap-design.md` is the
-authoritative product roadmap from Phase 3 onward. The earlier
+`docs/specs/2026-09-09-marey-engineering-roadmap-design.md` is the
+authoritative roadmap from Phase 3C onward. It changed the project's purpose:
+Marey now optimises for a **complete, provable engineering artifact with a
+declarable finish line**, not for adoption. The door to users is left open —
+package, license, CLI, README stay in — but acquisition work (a GitHub Action,
+documentation integrations, a gallery, adoption metrics) moved past the finish
+line. Read its §1 for the evidence that forced the change; two research
+documents in `docs/research/` own the underlying measurements.
+
+`2026-09-01-marey-product-roadmap-design.md` remains the historical record of
+Phases 3A and 3B and of why export was pulled ahead of physics breadth. It is
+superseded from Phase 4 onward. The earlier
 `2026-08-26-physics-shared-world-design.md` remains authoritative for the
 motion-graphics direction, decisions D1–D18, and completed Phases 0–2; its
-Sections 8–12 are historical and superseded. **Treat both documents' settled
-decisions as deliberate**. If you believe one is wrong, say so explicitly
-rather than quietly deviating.
+Sections 8–12 are historical and superseded. **Treat all three documents'
+settled decisions as deliberate**. If you believe one is wrong, say so
+explicitly rather than quietly deviating.
 
 ## Phase history
 
@@ -60,18 +70,34 @@ rather than quietly deviating.
   whole-branch review landed after it at `e1dcdd8`. **Read its execution notes
   before Phase 4**: the plan's notes record the frame-selection and
   determinism evidence that Product Gate B builds on.
-- **Phases 4–5 — export and distribution.** Build one deterministic frame
-  sampler, then PNG, a baked-Lottie subset, video, public compiler/CLI surfaces,
-  CI integration, and embeddable output. Export moves ahead of more physics
-  syntax because it validates the source-to-artifact product thesis.
-- **Phase 6 — motion-graphics core and editor payoff.** Color animation,
-  delay/stagger, scrubbing, and live-edit replay; semantic layout only when the
-  Phase 3B evidence supports it.
-- **Phase 7 — remaining physics syntax.** `world`, `lockPosition`,
+- **Phase 3C — motion primitives: next.** `delay` on `animate`, an origin or
+  anchor property, and a zero-`scale` rule that permits a degenerate start.
+  Found by construction on 2026-09-09: without them a staggered reveal costs a
+  six-line no-op `sequence` wrapper per object, a baseline-anchored bar needs a
+  hand-computed centre coordinate, and `scale: (1, 0)` is `TYPE_INVALID_SCALE`.
+  Small, and first, because export bakes whatever the language can express.
+- **Phase 4 — composition and export foundation.** Finite scene duration, one
+  deterministic frame sampler above `SceneRuntime`, a PNG sequence, a compiler
+  surface decoupled from the Web Worker, and `marey check`. Exit is Gate B.
+  **Read the roadmap's §6.3 trap before writing the PNG exporter** — PixiJS
+  does not set `preserveDrawingBuffer`, so a naive in-page pixel read produces
+  blank images and reports success.
+- **Phase 5A — baked Lottie.** A bounded subset; `text` is excluded because the
+  Lottie spec's text layer has been open 19 months.
+- **Phase 5B — video.** WebM and MP4 via WebCodecs and a muxer, never
+  `MediaRecorder`.
+- **Phase 6 — packaging and legibility.** Public package, `LICENSE`, a root
+  README, `marey check`/`marey export`, and a written account of the
+  determinism work. Replaces the old Phase 5B (Distribution); acquisition work
+  is deliberately out of scope.
+- **Phase 7 — motion-graphics core.** Color animation, `stagger`, scrubbing,
+  and live-edit replay.
+- **Phase 8 — remaining physics syntax.** `world`, `lockPosition`,
   `lockRotation`, and `spin`; D13's explicit-body rule remains in force.
-- **Phase 8 — full documentation site and adoption.** Minimal guides ship with
-  each earlier capability; the full site follows stable syntax, export,
-  distribution, and external workflow attempts.
+- **Finish line.** Phases 3C–8 complete. Everything after — the documentation
+  site, distribution and integrations, semantic layout, spring easing, derived
+  accessibility artifacts, embedded runtimes — is catalogued as further
+  capability with no commitment.
 
 ## Reference docs
 

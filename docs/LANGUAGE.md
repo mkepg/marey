@@ -1072,4 +1072,4 @@ colour, is a compile error (`[TYPE_ANIM_PROP]`).
 
 For the design rationale behind these decisions, see
 `docs/specs/`. The authoritative future sequence is
-`docs/specs/2026-09-01-marey-product-roadmap-design.md`.
+`docs/specs/2026-09-09-marey-engineering-roadmap-design.md`.
