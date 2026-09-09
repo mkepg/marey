@@ -5,6 +5,7 @@ import type { BodyGeometry, BodyState, IPhysicsWorld, PhysicsParams, PinReason }
 import type { LocalTransform } from "./transform";
 import {
   bindPhysicsBodies,
+  centreInParent,
   cullEscapedBodies,
   flushPendingVelocity,
   hasPhysicsAnywhere,
@@ -150,6 +151,12 @@ interface MockContainer {
   __mareyLayout?: {
     localPivotX: number;
     localPivotY: number;
+    /**
+     * Required, not optional, so a fixture cannot silently omit it and feed
+     * `undefined` into the placement arithmetic as a NaN.
+     */
+    centreOffsetX: number;
+    centreOffsetY: number;
     currentPos: { x: number; y: number };
     currentScale: { x: number; y: number };
   };
@@ -195,6 +202,10 @@ function staticGroup(over: {
     __mareyLayout: {
       localPivotX: 0,
       localPivotY: 0,
+      // A group's pivot IS its local origin and its centre offset is always
+      // zero (D16) — never derived from where its children sit.
+      centreOffsetX: 0,
+      centreOffsetY: 0,
       currentPos: { x: over.x, y: over.y },
       currentScale: { x: over.scale?.x ?? 1, y: over.scale?.y ?? 1 },
     },
@@ -202,8 +213,16 @@ function staticGroup(over: {
 }
 
 /** A leaf that declares physics, so it does own a body. */
-function physicsChild(pos: { x: number; y: number }): MockContainer {
+function physicsChild(
+  pos: { x: number; y: number },
+  over: {
+    centreOffset?: { x: number; y: number };
+    rotation?: number;
+    scale?: { x: number; y: number };
+  } = {}
+): MockContainer {
   return makeContainer({
+    rotation: over.rotation ?? 0,
     __bodyShape: { kind: "circle", radius: 10 },
     __physics: {
       velocity: { x: 0, y: 0 },
@@ -216,18 +235,26 @@ function physicsChild(pos: { x: number; y: number }): MockContainer {
     __mareyLayout: {
       localPivotX: 0,
       localPivotY: 0,
+      centreOffsetX: over.centreOffset?.x ?? 0,
+      centreOffsetY: over.centreOffset?.y ?? 0,
       currentPos: { x: pos.x, y: pos.y },
-      currentScale: { x: 1, y: 1 },
+      currentScale: { x: over.scale?.x ?? 1, y: over.scale?.y ?? 1 },
     },
   });
 }
 
 const SHAPE: BodyGeometry = { kind: "circle", radius: 10 };
 
-function layoutAt(x: number, y: number, sx = 1, sy = 1) {
+/**
+ * `cx`/`cy` are the pivot-to-bbox-centre offset, zero at the default origin —
+ * which is why every pre-existing caller can leave them out.
+ */
+function layoutAt(x: number, y: number, sx = 1, sy = 1, cx = 0, cy = 0) {
   return {
     localPivotX: 0,
     localPivotY: 0,
+    centreOffsetX: cx,
+    centreOffsetY: cy,
     currentPos: { x, y },
     currentScale: { x: sx, y: sy },
   };
@@ -709,5 +736,212 @@ describe("ancestor transforms (spec D17)", () => {
     expect(world.addCalls[0].x).toBe(250);
     expect(world.addCalls[0].y).toBe(175);
     expect(world.scaleCalls).toEqual([{ id: "b0", sx: 1, sy: 1 }]);
+  });
+});
+
+/**
+ * A 40x20 rectangle with `origin: (0.5, 1)` has its pivot on its bottom edge,
+ * so `position` places that edge — but Matter places a body at its CENTRE OF
+ * MASS, 10px above. `centreOffsetY: -10` is that vector, pointing up.
+ */
+const BOTTOM_ORIGIN: { x: number; y: number } = { x: 0, y: -10 };
+
+describe("origin through the physics seam · placement", () => {
+  it("places a bottom-origin body at its centre, not at its origin point", () => {
+    const c = makeContainer({
+      __physics: PHYSICS,
+      __bodyShape: SHAPE,
+      __mareyLayout: layoutAt(100, 500, 1, 1, BOTTOM_ORIGIN.x, BOTTOM_ORIGIN.y),
+    });
+    const world = new FakeWorld();
+    bindPhysicsBodies(asContainer(c), world);
+
+    expect(world.addCalls[0].x).toBe(100);
+    expect(world.addCalls[0].y).toBe(490);
+  });
+
+  it("scales the pivot-to-centre offset with the object's own scale", () => {
+    const c = makeContainer({
+      __physics: PHYSICS,
+      __bodyShape: SHAPE,
+      __mareyLayout: layoutAt(100, 500, 1, 3, BOTTOM_ORIGIN.x, BOTTOM_ORIGIN.y),
+    });
+    const world = new FakeWorld();
+    bindPhysicsBodies(asContainer(c), world);
+
+    expect(world.addCalls[0].y).toBe(470);
+  });
+
+  it("rotates the pivot-to-centre offset by the object's own rotation", () => {
+    // Turned a quarter turn, "10px above the pivot" points along +x instead.
+    const c = makeContainer({
+      __physics: PHYSICS,
+      __bodyShape: SHAPE,
+      rotation: Math.PI / 2,
+      __mareyLayout: layoutAt(100, 500, 1, 1, BOTTOM_ORIGIN.x, BOTTOM_ORIGIN.y),
+    });
+    const world = new FakeWorld();
+    bindPhysicsBodies(asContainer(c), world);
+
+    expect(world.addCalls[0].x).toBeCloseTo(110, 8);
+    expect(world.addCalls[0].y).toBeCloseTo(500, 8);
+  });
+
+  it("leaves a default-origin body exactly where it is today", () => {
+    const c = makeContainer({
+      __physics: PHYSICS,
+      __bodyShape: SHAPE,
+      __mareyLayout: layoutAt(100, 500),
+    });
+    const world = new FakeWorld();
+    bindPhysicsBodies(asContainer(c), world);
+
+    expect(world.addCalls[0].x).toBe(100);
+    expect(world.addCalls[0].y).toBe(500);
+  });
+
+  it("applies the offset in the child's own frame, then the ancestor's", () => {
+    // The judgment call this pins: the offset is scaled and rotated by the
+    // CHILD, and the result is then scaled and rotated by the GROUP — not
+    // scaled and rotated once by the composed transform. The two answers
+    // differ only when the child rotates and some scale is non-uniform, which
+    // is exactly this fixture: child turned 90 degrees inside a group
+    // stretched 2x on x alone.
+    //
+    // Child frame: (0, -10) rotated 90 degrees is (10, 0).
+    // Group frame: (10, 0) scaled by (2, 1) is (20, 0).
+    // Composing once instead would scale (0, -10) by (2, 1) to (0, -10) and
+    // rotate to (10, 0) — half the answer.
+    const child = physicsChild(
+      { x: 0, y: 0 },
+      { centreOffset: BOTTOM_ORIGIN, rotation: Math.PI / 2 }
+    );
+    const g = staticGroup({ x: 0, y: 0, scale: { x: 2, y: 1 }, children: [child] });
+
+    const world = new FakeWorld();
+    bindPhysicsBodies(asContainer(g), world);
+
+    expect(world.addCalls[0].x).toBeCloseTo(20, 8);
+    expect(world.addCalls[0].y).toBeCloseTo(0, 8);
+  });
+});
+
+describe("origin through the physics seam · write-back", () => {
+  /** A bottom-origin container, stretched 3x on y so the offset also scales. */
+  function bottomOriginBody(world: FakeWorld): {
+    c: MockContainer;
+    bindings: PhysicsBinding[];
+  } {
+    const c = makeContainer({
+      __physics: PHYSICS,
+      __bodyShape: SHAPE,
+      __mareyLayout: layoutAt(100, 500, 1, 3, BOTTOM_ORIGIN.x, BOTTOM_ORIGIN.y),
+    });
+    const bindings = bindPhysicsBodies(asContainer(c), world);
+    world.unpin(bindings[0].id, "NO_RUNNER");
+    return { c, bindings };
+  }
+
+  it("round-trips a bottom-origin container through bind and write-back", () => {
+    const world = new FakeWorld();
+    const { c, bindings } = bottomOriginBody(world);
+
+    // The world reports back exactly the centre it was handed at bind time, so
+    // the container must land on the position it started from.
+    const placed = world.addCalls[0];
+    world.setState(bindings[0].id, { x: placed.x, y: placed.y, angle: placed.angle });
+    syncWorldToContainers(bindings, world, 1);
+
+    expect(c.__mareyLayout!.currentPos.x).toBeCloseTo(100, 8);
+    expect(c.__mareyLayout!.currentPos.y).toBeCloseTo(500, 8);
+  });
+
+  it("snapContainerToBody round-trips the same container the same way", () => {
+    const world = new FakeWorld();
+    const { c, bindings } = bottomOriginBody(world);
+
+    const placed = world.addCalls[0];
+    world.setState(bindings[0].id, { x: placed.x, y: placed.y, angle: placed.angle });
+    snapContainerToBody(asContainer(c), world);
+
+    expect(c.__mareyLayout!.currentPos.x).toBeCloseTo(100, 8);
+    expect(c.__mareyLayout!.currentPos.y).toBeCloseTo(500, 8);
+  });
+
+  it("un-rotates the offset by the body's new angle, not the container's old one", () => {
+    // A tumbling body reports a centre and an angle together. The pivot's
+    // position depends on where the offset points AFTER the rotation, so the
+    // inverse must use the angle just read — not the angle the container is
+    // still holding from the previous tick.
+    //
+    // Centre (110, 500) at a quarter turn: the offset (0, -10) rotates to
+    // (10, 0), so the pivot is at (100, 500). Using the stale angle 0 instead
+    // would put it at (110, 510).
+    const world = new FakeWorld();
+    const c = makeContainer({
+      __physics: PHYSICS,
+      __bodyShape: SHAPE,
+      __mareyLayout: layoutAt(100, 500, 1, 1, BOTTOM_ORIGIN.x, BOTTOM_ORIGIN.y),
+    });
+    const bindings = bindPhysicsBodies(asContainer(c), world);
+    world.unpin(bindings[0].id, "NO_RUNNER");
+    world.setState(bindings[0].id, { x: 110, y: 500, angle: Math.PI / 2 });
+
+    syncWorldToContainers(bindings, world, 1);
+
+    expect(c.rotation).toBeCloseTo(Math.PI / 2, 8);
+    expect(c.__mareyLayout!.currentPos.x).toBeCloseTo(100, 8);
+    expect(c.__mareyLayout!.currentPos.y).toBeCloseTo(500, 8);
+  });
+
+  it("snapContainerToBody also un-rotates by the body's new angle", () => {
+    const world = new FakeWorld();
+    const c = makeContainer({
+      __physics: PHYSICS,
+      __bodyShape: SHAPE,
+      __mareyLayout: layoutAt(100, 500, 1, 1, BOTTOM_ORIGIN.x, BOTTOM_ORIGIN.y),
+    });
+    bindPhysicsBodies(asContainer(c), world);
+    world.setState(c.__body!, { x: 110, y: 500, angle: Math.PI / 2 });
+
+    snapContainerToBody(asContainer(c), world);
+
+    expect(c.rotation).toBeCloseTo(Math.PI / 2, 8);
+    expect(c.__mareyLayout!.currentPos.x).toBeCloseTo(100, 8);
+    expect(c.__mareyLayout!.currentPos.y).toBeCloseTo(500, 8);
+  });
+
+  it("write-back inverts the ancestor transform and the offset together", () => {
+    // Both corrections at once, on the path a template's physics child takes:
+    // the child's own quarter turn puts its offset along +x, and the group's
+    // 2x stretch doubles it — so the pivot is 20 scene-px left of the centre.
+    const world = new FakeWorld();
+    const child = physicsChild(
+      { x: 0, y: 0 },
+      { centreOffset: BOTTOM_ORIGIN, rotation: Math.PI / 2 }
+    );
+    const g = staticGroup({ x: 300, y: 200, scale: { x: 2, y: 1 }, children: [child] });
+    const bindings = bindPhysicsBodies(asContainer(g), world);
+    world.unpin(bindings[0].id, "NO_RUNNER");
+
+    const placed = world.addCalls[0];
+    world.setState(bindings[0].id, { x: placed.x, y: placed.y, angle: placed.angle });
+    syncWorldToContainers(bindings, world, 1);
+
+    expect(child.__mareyLayout!.currentPos.x).toBeCloseTo(0, 8);
+    expect(child.__mareyLayout!.currentPos.y).toBeCloseTo(0, 8);
+  });
+});
+
+describe("centreInParent", () => {
+  it("returns currentPos untouched at the default origin", () => {
+    const c = makeContainer({ __mareyLayout: layoutAt(7, 11) });
+    expect(centreInParent(asContainer(c))).toEqual({ x: 7, y: 11 });
+  });
+
+  it("contributes no offset for a container with no layout, matching bodyTransformOf's identity default", () => {
+    // The bare scene root is exactly this shape.
+    const c = makeContainer();
+    expect(centreInParent(asContainer(c))).toEqual({ x: 0, y: 0 });
   });
 });

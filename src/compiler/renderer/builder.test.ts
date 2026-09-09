@@ -166,6 +166,78 @@ describe("builder · group compound geometry", () => {
   });
 });
 
+describe("builder · group compound geometry with a moved origin", () => {
+  // A part is a Matter body part, and Matter places a body at its CENTRE OF
+  // MASS — but a child's `currentPos` places its pivot, which `origin` may
+  // have moved anywhere in its bounding box.
+
+  it("places a bottom-origin child's part at the child's centre, not its origin point", () => {
+    // 40x20 with origin (0.5, 1): the declared y is its bottom edge, so the
+    // part sits half its height (10px) above.
+    const parts = partsOf(group("g", [
+      rect("r", 0, 100, 40, 20, { origin: { x: 0.5, y: 1 } } as Partial<IRObjectProps>),
+    ]));
+    expect(parts).toEqual([
+      { kind: "rectangle", width: 40, height: 20, x: 0, y: 90, angle: 0 },
+    ]);
+  });
+
+  it("scales the offset with the child's own scale, alongside its dimensions", () => {
+    // Stretched 3x on y, the bottom edge is 30px below the centre, not 10.
+    const parts = partsOf(group("g", [
+      rect("r", 0, 100, 40, 20, {
+        origin: { x: 0.5, y: 1 },
+        scale: { x: 1, y: 3 },
+      } as Partial<IRObjectProps>),
+    ]));
+    expect(parts).toEqual([
+      { kind: "rectangle", width: 40, height: 60, x: 0, y: 70, angle: 0 },
+    ]);
+  });
+
+  it("offsets a polygon child's placement without touching its already-centre-relative points", () => {
+    // The double-correction trap. A polygon's `__bodyShape` points are ALREADY
+    // expressed relative to its bbox centre, so only the PLACEMENT needs the
+    // offset. Points identical to the default-origin case above is the
+    // assertion that no second correction crept in.
+    const tri: IRObjectNode = {
+      id: "t",
+      props: {
+        kind: "polygon", position: { x: 40, y: 0 },
+        points: [{ x: 0, y: -30 }, { x: 26, y: 15 }, { x: -26, y: 15 }],
+        color: "#ff0000", rotation: 0, scale: { x: 1, y: 1 }, alpha: 1, layer: 0,
+        origin: { x: 0, y: 0 },
+        animations: [], sequences: [],
+      } as IRObjectProps,
+      children: [],
+    };
+    const parts = partsOf(group("g", [tri]));
+    expect(parts).toHaveLength(1);
+    const p = parts[0];
+    if (p.kind !== "polygon") throw new Error("expected a polygon part");
+    // bbox min (-26, -30), centre (0, -7.5): the pivot-to-centre offset is
+    // (26, 22.5), so the part lands there relative to the declared position.
+    expect(p.x).toBe(66);
+    expect(p.y).toBe(22.5);
+    expect(p.points.map((q) => ({ x: q.x, y: q.y }))).toEqual([
+      { x: 0, y: -22.5 }, { x: 26, y: 22.5 }, { x: -26, y: 22.5 },
+    ]);
+  });
+
+  it("rotates the offset into the child's own frame before the group's", () => {
+    // The child's quarter turn sends "10px above the pivot" along +x instead.
+    const parts = partsOf(group("g", [
+      rect("r", 0, 100, 40, 20, {
+        origin: { x: 0.5, y: 1 },
+        rotation: 90,
+      } as Partial<IRObjectProps>),
+    ]));
+    expect(parts).toHaveLength(1);
+    expect(parts[0].x).toBeCloseTo(10, 10);
+    expect(parts[0].y).toBeCloseTo(100, 10);
+  });
+});
+
 describe("builder · leaf shapes keep their existing geometry", () => {
   it("a circle is still a circle", () => {
     expect(buildNode(circle("c", 0, 0, 12)).__bodyShape).toEqual({ kind: "circle", radius: 12 });

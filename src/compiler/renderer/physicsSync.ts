@@ -22,6 +22,50 @@ export function bodyTransformOf(container: Container): LocalTransform {
   return container.__bodyTransform ?? IDENTITY;
 }
 
+/** The layout block a container carries once `builder.ts` has wrapped it. */
+type MareyLayout = NonNullable<Container["__mareyLayout"]>;
+
+/**
+ * The vector from a container's pivot to its bounding-box centre, expressed in
+ * the container's PARENT space.
+ *
+ * `centreOffsetX/Y` are recorded at scale 1 and rotation 0, so they take the
+ * container's own rotation and scale — but never its translation, since this
+ * is a vector and not a point. That is exactly `rotateScaleVector`, which
+ * `handoff` already uses for velocities.
+ *
+ * `rot` is passed rather than read off the container because write-back needs
+ * it at the body's NEW angle, not the angle the container still holds.
+ */
+function pivotToCentre(layout: MareyLayout, rot: number): { x: number; y: number } {
+  return rotateScaleVector(
+    { x: 0, y: 0, rot, sx: layout.currentScale.x, sy: layout.currentScale.y },
+    layout.centreOffsetX,
+    layout.centreOffsetY
+  );
+}
+
+/**
+ * Where this container's bounding-box centre sits in its parent's space.
+ *
+ * `position` places the *pivot*, which `origin` may move anywhere in (or out
+ * of) the bounding box; Matter places a body at its **centre of mass**. Every
+ * container→body handoff therefore goes through here rather than through
+ * `currentPos` directly.
+ *
+ * At the default origin `(0.5, 0.5)` the offset is `(0, 0)` and this returns
+ * `currentPos` unchanged, which is why no pre-origin scene moves.
+ *
+ * A container with no layout — the bare scene root — contributes no offset, the
+ * same convention `bodyTransformOf` uses when there is no `__bodyTransform`.
+ */
+export function centreInParent(container: Container): { x: number; y: number } {
+  const layout = container.__mareyLayout;
+  if (!layout) return { x: 0, y: 0 };
+  const v = pivotToCentre(layout, container.rotation);
+  return { x: layout.currentPos.x + v.x, y: layout.currentPos.y + v.y };
+}
+
 function stepHasPhysics(step: IRSequenceStep): boolean {
   if ("type" in step && step.type === "parallel") {
     return step.steps.some((sub) => !("property" in sub));
@@ -106,8 +150,12 @@ export function bindPhysicsBodies(root: Container, world: IPhysicsWorld): Physic
       // its parent, so an object inside a group needs its ancestor chain
       // composed in — without which a template's every instance simulates at
       // its LOCAL coordinates (spec D17).
+      //
+      // And a body sits at its centre of mass, while `currentPos` places the
+      // pivot — which `origin` may have moved off the bounding-box centre.
       container.__bodyTransform = t;
-      const worldPos = toWorld(t, layout.currentPos.x, layout.currentPos.y);
+      const centre = centreInParent(container);
+      const worldPos = toWorld(t, centre.x, centre.y);
 
       world.addBody(
         id,
@@ -195,10 +243,15 @@ export function syncWorldToContainers(
     const layout = container.__mareyLayout;
     if (!layout) continue;
     const t = bodyTransformOf(container);
-    const local = toLocal(t, state.x, state.y);
-    layout.currentPos.x = local.x;
-    layout.currentPos.y = local.y;
-    container.rotation = state.angle - t.rot;
+    const centre = toLocal(t, state.x, state.y);
+    // The world reports a body's CENTRE; `currentPos` places the pivot, which
+    // `origin` may have moved off it. The offset is un-rotated by the angle
+    // just read — not the one the container is still holding from last tick.
+    const rot = state.angle - t.rot;
+    const v = pivotToCentre(layout, rot);
+    layout.currentPos.x = centre.x - v.x;
+    layout.currentPos.y = centre.y - v.y;
+    container.rotation = rot;
     container.__updateLayout?.();
   }
 }
@@ -225,10 +278,16 @@ export function snapContainerToBody(container: Container, world: IPhysicsWorld):
   const layout = container.__mareyLayout;
   if (!state || !layout) return;
   const t = bodyTransformOf(container);
-  const local = toLocal(t, state.x, state.y);
-  layout.currentPos.x = local.x;
-  layout.currentPos.y = local.y;
-  container.rotation = state.angle - t.rot;
+  const centre = toLocal(t, state.x, state.y);
+  // Same centre-to-pivot correction as `syncWorldToContainers`. Deliberately
+  // written out at both sites rather than shared: they are the two code paths
+  // for one rule, and keeping them separate is what makes reverting either one
+  // alone show up as a test failure.
+  const rot = state.angle - t.rot;
+  const v = pivotToCentre(layout, rot);
+  layout.currentPos.x = centre.x - v.x;
+  layout.currentPos.y = centre.y - v.y;
+  container.rotation = rot;
   container.__updateLayout?.();
 }
 

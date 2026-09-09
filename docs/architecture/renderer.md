@@ -39,7 +39,23 @@ someone reaching for `Graphics` or `Ticker`; every `pixi.js` import in them is
   `poly-decomp` is **not** a dependency; polygons use a convex hull (spec §3).
 
 `renderer/physicsSync.ts` is the only place containers and bodies meet. It
-imports `pixi.js` for types **only**, so it is headlessly testable too. An
+imports `pixi.js` for types **only**, so it is headlessly testable too. Its
+`centreInParent(container)` is the single reconciliation of the two frames
+this seam joins: `position` places a container's **pivot**, which `origin`
+may move anywhere in (or out of) the bounding box, while Matter places a body
+at its **centre of mass**. Every container→body handoff goes through it —
+bind-time placement, both write-back sites, and `builder.ts`'s
+`collectBodyParts`, which is why `builder.ts` imports from `physicsSync.ts`
+and not the other way round (the reverse would drag a runtime `pixi.js`
+import into a module that must not have one). The offset it applies is a
+vector in the container's own local frame, so it takes that container's
+rotation and scale but never its translation; write-back un-rotates it by the
+angle just read from the body, not the one the container still holds. It is
+`(0, 0)` at the default origin, so every pre-`origin` scene follows the
+identical path with an added zero. **A shape's `__bodyShape` is already
+expressed relative to its bbox centre** — a polygon's points most visibly —
+so only the *placement* takes the offset; correcting the points as well
+double-counts it. An
 object gets a body iff it declares `physics` directly or in a `sequence` (D13);
 animate-only objects are not colliders. Pinning is reason-counted — `NO_RUNNER`,
 `POS_ANIM`, `FROZEN` — and pinned means container → body, so a frozen object

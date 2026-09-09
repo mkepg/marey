@@ -1,6 +1,7 @@
 import { Container, Graphics, Text, TextStyle } from "pixi.js";
 import type { IRObjectNode, IRObjectProps, IRAnimation, IRPhysics, IRSequence } from "../sceneIR";
 import type { BodyGeometry, BodyPart } from "./physicsWorld";
+import { centreInParent } from "./physicsSync";
 import { compose, IDENTITY, type LocalTransform } from "./transform";
 
 declare module "pixi.js" {
@@ -11,9 +12,9 @@ declare module "pixi.js" {
       /**
        * The local vector FROM the pivot TO the bounding-box centre, at scale
        * 1 and rotation 0 — `(0, 0)` at the default origin `(0.5, 0.5)`, where
-       * the pivot already sits on the centre. A later task (origin through
-       * physics) reads these to place a body relative to the pivot rather
-       * than the bbox centre it used to assume they coincided with.
+       * the pivot already sits on the centre. `physicsSync.centreInParent`
+       * reads these: `position` places the pivot, but Matter places a body at
+       * its centre of mass, and the two only coincide at the default origin.
        */
       centreOffsetX: number;
       centreOffsetY: number;
@@ -160,7 +161,19 @@ function collectBodyParts(container: Container, t: LocalTransform, out: BodyPart
     // A `Graphics` or `Text` leaf inside a shape's wrapper has neither.
     if (!shape || !layout) continue;
 
-    const childT = compose(t, layout.currentPos, child.rotation, layout.currentScale);
+    // A part is placed at the child's bounding-box CENTRE, not at its pivot:
+    // `origin` may have moved the pivot anywhere in the bbox, while Matter
+    // places every part at its centre of mass. `centreInParent` folds in the
+    // child's own rotation and scale; `compose` then adds the group's.
+    //
+    // The part's *shape* needs no second correction — a polygon's points are
+    // already expressed relative to its bbox centre (see `buildNode`), and a
+    // rectangle's and circle's are centre-relative by construction.
+    //
+    // The nested-group recursion below is unaffected: a group's pivot IS its
+    // local origin and its centre offset is always zero (D16), so for a
+    // compound child `centreInParent` returns `currentPos` unchanged.
+    const childT = compose(t, centreInParent(child), child.rotation, layout.currentScale);
 
     if (shape.kind === "compound") {
       collectBodyParts(child, childT, out);
