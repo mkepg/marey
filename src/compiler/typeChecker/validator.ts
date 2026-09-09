@@ -11,6 +11,7 @@ import {
 import type { PropertySpec } from "../languageContract";
 import {
   countPhysicsCost,
+  hasPhysicsDescendant,
   MAX_PHYSICS_BODIES,
   MAX_PHYSICS_PARTS,
   ownsPhysics,
@@ -36,6 +37,161 @@ function formatConstraintNumber(value: number): string {
 
 function formatPointCount(value: number): string {
   return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+type ErrPos = Pick<CompilerError, "line" | "col" | "endLine" | "endCol">;
+
+function errPosOf(val: AstValue): ErrPos {
+  return { line: val.line, col: val.col, endLine: val.endLine, endCol: val.endCol };
+}
+
+/** `(1, 0)` for a point, `0` for a number — the value as the author wrote it. */
+function scaleValueText(val: AstValue): string {
+  return val.kind === "point" ? `(${val.x}, ${val.y})` : val.kind === "number" ? `${val.value}` : "";
+}
+
+function scaleHasZeroComponent(val: AstValue): boolean {
+  if (val.kind === "number") return val.value === 0;
+  if (val.kind === "point") return val.x === 0 || val.y === 0;
+  return false;
+}
+
+/**
+ * The sign half of the scale rule, in one place.
+ *
+ * Two call sites reach it: the `nonNegativeScale` contract arm below, for a
+ * declared `scale` property, and `collectErrors`'s `animate` branch, for a
+ * `property: scale` block's `to`. Before Phase 3C only the first existed, so
+ * `to: (-3, 1)` compiled with zero errors while `scale: (-3, 1)` one line
+ * above did not (design §2.2) — a rule enforced on the declaration site and
+ * not on the property whose entire purpose is to change that value over time.
+ * Bringing `to` under it is a narrowing, with the regression test §5.4
+ * requires.
+ *
+ * `subject` is the noun phrase naming the offending value, so both frames read
+ * as English either way: "'scale' cannot be negative, but got -2." and
+ * "the scale target 'to' cannot have a negative component, but got (-3, 1)."
+ *
+ * The wording names *negativity* and says nothing about zero. It said "must be
+ * greater than zero" until Phase 3C, which stopped being true when zero became
+ * legal off the physics seam — and an author who read it wrote `scale: 0.001`,
+ * the workaround this phase exists to delete (design §5.1). The
+ * TYPE_INVALID_SCALE code is kept: the category (an unusable scale value) is
+ * unchanged, and the code is what tooling greps for.
+ */
+function negativeScaleError(
+  label: string,
+  subject: string,
+  val: AstValue,
+): CompilerError | undefined {
+  if (val.kind === "number" && val.value < 0) {
+    return {
+      phase: "TYPE",
+      message: `[TYPE_INVALID_SCALE] ${label}: ${subject} cannot be negative, but got ${val.value}.`,
+      ...errPosOf(val),
+    };
+  }
+  if (val.kind === "point" && (val.x < 0 || val.y < 0)) {
+    return {
+      phase: "TYPE",
+      message: `[TYPE_INVALID_SCALE] ${label}: ${subject} cannot have a negative component, but got (${val.x}, ${val.y}).`,
+      ...errPosOf(val),
+    };
+  }
+  return undefined;
+}
+
+/**
+ * Why this object participates in physics, as a sentence naming the culprit —
+ * or `null` if it does not participate and a zero scale is therefore harmless.
+ *
+ * The three clauses are design §2.4's, and each is a distinct hazard rather
+ * than three spellings of one:
+ *
+ *  1. the object owns a body (`ownsPhysics`, so D13's sequence/parallel steps
+ *     count) — `physicsWorld.setScale` clamps `|s| < 1e-4`, so this one is
+ *     bounded rather than broken, but a silently degenerate collider is still
+ *     not something to let an author write;
+ *  2. it is inside a group that owns a body — its geometry is baked into that
+ *     group's compound body by `builder.collectBodyParts`, and Matter's
+ *     `Vertices.centre` divides a polygon part by its own area, which a zero
+ *     scale makes zero;
+ *  3. it is a group with a body beneath it — its scale composes into
+ *     `__bodyTransform`, which `renderer/transform.ts`'s `toLocal` divides by.
+ *
+ * Clause 2 uses `ownsPhysics` rather than "has a direct `physics` child" so it
+ * matches TYPE_LINE_PHYSICS's existing ancestor test and D13: a group whose
+ * physics runs as a sequence step still welds its children into one body.
+ * That choice is load-bearing and pinned — "rejects a zero scale under a group
+ * whose physics is a sequence step" in validator.test.ts.
+ *
+ * The clause *order*, by contrast, is deliberately not pinned, and this is the
+ * reason rather than an omission (AGENT-LESSONS §2d). Reordering the three
+ * leaves the whole suite green, and no clean program can tell the difference:
+ * two clauses can only match the same object when physics is nested inside
+ * physics, which D17 already rejects with TYPE_PHYSICS_IN_PHYSICS_GROUP. Any
+ * source that could distinguish the orders is invalid for another reason
+ * first. Most-specific-first is kept because it blames the nearest cause.
+ */
+function physicsParticipationReason(
+  node: ObjectNode,
+  ancestors: readonly ObjectNode[],
+): string | null {
+  if (ownsPhysics(node)) {
+    return `'${node.name}' declares 'physics', and a zero-scaled body has no usable collision geometry.`;
+  }
+  // Innermost first: the nearest enclosing physics group is the one whose body
+  // this object's geometry is actually welded into.
+  for (let i = ancestors.length - 1; i >= 0; i--) {
+    const anc = ancestors[i];
+    if (anc.type === "group" && ownsPhysics(anc)) {
+      return `'${node.name}' is inside group '${anc.name}', which declares 'physics' and bakes its children's geometry into one body.`;
+    }
+  }
+  if (node.type === "group" && hasPhysicsDescendant(node)) {
+    return `Group '${node.name}' contains an object with 'physics', and the group's scale is composed into that body's transform.`;
+  }
+  return null;
+}
+
+/**
+ * The zero half of the scale rule. Negative is banned outright (see
+ * `negativeScaleError`); zero is banned only where it reaches a divisor, which
+ * is the physics seam and nothing else — design §2.3 established that PixiJS
+ * inverts no matrix Marey can reach.
+ */
+function zeroScalePhysicsError(
+  label: string,
+  subject: string,
+  val: AstValue,
+  owner: ObjectNode,
+  ownerAncestors: readonly ObjectNode[],
+): CompilerError | undefined {
+  if (!scaleHasZeroComponent(val)) return undefined;
+  const reason = physicsParticipationReason(owner, ownerAncestors);
+  if (reason === null) return undefined;
+  const clause = val.kind === "point"
+    ? "cannot have a zero component"
+    : "cannot be zero";
+  return {
+    phase: "TYPE",
+    message: `[TYPE_ZERO_SCALE_PHYSICS] ${label}: ${subject} ${clause} on an object that participates in physics, but got ${scaleValueText(val)}. ${reason}`,
+    ...errPosOf(val),
+  };
+}
+
+/**
+ * Index in `ancestors` of the renderable that owns a block, skipping the
+ * `sequence`/`parallel` wrappers D13 says are not owners; `-1` if the block
+ * has no owning object at all (an `animate` or `physics` at the scene root,
+ * which its own branch reports separately).
+ */
+function ownerIndex(ancestors: readonly ObjectNode[]): number {
+  let i = ancestors.length - 1;
+  while (i >= 0 && (ancestors[i].type === "sequence" || ancestors[i].type === "parallel")) {
+    i--;
+  }
+  return i;
 }
 
 // Exported only as a test seam (validator.test.ts's "generic listOf path"
@@ -99,20 +255,20 @@ export function validateLocalConstraint(
       return undefined;
 
     // `scale` is the only property whose kind is `["number", "point"]` and
-    // whose positivity check differs by which of those two the value is —
-    // a plain number gets one message, a point gets another, both carrying
+    // whose sign check differs by which of those two the value is — a plain
+    // number gets one message, a point gets another, both carrying
     // TYPE_INVALID_SCALE. This used to be a bespoke `key === "scale"` branch
     // in `collectErrors` that short-circuited before ever reaching this
     // function, leaving `scale`'s `positivePoint` contract entry dead data
-    // no consumer read. Folded in here, preserving both messages exactly.
-    case "positiveScale":
-      if (val.kind === "number" && val.value <= 0) {
-        return error(`[TYPE_INVALID_SCALE] ${label}: 'scale' must be greater than zero.`);
-      }
-      if (val.kind === "point" && (val.x <= 0 || val.y <= 0)) {
-        return error(`[TYPE_INVALID_SCALE] ${label}: 'scale' components must be greater than zero, but got (${val.x}, ${val.y}).`);
-      }
-      return undefined;
+    // no consumer read.
+    //
+    // Only the *sign* rule is a local constraint, because it is the only half
+    // of the rule a value can answer on its own. Zero depends on where the
+    // object sits in the scene tree (TYPE_ZERO_SCALE_PHYSICS, applied in
+    // `collectErrors` where the ancestor chain is in hand), which no
+    // `LocalConstraint` can see.
+    case "nonNegativeScale":
+      return negativeScaleError(label, `'${key}'`, val);
 
     case "maxLength":
       if (val.kind === "string" && val.value.length > constraint.max) {
@@ -356,13 +512,7 @@ export function collectErrors(ast: AstNode): CompilerError[] {
       // group is allowed — indeed required — to declare physics on itself.
       // Per D13 a `sequence`/`parallel` wrapper is not an owner, so skip past
       // those to find the renderable object the block actually belongs to.
-      let ownerIdx = ancestors.length - 1;
-      while (
-        ownerIdx >= 0 &&
-        (ancestors[ownerIdx].type === "sequence" || ancestors[ownerIdx].type === "parallel")
-      ) {
-        ownerIdx--;
-      }
+      const ownerIdx = ownerIndex(ancestors);
 
       for (let i = ownerIdx - 1; i >= 0; i--) {
         const anc = ancestors[i];
@@ -424,6 +574,32 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         }
         if ((p === "rotation" || p === "alpha") && toVal.kind !== "number") {
           errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property '${p}' expects a number for 'to'.`, line: toVal.line, col: toVal.col, endLine: toVal.endLine, endCol: toVal.endCol });
+        }
+
+        // A `to` reaches exactly the same runtime state a declared `scale`
+        // does, so both scale rules apply to it (design §5.3). Until Phase 3C
+        // this block validated `to` by *kind* alone, which is why the ban on
+        // the declaration site was never an invariant: `to: (-3, 1)` and
+        // `to: (1, 0)` both compiled.
+        if (p === "scale") {
+          const signError = negativeScaleError(label, "the scale target 'to'", toVal);
+          if (signError) errors.push(signError);
+
+          // Zero is a question about the *object*, not the animate block, so
+          // it needs the renderable this block belongs to — which is not
+          // necessarily `parentNode`, because a `sequence`/`parallel` may sit
+          // between them (D13).
+          const ownerIdx = ownerIndex(ancestors);
+          if (ownerIdx >= 0) {
+            const zeroError = zeroScalePhysicsError(
+              label,
+              "the scale target 'to'",
+              toVal,
+              ancestors[ownerIdx],
+              ancestors.slice(0, ownerIdx),
+            );
+            if (zeroError) errors.push(zeroError);
+          }
         }
       }
 
@@ -563,7 +739,7 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         continue;
       }
 
-      // `scale`'s positivity check (TYPE_INVALID_SCALE) is a `positiveScale`
+      // `scale`'s sign check (TYPE_INVALID_SCALE) is a `nonNegativeScale`
       // constraint like any other property's — see validateLocalConstraint —
       // rather than a bespoke branch here that never consulted the contract.
       const spec = LANGUAGE_CONTRACT[typeName as keyof typeof LANGUAGE_CONTRACT]?.properties[key];
@@ -571,6 +747,19 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         ? validateLocalConstraint(label, typeName, key, val, spec)
         : undefined;
       if (localError) errors.push(localError);
+
+      // The other half of the scale rule. It cannot be a `LocalConstraint`
+      // like the sign check above, because whether a zero component is legal
+      // depends on the object's place in the scene tree rather than on the
+      // value — `validateLocalConstraint` sees neither the node nor its
+      // ancestors. `scale` is not on the scene block, so `node` is an
+      // ObjectNode wherever this fires.
+      if (key === "scale" && !isScene) {
+        const zeroError = zeroScalePhysicsError(
+          label, `'${key}'`, val, node as ObjectNode, ancestors,
+        );
+        if (zeroError) errors.push(zeroError);
+      }
     }
 
     const hasVisualChildren = node.children.some(

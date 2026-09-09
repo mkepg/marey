@@ -675,23 +675,30 @@ describe("TYPE_INVALID_SCALE (dead-contract-data fold-in)", () => {
   // so no consumer read the constraint. These pin the exact existing
   // messages so folding the check into the constraint system (or dropping
   // the dead entry) cannot silently change behaviour.
-  it("rejects a non-positive numeric scale with the exact TYPE_INVALID_SCALE message", () => {
+  //
+  // Phase 3C reworded both. The code is unchanged, because the category (an
+  // unusable scale value) is what tooling greps for, but "must be greater
+  // than zero" became false when zero stopped being banned outright — and an
+  // author who read it wrote `scale: 0.001`, the exact workaround Phase 3C
+  // exists to delete (design §5.1). The wording names negativity and says
+  // nothing about zero, which is now a separate rule with its own code.
+  it("rejects a negative numeric scale with the exact TYPE_INVALID_SCALE message", () => {
     const out = errorsFor(`scene {
   size: (100, 100)
-  circle c { position: (10, 10), radius: 5, scale: 0 }
+  circle c { position: (10, 10), radius: 5, scale: -2 }
 }`);
     expect(out).toEqual([
-      "[TYPE_INVALID_SCALE] 'circle' object 'c': 'scale' must be greater than zero.",
+      "[TYPE_INVALID_SCALE] 'circle' object 'c': 'scale' cannot be negative, but got -2.",
     ]);
   });
 
-  it("rejects a non-positive point scale with the exact TYPE_INVALID_SCALE message", () => {
+  it("rejects a negative point scale component with the exact TYPE_INVALID_SCALE message", () => {
     const out = errorsFor(`scene {
   size: (100, 100)
   circle c { position: (10, 10), radius: 5, scale: (2, -1) }
 }`);
     expect(out).toEqual([
-      "[TYPE_INVALID_SCALE] 'circle' object 'c': 'scale' components must be greater than zero, but got (2, -1).",
+      "[TYPE_INVALID_SCALE] 'circle' object 'c': 'scale' cannot have a negative component, but got (2, -1).",
     ]);
   });
 
@@ -703,6 +710,277 @@ describe("TYPE_INVALID_SCALE (dead-contract-data fold-in)", () => {
     expect(errorsFor(`scene {
   size: (100, 100)
   circle c { position: (10, 10), radius: 5, scale: (1.5, 0.5) }
+}`)).toEqual([]);
+  });
+
+  it("allows a numeric zero scale on a non-physical object, which TYPE_INVALID_SCALE used to reject", () => {
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  circle c { position: (10, 10), radius: 5, scale: 0 }
+}`)).toEqual([]);
+  });
+});
+
+// Design §2.4. `TYPE_INVALID_SCALE` claimed to protect a WebGL matrix
+// inversion Marey never performs; what is actually load-bearing is the
+// physics seam — `transform.ts`'s `toLocal` divides by the ancestor chain's
+// composed scale, and Matter's `Vertices.centre` divides a compound polygon
+// part by its own area. An object's own visual scale reaches neither.
+describe("zero scale", () => {
+  it("permits a zero scale component on a non-physical object", () => {
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  rectangle r { position: (50, 50), size: (10, 10), scale: (1, 0) }
+}`)).toEqual([]);
+  });
+
+  it("permits a zero scale as an animation target on a non-physical object", () => {
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  rectangle r {
+    position: (50, 50)
+    size: (10, 10)
+    animate { property: scale, to: (1, 0), duration: 1 }
+  }
+}`)).toEqual([]);
+  });
+
+  it("permits a zero scale on a group whose descendants have no physics", () => {
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  group g {
+    position: (50, 50)
+    scale: (1, 0)
+    circle c { position: (0, 0), radius: 5 }
+  }
+}`)).toEqual([]);
+  });
+
+  it("permits a zero scale on a non-physical child of a non-physical group", () => {
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  group g {
+    position: (50, 50)
+    circle c { position: (0, 0), radius: 5, scale: (1, 0) }
+  }
+}`)).toEqual([]);
+  });
+});
+
+describe("zero scale under physics", () => {
+  it("rejects a zero scale on an object that declares physics", () => {
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (50, 50)
+    radius: 5
+    scale: (1, 0)
+    physics { duration: 1 }
+  }
+}`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("[TYPE_ZERO_SCALE_PHYSICS]");
+    // The full text, not a short substring: the clause that matched is part
+    // of the requirement (design §5), and only clause 1 can produce this.
+    expect(out[0]).toBe(
+      "[TYPE_ZERO_SCALE_PHYSICS] 'circle' object 'c': 'scale' cannot have a zero component on an object that participates in physics, but got (1, 0). 'c' declares 'physics', and a zero-scaled body has no usable collision geometry.",
+    );
+  });
+
+  it("rejects a zero scale on an object whose physics is a sequence step (D13)", () => {
+    // Clause 1 follows `ownsPhysics`, not "has a direct physics child": D13
+    // makes a sequence step's physics block the object's own body too.
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (50, 50)
+    radius: 5
+    scale: (1, 0)
+    sequence {
+      animate { property: alpha, to: 0.5, duration: 0.5 }
+      physics { duration: 1 }
+    }
+  }
+}`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("[TYPE_ZERO_SCALE_PHYSICS]");
+    expect(out[0]).toContain("'c' declares 'physics'");
+  });
+
+  it("rejects a zero scale on a group with a physics descendant", () => {
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  group g {
+    position: (50, 50)
+    scale: (1, 0)
+    circle c { position: (0, 0), radius: 5, physics { duration: 1 } }
+  }
+}`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("[TYPE_ZERO_SCALE_PHYSICS]");
+    expect(out[0]).toBe(
+      "[TYPE_ZERO_SCALE_PHYSICS] 'group' object 'g': 'scale' cannot have a zero component on an object that participates in physics, but got (1, 0). Group 'g' contains an object with 'physics', and the group's scale is composed into that body's transform.",
+    );
+  });
+
+  it("rejects a zero scale on a group whose physics descendant is two levels down", () => {
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  group outer {
+    position: (50, 50)
+    scale: (1, 0)
+    group inner {
+      position: (0, 0)
+      circle c { position: (0, 0), radius: 5, physics { duration: 1 } }
+    }
+  }
+}`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("[TYPE_ZERO_SCALE_PHYSICS]");
+    expect(out[0]).toContain("Group 'outer' contains an object with 'physics'");
+  });
+
+  it("rejects a zero scale on a child of a physics group", () => {
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  group g {
+    position: (50, 50)
+    physics { duration: 1 }
+    circle c { position: (0, 0), radius: 5, scale: (1, 0) }
+  }
+}`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("[TYPE_ZERO_SCALE_PHYSICS]");
+    expect(out[0]).toBe(
+      "[TYPE_ZERO_SCALE_PHYSICS] 'circle' object 'c': 'scale' cannot have a zero component on an object that participates in physics, but got (1, 0). 'c' is inside group 'g', which declares 'physics' and bakes its children's geometry into one body.",
+    );
+  });
+
+  it("rejects a zero scale under a group whose physics is a sequence step", () => {
+    // Pins a judgment call clause 2 had to make and that nothing else in the
+    // suite has an opinion about: "a group that declares physics" follows
+    // `ownsPhysics` — D13's rule, so a sequence step counts — not "has a
+    // direct 'physics' child". Narrowing it to direct children left the whole
+    // suite green, and it would be wrong: the group still welds its children
+    // into one compound body when that step runs, so this child's geometry
+    // still reaches Matter's `Vertices.centre` and its zero area.
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  group g {
+    position: (50, 50)
+    sequence {
+      animate { property: alpha, to: 0.5, duration: 0.5 }
+      physics { duration: 1 }
+    }
+    circle c { position: (0, 0), radius: 5, scale: (1, 0) }
+  }
+}`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("[TYPE_ZERO_SCALE_PHYSICS]");
+    expect(out[0]).toContain("'c' is inside group 'g', which declares 'physics'");
+  });
+
+  it("rejects a zero numeric scale, not only a zero point component", () => {
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (50, 50)
+    radius: 5
+    scale: 0
+    physics { duration: 1 }
+  }
+}`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toBe(
+      "[TYPE_ZERO_SCALE_PHYSICS] 'circle' object 'c': 'scale' cannot be zero on an object that participates in physics, but got 0. 'c' declares 'physics', and a zero-scaled body has no usable collision geometry.",
+    );
+  });
+
+  it("rejects a zero animated scale target on a physical object", () => {
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (50, 50)
+    radius: 5
+    animate { property: scale, to: (0, 1), duration: 1 }
+    physics { duration: 1 }
+  }
+}`);
+    expect(out.filter((e) => e.includes("[TYPE_ZERO_SCALE_PHYSICS]"))).toHaveLength(1);
+    expect(out[0]).toBe(
+      "[TYPE_ZERO_SCALE_PHYSICS] The 'animate' block: the scale target 'to' cannot have a zero component on an object that participates in physics, but got (0, 1). 'c' declares 'physics', and a zero-scaled body has no usable collision geometry.",
+    );
+  });
+
+  it("rejects a zero animated scale target inside a sequence step, whose owner is the object (D13)", () => {
+    // The owning renderable is found by skipping `sequence`/`parallel`
+    // wrappers, which D13 says are not owners — the same rule the
+    // TYPE_PHYSICS_IN_PHYSICS_GROUP walk uses.
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  group g {
+    position: (50, 50)
+    physics { duration: 1 }
+    circle c {
+      position: (0, 0)
+      radius: 5
+      sequence {
+        animate { property: scale, to: (0, 1), duration: 1 }
+      }
+    }
+  }
+}`);
+    expect(out.filter((e) => e.includes("[TYPE_ZERO_SCALE_PHYSICS]"))).toHaveLength(1);
+    expect(out[0]).toContain("'c' is inside group 'g'");
+  });
+});
+
+describe("negative scale (the narrowing)", () => {
+  // Roadmap §5.2's required regression test. `to: (-3, 1)` compiled with zero
+  // errors before Phase 3C: `validator.ts`'s animate branch checked `to` by
+  // *kind* only. The value assertion is deliberate — it pins that the
+  // diagnostic names the offending value, so this cannot pass by way of a
+  // neighbouring TYPE_INVALID_SCALE from a declared `scale` property.
+  it("rejects a negative animated scale target, which compiled before Phase 3C", () => {
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (50, 50)
+    radius: 5
+    animate { property: scale, to: (-3, 1), duration: 1 }
+  }
+}`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("[TYPE_INVALID_SCALE]");
+    expect(out[0]).toContain("(-3, 1)");
+    expect(out[0]).toBe(
+      "[TYPE_INVALID_SCALE] The 'animate' block: the scale target 'to' cannot have a negative component, but got (-3, 1).",
+    );
+  });
+
+  it("rejects a negative numeric animated scale target", () => {
+    const out = errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (50, 50)
+    radius: 5
+    animate { property: scale, to: -3, duration: 1 }
+  }
+}`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toBe(
+      "[TYPE_INVALID_SCALE] The 'animate' block: the scale target 'to' cannot be negative, but got -3.",
+    );
+  });
+
+  it("still allows a positive animated scale target", () => {
+    expect(errorsFor(`scene {
+  size: (100, 100)
+  circle c {
+    position: (50, 50)
+    radius: 5
+    animate { property: scale, to: (2, 0.5), duration: 1 }
+  }
 }`)).toEqual([]);
   });
 });

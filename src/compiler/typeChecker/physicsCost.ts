@@ -30,6 +30,26 @@ export function ownsPhysics(node: ObjectNode): boolean {
     ));
 }
 
+/**
+ * Whether any *visual descendant* of this node owns a Matter body.
+ *
+ * `ownsPhysics` asks about the node itself and is answered by looking at its
+ * own children; this walks the whole subtree, and lives beside it so both
+ * share one notion of which children are visual. Its caller is the
+ * TYPE_ZERO_SCALE_PHYSICS rule's third clause (design §2.4): a group's scale
+ * is composed into `__bodyTransform` for every body beneath it, and
+ * `renderer/transform.ts`'s `toLocal` divides by that composed scale — so a
+ * zero component anywhere up the chain writes `Infinity`/`NaN` onto a body's
+ * position, however far down the body actually is.
+ */
+export function hasPhysicsDescendant(node: ObjectNode): boolean {
+  for (const child of node.children) {
+    if (!isVisualNode(child)) continue;
+    if (ownsPhysics(child) || hasPhysicsDescendant(child)) return true;
+  }
+  return false;
+}
+
 function collectVisualLeaves(node: ObjectNode, leaves: ObjectNode[]): void {
   for (const child of node.children) {
     if (!isVisualNode(child)) continue;

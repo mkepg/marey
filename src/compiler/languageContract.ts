@@ -10,7 +10,13 @@ export type LocalConstraint =
   | Readonly<{ kind: "positive" }>
   | Readonly<{ kind: "nonNegative" }>
   | Readonly<{ kind: "positivePoint" }>
-  | Readonly<{ kind: "positiveScale" }>
+  // Distinct from `nonNegative` (a plain number, e.g. `animate`'s `delay`):
+  // `scale` accepts either a number or a point, and only the *sign* half of
+  // its rule lives here. Zero is rejected separately, by the tree-aware
+  // TYPE_ZERO_SCALE_PHYSICS rule in `typeChecker/validator.ts`, because
+  // whether zero is legal depends on the object's place in the scene tree
+  // rather than on the value alone (design §2.4).
+  | Readonly<{ kind: "nonNegativeScale" }>
   | Readonly<{ kind: "maxLength"; max: number }>
   | Readonly<{ kind: "listOf"; element: ValueKind; min: number; max: number }>;
 
@@ -125,7 +131,7 @@ const scale = property(
   "Scales the object. Can be a uniform number or a point for independent X/Y scaling.",
   "scale: 1.5 or scale: (2, 0.5)",
   "1.0",
-  { default: point(1, 1), constraint: { kind: "positiveScale" } },
+  { default: point(1, 1), constraint: { kind: "nonNegativeScale" } },
 );
 const layer = property(
   "number",
