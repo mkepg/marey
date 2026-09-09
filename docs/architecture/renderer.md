@@ -43,11 +43,12 @@ imports `pixi.js` for types **only**, so it is headlessly testable too. Its
 `centreOffsetVector` / `centreInParent` are where the two frames this seam
 joins get reconciled: `position` places a container's **pivot**, which `origin`
 may move anywhere in (or out of) the bounding box, while Matter places a body
-at its **centre of mass**. **Four of the five container→body handoffs go
-through it** — bind-time placement, both write-back sites, and `builder.ts`'s
+at its **centre of mass**. **All five container→body handoffs go
+through it** — bind-time placement, both write-back sites, `builder.ts`'s
 `collectBodyParts` (which is why `builder.ts` imports from `physicsSync.ts`
 and not the other way round: the reverse would drag a runtime `pixi.js`
-import into a module that must not have one). The offset it applies is a
+import into a module that must not have one), and `sceneRuntime.ts`'s
+`pushAnimToWorld`. The offset it applies is a
 vector in the container's own local frame, so it takes that container's
 rotation and scale but never its translation; write-back un-rotates it by the
 angle just read from the body, not the one the container still holds. It is
@@ -57,19 +58,33 @@ expressed relative to its bbox centre** — a polygon's points most visibly —
 so only the *placement* takes the offset; correcting the points as well
 double-counts it.
 
-**The fifth handoff is not reconciled yet.** `sceneRuntime.ts`'s
-`pushAnimToWorld` calls `world.setPosition` with a lerped position and no
-centre offset, so a bottom-origin object under a position `animate` puts its
-body at its origin point rather than its centre. Do not read the list above
-as exhaustive until that is closed. It cannot be closed by calling
-`centreInParent`: `pushAnimToWorld` runs in the **tick** phase and evaluates
-at `alpha = 0` precisely to satisfy invariant 3, while `centreInParent` reads
+**The fifth handoff is `pushAnimToWorld`, and it is the only one that could
+not use `centreInParent`.** It runs in the **tick** phase and evaluates at
+`alpha = 0` precisely to satisfy invariant 3, while `centreInParent` reads
 `container.rotation`, `currentPos` and `currentScale` — all three last written
 by the paint phase at wall-clock alpha. The tick-safe entry point is
 `centreOffsetVector(layout, rot, scale)`, which reads only the
 construction-time `centreOffsetX/Y` and takes everything mutable as an
 argument, so the caller composes the offset onto the position it is itself
-computing. An
+computing. Its two branches differ:
+
+- **Position** adds the offset to its own lerped pivot and pushes an absolute
+  centre, exactly as the bind path does. The scale it feeds the offset is a
+  concurrent scale runner's own `alpha = 0` lerp, never `layout.currentScale`.
+- **Scale** pushes a `setPosition` the branch never made before this phase,
+  because PixiJS scales a container about its **pivot** and Matter scales a
+  body about the body's own **centre**: as a bottom-origin object grows, its
+  drawn centre walks away from the pivot while its body's stays put, so the
+  collider leaves the drawing during exactly the "grow from a baseline" idiom.
+  It pushes a **delta** on the body's own centre read at alpha 1 — the absolute
+  pivot only exists in paint-phase state — and stands down entirely while a
+  position runner is live, which would otherwise count the offset twice.
+
+Both branches take the container's rotation from the **body** at alpha 1, not
+from `container.rotation`, for the same invariant-3 reason. At the default
+origin the offset is `(0, 0)` and both skip the correction outright, so those
+scenes' call sequences are byte-identical to their pre-`origin` ones — the
+scale branch in particular still pushes no position at all. An
 object gets a body iff it declares `physics` directly or in a `sequence` (D13);
 animate-only objects are not colliders. Pinning is reason-counted — `NO_RUNNER`,
 `POS_ANIM`, `FROZEN` — and pinned means container → body, so a frozen object

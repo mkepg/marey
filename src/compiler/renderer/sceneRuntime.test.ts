@@ -20,6 +20,8 @@ class RecordingWorld implements IPhysicsWorld {
   readonly positions = new Map<string, { x: number; y: number }>();
   readonly velocities = new Map<string, { x: number; y: number }>();
   readonly angleOverrides = new Map<string, number | null>();
+  /** Test helper: the angle `readState` reports, so a body can be turned. */
+  readonly angles = new Map<string, number>();
   idle = false;
 
   addBody(id: string, _g: BodyGeometry, x: number, y: number, _a: number, _p: PhysicsParams): void {
@@ -57,7 +59,7 @@ class RecordingWorld implements IPhysicsWorld {
   step(): void { this.calls.push("step"); }
   readState(id: string, _alpha: number): BodyState | null {
     const p = this.positions.get(id);
-    return p ? { x: p.x, y: p.y, angle: 0 } : null;
+    return p ? { x: p.x, y: p.y, angle: this.angles.get(id) ?? 0 } : null;
   }
   idsOutsideBounds(_margin: number): string[] { return []; }
   isIdle(): boolean { return this.idle; }
@@ -108,14 +110,20 @@ function makeContainer(over: {
   physics?: IRPhysics;
   sequence?: IRSequence;
   position?: { x: number; y: number };
+  /**
+   * The pivot-to-bbox-centre vector `origin` produces, `(0, 0)` at the default
+   * origin — which is why every pre-origin caller leaves it out.
+   */
+  centreOffset?: { x: number; y: number };
 } = {}): Container {
   const c = new Container();
   const pos = over.position ?? { x: 0, y: 0 };
+  const off = over.centreOffset ?? { x: 0, y: 0 };
   c.__mareyLayout = {
     localPivotX: 0,
     localPivotY: 0,
-    centreOffsetX: 0,
-    centreOffsetY: 0,
+    centreOffsetX: off.x,
+    centreOffsetY: off.y,
     currentPos: { x: pos.x, y: pos.y },
     currentScale: { x: 1, y: 1 },
   };
@@ -455,6 +463,217 @@ describe("SceneRuntime · tick phase", () => {
   });
 });
 
+/**
+ * The fifth container→body handoff (docs/architecture/renderer.md).
+ *
+ * A 40x20 rectangle with `origin: (0.5, 1)` has its pivot on its bottom edge,
+ * so `position` places that edge — but Matter places a body at its CENTRE OF
+ * MASS, 10px above. `centreOffsetY: -10` is that vector, pointing up.
+ */
+const BOTTOM_ORIGIN = { x: 0, y: -10 };
+
+/** Every `setPosition` the world was told, in order. */
+function positionPushes(world: RecordingWorld): string[] {
+  return world.calls.filter((s) => s.startsWith("setPosition:"));
+}
+
+describe("SceneRuntime · origin through the physics seam", () => {
+  it("moves a bottom-origin body's centre as its scale animation grows it", () => {
+    // A 40x20 rect standing on y = 500, origin (0.5, 1), growing 1x -> 3x in y.
+    // At scale 1 its centre is 10 above the baseline; at scale 3, 30 above.
+    //
+    // PixiJS scales a container about its PIVOT, Matter scales a body about the
+    // body's own CENTRE, so `setScale` alone leaves the collision shape behind
+    // during exactly the "grow from a baseline" idiom this phase exists for.
+    const c = makeContainer({
+      position: { x: 100, y: 500 },
+      centreOffset: BOTTOM_ORIGIN,
+      animations: [anim({ property: "scale", to: { x: 1, y: 3 }, duration: 2 / TICK_HZ })],
+      physics: { ...PHYSICS, duration: "indefinitely" },
+    });
+    const world = new RecordingWorld();
+    const rt = new SceneRuntime(world, makeRoot(c));
+
+    // Bound at its centre: 500 - 10.
+    expect(world.positions.get(c.__body!)).toEqual({ x: 100, y: 490 });
+
+    rt.advanceOneTick();
+    rt.advanceOneTick();
+
+    expect(world.positions.get(c.__body!)!.y).toBeCloseTo(470, 6);
+    // Half-way there on the tick in between, not in one jump at the end.
+    expect(positionPushes(world)).toEqual([
+      "setPosition:b0:100.0000,480.0000",
+      "setPosition:b0:100.0000,470.0000",
+    ]);
+  });
+
+  it("does not move a default-origin body's centre when its scale animates", () => {
+    // The test that protects every existing scene: with the pivot already on
+    // the centre the offset is exactly (0, 0), so a scale animation must still
+    // push NO position at all, and the call sequence stays byte-identical.
+    const c = makeContainer({
+      position: { x: 100, y: 500 },
+      animations: [anim({ property: "scale", to: { x: 1, y: 3 }, duration: 2 / TICK_HZ })],
+      physics: { ...PHYSICS, duration: "indefinitely" },
+    });
+    const world = new RecordingWorld();
+    const rt = new SceneRuntime(world, makeRoot(c));
+
+    rt.advanceOneTick();
+    rt.advanceOneTick();
+
+    expect(positionPushes(world)).toEqual([]);
+  });
+
+  it("pushes a bottom-origin body's centre during a position animation, not its origin point", () => {
+    // The position branch lerps PIVOT-relative endpoints, so it owes the world
+    // the same correction the bind path makes.
+    const c = makeContainer({
+      position: { x: 100, y: 500 },
+      centreOffset: BOTTOM_ORIGIN,
+      animations: [anim({ to: { x: 140, y: 500 }, duration: 2 / TICK_HZ })],
+      physics: { ...PHYSICS, duration: "indefinitely" },
+    });
+    const world = new RecordingWorld();
+    const rt = new SceneRuntime(world, makeRoot(c));
+
+    rt.advanceOneTick();
+    rt.advanceOneTick();
+
+    expect(positionPushes(world)).toEqual([
+      "setPosition:b0:120.0000,490.0000",
+      "setPosition:b0:140.0000,490.0000",
+    ]);
+  });
+
+  it("rotates a position push's offset by the body's angle, not the container's", () => {
+    // The position branch's half of the same question the scale branch answers
+    // below. A position-animated body is pinned, so `syncWorldToContainers`
+    // skips it and `container.rotation` is written only by `applyAnim` — at the
+    // driver's wall-clock alpha, which invariant 3 forbids feeding the world.
+    //
+    // Turned a quarter turn, "10px above the pivot" points along +x, so each
+    // push sits 10px to the RIGHT of the pivot rather than 10px above it.
+    // Taking the container's rotation of 0 would give (120, 490)/(140, 490).
+    const c = makeContainer({
+      position: { x: 100, y: 500 },
+      centreOffset: BOTTOM_ORIGIN,
+      animations: [anim({ to: { x: 140, y: 500 }, duration: 2 / TICK_HZ })],
+      physics: { ...PHYSICS, duration: "indefinitely" },
+    });
+    const world = new RecordingWorld();
+    const rt = new SceneRuntime(world, makeRoot(c));
+    world.angles.set(c.__body!, Math.PI / 2);
+
+    rt.advanceOneTick();
+    rt.advanceOneTick();
+
+    const pushes = positionPushes(world).map((s) => s.split(":")[2].split(",").map(Number));
+    expect(pushes).toHaveLength(2);
+    expect(pushes[0][0]).toBeCloseTo(130, 6);
+    expect(pushes[0][1]).toBeCloseTo(500, 6);
+    expect(pushes[1][0]).toBeCloseTo(150, 6);
+    expect(pushes[1][1]).toBeCloseTo(500, 6);
+  });
+
+  it("offsets a position push by the concurrent scale animation's own lerped value", () => {
+    // Two runners on one container. The offset scales with the object, so the
+    // position branch needs the scale — and `layout.currentScale` is written by
+    // `applyAnim` at the driver's wall-clock alpha, which is precisely the value
+    // invariant 3 forbids feeding the world. It must use the scale runner's own
+    // alpha-0 lerp instead.
+    //
+    // It also decides which branch owns the placement: the position branch
+    // already pushes an absolute centre with the offset in it, so a
+    // scale-driven delta on top would count the offset twice — and which of the
+    // two ran first would decide the answer, since runners push in spawn order.
+    const c = makeContainer({
+      position: { x: 100, y: 500 },
+      centreOffset: BOTTOM_ORIGIN,
+      animations: [
+        anim({ to: { x: 140, y: 500 }, duration: 2 / TICK_HZ }),
+        anim({ property: "scale", to: { x: 1, y: 3 }, duration: 2 / TICK_HZ }),
+      ],
+      physics: { ...PHYSICS, duration: "indefinitely" },
+    });
+    const world = new RecordingWorld();
+    const rt = new SceneRuntime(world, makeRoot(c));
+
+    rt.advanceOneTick();
+    rt.advanceOneTick();
+
+    // Tick 1: pivot 120, scale y 2, so the centre is 20 above it.
+    // Tick 2: pivot 140, scale y 3, so the centre is 30 above it.
+    // Reading the painted `currentScale` would give 490 on tick 1; letting the
+    // scale branch add its delta as well would append two more pushes.
+    expect(positionPushes(world)).toEqual([
+      "setPosition:b0:120.0000,480.0000",
+      "setPosition:b0:140.0000,470.0000",
+    ]);
+  });
+
+  it("resumes the scale branch from where the position branch left the centre", () => {
+    // The handover, by VALUE rather than by count. A position animation ending
+    // part-way through a longer scale animation hands the placement back, and
+    // the scale branch continues with a ONE-TICK delta — so the scale it last
+    // told the world has to keep advancing during the ticks it was suppressed.
+    // Carrying the spawn scale across instead replays the whole growth so far
+    // on the first tick after the handover, which no call count can see.
+    //
+    // The invariant the sequence encodes: the body's centre is the pivot plus
+    // the offset at this tick's scale, on every tick and through both branches.
+    const c = makeContainer({
+      position: { x: 100, y: 500 },
+      centreOffset: BOTTOM_ORIGIN,
+      animations: [
+        anim({ to: { x: 140, y: 500 }, duration: 2 / TICK_HZ }),
+        anim({ property: "scale", to: { x: 1, y: 3 }, duration: 4 / TICK_HZ }),
+      ],
+      physics: { ...PHYSICS, duration: "indefinitely" },
+    });
+    const world = new RecordingWorld();
+    const rt = new SceneRuntime(world, makeRoot(c));
+
+    for (let i = 0; i < 4; i++) rt.advanceOneTick();
+
+    // Ticks 1-2 are the position branch, at scale y 1.5 then 2. Ticks 3-4 are
+    // the scale branch alone, at 2.5 then 3, with the pivot parked at 140.
+    expect(positionPushes(world)).toEqual([
+      "setPosition:b0:120.0000,485.0000",
+      "setPosition:b0:140.0000,480.0000",
+      "setPosition:b0:140.0000,475.0000",
+      "setPosition:b0:140.0000,470.0000",
+    ]);
+  });
+
+  it("rotates the offset by the body's tick-aligned angle, not the container's", () => {
+    // A free body owns its own angle, and `container.rotation` only catches up
+    // in the PAINT phase, at the driver's alpha (`syncWorldToContainers`). The
+    // body's angle read at alpha 1 is the tick-aligned one.
+    //
+    // Turned a quarter turn, "10px above the pivot" points along +x instead, so
+    // growing 1x -> 3x in y walks the centre 20px to the RIGHT rather than 20px
+    // up. Using the container's rotation of 0 would give (100, 470).
+    const c = makeContainer({
+      position: { x: 100, y: 500 },
+      centreOffset: BOTTOM_ORIGIN,
+      animations: [anim({ property: "scale", to: { x: 1, y: 3 }, duration: 2 / TICK_HZ })],
+      physics: { ...PHYSICS, duration: "indefinitely" },
+    });
+    const world = new RecordingWorld();
+    const rt = new SceneRuntime(world, makeRoot(c));
+    world.angles.set(c.__body!, Math.PI / 2);
+
+    rt.advanceOneTick();
+    rt.advanceOneTick();
+
+    const last = world.positions.get(c.__body!)!;
+    expect(last.x).toBeCloseTo(120, 6);
+    expect(last.y).toBeCloseTo(490, 6);
+  });
+});
+
 describe("SceneRuntime · paint phase", () => {
   it("splices completed runners so isIdle can become true", () => {
     const c = makeContainer({ animations: [anim({ property: "alpha", to: 0 })] });
@@ -526,6 +745,43 @@ const YOYO_SUBJECT = (): Container =>
     physics: { ...PHYSICS, duration: "indefinitely" },
   });
 
+/**
+ * A bottom-origin object growing from its baseline while its body is free.
+ *
+ * The scale branch pushed nothing into the world before this phase, so its new
+ * `setPosition` needs its own pacing check. It is also the case that exposes
+ * `layout.currentScale`: the paint phase writes it at the driver's alpha, so a
+ * branch that read it instead of its own alpha-0 lerp would diverge here.
+ * Twenty ticks, so the completion lands mid-burst at both pacings.
+ */
+const BOTTOM_ORIGIN_SCALE_SUBJECT = (): Container =>
+  makeContainer({
+    position: { x: 400, y: 300 },
+    centreOffset: BOTTOM_ORIGIN,
+    animations: [
+      anim({ property: "scale", to: { x: 1, y: 3 }, duration: 20 / TICK_HZ, easing: "easeInOut" }),
+    ],
+    physics: { ...PHYSICS, duration: "indefinitely" },
+  });
+
+/**
+ * The same object with a position animation over it, ending first.
+ *
+ * Covers the handover: while the position runner is alive it owns the
+ * placement and reads the scale runner's alpha-0 lerp; once it completes the
+ * scale branch takes over with its own delta.
+ */
+const BOTTOM_ORIGIN_BOTH_SUBJECT = (): Container =>
+  makeContainer({
+    position: { x: 400, y: 300 },
+    centreOffset: BOTTOM_ORIGIN,
+    animations: [
+      anim({ to: { x: 460, y: 300 }, duration: 10 / TICK_HZ, easing: "easeInOut" }),
+      anim({ property: "scale", to: { x: 1, y: 3 }, duration: 30 / TICK_HZ, easing: "easeInOut" }),
+    ],
+    physics: { ...PHYSICS, duration: "indefinitely" },
+  });
+
 function runAtPacing(
   ticksPerFrame: number,
   totalTicks: number,
@@ -577,6 +833,39 @@ describe("SceneRuntime · frame pacing must not reach the world", () => {
 
     // And it stops pushing after it completes: 10 pushes, not 40.
     expect(calls.filter((s) => s.startsWith("setPosition:"))).toHaveLength(10);
+  });
+
+  it("sends the same calls at 7 ticks per frame while a bottom-origin object grows", () => {
+    expect(runAtPacing(7, 40, BOTTOM_ORIGIN_SCALE_SUBJECT))
+      .toEqual(runAtPacing(1, 40, BOTTOM_ORIGIN_SCALE_SUBJECT));
+  });
+
+  it("sends the same calls at 12 ticks per frame while a bottom-origin object grows", () => {
+    expect(runAtPacing(12, 40, BOTTOM_ORIGIN_SCALE_SUBJECT))
+      .toEqual(runAtPacing(1, 40, BOTTOM_ORIGIN_SCALE_SUBJECT));
+  });
+
+  it("sends the same calls at 7 and 12 ticks per frame across the position-to-scale handover", () => {
+    expect(runAtPacing(7, 40, BOTTOM_ORIGIN_BOTH_SUBJECT))
+      .toEqual(runAtPacing(1, 40, BOTTOM_ORIGIN_BOTH_SUBJECT));
+    expect(runAtPacing(12, 40, BOTTOM_ORIGIN_BOTH_SUBJECT))
+      .toEqual(runAtPacing(1, 40, BOTTOM_ORIGIN_BOTH_SUBJECT));
+  });
+
+  it("actually pushes positions from both origin subjects, so the pacing checks are not vacuous", () => {
+    // Guards the harness: at the default origin the scale branch pushes nothing
+    // at all, so a subject that lost its offset would make the four comparisons
+    // above agree on an empty set of position calls.
+    const scaleOnly = runAtPacing(1, 40, BOTTOM_ORIGIN_SCALE_SUBJECT)
+      .filter((s) => s.startsWith("setPosition:"));
+    // One per tick of the 20-tick animation, then silence.
+    expect(scaleOnly).toHaveLength(20);
+
+    const both = runAtPacing(1, 40, BOTTOM_ORIGIN_BOTH_SUBJECT)
+      .filter((s) => s.startsWith("setPosition:"));
+    // Ten from the position runner, then twenty more from the scale runner
+    // alone — the handover, not one branch doing all the work.
+    expect(both).toHaveLength(30);
   });
 
   it("starts a sequence's second animation from the first one's exact target", () => {
