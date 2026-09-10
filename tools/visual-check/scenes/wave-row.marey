@@ -1,0 +1,68 @@
+// Phase 3C, roadmap exit criterion 3: a fixed-period travelling wave.
+//
+// Fifteen beads share ONE `duration` — so one period — and differ only in
+// `delay`. The result travels along the row at a constant rate and keeps its
+// shape indefinitely. Staggering with `duration` instead, the only way to
+// stagger anything before this phase, gives every bead a different period: the
+// row drifts apart and there is no wave to see at any length.
+//
+// This is the criterion-3 scene, and it is deliberately a straight row rather
+// than a ring: in a single still frame a row shows the phase gradient directly,
+// as a monotone rise and fall across the beads, where a ring's does not read.
+//
+// The delays span one full there-and-back cycle (`2 x duration`, since `yoyo`
+// makes `duration` a half-cycle), so exactly one wavelength fits the row.
+//
+// What to look for: a smooth arc of beads, not a scatter. `loop: true` means
+// this scene never rests, so `frozen at rest` and `deterministic` do not apply
+// (see SKILL.md).
+
+let ink = #e2e8f0
+let dim = #64748b
+let sky = #38bdf8
+
+let count  = 15
+let period = 1.2
+let cycle  = 2 * period
+let midY   = 300
+let swing  = 90
+let startX = 100
+let span   = 600
+let gap    = span / (count - 1)
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  fit: contain
+
+  text title {
+    position: (400, 40)
+    content: "wave row"
+    fontSize: 20
+    color: ink
+  }
+
+  line axis {
+    position: (400, midY)
+    points: [(-span / 2, 0), (span / 2, 0)]
+    thickness: 1
+    color: dim
+  }
+
+  generate i in 0 to count - 1 {
+    circle bead {
+      position: (startX + i * gap, midY - swing)
+      radius: 10
+      color: sky
+      animate {
+        property: position
+        to: (startX + i * gap, midY + swing)
+        duration: period
+        delay: i * cycle / count
+        easing: easeInOut
+        loop: true
+        yoyo: true
+      }
+    }
+  }
+}

@@ -1,0 +1,70 @@
+// A generated static backdrop with one animated playhead sweeping across it.
+//
+// The cheap shape of an explainer: a generated diagram that does not move, and
+// a single moving element that carries the meaning. Kept from the Phase 3C
+// gap-finding set as the control — it is the one of the three that needed no
+// workaround, so it is promoted unchanged in substance. If the other two ever
+// diverge from it, the difference is the language change, not the scene.
+//
+// `loop: true` means this scene never comes to rest, so `frozen at rest` and
+// `deterministic` are meaningless for it (see SKILL.md). What it checks is that
+// `generate` with `%`, `if`, and a computed `length` still lays out a diagram,
+// and that the playhead sweeps the full span.
+
+let ink   = #e2e8f0
+let dim   = #64748b
+let sky   = #38bdf8
+let amber = #fbbf24
+
+let count   = 11
+let period  = 5
+let startX  = 100
+let span    = 600
+let spacing = span / (count - 1)
+let axisY   = 300
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  fit: contain
+
+  text title {
+    position: (400, 40)
+    content: "timeline sweep"
+    fontSize: 20
+    color: ink
+  }
+
+  line axis {
+    position: (400, axisY)
+    points: [(-span / 2, 0), (span / 2, 0)]
+    thickness: 2
+    color: dim
+  }
+
+  generate i in 0 to count - 1 {
+    let major = i % period == 0
+    let half  = if major then 14 else 6
+    line tick {
+      position: (startX + i * spacing, axisY)
+      points: [(0, -half), (0, half)]
+      thickness: if major then 3 else 2
+      color: if major then amber else sky
+    }
+  }
+
+  line playhead {
+    position: (startX, axisY)
+    points: [(0, -40), (0, 40)]
+    thickness: 3
+    color: ink
+    animate {
+      property: position
+      to: (startX + span, axisY)
+      duration: 3.2
+      easing: easeInOut
+      loop: true
+      yoyo: true
+    }
+  }
+}

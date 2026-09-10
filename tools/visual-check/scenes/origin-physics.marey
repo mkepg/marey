@@ -1,0 +1,105 @@
+// Phase 3C: `origin` through the physics seam — the two halves, side by side.
+//
+// Nothing else in this repository exercises a non-default `origin` on an
+// object that has a body, so before this scene existed the whole
+// origin-x-physics seam was verifiable only by arithmetic the headless suite
+// checks against itself. Both halves are wrong in a way that still compiles,
+// still type-checks, and shows up only in the geometry.
+//
+// LEFT — placement. `position` places the PILLAR's origin, which is its bottom
+// edge, but Matter simulates a body about its centre of mass. The renderer
+// reconciles the two: the body is created at the bounding-box centre and what
+// the world reports is carried back to the origin point before painting.
+// Look for: the pillar lands STANDING ON the ledge. If the reconciliation were
+// dropped, the body would sit 105px (half its height) below the drawing, so
+// the pillar would come to rest buried in the ledge or hanging above it.
+//
+// RIGHT — scale tracking. PixiJS scales an object about its pivot; Matter
+// scales a body about the body's own centre. As the bottom-anchored BAR grows
+// upward, its body's centre has to be moved up to match, or the collider stays
+// where it started while the drawing climbs away from it.
+// Look for: the RIDER ball is carried up by the growing bar and comes to rest
+// ON its top edge. Untracked, the collider would grow downward through the
+// ledge as much as upward, and the ball would stop roughly 80px short — with
+// the bar drawn straight through it.
+//
+// The ledge freezes early (a numeric `duration` that expires), so it is
+// immovable scenery by the time anything touches it. Every animation here
+// finishes, so this scene does settle: `frozen at rest` and `deterministic`
+// both apply.
+
+let ink   = #e2e8f0
+let slate = #334155
+let sky   = #38bdf8
+let amber = #fbbf24
+
+let deck = 532
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  fit: contain
+
+  text title {
+    position: (400, 40)
+    content: "origin x physics"
+    fontSize: 20
+    color: ink
+  }
+
+  rectangle ledge {
+    position: (400, 545)
+    size: (680, 26)
+    color: slate
+    physics {
+      gravity: (0, 0)
+      collideBounds: true
+      duration: 0.4
+    }
+  }
+
+  rectangle pillar {
+    position: (250, 300)
+    size: (80, 210)
+    color: sky
+    origin: (0.5, 1)
+    physics {
+      gravity: (0, 900)
+      bounce: 0.05
+      airDrag: 0.004
+      collideBounds: true
+      duration: indefinitely
+    }
+  }
+
+  rectangle bar {
+    position: (560, deck)
+    size: (80, 120)
+    color: amber
+    origin: (0.5, 1)
+    animate {
+      property: scale
+      to: (1, 2.4)
+      duration: 1.4
+      easing: easeOut
+    }
+    physics {
+      gravity: (0, 0)
+      bounce: 0
+      collideBounds: true
+      duration: indefinitely
+    }
+  }
+
+  circle rider {
+    position: (560, 390)
+    radius: 20
+    color: ink
+    physics {
+      gravity: (0, 900)
+      bounce: 0.05
+      collideBounds: true
+      duration: indefinitely
+    }
+  }
+}

@@ -132,6 +132,43 @@ something to let an author write silently.
 The validator already walks ancestry for `TYPE_PHYSICS_IN_PHYSICS_GROUP` and
 `TYPE_PHYSICS_IN_ANIMATED_GROUP`, so this needs no new traversal machinery.
 
+### 2.4a The measured cost of one teachable rule — a known over-rejection
+
+*Added at implementation (Task 6), from a Task 5 review finding. The rule above
+is unchanged and is not to be narrowed on the strength of this note; §2.4 chose
+one teachable rule over a minimal one, and this is what that choice costs.*
+
+Clause 2 is **over-broad, in two directions that are now measured rather than
+predicted**:
+
+- **On the `to` side.** A zero animated `to` on a *child of a physics group* is
+  rejected — but D18 makes such an `animate` visual-only. The child owns no
+  body of its own, and `collectBodyParts` bakes the child's **declared** scale
+  into the group's compound body at build time, so an animated zero reaches
+  neither `toLocal`'s divisor (hazard 1) nor `Vertices.centre` (hazard 2). The
+  rejection protects nothing in that one case.
+- **On the declared side.** §2.3's own table already records that
+  `createPartBody` clamps rectangle and circle parts with
+  `Math.max(p.radius, 0.5)` / `Math.max(p.width, 1)`. Only a **polygon** child
+  is genuinely hazardous, so a minimal rule would read: *you may write
+  `scale: (1, 0)` on a rectangle inside a physics group, but not on a polygon.*
+
+That sentence is the argument for keeping the rule as written. A rule an author
+can hold in their head — *a zero scale is illegal wherever the object takes
+part in physics* — is worth more than a rule that is exactly minimal and
+unlearnable, and the diagnostic already names which of the three clauses fired.
+
+What makes it safe to leave (AGENT-LESSONS §7): this is a **spurious rejection
+carrying a named diagnostic**, not silent data loss. The author sees
+`TYPE_ZERO_SCALE_PHYSICS` at the offending line and can write `scale: (1, 0.001)`
+for that one nested case — the very workaround this phase deletes everywhere
+else, which is the honest statement of the cost. No first-party `.marey` file
+has the shape; re-verified at Task 6 across `eval/scenes`, `eval/scenes-r2`,
+`eval/scenes-3b`, `tools/visual-check/scenes`, `src/store/defaultScene.ts`
+and `docs/LANGUAGE.md`. If a future phase narrows it, the thing to narrow is
+clause 2 alone, split by child kind, and the reason to do so is evidence that
+authors hit it — not this note.
+
 ---
 
 ## 3. `delay`

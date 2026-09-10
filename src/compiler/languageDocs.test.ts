@@ -650,6 +650,100 @@ describe("LANGUAGE.md · Physics · line has zero collision geometry", () => {
   });
 });
 
+describe("LANGUAGE.md · Animation · delay", () => {
+  // Two claims the "delay" section makes that nothing else in the suite pins.
+  // The period-stays-duration and progress-is-exactly-zero claims are pinned
+  // directly in `renderer/timeline.test.ts`; these two are about the seam
+  // between the delay and the rest of the runtime, so they are driven through
+  // the real compiler, builder, SceneRuntime and MatterWorld.
+
+  it("keeps a delayed position animation's hold on the body for the whole delay", () => {
+    // "An object that also has physics keeps the animation's hold on its body
+    // for the whole delay." Without that, the object would fall for 0.25s and
+    // then be snatched back to its declared position when the animation began.
+    const ir = irFor(`
+      scene {
+        size: (800, 600)
+        circle bob {
+          position: (400, 100)
+          radius: 12
+          animate { property: position, to: (400, 200), duration: 0.2, delay: 0.25, easing: linear }
+          physics { gravity: (0, 900), bounce: 0.2, duration: indefinitely }
+        }
+      }
+    `);
+
+    const root = new Container();
+    root.addChild(buildNode(ir.registry["scene.bob"]));
+    const world = new MatterWorld(800, 600);
+    const runtime = new SceneRuntime(world, root);
+    const id = root.children[0].__body!;
+
+    // 0.25s is 30 ticks at 120Hz. Through every one of them the body is
+    // pinned and parked exactly where it was declared. Undelayed, the whole
+    // 0.2s animation would have finished by tick 24 and released it.
+    for (let i = 0; i < 30; i++) runtime.advanceOneTick();
+    expect(world.isPinned(id)).toBe(true);
+    expect(world.readState(id, 1)!.y).toBeCloseTo(100, 6);
+
+    // 23 more ticks is one short of the 24-tick animation: linear, so it is
+    // 23/24 of the way from 100 to 200, and still held by the animation.
+    for (let i = 0; i < 23; i++) runtime.advanceOneTick();
+    expect(world.isPinned(id)).toBe(true);
+    expect(world.readState(id, 1)!.y).toBeCloseTo(100 + (100 * 23) / 24, 4);
+    runtime.destroy();
+  });
+
+  it("counts a step's delay as part of that step's time, so the next step starts later", () => {
+    // "Inside a sequence, a step's delay counts as part of that step's elapsed
+    // time, so the sequence's total runtime includes it and the following step
+    // starts that much later."
+    //
+    // Asserted as a *shift* rather than against absolute tick numbers: the
+    // delayed run's trace, with its delay ticks dropped, must equal the
+    // undelayed run's trace exactly. That pins both halves of the claim — the
+    // hold, and the fact that the second step is displaced by the delay and
+    // otherwise unchanged — without encoding the one-tick step-start latency a
+    // `sequence` already has, which is not this property's business.
+    const alphaTrace = (delay: number, ticks: number): number[] => {
+      const ir = irFor(`
+        scene {
+          size: (800, 600)
+          circle dot {
+            position: (400, 300)
+            radius: 10
+            alpha: 1
+            sequence {
+              animate { property: alpha, to: 0, duration: 0.1, delay: ${delay}, easing: linear }
+              animate { property: alpha, to: 1, duration: 0.1, easing: linear }
+            }
+          }
+        }
+      `);
+      const root = new Container();
+      root.addChild(buildNode(ir.registry["scene.dot"]));
+      const world = new MatterWorld(800, 600);
+      const runtime = new SceneRuntime(world, root);
+      const dot = root.children[0];
+      const trace: number[] = [];
+      for (let i = 0; i < ticks; i++) {
+        runtime.advanceOneTick();
+        runtime.paint(0);
+        trace.push(dot.alpha);
+      }
+      runtime.destroy();
+      return trace;
+    };
+
+    // 0.1s is 12 ticks at 120Hz.
+    const delayed = alphaTrace(0.1, 40);
+    const plain = alphaTrace(0, 28);
+
+    expect(delayed.slice(0, 12)).toEqual(new Array(12).fill(1));
+    expect(delayed.slice(12)).toEqual(plain);
+  });
+});
+
 describe("LANGUAGE.md · Physics · airDrag default", () => {
   it("defaults to 0 (a vacuum), not the 0.006 snippet placeholder", () => {
     // L448-451 states airDrag "ranges from 0.0 to 1.0 inclusive, defaulting to

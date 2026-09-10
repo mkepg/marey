@@ -1,0 +1,66 @@
+// Phase 3C: a staggered reveal, written with no workarounds.
+//
+// Seven bars grow up out of a baseline, one after another. This is the scene
+// that found the phase's three gaps by construction, and it is kept as the
+// evidence for exit criteria 1 and 2. The throwaway version needed:
+//
+//   * a no-op `sequence` first step whose `duration` encoded the delay, and
+//   * a `parallel` moving `position` and `scale` together with a hand-computed
+//     centre, because scale grew from the object's middle, and
+//   * `scale: (1, 0.001)`, because a zero component was a compile error.
+//
+// All three are gone. `delay` staggers the starts, `origin: (0.5, 1)` puts the
+// pivot on the baseline so growing in y grows upward, and `scale: (1, 0)` is a
+// legal start value.
+//
+// What to look for: every bar must STAND ON the grey rule, not straddle it. A
+// bar centred on the rule means the origin pivot has stopped reaching the
+// renderer — it still compiles and still type-checks, so only the geometry
+// shows it.
+
+let ink = #e2e8f0
+let dim = #64748b
+let sky = #38bdf8
+
+let values   = [3, 7, 2, 9, 5, 8, 4]
+let count    = length(values)
+let unit     = 30
+let baseline = 500
+let step     = 800 / (count + 1)
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  fit: contain
+
+  text title {
+    position: (400, 40)
+    content: "bars reveal"
+    fontSize: 20
+    color: ink
+  }
+
+  line baselineRule {
+    position: (400, baseline)
+    points: [(-320, 0), (320, 0)]
+    thickness: 2
+    color: dim
+  }
+
+  generate v, i in values {
+    rectangle bar {
+      position: (step * (i + 1), baseline)
+      size: (step - 30, v * unit)
+      color: sky
+      origin: (0.5, 1)
+      scale: (1, 0)
+      animate {
+        property: scale
+        to: (1, 1)
+        duration: 0.55
+        delay: 0.05 + i * 0.14
+        easing: easeOut
+      }
+    }
+  }
+}

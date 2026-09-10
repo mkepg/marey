@@ -110,6 +110,11 @@ for determinism.
 | `fit-cover.marey` | `fit: cover` — no letterbox, aspect preserved, corner markers cropped off the short axis. |
 | `fit-fill.marey` | `fit: fill` — no letterbox, aspect **not** preserved; the disc renders as an ellipse. |
 | `fit-none.marey` | `fit: none` — unscaled, anchored top-left, smallest disc of the four. |
+| `bars-reveal.marey` | Phase 3C's headline idiom: `delay` staggers seven bars, `origin: (0.5, 1)` stands each on the baseline, `scale: (1, 0)` starts them at nothing. Every bar must **stand on** the grey rule, not straddle it — a bar centred on it means the origin pivot has stopped reaching the renderer, which still compiles and still type-checks. |
+| `ring-pulse.marey` | A fixed-period phase offset: one shared `duration`, `delay` varying by ordinal. Dot sizes must vary smoothly around the ring. Loops, so `frozen at rest` and `deterministic` do not apply. |
+| `wave-row.marey` | Roadmap exit criterion 3, in the form where a still frame shows it: fifteen beads, one constant `duration`, `delay` spanning one full cycle, so exactly one wavelength fits the row and travels along it. Loops. |
+| `timeline-sweep.marey` | The control from the same set — a generated diagram plus one moving playhead, the one of the three that needed no Phase 3C workaround, so it is unchanged in substance. Loops. |
+| `origin-physics.marey` | `origin` through the physics seam, both halves. LEFT: a bottom-origin pillar falls and must land **standing on** the ledge — its body is placed at its bbox centre, not at its origin point. RIGHT: a bottom-origin bar grows upward under a scale animation and must carry the rider ball up on its top edge — Matter scales a body about its own centre, so the centre has to be moved to match. Settles, so `frozen at rest` and `deterministic` both apply. |
 
 Add a scene rather than editing one when checking something new — these are
 regression checks, and their expected images are their value.

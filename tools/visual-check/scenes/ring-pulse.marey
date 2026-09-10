@@ -1,0 +1,61 @@
+// Phase 3C: a fixed-period phase offset, on a ring.
+//
+// Twelve dots pulse on one shared clock. Every dot has the SAME `duration`, so
+// every dot has the same period; only `delay` differs, so what varies is
+// phase. The throwaway version that found this gap could fake a stagger only
+// by varying each dot's `duration` — which changes its *period*, so the dots
+// drift permanently out of step and never hold a wave shape at all. That
+// distinction is the whole reason `delay` exists, and it is why the delay is
+// spent once rather than re-armed each loop: re-arming would make the period
+// `delay + duration` and put the language straight back where it started.
+//
+// The delays span one full there-and-back cycle (`2 x duration`, because
+// `yoyo` makes `duration` a half-cycle), so the offsets wrap once around the
+// ring.
+//
+// What to look for: dot sizes must vary SMOOTHLY around the ring, largest and
+// smallest diametrically staged rather than scattered. `loop: true` means this
+// scene never rests, so `frozen at rest` and `deterministic` do not apply to it
+// (see SKILL.md).
+
+let dim   = #64748b
+let ink   = #e2e8f0
+let amber = #fbbf24
+
+let count  = 12
+let ring   = 180
+let period = 0.7
+let cycle  = 2 * period
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  fit: contain
+
+  text title {
+    position: (400, 40)
+    content: "ring pulse"
+    fontSize: 20
+    color: ink
+  }
+
+  circle center { position: (400, 300), radius: 3, color: dim, alpha: 0.5 }
+
+  generate i in 0 to count - 1 {
+    let angle = i * 360 / count
+    circle dot {
+      position: (400 + ring * cos(angle), 300 + ring * sin(angle))
+      radius: 9
+      color: amber
+      animate {
+        property: scale
+        to: (2.2, 2.2)
+        duration: period
+        delay: i * cycle / count
+        easing: easeInOut
+        loop: true
+        yoyo: true
+      }
+    }
+  }
+}

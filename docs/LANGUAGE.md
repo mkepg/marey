@@ -57,16 +57,17 @@ downward**, with the origin at the top-left of the scene. Physics gravity's
 default value, `(0, 980)`, is consistent with this: a positive y-velocity
 falls toward the bottom of the scene.
 
-**Every object's pivot is the centre of its bounding box.** There is no
-`anchor` property. `position` places that point, not a corner — a `rectangle`
-with `position: (100, 100)` and `size: (60, 40)` is centred on `(100, 100)`,
-not top-left-aligned to it. `rotation` and `scale` act about the pivot. For
-`polygon` and `line`, the bounding-box centre is not the same as the centroid
-when the shape is asymmetric — the triangle below pivots at `(0, -7.5)`, not
-at its centroid `(0, 0)`. **A `group`'s pivot is the local origin it is
-positioned at, not the centre of its children** — children placed
-asymmetrically around that origin still rotate about the origin, not about
-the visual centre of the group's content.
+**Every object's pivot is its `origin`, which defaults to the centre of its
+bounding box.** There is no `anchor` property. `position` places the pivot,
+not a corner — a `rectangle` with `position: (100, 100)` and `size: (60, 40)`
+is centred on `(100, 100)` by default, not top-left-aligned to it. `rotation`
+and `scale` act about that same point. For `polygon` and `line`, the
+bounding-box centre is not the same as the centroid when the shape is
+asymmetric — the triangle below pivots at `(0, -7.5)`, not at its centroid
+`(0, 0)`. **A `group`'s pivot is the local origin it is positioned at, not the
+centre of its children** — children placed asymmetrically around that origin
+still rotate about the origin, not about the visual centre of the group's
+content.
 
 A child object's `position` is relative to its parent `group`'s local space,
 not to the scene origin — moving or rotating the group moves and rotates its
@@ -84,6 +85,92 @@ scene graph. It defaults to `0`.
 compile error. It defaults to `1.0` — fully opaque.
 
 `scale` defaults to `(1, 1)` — unscaled — on every object, including `group`.
+
+**A negative `scale` component is a compile error everywhere**
+(`TYPE_INVALID_SCALE`) — on a declared `scale` and on an `animate` block's
+`to` alike. Mirroring an object by scaling it past zero is not a supported
+effect: a physics object's collider is sized from the absolute value, so it
+would silently disagree with the drawing.
+
+**A zero component is legal**, except on an object that takes part in physics.
+`scale: (1, 0)` is an object with no height yet, and animating from it to
+`(1, 1)` is how a reveal that grows from nothing is written — there is no need
+to spell it `0.001`.
+
+The exception is `TYPE_ZERO_SCALE_PHYSICS`, and it covers exactly the objects
+whose scale reaches the simulation:
+
+- an object that declares `physics` itself, directly or in any step of a
+  `sequence` or `parallel` it owns;
+- an object inside a `group` that declares `physics`, because its geometry is
+  baked into that group's welded body;
+- a `group` with a `physics` descendant, because the group's scale composes
+  into that body's transform.
+
+Two of those three are divisions. A group's scale composes into the transform
+that is **inverted** to carry a body's simulated position back into local
+space, and a welded polygon part's geometry is divided by its own area, which
+a zero scale makes zero; either produces `Infinity` or `NaN` rather than a flat
+object. The third — an object's own body — is not a division: the collider is
+clamped to a floor instead, so it comes out degenerate but bounded. It is
+banned anyway, because a collider that silently disagrees with its drawing is
+not something to write by accident, and because one rule an author can hold in
+their head beats three rules that are exactly minimal.
+
+Everywhere else there is nothing to divide by and nothing to clamp, and a zero
+scale is just a scale of zero. Both rules apply to an `animate` block's `to`
+when `property: scale`, not only to a declared `scale`, because both reach the
+same runtime state.
+
+`origin` is a fraction of the object's own bounding box: `(0, 0)` is its
+top-left corner, `(1, 1)` its bottom-right, and the default `(0.5, 0.5)` its
+centre. It is **one** point, not two — the point `position` places is the same
+point `scale` and `rotation` act around, because in the scene graph they are
+one pivot.
+
+`origin: (0.5, 1)` is bottom-centre. A rectangle whose `position` sits on a
+baseline and whose `origin` is `(0.5, 1)` stands *on* that baseline, so
+scaling it in y grows it upward out of the baseline instead of outward from
+its middle. That is the whole of what a baseline-anchored bar needs: no second
+animation moving `position` in step with `scale`, and no hand-computed centre
+coordinate.
+
+Values outside `0..1` are permitted and place the origin outside the bounding
+box, which gives rotation about an external point. That is a restriction not
+written rather than a feature added — no arithmetic divides by the origin, so
+a large value is unusual rather than dangerous.
+
+**`origin` is not available on a `group`**; writing it there is a compile
+error (`TYPE_ORIGIN_ON_GROUP`). A group's pivot is its own local `(0, 0)` and
+is never derived from where its children sit, so a group already has an
+author-controlled origin — a group that should grow from its bottom edge is
+written by placing its children above `(0, 0)`. Giving a group an `origin`
+would mean deriving a bounding box from its children, which is the thing that
+rule exists to refuse.
+
+```marey
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  line rule {
+    position: (400, 500)
+    points: [(-320, 0), (320, 0)]
+    thickness: 2
+    color: white
+  }
+
+  rectangle bar {
+    position: (400, 500)
+    size: (60, 210)
+    color: cyan
+    origin: (0.5, 1)
+  }
+}
+```
+
+The bar's `position` and the rule's are the same point, and the bar stands on
+it rather than straddling it.
 
 Colours are written as a hex code after `#` — 3 digits (`#f00`) or 6 digits
 (`#ff0000`) — or as one of nine named-colour keywords: `red`, `green`,
@@ -146,12 +233,14 @@ scene {
 ## Animation
 
 `animate` is a child block of a shape or `group`. It requires `property`,
-`to`, and `duration`. `easing`, `loop`, `yoyo`, and `handoff` are optional.
-`handoff` applies to an `animate` with a `physics` sibling that can receive
-its exit velocity — directly on the same object, inside one `parallel`, or
-as a later `sequence` step — and is covered under Sequencing.
+`to`, and `duration`. `delay`, `easing`, `loop`, `yoyo`, and `handoff` are
+optional. `handoff` applies to an `animate` with a `physics` sibling that can
+receive its exit velocity — directly on the same object, inside one
+`parallel`, or as a later `sequence` step — and is covered under Sequencing.
 
 `duration` is a number of seconds and must be strictly greater than 0.
+`delay` is also a number of seconds, defaults to `0`, and must be `0` or
+greater; it is covered below.
 
 Only four properties can be animated: `position`, `rotation`, `scale`, and
 `alpha`. Naming any other property is a compile error listing those four.
@@ -269,6 +358,70 @@ scene {
     sequence {
       animate { property: position, to: (400, 300), duration: 1.0 }
       animate { property: position, to: (100, 300), duration: 1.0 }
+    }
+  }
+}
+```
+
+### delay
+
+`delay` holds an animation at its starting value for a number of seconds
+before it begins. The object does not jump and does not creep: while the delay
+is outstanding the animation's progress is exactly `0`, not a small positive
+fraction of the frame the delay expires on.
+
+**The delay is spent once, before the first iteration, and is never re-armed.**
+A `loop: true` animation with `duration: 1.0` and `delay: 0.3` starts 0.3 s
+late and then repeats every 1.0 s: its period stays `duration`. That is what
+makes a fixed-period phase offset expressible — give every generated object the
+same `duration` and a `delay` that varies with its ordinal, and they run as one
+travelling wave whose period never changes. Varying `duration` instead changes
+each object's *period*, so the objects drift apart rather than holding a phase
+relationship.
+
+`yoyo` is unaffected: the delay precedes the whole loop, not each half, so a
+yoyo cycle still takes `2 × duration`. `handoff` is unaffected in kind — the
+delay shifts *when* the animation completes, and so shifts when its momentum
+is handed to physics.
+
+Inside a `sequence`, a step's `delay` counts as part of that step's elapsed
+time, so the sequence's total runtime includes it and the following step
+starts that much later.
+
+An object that also has `physics` keeps the animation's hold on its body for
+the whole delay. A delayed position animation does not drop the object into
+gravity for the length of the delay and then snatch it back to the animation's
+starting value.
+
+Delay, `origin` and a zero `scale` are the three pieces of a staggered reveal.
+Every bar below shares one `duration`, so they share one period; only `delay`
+differs, so what varies is phase. Each bar stands on the baseline because its
+`origin` is bottom-centre, and starts at zero height because its declared
+`scale` is `(1, 0)`:
+
+```marey
+let values = [3, 7, 2, 9, 5]
+let unit   = 34
+let step   = 800 / (length(values) + 1)
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate v, i in values {
+    rectangle bar {
+      position: (step * (i + 1), 500)
+      size: (step - 30, v * unit)
+      color: cyan
+      origin: (0.5, 1)
+      scale: (1, 0)
+      animate {
+        property: scale
+        to: (1, 1)
+        duration: 0.55
+        delay: i * 0.14
+        easing: easeOut
+      }
     }
   }
 }
@@ -495,6 +648,14 @@ when the group's contents sit entirely to one side of it, so a group whose
 children are all offset still rotates about its declared origin rather than
 about the middle of its contents.
 
+**A shape's body is placed at its bounding-box centre, not at its `origin`.**
+Matter simulates a body about its centre of mass, so an object whose `origin`
+moves the pivot away from the centre has that difference reconciled at the
+seam: the body is created at the centre, and whatever the simulation reports
+is carried back to the origin point before the object is drawn. A bar declared
+on a baseline with `origin: (0.5, 1)` therefore collides as the bar you can
+see, not as a box straddling the baseline.
+
 **Bodies that start overlapping — for instance, two objects placed at the
 same `position` — are separated within a single tick.** The engine pushes
 them apart along the contact axis as soon as the simulation starts; the
@@ -611,7 +772,12 @@ object, though the object still moves under gravity and collisions; only its
 angle is held to the animation.
 
 `animate scale` resizes the object's collision shape to match its visual size
-as the animation progresses.
+as the animation progresses. With a non-centre `origin` it also **moves** the
+collision shape: PixiJS scales an object about its pivot while Matter scales a
+body about the body's own centre, so as a bottom-anchored bar grows upward its
+body's centre is moved up to match. Without that the drawing and the collider
+would drift apart during exactly the grow-from-a-baseline idiom `origin`
+exists for.
 
 When an animation finishes, the object returns to full physics control on
 whichever property the animation was driving.
@@ -1007,19 +1173,26 @@ A short list of hard walls. Crossing any of these is a compile error, not a
 runtime warning or a silent clamp.
 
 - `duration` (on `animate` or `physics`) must be strictly greater than 0;
-  `radius`, `thickness`, and `fontSize` must be greater than 0; `size`'s
-  width and height must each be greater than 0; `alpha`, `airDrag`, and
-  `bounce` must fall between `0.0` and `1.0` inclusive; and `polygon`
+  `delay` must be 0 or greater; `radius`, `thickness`, and `fontSize` must be
+  greater than 0; `size`'s width and height must each be greater than 0;
+  `alpha`, `airDrag`, and `bounce` must fall between `0.0` and `1.0`
+  inclusive; no `scale` component may be negative; and `polygon`
   requires at least 3 points, `line` at least 2, with no shape's point list
   exceeding 10,000 points. Each of these is declared once, per property, as
   a `constraint` on that property's entry in `languageContract.ts`, and
   enforced by one generic function, `validateLocalConstraint`
-  (`typeChecker/validator.ts:47-172`), rather than by a separate hand-written
+  (`typeChecker/validator.ts:203-334`), rather than by a separate hand-written
   check for each property.
+- **The one rule that cannot be a per-property constraint** is the zero-`scale`
+  ban, `[TYPE_ZERO_SCALE_PHYSICS]`, because whether a zero component is legal
+  depends on where the object sits in the scene tree rather than on the value
+  alone — see the three clauses under "Scene model" above. It is checked
+  against the object's ancestors and descendants, on a declared `scale` and on
+  an `animate` block's `to` alike.
 - `text` content is capped at 500 characters (the same generic constraint
-  mechanism, `[TYPE_TEXT_TOO_LONG]`, `typeChecker/validator.ts:113`), and a
+  mechanism, `[TYPE_TEXT_TOO_LONG]`, `typeChecker/validator.ts:275`), and a
   scene may contain at most 500 `text` objects in total
-  (`typeChecker/validator.ts:176`, `202-208`).
+  (`typeChecker/validator.ts:338`, `363-372`).
 - A scene's physics cost is capped at 500 bodies and 2,000 collision parts
   (`MAX_PHYSICS_BODIES`, `MAX_PHYSICS_PARTS` in
   `typeChecker/physicsCost.ts:3-4`). A "body" is any object or group that
@@ -1027,9 +1200,9 @@ runtime warning or a silent clamp.
   collision primitive that body is built from — one for a single shape, one
   per welded child for a compound `group`. Crossing either ceiling is
   `[TYPE_PHYSICS_BODY_LIMIT]` or `[TYPE_PHYSICS_PART_LIMIT]`
-  (`typeChecker/validator.ts:587-606`).
+  (`typeChecker/validator.ts:786-805`).
 - Type checking stops reporting once 50 errors have accumulated
-  (`typeChecker/validator.ts:185`). Parsing enforces the same 50-error ceiling
+  (`typeChecker/validator.ts:347`). Parsing enforces the same 50-error ceiling
   but aborts outright on reaching it rather than continuing
   (`parser/state.ts:112-114`), so a badly malformed file can report fewer than
   50 errors in total.
@@ -1065,9 +1238,9 @@ lands, the editor's own completions and hovers are the authority on which
 properties a given object accepts.
 
 Colour animation is not supported. `animate`'s `property` accepts only the
-four names in `ANIMATABLE_PROPERTIES` (`languageContract.ts:52`) —
+four names in `ANIMATABLE_PROPERTIES` (`languageContract.ts:59`) —
 `position`, `rotation`, `scale`, and `alpha` — checked at
-`typeChecker/validator.ts:410`; naming any other property, including a
+`typeChecker/validator.ts:567`; naming any other property, including a
 colour, is a compile error (`[TYPE_ANIM_PROP]`).
 
 For the design rationale behind these decisions, see

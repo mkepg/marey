@@ -359,4 +359,32 @@ describe("origin", () => {
     expect(c.pivot.y).toBe(40);
     expect(c.__mareyLayout!.centreOffsetY).toBe(-30);
   });
+
+  it("gives a group a zero centre offset however its children sit — D16", () => {
+    // Pinning the *structure*, not a consequence of it (AGENT-LESSONS §2a).
+    // Three separate things lean on this being unconditionally zero:
+    //
+    //  * `physicsSync`'s bind and both write-back sites add the offset for
+    //    every container including groups, and D16 says a group's pivot is its
+    //    own local (0, 0) rather than anything derived from its children;
+    //  * `sceneRuntime.pushAnimToWorld` skips its whole centre correction --
+    //    and the `readState` it needs -- when the offset is zero, so a group
+    //    with a scale animation must push no position at all;
+    //  * that skip is what makes the compound read-order question Task 4 filed
+    //    *unreachable*: only a group produces a `kind: "compound"` body
+    //    (builder.ts:360), `origin` on a group is TYPE_ORIGIN_ON_GROUP, and
+    //    this zero means the branch that reads a body's centre around
+    //    `setScale` never runs on a compound.
+    //
+    // The children are deliberately asymmetric and far from the origin: a
+    // bounding box derived from them would put the centre nowhere near (0, 0).
+    const g = buildNode(group("g", [
+      rect("a", 200, 40, 20, 20),
+      rect("b", 260, 90, 20, 20),
+    ]));
+    expect(g.pivot.x).toBe(0);
+    expect(g.pivot.y).toBe(0);
+    expect(g.__mareyLayout!.centreOffsetX).toBe(0);
+    expect(g.__mareyLayout!.centreOffsetY).toBe(0);
+  });
 });

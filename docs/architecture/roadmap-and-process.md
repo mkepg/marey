@@ -70,12 +70,33 @@ explicitly rather than quietly deviating.
   whole-branch review landed after it at `e1dcdd8`. **Read its execution notes
   before Phase 4**: the plan's notes record the frame-selection and
   determinism evidence that Product Gate B builds on.
-- **Phase 3C — motion primitives: next.** `delay` on `animate`, an origin or
-  anchor property, and a zero-`scale` rule that permits a degenerate start.
-  Found by construction on 2026-09-09: without them a staggered reveal costs a
-  six-line no-op `sequence` wrapper per object, a baseline-anchored bar needs a
-  hand-computed centre coordinate, and `scale: (1, 0)` is `TYPE_INVALID_SCALE`.
-  Small, and first, because export bakes whatever the language can express.
+- **Phase 3C — motion primitives: done** on `phase-3c-motion-primitives`,
+  pending the independent whole-branch review AGENT-LESSONS §8 requires. The
+  three gaps were found by construction on 2026-09-09 — a staggered reveal cost
+  a no-op `sequence` wrapper per object, a baseline-anchored bar needed a
+  hand-computed centre coordinate, and `scale: (1, 0)` was rejected outright —
+  and all three are closed. `animate` gained `delay`, in seconds, **spent once
+  before the first iteration and never re-armed**, so a looping animation's
+  period stays `duration` and varying `delay` across generated objects varies
+  phase rather than period. Shapes gained `origin`, an `IRPoint` in normalised
+  bounding-box units defaulting to `(0.5, 0.5)`, which becomes the container
+  pivot — so `position` places the origin rather than the geometric centre, and
+  `(0.5, 1)` is a bar that grows from a baseline. `origin` is deliberately
+  **not** available on a `group` (`TYPE_ORIGIN_ON_GROUP`): D16 makes a group's
+  pivot its own local origin, never derived from its children. The scale rule
+  split in two: a negative component is still `TYPE_INVALID_SCALE` everywhere,
+  now with wording that names negativity rather than claiming zero is illegal,
+  while **a zero component is rejected only for objects that participate in
+  physics**, as the new `TYPE_ZERO_SCALE_PHYSICS` — so `scale: (1, 0)` is now
+  legal and the `0.001` workaround is gone. Both rules were extended to
+  `animate`'s `to`, which previously was validated by kind alone; that is a
+  narrowing, and it carries a regression test. The phase also reconciled
+  `origin` through the physics seam at five sites: a body is placed at its
+  bounding-box centre rather than its pivot, and a bottom-origin object's
+  centre is tracked through a scale animation. Design in
+  `2026-09-09-marey-phase-3c-motion-primitives-design.md`; **read the plan's
+  execution notes before Phase 4.** Current-phase status is stated once, in
+  `docs/architecture/README.md` — update that line and this bullet together.
 - **Phase 4 — composition and export foundation.** Finite scene duration, one
   deterministic frame sampler above `SceneRuntime`, a PNG sequence, a compiler
   surface decoupled from the Web Worker, and `marey check`. Exit is Gate B.

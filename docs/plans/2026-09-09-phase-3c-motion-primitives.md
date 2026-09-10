@@ -1143,3 +1143,353 @@ Interfaces block and consumed under those exact names in Tasks 3 and 4.
 line. `LocalConstraint` gains `nonNegative` in Task 1 and `positiveScale`
 becomes `nonNegativeScale` in Task 5 — two separate edits to the same union, in
 that order.
+
+---
+
+## Execution notes
+
+Written 2026-09-10 at the close of Task 6, from `git diff f367544..HEAD`, the
+five task reports, and the SDD ledger
+(`.sdd/2026-09-09-phase-3c-motion-primitives/progress.md`) — **not**
+from any single task's self-report. Every number in "Final evidence" and every
+row marked *(re-run)* in "Mutation tests" was re-derived first-hand on a clean
+tree while writing this, with each mutated file restored afterwards and
+`git diff --stat` confirmed empty. Where a figure is quoted from the ledger
+rather than re-run here, it says so.
+
+**Two figures moved between the task reports and this re-derivation, and the
+observation wins.** Task 1 recorded 4 failures for reverting `advanceAnimTime`'s
+delay branch; it is **7** now. Task 2 recorded 3 for flipping `origin`'s
+default; it is **7** now. Neither is a discrepancy — both were measured against
+a smaller suite, and the tests Tasks 3, 4 and 6 added along the same seams pick
+the mutations up too. A count is only meaningful beside the suite size it was
+taken against, which is why every row below carries one.
+
+### Final evidence
+
+| Check | Command | Result |
+|---|---|---|
+| Unit suite | `npx vitest run` | **20 files / 677 tests / exit 0** |
+| Typecheck | `npx tsc -b --noEmit` | exit 0 |
+| Production build | `npm run build` | exit 0; only the pre-existing >500 kB chunk-size advisory and the `vite:preact-jsx` esbuild-deprecation notice |
+| Reference examples | `npx vitest run src/compiler/languageDocs.test.ts` | 45/45 — 16 `marey` fences compiled, up from 14 |
+| R1 corpus | `npx vitest run --config eval/vitest.config.ts` | **20/20 compiled clean (100%)** |
+| R2 corpus | `EVAL_DIR=eval/scenes-r2 npx vitest run --config eval/vitest.config.ts` | **20/20 compiled clean (100%)** |
+| 3B demonstration corpus | `EVAL_DIR=eval/scenes-3b npx vitest run --config eval/vitest.config.ts` | **3/3 compiled clean (100%)** |
+| Reports unmoved | `git diff --stat -- eval/report.json eval/report-r2.json eval/report-3b.json` | empty — checked **after** all three runs had regenerated all three files, and with `git diff`, never `git status` (AGENT-LESSONS §6) |
+| Visual-check fixtures | `EVAL_DIR=tools/visual-check/scenes npx vitest run --config eval/vitest.config.ts` | **17/17 compiled clean** — the 12 standing scenes plus this phase's 5. Its report JSON was deleted rather than committed |
+| Tree | `git ls-files --others --exclude-standard`; `git diff --stat` | no stray files; no probe or scratch file survives — the one written while checking the sequence-delay claim (`src/compiler/__probe_seqdelay.test.ts`) was deleted, and the suite count above is the proof |
+
+Branch shape: **11 commits**, `f367544..HEAD`. The ten implementation commits,
+`f367544..106683e`, are **20 files, +3,820 / −92**; this documentation commit
+adds the reference prose, five fixtures, three tests and these notes on top of
+that.
+
+*A single total for the whole branch is deliberately not quoted here.* It would
+count the line that quotes it, and the two attempts at it made while writing
+this were each wrong by exactly the size of their own correction — a small,
+self-inflicted instance of AGENT-LESSONS §1, recorded rather than quietly
+fixed. The two figures above are stable because neither is measured over a file
+this section lives in.
+
+**Baseline check.** The suite at the branch base `f367544` was 20 files / 604
+tests; at Task 6's start it was 20 files / 672. This task added 5: two compiled
+`marey` fences in `docs/LANGUAGE.md`, two facts about `delay` that nothing else
+pinned, and one structural pin on D16's group offset. Net for the phase:
+**+73 tests, no new test file.**
+
+**Chromium** (`visual-check`, headless Chromium on SwiftShader, dev server
+started with `npx vite --port 5199 --strictPort`, killed afterwards and the port
+confirmed to have no `LISTENING` socket):
+
+| Scene | compiled | rendered | frozen at rest | cpu at rest | deterministic across a cold reload | page errors |
+|---|---|---|---|---|---|---|
+| `bars-reveal` | true | true | **true** | 0.018 s / 2 s wall | **true** — `3e5445fea1fac6d9` in both runs | 0 |
+| `origin-physics` | true | true | **true** | 0.018 s / 2 s wall | **true** — `420e63c2e46dd1a0` in both runs | 0 |
+| `wave-row` | true | true | false | 0.071 s | n/a — `loop: true` never comes to rest, so both measures are meaningless here, and `SKILL.md` says so | 0 |
+| `ring-pulse` | true | true | false | 0.060 s | n/a — same reason | 0 |
+| `timeline-sweep` | true | true | false | 0.068 s | n/a — same reason | 0 |
+
+**The PNGs were looked at, not just the JSON**, and this is the first point in
+the phase at which that was possible at all: every pre-existing `.marey` file
+uses the default origin, so before these fixtures existed a capture would have
+exercised the added-zero path and proved nothing. Task 3 and Task 5 each filed
+exactly that, and this is where it is closed.
+
+- `bars-reveal` at 300 ms: four bars drawn, three still absent, the fourth
+  mid-growth — a stagger caught in the act. At rest: seven bars in the ratio
+  3:7:2:9:5:8:4, **each standing on the grey rule rather than straddling it**.
+  That is the whole of the origin check: a bar anchored at its centre would sit
+  half-buried below the rule and would still compile, still type-check, and
+  still produce nine IR nodes.
+- `origin-physics` at rest: the blue pillar has **fallen and landed standing on
+  the ledge**, its bottom edge flush with the deck — the bind-time placement
+  reconciliation. The amber bar has **grown upward out of the deck** with its
+  bottom edge unmoved, and the white rider ball has been **carried up and rests
+  on the bar's top edge** — the scale-animation centre tracking. Untracked, the
+  bar's collider would have grown downward through the ledge as much as upward,
+  and the ball would have stopped about 80 px short with the bar drawn through
+  it.
+- `wave-row` at 1000 ms and at 1800 ms: a single smooth S-curve spanning the
+  row, and the same curve **translated along the row** in the later frame. One
+  wavelength, one period, phase moving — criterion 3, in a form a still frame
+  can carry.
+- `ring-pulse` at 1100 ms: dot sizes vary smoothly around the ring, largest at
+  the top and smallest at the bottom, with a monotone gradient down each side.
+- `timeline-sweep` at 1600 ms: eleven ticks with the three majors at ordinals
+  0, 5 and 10 in amber, and the playhead mid-sweep.
+
+### Exit criteria (design §7), each with the evidence that settles it
+
+| # | Criterion | Evidence |
+|---|---|---|
+| 1 | A staggered reveal across generated objects needs no no-op `sequence` step | `bars-reveal` rewritten: `grep -c 'sequence {'` **1 → 0**, `'parallel {'` **1 → 0**, `'animate {'` **3 → 1**. Code lines, excluding comments and blanks, **55 → 41 (−25%)**. The throwaway version is preserved at `.visual-check/explainer/bars-reveal.marey` (gitignored) as the "before" these were measured against |
+| 2 | A bar grows from a baseline without a hand-computed centre coordinate | The same rewrite. The workaround line `to: (step * (i + 1), baseline - (v * unit) / 2)` is gone, and with it the second `animate` that carried it; `origin: (0.5, 1)` replaces both. `scale: (1, 0.001)` and `to: (1, 0.001)` became `scale: (1, 0)` and `to: (1, 1)`. Confirmed in the browser, not only in the source — see the `bars-reveal` capture above |
+| 3 | A fixed-period phase-offset animation is expressible | `wave-row.marey`: one `duration` shared by fifteen generated beads, `delay: i * cycle / count` the only thing that varies. Rendered and **seen to travel** — two captures 800 ms apart show the same waveform displaced along the row. `ring-pulse.marey` is the same property in the scene that originally documented its absence: its `duration: 0.7 + i / 14` workaround, which changed each dot's *period*, is now a constant `duration: period` with the offset in `delay` |
+| 4 | `TYPE_INVALID_SCALE`'s invariant is documented, and any narrowing has a regression test | Design §2, committed at `b084873` before any code. The narrowing — `to: (-3, 1)` compiled on `main` and does not now — is pinned by `"rejects a negative animated scale target, which compiled before Phase 3C"`, which asserts the code **and** the value `(-3, 1)`, so it cannot pass by way of a neighbouring declared-scale diagnostic. Neutralising the `to`-side rules fails 4 tests (mutation F). §2.4a, added at Task 6, records the rule's measured over-rejection as a deliberate cost |
+| 5 | The three canonical scenes and both authorability corpora stay green | 20/20, 20/20, 3/3, all three report JSONs content-unchanged after regeneration. **`git diff f367544..HEAD -- .eval` is empty**: not one corpus file was touched by this phase, so the evidence they carry is untouched |
+| + | The three explainer scenes are promoted to `tools/visual-check/scenes/` in workaround-free form | Done, plus two more — see "Five scenes, not four" below |
+
+### Five scenes, not four
+
+Task 6's brief asks for the three explainers rewritten plus "a fourth scene
+proving exit criterion 3", and separately requires the capture set to include a
+bottom-origin object **under physics**. Those two cannot both be four files:
+none of the three explainers has physics, and a bar that grows from
+`scale: (1, 0)` cannot acquire it — that is `TYPE_ZERO_SCALE_PHYSICS` by this
+phase's own rule. So the set is five:
+
+| Scene | Carries |
+|---|---|
+| `bars-reveal.marey` | Criteria 1 and 2 — rewritten, both workarounds gone |
+| `ring-pulse.marey` | Rewritten: its varying-`duration` workaround replaced by a constant `duration` and a varying `delay` |
+| `timeline-sweep.marey` | The control. It is the one of the three that needed no workaround, so it is promoted unchanged in substance and its header says why |
+| `wave-row.marey` | The brief's fourth scene: criterion 3, deliberately a row rather than a ring, because a still frame shows a row's phase gradient and does not show a ring's |
+| `origin-physics.marey` | `origin` × physics, both halves — placement and scale tracking. Nothing else in the repository exercises that seam in a browser |
+
+### Defects found in source beyond the plan
+
+Each names where it was fixed.
+
+1. **`docs/architecture/renderer.md` stated a falsehood the same commit
+   created.** "Every visual's pivot is the centre of its bounding box" is true
+   only at the default origin, and the paragraph cited a line number Task 2's
+   own edits had moved. Load-bearing rather than cosmetic: `README.md` orders
+   every agent touching `src/compiler/renderer/` to read that file first, and
+   Tasks 3 and 4 are exactly such agents — they would have been briefed off a
+   document Task 2 had falsified. Fixed in `0056e75`.
+2. **`LANGUAGE_CONTRACT` contradicted itself.** `centerPosition` and
+   `bboxMidpointPosition` — Monaco hover strings, so user-visible — still
+   promised that `position` places the geometric centre. A self-contradiction
+   inside the single source of truth is the exact class of defect Global
+   Constraint 1 exists to prevent. Fixed in `0056e75`.
+3. **The exported `centreInParent` would have walked Task 4 into an
+   invariant-3 violation.** It reads `container.rotation`, `layout.currentPos`
+   **and** `layout.currentScale`, all last written by the *paint* phase at
+   wall-clock alpha. Harmless at its two build-time call sites; a tick-phase
+   caller would have leaked the wall clock into the physics world. Found by
+   Task 3's review and fixed **structurally** rather than by comment: the
+   tick-safe entry point `centreOffsetVector(layout, rot, scale)` takes every
+   mutable input as a parameter and reads only `centreOffsetX/Y`, which is
+   written once at construction and mutated nowhere, so there is no route from
+   inside it to alpha-dependent state the caller did not choose to pass
+   (`5c14e56`). The implementer found the third of the three reads itself — the
+   review had named two, and the third was `applyAnim`'s write to
+   `currentScale`, which is precisely the one the scale-animation task would
+   have hit.
+4. **An invariant-3 leak on the freeze path**, in Task 3's code, found by Task
+   4's review. `snapContainerToBody` fed paint-written `layout.currentScale`
+   into the pivot correction while a scale animation was live, so a frozen
+   bottom-origin object's drawn position was frame-rate dependent by about a
+   tick of offset growth. It survived the new frame-pacing coverage because
+   every other pacing subject uses `duration: indefinitely`, so
+   `snapContainerToBody` never fired at all. Fixed in `fa7facc` by making
+   `tickScale` a **required** parameter — an optional one defaulting to
+   `layout.currentScale` is the shape that readmits the bug.
+5. **A scale base that goes stale when scale ownership moves between runners.**
+   Two live scale runners each read the body's centre and pushed `before + Δᵢ`,
+   so the world received `Δ_A + Δ_B` while `setScale` landed only one absolute
+   value — the collider walks off the drawing. Fixing it exposed a second,
+   latent defect independent of two-runner scenes: a *per-runner* base is wrong
+   whenever a short runner completes and a long one takes over. Replaced with a
+   per-container ledger seeded from the bindings plus a designated owner
+   (`fa7facc`). Introduced by Task 4 and closed inside it.
+6. **A comment that claimed more than was true** (AGENT-LESSONS §2c rung 5).
+   `tickScaleOf`'s `completedThisTick` term was documented as redundant *by
+   construction*. It is load-bearing with two runners in array order
+   `[live, completing]`. The zero-failure result that produced the claim was a
+   property of the test corpus, not of construction: after the two-runner test
+   landed, reverting the same term fails **5** tests. Comment rewritten in
+   `fa7facc`; the code never changed.
+7. **`renderer.md` claimed a completeness the code lacked** — it enumerated the
+   container→body handoffs as exhaustive while `pushAnimToWorld` was
+   unreconciled. Corrected to "four of the five" with the fifth named, then to
+   "all five" once Task 4 closed it.
+8. **Seven required behaviours had no test at all** (AGENT-LESSONS §2c rung 4),
+   each found by deleting the line and running the suite, none by reading:
+   `builder.ts`'s `delay` resolution and `sceneRuntime.ts`'s `delayTicks`
+   conversion (612/612 green with each hardcoded wrong), the `polygon` and
+   `line` origin call sites (622/622 and 623/623 green when reverted to a fixed
+   centre), `worldScale` recorded only when actually pushing (651/651), the
+   position branch's offset **rotation** (652/652), and — found in this task —
+   D16's rule that a group's `centreOffset` is unconditionally `(0, 0)`
+   (mutation B below: before the pin, deriving a group's pivot from its
+   children left the whole suite green).
+9. **`docs/LANGUAGE.md` carried seven line-number citations this phase's own
+   commits falsified.** `validateLocalConstraint` moved from `:47-172` to
+   `:203-334`, `TYPE_TEXT_TOO_LONG` from `:113` to `:275`, the text-node ceiling
+   from `:176`/`:202-208` to `:338`/`:363-372`, the 50-error cap from `:185` to
+   `:347`, the physics limits from `:587-606` to `:786-805`, the
+   animatable-property check from `:410` to `:567`, and `ANIMATABLE_PROPERTIES`
+   from `languageContract.ts:52` to `:59`. All seven re-derived by reading the
+   files and corrected in this task. The parser citations were re-checked in the
+   same pass and are all still accurate — this phase did not touch `parser/`.
+
+### Defects found in this plan
+
+1. **Task 3 Step 5's fake-world API does not exist.** `world.unpinAll()` and
+   `world.setReadState(...)` were the controller's guesses at a fake it had
+   never read; the real `FakeWorld` offers `unpin(id, reason)` and
+   `setState(id, state)`. Ruled adapt-to-reality before dispatch: preserve the
+   *assertions*, not the spellings.
+2. **Task 4's central assertion could not have been observed.** The plan names
+   `runtimeWithScaleAnim` and `world.positionCalls`; neither exists, and worse,
+   `RecordingWorld.setPosition(_id, _x, _y)` is a no-op stub with
+   underscore-prefixed parameters that **records nothing**. The task's headline
+   test needed recording added to the fake before it could fail for the right
+   reason. Found by the controller reading the fake during Task 2's fix round
+   and carried into the Task 4 dispatch.
+3. **Task 4's Interfaces block specified the defect in source-item 3 above.**
+   "Consumes: `centreInParent` from Task 3" is exactly the import that would
+   have leaked paint-phase state into the tick phase. This plan's own type
+   consistency check confirmed the *name* matched across tasks, which is a
+   weaker property than it looks: the names agreed and the semantics did not.
+4. **The controller predicted two test files would go RED, and was wrong about
+   both, twice.** `constants.test.ts` enumerates nothing structurally — its only
+   contract-derived content is `propertySections()`, which regenerates itself.
+   `languageContract.test.ts`'s gap check fires only on an optional property
+   with **neither** a `default` nor a `derivedDefault`, and both `delay` and
+   `origin` have defaults. Both implementers checked rather than assuming, and
+   said so; recorded here because a prediction asserted from a test's *purpose*
+   rather than its *assertions* is a controller error, not an implementer one.
+5. **Task 2 Step 1's first test is a regression pin, not a RED step.** "defaults
+   to the bounding-box centre" asserts today's behaviour and passes before any
+   work; the file's RED comes from the type error. Caught in the pre-flight scan
+   and ruled before dispatch, so no implementer read its passing as progress.
+6. **Task 5 Step 5.4's "extend the existing traversal" cannot be done.** The
+   traversal it names is anchored on a `physics` node and walks **upward**;
+   clause 2 is an upward walk anchored on the *object*, and clause 3 is a
+   **downward** walk from a group. One loop cannot serve all three. The
+   implementer said so rather than forcing it, and extracted the part that
+   genuinely was shared — the D13 owner walk, now `ownerIndex()`, called from
+   both the `physics` and `animate` branches instead of hand-copied.
+7. **Task 6's own brief is short by one file, in two places.** Its file list
+   omits the design spec, which its own carried item requires editing beside
+   §2.4; and its Step 3 asks for four scenes while its Step 6 capture set needs
+   a physics scene that none of the four can be. Both were resolved before
+   dispatch and are recorded above.
+
+### Deliberate gaps and deferrals
+
+Each with what makes it harmless *today*, per AGENT-LESSONS §7 — not merely
+inconvenient to fix.
+
+| Deferred | Why it is safe to defer |
+|---|---|
+| **`TYPE_ZERO_SCALE_PHYSICS` over-rejects** a zero animated `to` on a child of a physics group, and a zero declared `scale` on a rectangle or circle child of one | A **spurious rejection carrying a named diagnostic**, not silent data loss: the author sees the error at the offending line. Design §2.4 chose one teachable rule over a minimal one *in writing*, so this is a measured cost rather than an oversight, and §2.4a now records it beside the rule with its reasoning and the shape any future narrowing should take. Re-verified in this task that no first-party `.marey` file has the shape. The cost stated honestly: in that one nested case an author must still write `0.001` |
+| The compound `readState`-before-`setScale` ordering is untestable with the current fakes | **Stronger than a deferral: it is unreachable.** Only a `group` produces a `kind: "compound"` body (`renderer/builder.ts:360`), `origin` on a group is `TYPE_ORIGIN_ON_GROUP`, and a group's `centreOffset` is hard-coded `(0, 0)` by D16 — so `tracksCentre` is false for every compound and the branch that reads a body's centre around `setScale` never runs on one. A `MatterWorld` compound-plus-origin fixture was therefore **not** written, because it cannot be written in Marey source at all; what was written instead is the structural pin that makes the unreachability load-bearing (mutation B). The ordering is kept, with its reasoning at the call site, so it stays correct if a future phase gives groups an origin |
+| `text`'s origin call site has no headless test | PixiJS `Text` needs a canvas, which `builder.test.ts`'s header comment has recorded since before this phase. The arithmetic is shared with the four kinds that *are* pinned — one `applyAnchorAndPivot`, five call sites — so what is unguarded is the call, not the rule. The browser path covers it |
+| The two write-back sites duplicate ~8 lines | A **deliberate** non-extraction, with a comment saying so. Merging `syncWorldToContainers` and `snapContainerToBody` would collapse two independently-revertible sites into one and destroy the per-site check that proved them separately guarded — the exact failure AGENT-LESSONS §2 records from Phase 3B |
+| A delayed bottom-origin scale animation pushes a zero-delta `setPosition` on every delay tick | A true numeric no-op, and deterministic. `delay × origin × scale` is a newly expressible combination with no test of its own |
+| The dead `!previous` guard in `pushAnimToWorld` | Unreachable twice over: `spawnAnim` seeds a scale for every scale runner, and the per-container ledger is seeded from the bindings in the constructor |
+| `centreInParent`'s layout-less `{x: 0, y: 0}` return is an absolute point, not a null offset | Unreachable from all four call sites, each of which guards on `layout` first. TypeScript rejects deleting the branch, so a revert check is impossible in the §2f sense, and its *contract* is pinned by a direct unit test instead |
+| The zero rule is gated on a hardcoded `key === "scale"` rather than on the constraint kind | The sign half **is** contract-driven; the zero half cannot be a `LocalConstraint` at all, because it depends on the object's place in the tree rather than on the value. A contract flag meaning "this property also has a tree rule" is a design question, not a rename |
+| `physicsParticipationReason`'s ancestor walk duplicates `TYPE_LINE_PHYSICS`'s | Behaviour-identical today; unifying them is a refactor with no behavioural claim attached |
+| The clause *order* in `physicsParticipationReason` is unpinned | The §2f result, established rather than asserted: two clauses can only match the same object when physics nests inside physics, and D17 rejects every such program with `TYPE_PHYSICS_IN_PHYSICS_GROUP`. There is no clean source whose diagnostic differs between the orders, so a test would have to be written against source that is invalid for an unrelated reason. The reasoning sits in a comment beside the ordering, not only in a report |
+| One-tick lag between the centre correction and a concurrent rotation animation | `overrideAngle` is applied inside `step()`, so the offset uses the previous tick's angle. Deterministic and frame-rate independent — the same one-tick cost `pushAnimToWorld` already documents for position. Closing it needs a getter on `IPhysicsWorld` |
+| `applyAnchorAndPivot` returns a value five of its six callers discard | Cosmetic |
+| `from` on `animate`, `stagger`, mirroring via negative scale, `origin` on `group` | Design §9 — deliberate scope, argued there. `stagger` is roadmap Phase 7 and explicitly conditioned on "`delay` having landed in 3C", which it now has |
+
+### Goldens
+
+`sceneIR.ts` gained two fields, so goldens **moved, and that was the expected
+result** — the inverse of Phase 3B, where an unmoved golden was the evidence.
+
+`git diff f367544..HEAD -- src/compiler/__snapshots__/determinism.test.ts.snap`
+is **122 added lines and zero deleted lines.** Zero deletions is the
+load-bearing half: not one coordinate, tick count, duration or layer moved
+anywhere in any of the three snapshots. The additions are exactly:
+
+- **10 × `"delay": 0`** — one per `IRAnimation` the golden sources produce
+  (Task 1, `d55e765`).
+- **28 × `"origin": { "x": 0.5, "y": 0.5 }`**, 112 lines across four
+  indentation levels — one per shape (Task 2, `f1bbbe4`).
+
+`10 + 28 × 4 = 122`. ✓ Both diffs were read in full before `vitest -u` was run,
+and the "no other value moved" claim was checked against the whole hunk rather
+than the diff's tail, because a moved coordinate would have meant the change had
+altered timing or placement. Tasks 3, 4, 5 and 6 moved no golden at all — they
+change runtime behaviour and validation, not the IR.
+
+### Mutation tests
+
+Rows A–G were **re-run first-hand while writing these notes**, on a clean tree
+at Task 6's HEAD, each mutation applied alone and the file restored afterwards
+with `git diff --stat` confirmed empty. Every count is against the **677**-test
+suite. Rows marked *(ledger)* are the checks performed during the tasks
+themselves, against the smaller suites named beside them.
+
+| # | Mutation | Observed |
+|---|---|---|
+| A *(re-run)* | `typeChecker/builder.ts`'s `delay` resolution hardcoded to `0` | **3 failed / 674.** `resolves an animation's explicit delay into the IR`, plus both of Task 6's new `LANGUAGE.md · Animation · delay` facts. At Task 1 this same mutation left **612/612 green** — the wiring between the contract and the IR had no test at all |
+| B *(re-run)* | A group's pivot derived from its children's bounds instead of D16's fixed `(0, 0)` | **1 failed / 677**, and it is the pin added in this task. Before it, the suite had **no opinion** about a rule three separate mechanisms depend on — including the one that makes the compound read-order question unreachable |
+| C *(re-run)* | `advanceAnimTime`'s delay-spending branch deleted | **7 failed / 670.** Was 4 of 612 at Task 1; the tests Tasks 4 and 6 added along the same seam pick it up too |
+| D *(re-run)* | `animProgress`'s `delayTicks > 0` early return deleted | **1 failed / 676** — `holds progress at exactly 0 during the delay, at any sub-tick alpha`. Reverted **separately** from C, per AGENT-LESSONS §2c's breadth corollary: reverting both at once would say nothing about which is guarded, and the answer is that each guards a different test |
+| E *(re-run)* | `origin`'s contract default flipped from `(0.5, 0.5)` to `(0, 0)` — design §6.3's required judgment-call flip | **7 failed / 670.** Was 3 of 623 at Task 2, all three determinism goldens; it is now goldens plus the physics-seam tests Tasks 3 and 4 added |
+| F *(re-run)* | The `animate` `to` scale rules neutralised (`if (p === "scale")` → `if (false)`) | **4 failed / 673** — the narrowing test, the negative numeric `to`, and both zero-`to` cases. This is exit criterion 4's regression evidence, re-derived |
+| G *(re-run)* | The scale branch's `setPosition` deleted | **6 failed / 671.** Matches Task 4's post-fix figure exactly |
+| 1 *(ledger, 640)* | Each of Task 3's four sites reverted **individually** | bind **7**, `syncWorldToContainers` **3**, `snapContainerToBody` **2**, `collectBodyParts` **4**. B and C fail on **disjoint** sets — neither write-back path rides on the other's coverage, which is the specific failure AGENT-LESSONS §2 records twice |
+| 2 *(ledger, 672)* | Each of the three physics-participation clauses reverted individually, then the `to`-side check | clause 1 **4**, clause 2 **3**, clause 3 **2**, `to` side **4**. Plus two unasked: the negative ban's numeric arm **2**, its point arm **2** |
+| 3 *(ledger, 672)* | Clause 2's reading of "a group that declares physics" flipped from `ownsPhysics` (D13: a sequence step counts) to direct `physics` children | **672/672 still green** — a §2d decision with no test. Closed with `rejects a zero scale under a group whose physics is a sequence step`; re-flipping now fails exactly 1 |
+| 4 *(ledger, 672)* | Clause *order* reversed to descendant-first | **672/672 green, and deliberately left that way** — the §2f result in the deferrals table above |
+| 5 *(ledger, 653→655)* | `scaleOwnerOf`'s `completedThisTick` term deleted | **0 → 5 failed.** The zero was a property of the corpus, not of construction; the claim that it was redundant *by construction* was rung 5, caught by a reviewer rather than by the suite |
+| 6 *(ledger, 651/652)* | `worldScale` recorded only when actually pushing; the position branch's offset rotation forced to 0 | **0 and 0** — two required behaviours with no test. Both closed, and each now fails 1 |
+| 7 *(ledger, 654)* | The zero-offset guard flipped to always-call | **1 failed** — the inherited `does not move a default-origin body's centre when its scale animates`. That is the test protecting every scene written before `origin` existed, and Task 4's brief asked explicitly whether it was doing its job |
+| 8 *(ledger, 655)* | `tickScaleOf` forced to read the painted `layout.currentScale` | **4 failed**, including the 7-vs-12-ticks-per-frame pacing comparison across the position-to-scale handover — the invariant-3 leak caught by pacing alone, with no direct assertion naming it |
+| 9 *(ledger, 623)* | Each shape kind's origin call site reverted individually | rectangle **3**, circle **1**, **polygon 0** — rung 4, closed with a polygon test that then fails 1. `line` was found the same way in the fix round |
+
+The pattern is the one Phase 3B recorded and this phase repeats: **reading finds
+contradictions; only execution finds coincidences.** Rows A, B, 3, 5, 6 and 9 —
+six of the sixteen checks — were **green against the very thing they existed to
+catch**, and not one of them was found by reading the code.
+
+### Process, for the next phase
+
+- **The tiering held, and the sizing test held with it.** Six tasks, four
+  Integration and two Architecture, with the one genuinely new behaviour (§4.4's
+  coupling) split across Tasks 3 and 4 precisely because a single task needing
+  more than two implementer rounds should have been two tasks. No task needed
+  more than **one** fix round, and Tasks 1 and 5 needed none.
+- **Every fix round was batched.** Task 2 took three findings in one round,
+  Task 3 two, Task 4 four. AGENT-LESSONS §7b measured a Phase 3B fix round at
+  282,971 tokens against a `+37/−5` diff: the reload is the cost, so the number
+  of rounds is what matters, and this phase paid three reloads in total.
+- **The two most valuable findings of the phase came from reviewers, not from
+  the suite,** and neither was visible in a green run: the exported helper that
+  would have walked Task 4 into invariant 3, and the comment claiming a
+  redundancy that measurement disproved 0-to-5. AGENT-LESSONS §8's point
+  survives — budget the review that shares none of your reasoning.
+- **Three controller predictions were wrong and were corrected by implementers
+  who checked.** Two RED-file predictions, and one framing about what a diff can
+  show. Each was reported rather than quietly reconciled, which is what made
+  them cheap; the framing error in particular had primed a reviewer with a
+  controller's own conclusion, which is AGENT-LESSONS §3.
+- **What is still owed:** the independent whole-branch review by someone with no
+  stake in the prior reasoning (AGENT-LESSONS §8), and the merge. Phase 3A
+  passed eleven task reviews and a whole-branch review and *then* an outside
+  reviewer found four Important defects, two of which made published exit
+  criteria false. **Phase 3C is not done until it has had one**, and both
+  phase-status lines — `docs/architecture/README.md`'s "Current phase" and
+  `roadmap-and-process.md`'s 3C bullet — must be updated together when it
+  merges. They were written to say exactly that, because all three transitions
+  so far shipped stale (AGENT-LESSONS §5b).
