@@ -21,7 +21,15 @@ export interface FrameSnapshot {
   readonly objects: ReadonlyArray<ObjectSnapshot>;
 }
 
-function snapshotObjects(root: Container): ObjectSnapshot[] {
+/**
+ * Read one snapshot's worth of transforms off a built scene tree.
+ *
+ * Public because it is the *inverse* of `applySnapshot`
+ * (`../export/pngSequence.ts`), and a round trip is only checkable if both
+ * directions are reachable. Nothing else in the renderer needs it: the sampler
+ * below is the only production caller.
+ */
+export function snapshotFor(root: Container): ObjectSnapshot[] {
   const out: ObjectSnapshot[] = [];
   // Depth-first in scene-graph order, which is IR order. The ordering is part
   // of the contract: a hash over the sequence is only stable if the sequence is.
@@ -91,7 +99,7 @@ export function sampleFrames(
 ): FrameSnapshot[] {
   const frames: FrameSnapshot[] = [];
 
-  frames.push(Object.freeze({ index: 0, tick: 0, objects: Object.freeze(snapshotObjects(root)) }));
+  frames.push(Object.freeze({ index: 0, tick: 0, objects: Object.freeze(snapshotFor(root)) }));
 
   for (let index = 1; index < plan.frameCount; index++) {
     for (let t = 0; t < plan.ticksPerFrame; t++) {
@@ -101,7 +109,7 @@ export function sampleFrames(
     frames.push(Object.freeze({
       index,
       tick: index * plan.ticksPerFrame,
-      objects: Object.freeze(snapshotObjects(root)),
+      objects: Object.freeze(snapshotFor(root)),
     }));
   }
 

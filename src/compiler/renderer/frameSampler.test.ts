@@ -1,10 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { Container } from "pixi.js";
 import { buildNode } from "./builder";
-import { sampleFrames } from "./frameSampler";
+import { sampleFrames, snapshotFor } from "./frameSampler";
 import { SceneRuntime } from "./sceneRuntime";
 import { MatterWorld } from "./physicsWorld";
 import { hashFrames } from "../export/frameHash";
+import { applySnapshot } from "../export/pngSequence";
 import { planExport } from "../export/exportContract";
 import { lex } from "../lexer";
 import { parse } from "../parser";
@@ -45,6 +46,15 @@ function buildRoot(ir: IRSceneNode): Container {
   const root = new Container();
   for (const node of ir.children) root.addChild(buildNode(node as IRObjectNode));
   return root;
+}
+
+/** The built container carrying an IR id, for reading its drawn transform. */
+function containerFor(root: Container, id: string): Container {
+  const hit = root.children
+    .map((c) => c as Container)
+    .find((c) => c.__mareyId === id);
+  if (!hit) throw new Error(`no container with id ${id}`);
+  return hit;
 }
 
 function runExport(fps: number): { frames: ReturnType<typeof sampleFrames>; plan: SamplerPlan } {
@@ -234,5 +244,125 @@ describe("sampleFrames · snapshot shape", () => {
     const { frames } = runExport(30);
     expect(Object.isFrozen(frames[0])).toBe(true);
     expect(Object.isFrozen(frames[0].objects[0])).toBe(true);
+  });
+});
+
+/**
+ * A 2s scene whose three objects each animate a DIFFERENT non-position
+ * property, so `applySnapshot` writing only some fields cannot pass.
+ *
+ * `SOURCE` above animates `position` and nothing else, which leaves
+ * `rotation`, `scaleX/Y` and `alpha` at their authored defaults for every
+ * frame of every test in this file — so a snapshot applier that dropped those
+ * four fields entirely would round-trip perfectly against it. This fixture is
+ * what makes each of them load-bearing.
+ */
+const MOTION_SOURCE = `
+scene {
+  size: (400, 300)
+  duration: 2
+
+  rectangle spinner {
+    position: (60, 60)
+    size: (40, 20)
+    color: yellow
+    animate { property: rotation, to: 90, duration: 2, easing: linear }
+  }
+
+  circle grower {
+    position: (200, 150)
+    radius: 10
+    color: cyan
+    animate { property: scale, to: (3, 2), duration: 2, easing: linear }
+  }
+
+  circle fader {
+    position: (320, 100)
+    radius: 10
+    color: magenta
+    animate { property: alpha, to: 0.25, duration: 2, easing: linear }
+  }
+}
+`;
+
+describe("applySnapshot", () => {
+  it("round-trips: applying a frame's own snapshot changes nothing", () => {
+    const ir = irFor(SOURCE);
+    const result = planExport(ir, { fps: 30 });
+    if (!result.ok) throw new Error("plan failed");
+    const world = new MatterWorld(ir.width, ir.height);
+    const root = buildRoot(ir);
+    const runtime = new SceneRuntime(world, root);
+    const frames = sampleFrames(runtime, root, result.plan);
+
+    // Re-applying the last frame to the tree it came from must be a no-op.
+    const before = JSON.stringify(frames[frames.length - 1].objects);
+    applySnapshot(root, frames[frames.length - 1]);
+    const after = JSON.stringify(snapshotFor(root));
+    expect(after).toBe(before);
+
+    runtime.destroy();
+  });
+
+  it("moves the tree to an earlier frame's state", () => {
+    const ir = irFor(SOURCE);
+    const result = planExport(ir, { fps: 30 });
+    if (!result.ok) throw new Error("plan failed");
+    const world = new MatterWorld(ir.width, ir.height);
+    const root = buildRoot(ir);
+    const runtime = new SceneRuntime(world, root);
+    const frames = sampleFrames(runtime, root, result.plan);
+
+    applySnapshot(root, frames[0]);
+    // Ids are scope-qualified (`typeChecker/builder.ts`), so the bare declared
+    // name never matches — same correction the snapshot-shape tests above make.
+    const slider = snapshotFor(root).find((o) => o.id === "scene.slider")!;
+    expect(slider.x).toBeCloseTo(100, 6);
+
+    // …and on the container itself, not only in the layout bookkeeping.
+    // `snapshotFor` reads `layout.currentPos`, so the assertion above holds
+    // even if nothing is ever pushed onto the container — an object that moves
+    // in the JSON and stands still in the PNG, which is precisely the class of
+    // failure this task exists to prevent. `__updateLayout()` is what pushes
+    // it, and this is the assertion that fails when that call is dropped.
+    expect(containerFor(root, "scene.slider").position.x).toBeCloseTo(100, 6);
+    expect(containerFor(root, "scene.slider").position.y).toBeCloseTo(100, 6);
+
+    runtime.destroy();
+  });
+
+  it("restores rotation, scale and alpha, not only position", () => {
+    const ir = irFor(MOTION_SOURCE);
+    const result = planExport(ir, { fps: 30 });
+    if (!result.ok) throw new Error("plan failed");
+    const world = new MatterWorld(ir.width, ir.height);
+    const root = buildRoot(ir);
+    const runtime = new SceneRuntime(world, root);
+    const frames = sampleFrames(runtime, root, result.plan);
+
+    // Sampling leaves the tree at the LAST frame, so rewinding to a
+    // mid-animation frame is a real move on every one of the three properties.
+    const mid = frames[20];
+    const end = frames[frames.length - 1];
+    const fieldOf = (
+      fs: ReadonlyArray<{ id: string; rotation: number; scaleX: number; alpha: number }>,
+      id: string,
+    ) => fs.find((o) => o.id === id)!;
+    // Guard the guard: if the fixture stopped animating, the assertion below
+    // would pass by coincidence rather than by restoration (AGENT-LESSONS §2a).
+    expect(fieldOf(mid.objects, "scene.spinner").rotation)
+      .not.toBeCloseTo(fieldOf(end.objects, "scene.spinner").rotation, 6);
+    expect(fieldOf(mid.objects, "scene.grower").scaleX)
+      .not.toBeCloseTo(fieldOf(end.objects, "scene.grower").scaleX, 6);
+    expect(fieldOf(mid.objects, "scene.fader").alpha)
+      .not.toBeCloseTo(fieldOf(end.objects, "scene.fader").alpha, 6);
+
+    applySnapshot(root, mid);
+    expect(snapshotFor(root)).toEqual(mid.objects);
+    // Scale's own write-through, for the reason spelled out in the test above.
+    expect(containerFor(root, "scene.grower").scale.x)
+      .toBeCloseTo(fieldOf(mid.objects, "scene.grower").scaleX, 6);
+
+    runtime.destroy();
   });
 });
