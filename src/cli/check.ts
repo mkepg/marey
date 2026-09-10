@@ -30,6 +30,8 @@ const RATE_DEPENDENT_CODES: ReadonlySet<ExportDiagnosticCode> = new Set([
   "EXPORT_FRAME_BUDGET",
 ]);
 
+const USAGE = "Usage: marey check [--export-ready] [--fps <n>] <file...>";
+
 /** Pure. Never touches argv beyond what is passed in. */
 export function parseArgs(argv: readonly string[]): CheckArgs {
   const files: string[] = [];
@@ -56,11 +58,31 @@ export function parseArgs(argv: readonly string[]): CheckArgs {
       }
       continue;
     }
+    // Any other `--`-prefixed token is a typo'd or unsupported flag, not a
+    // filename — e.g. `--fps=30` (the more common CLI idiom, which this
+    // parser does not accept) must not be silently read as a file to open.
+    // Left uncaught, that produced a misleading ENOENT blaming a "missing
+    // file" for what was actually a flag-syntax mistake.
+    if (arg.startsWith("--")) {
+      if (error === null) {
+        error = `Unrecognized option '${arg}'. ${USAGE}`;
+      }
+      continue;
+    }
     files.push(arg);
   }
 
+  // --fps only means anything alongside --export-ready (checkOne never reads
+  // args.fps otherwise). Silently accepting it as a no-op would let a
+  // mistyped flag pair (e.g. forgetting --export-ready) report "ok" for a
+  // scene that would actually fail an export check — a false pass from a
+  // tool whose entire job is to not produce one.
+  if (error === null && fps !== null && !exportReady) {
+    error = `--fps has no effect without --export-ready. ${USAGE}`;
+  }
+
   if (error === null && files.length === 0) {
-    error = "no files given. Usage: marey check [--export-ready] [--fps <n>] <file...>";
+    error = `no files given. ${USAGE}`;
   }
 
   return { files, exportReady, fps, error };

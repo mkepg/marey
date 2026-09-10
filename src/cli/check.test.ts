@@ -25,6 +25,27 @@ describe("parseArgs", () => {
   it("rejects an empty file list", () => {
     expect(parseArgs([]).error).toContain("no files");
   });
+
+  it("rejects --fps given without --export-ready, rather than silently ignoring it", () => {
+    // checkOne never reads args.fps unless args.exportReady is true, so
+    // `marey check --fps 30 a.marey` would otherwise report "ok" for a scene
+    // that would actually fail an export check under that fps.
+    const a = parseArgs(["--fps", "30", "a.marey"]);
+    expect(a.error).toContain("has no effect");
+  });
+
+  it("does not reject --fps when --export-ready is also given", () => {
+    expect(parseArgs(["--export-ready", "--fps", "30", "a.marey"]).error).toBeNull();
+  });
+
+  it("rejects an unrecognized flag instead of reading it as a filename", () => {
+    // Unhandled, `--fps=30` (a common CLI idiom this parser does not accept)
+    // fell through to `files`, and main() went on to report a misleading
+    // ENOENT for a "file" named "--fps=30".
+    const a = parseArgs(["--fps=30", "a.marey"]);
+    expect(a.error).toContain("Unrecognized option '--fps=30'");
+    expect(a.files).not.toContain("--fps=30");
+  });
 });
 
 describe("formatDiagnostic", () => {
