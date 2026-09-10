@@ -70,8 +70,12 @@ explicitly rather than quietly deviating.
   whole-branch review landed after it at `e1dcdd8`. **Read its execution notes
   before Phase 4**: the plan's notes record the frame-selection and
   determinism evidence that Product Gate B builds on.
-- **Phase 3C — motion primitives: done** on `phase-3c-motion-primitives`,
-  pending the independent whole-branch review AGENT-LESSONS §8 requires. The
+- **Phase 3C — motion primitives: done and merged.** Fast-forwarded onto
+  `main` with no merge commit. The phase's last feature commit is `106683e`;
+  its reference, regression fixtures and evidence landed at `0dbfa46`, and the
+  independent whole-branch review AGENT-LESSONS §8 requires found **no
+  behavioural defect** — its findings were corrections to comments, citations
+  and numbers, and landed after the phase at `de0c4c0` and `160964d`. The
   three gaps were found by construction on 2026-09-09 — a staggered reveal cost
   a no-op `sequence` wrapper per object, a baseline-anchored bar needed a
   hand-computed centre coordinate, and `scale: (1, 0)` was rejected outright —

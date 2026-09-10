@@ -131,14 +131,14 @@ for a **complete, provable engineering artifact with a declarable finish
 line**, and acquisition work moved past that line. Read its §1 before
 proposing anything the old roadmap justified by adoption.
 
-Current phase: **3C — motion primitives**, and it is **complete on
-`phase-3c-motion-primitives`** — `delay` on `animate`, `origin` on shapes, and
-a zero-`scale` rule scoped to the objects that take part in physics. What
-remains is the independent whole-branch review AGENT-LESSONS §8 requires, and
-the merge. **Read
+Current phase: **4 — composition and export foundation**, not yet started.
+**3C — motion primitives is done and merged** (`delay` on `animate`, `origin`
+on shapes, and a zero-`scale` rule scoped to the objects that take part in
+physics), and its independent whole-branch review is complete. **Read
 `docs/plans/2026-09-09-phase-3c-motion-primitives.md`'s execution
-notes before starting Phase 4** — composition and export foundation, which
-bakes whatever the language can express. Phase 3B is **done and merged**. Full
+notes before starting Phase 4** — export bakes whatever the language can
+express, and 3C's notes record which of its guarantees are pinned by tests and
+which rest on an unreachability argument. Phase 3B is **done and merged**. Full
 phase history and prior decisions (D1–D18, R1) are in
 `roadmap-and-process.md`, whose 3C bullet must be updated in the same edit as
 this line.
