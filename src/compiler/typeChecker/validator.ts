@@ -360,6 +360,22 @@ export function collectErrors(ast: AstNode): CompilerError[] {
     const required = REQUIRED_PROPS[typeName] ?? [];
     const contract = PROP_TYPES[typeName]    ?? {};
 
+    // `physics.duration` accepts `indefinitely`, so an author will try it here.
+    // A named diagnostic beats the generic kind mismatch the contract would
+    // otherwise produce, because the fix is not "write a different value" — it
+    // is "write no value at all", which no type error can suggest. The property
+    // loop below skips 'duration' on the same condition (see its own comment)
+    // so this fires exactly once rather than alongside a second, generic
+    // kind-mismatch diagnostic for the same value.
+    const sceneDurationVal = node.props["duration"];
+    if (isScene && sceneDurationVal?.kind === "indefinitely") {
+      errors.push({
+        phase: "TYPE",
+        message: "[TYPE_SCENE_DURATION_INDEFINITE] The scene block: 'duration' does not accept 'indefinitely'. A scene with no fixed length is written by leaving 'duration' out — omit 'duration' instead.",
+        ...errPosOf(sceneDurationVal),
+      });
+    }
+
     if (typeName === "text") {
       textNodeCount++;
       if (textNodeCount > MAX_TEXT_NODES) {
@@ -723,6 +739,14 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         : effectiveExpected === val.kind;
 
       if (!isExpected) {
+        if (isScene && key === "duration" && val.kind === "indefinitely") {
+          // Already reported above as TYPE_SCENE_DURATION_INDEFINITE, whose
+          // wording names the fix ("omit 'duration' instead"); the generic
+          // kind-mismatch message below would only say "expects a number",
+          // which cannot suggest that. Skip it so this value gets exactly one
+          // diagnostic instead of two describing the same problem.
+          continue;
+        }
         if (key === "fit" && val.kind === "string") {
           errors.push({ phase: "TYPE", message: `${label}: 'fit' must be an unquoted keyword. Remove the quotes around the value.`, ...errPos });
         } else if (val.kind === "string" && (!Array.isArray(effectiveExpected) && effectiveExpected !== "string")) {

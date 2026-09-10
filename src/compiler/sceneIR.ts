@@ -143,6 +143,8 @@ export interface IRSceneNode {
   readonly height: number;
   readonly background: IRColor;
   readonly fit: IRFit;
+  /** Scene length in seconds, or null for an indefinite scene. */
+  readonly duration: number | null;
   readonly children: ReadonlyArray<IRObjectNode>;
   readonly registry: Readonly<Record<IRObjectId, IRObjectNode>>;
 }

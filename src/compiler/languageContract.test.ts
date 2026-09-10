@@ -25,7 +25,7 @@ describe("language contract", () => {
       easing: "easing", loop: "boolean", yoyo: "boolean", handoff: "boolean",
     });
     expect(Object.keys(LANGUAGE_CONTRACT.scene.properties)).toEqual([
-      "background", "size", "fit",
+      "background", "size", "fit", "duration",
     ]);
   });
 
@@ -160,6 +160,14 @@ describe("language contract", () => {
     expect(() => buildIR(ast!)).toThrow("Animation property 'to' must be a number or point");
   });
 
+  it("declares scene.duration as optional with absence as its documented meaning", () => {
+    const spec = LANGUAGE_CONTRACT.scene.properties.duration;
+    expect(spec.required).toBeUndefined();
+    expect(spec.default).toBeUndefined();
+    expect(spec.derivedDefault).toBeUndefined();
+    expect(spec.absentMeans).toBe("indefinite");
+  });
+
   it("gives every optional property a contract default or a named derived-default strategy", () => {
     // The structural guarantee behind §7 item 3: an optional property with
     // neither a `default` nor a `derivedDefault` is a gap where the builder
@@ -172,6 +180,11 @@ describe("language contract", () => {
         if (spec.required) continue;
         if (spec.default !== undefined) continue;
         if (spec.derivedDefault !== undefined) continue;
+        // A third documented fallback: the property's *absence* is itself the
+        // value. `scene.duration` omitted means indefinite, and no number says
+        // that. This is a third kind of documented fallback, not a hole in the
+        // rule — the check still fails for a property with none of the three.
+        if (spec.absentMeans !== undefined) continue;
         gaps.push(`${blockName}.${propName}`);
       }
     }

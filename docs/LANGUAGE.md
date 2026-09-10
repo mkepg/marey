@@ -52,6 +52,29 @@ logical dimensions are mapped onto the preview area, which may be any size:
 `fit` affects presentation only. It does not change any coordinate you
 write, and physics is simulated in logical units regardless of it.
 
+`duration` is optional and takes a positive number of seconds. It declares how
+long the scene runs, which is what an exporter samples. A scene that omits it is
+**indefinite** — it still plays in the preview, but it cannot be exported without
+an explicit export bound.
+
+Unlike `physics`, `scene` does **not** accept `duration: indefinitely`
+(`TYPE_SCENE_DURATION_INDEFINITE`). An indefinite scene is written by leaving
+the property out, so there is exactly one spelling for each state rather than
+two for one of them.
+
+```marey
+scene {
+  size: (800, 600)
+  duration: 4
+
+  circle dot {
+    position: (400, 300)
+    radius: 40
+    color: cyan
+  }
+}
+```
+
 Coordinates are in pixels. X increases rightward and **y increases
 downward**, with the origin at the top-left of the scene. Physics gravity's
 default value, `(0, 980)`, is consistent with this: a positive y-velocity

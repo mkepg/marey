@@ -1187,3 +1187,41 @@ describe("animate delay", () => {
     ]);
   });
 });
+
+describe("scene duration", () => {
+  it("accepts a finite positive duration", () => {
+    expect(errorsFor(`scene { size: (100, 100) duration: 5 }`)).toEqual([]);
+  });
+
+  it("rejects a zero or negative duration", () => {
+    // The brief's fixture asserted "greater than zero" (spelled out), but the
+    // existing `key === "duration"` special case in validateLocalConstraint's
+    // "positive" branch (validator.ts) produces "greater than 0" with a
+    // digit — the same wording `animate.duration` and `physics.duration`
+    // already get. Asserting the real string here rather than the one that
+    // never matches (AGENT-LESSONS §3d: a verbatim fixture is a claim to check).
+    const out = errorsFor(`scene { size: (100, 100) duration: 0 }`);
+    expect(out.join("\n")).toContain("must be strictly greater than 0");
+  });
+
+  it("rejects 'indefinitely' on a scene with its own named diagnostic", () => {
+    const out = errorsFor(`scene { size: (100, 100) duration: indefinitely }`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("TYPE_SCENE_DURATION_INDEFINITE");
+    // The wording only this rule produces, so a neighbouring kind-mismatch
+    // diagnostic cannot satisfy the assertion (AGENT-LESSONS §2b).
+    expect(out[0]).toContain("omit 'duration' instead");
+  });
+
+  it("builds a null duration into the IR when omitted", () => {
+    const { ast } = parse(lex(`scene { size: (100, 100) }`));
+    const { ir } = typeCheck(ast!);
+    expect(ir!.duration).toBeNull();
+  });
+
+  it("builds a declared duration into the IR in seconds", () => {
+    const { ast } = parse(lex(`scene { size: (100, 100) duration: 2.5 }`));
+    const { ir } = typeCheck(ast!);
+    expect(ir!.duration).toBe(2.5);
+  });
+});

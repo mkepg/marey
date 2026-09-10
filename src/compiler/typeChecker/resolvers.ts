@@ -99,6 +99,18 @@ export function resolveNumber(props: Record<string, AstValue>, key: string, fall
   if (v?.kind === "number") return (v as NumberValue).value;
   return fallback;
 }
+/**
+ * A number property that may legitimately be absent, where absence is not the
+ * same as any value. Distinct from `resolveNumber`, whose fallback is a number.
+ */
+export function resolveOptionalNumber(
+  props: Record<string, AstValue>,
+  key: string,
+): number | null {
+  const v = props[key];
+  if (v?.kind === "number") return (v as NumberValue).value;
+  return null;
+}
 export function resolvePoint(props: Record<string, AstValue>, key: string, fallback: IRPoint): IRPoint {
   const v = props[key];
   if (v?.kind === "point") return { x: (v as PointValue).x, y: (v as PointValue).y };

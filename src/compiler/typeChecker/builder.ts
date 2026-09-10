@@ -21,6 +21,7 @@ import type {
 import {
   resolveColor,
   resolveNumber,
+  resolveOptionalNumber,
   resolvePoint,
   resolveScale,
   resolveFit,
@@ -301,6 +302,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
     height:     sizeVal.y,
     background: resolveColor(sceneAst.props, "background", contractStringDefault("scene", "background")),
     fit:        resolveFit(sceneAst.props, contractStringDefault("scene", "fit")),
+    duration:   resolveOptionalNumber(sceneAst.props, "duration"),
     children:   Object.freeze(topLevelChildrenNodes.map(x => x.node)) as ReadonlyArray<IRObjectNode>,
     registry:   Object.freeze(registry) as Readonly<Record<IRObjectId, IRObjectNode>>,
   });

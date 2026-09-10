@@ -37,11 +37,29 @@ export type LocalConstraint =
  */
 export type DerivedDefaultStrategy = "polygonMinPoint";
 
+/**
+ * What an optional property's **absence** means, for the cases where no value
+ * can express it.
+ *
+ * `scene.duration` is the first: a scene with no declared duration is
+ * *indefinite*, and there is no number that says so. Giving it a fixed
+ * `default` would invent a length the author did not write; giving it a
+ * `derivedDefault` would compute one, which for a physics scene is not
+ * statically knowable at all.
+ *
+ * Declared here rather than left implicit so `languageContract.test.ts`'s gap
+ * check keeps enumerating structurally: every optional property still has a
+ * documented fallback, and this is a third kind of one rather than an
+ * exception to the rule.
+ */
+export type AbsentMeaning = "indefinite";
+
 export interface PropertySpec {
   readonly kinds: ValueKind | readonly ValueKind[];
   readonly required?: true;
   readonly default?: ContractDefault;
   readonly derivedDefault?: DerivedDefaultStrategy;
+  readonly absentMeans?: AbsentMeaning;
   readonly constraint?: LocalConstraint;
   readonly description: string;
   readonly example: string;
@@ -71,6 +89,7 @@ type PropertyOptions = Readonly<{
   required?: true;
   default?: ContractDefault;
   derivedDefault?: DerivedDefaultStrategy;
+  absentMeans?: AbsentMeaning;
   constraint?: LocalConstraint;
 }>;
 
@@ -178,6 +197,13 @@ const sceneProperties = Object.freeze({
     "fit: contain",
     "contain",
     { default: "contain" },
+  ),
+  duration: property(
+    "number",
+    "How long the scene runs, in seconds. Optional: a scene with no duration is indefinite and cannot be exported without an explicit export bound. Unlike 'physics', this does not accept 'indefinitely' — omit the property instead.",
+    "duration: 5",
+    "5",
+    { constraint: { kind: "positive" }, absentMeans: "indefinite" },
   ),
 });
 
