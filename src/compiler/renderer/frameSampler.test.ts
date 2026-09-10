@@ -7,6 +7,7 @@ import { MatterWorld } from "./physicsWorld";
 import { hashFrames } from "../export/frameHash";
 import { applySnapshot } from "../export/pngSequence";
 import { planExport } from "../export/exportContract";
+import { compileSource } from "../compileSource";
 import { lex } from "../lexer";
 import { parse } from "../parser";
 import { typeCheck } from "../typeChecker";
@@ -244,6 +245,204 @@ describe("sampleFrames · snapshot shape", () => {
     const { frames } = runExport(30);
     expect(Object.isFrozen(frames[0])).toBe(true);
     expect(Object.isFrozen(frames[0].objects[0])).toBe(true);
+  });
+});
+
+/**
+ * Gate B criterion 5: the canonical scenes export through one sampler.
+ *
+ * Every scene in `eval/scenes-3b/` goes through the same three stages the
+ * browser exporter does — `compileSource` → `planExport` → `sampleFrames` —
+ * with no per-scene special-casing anywhere in the loop.
+ *
+ * **Two of the four cannot reach the third stage in Node, and the reason is
+ * measured, not assumed.** `bar-chart` and `timeline-ticks` each declare a
+ * `text` block, and `builder.ts`'s text branch reads `textObj.width`, which
+ * PixiJS answers by calling `CanvasTextMetrics.measureText` → `document
+ * .createElement("canvas")`. In this suite's `environment: "node"` that throws
+ * `ReferenceError: document is not defined` at `builder.ts:329` before any
+ * sampling can begin — a limit of the *test environment*, not of the sampler.
+ * Which criterion that leaves to the browser is spelled out in
+ * `eval/RESULTS-GATE-B.md`; the `expectedTextBlocks` field below is what
+ * keeps the skip honest, because it is checked against the compiled IR rather
+ * than trusted from this comment.
+ */
+/*
+ * The corpus is pulled in through `import.meta.glob`, not `node:fs`:
+ * `tsconfig.app.json` gives `src/**` browser types (`"types": ["vite/client"]`)
+ * and no `@types/node`, so `import "node:fs"` here is a `tsc -b` error even
+ * though the test itself runs in Node. The glob is resolved by Vite at
+ * transform time, which has the side benefit of making the directory listing
+ * below a build-time fact rather than a runtime read.
+ */
+const CORPUS: Record<string, string> = import.meta.glob(
+  "../../../eval/scenes-3b/*.marey",
+  { query: "?raw", import: "default", eager: true },
+);
+
+/** `../../../eval/scenes-3b/bar-chart.marey` → `bar-chart.marey`. */
+const CORPUS_BY_FILE: Record<string, string> = Object.fromEntries(
+  Object.entries(CORPUS).map(([path, source]) => [path.slice(path.lastIndexOf("/") + 1), source]),
+);
+
+interface CanonicalScene {
+  readonly file: string;
+  /** The scene's declared `duration`, in seconds. Pinned, not read back. */
+  readonly durationSeconds: number;
+  /** How many `text` blocks the compiled IR holds. Nonzero ⇒ unbuildable here. */
+  readonly expectedTextBlocks: number;
+}
+
+const CANONICAL_SCENES: ReadonlyArray<CanonicalScene> = [
+  { file: "bar-chart.marey", durationSeconds: 1, expectedTextBlocks: 1 },
+  { file: "compound-logo.marey", durationSeconds: 6, expectedTextBlocks: 0 },
+  { file: "radial-dots.marey", durationSeconds: 1, expectedTextBlocks: 0 },
+  { file: "timeline-ticks.marey", durationSeconds: 1, expectedTextBlocks: 1 },
+];
+
+function countTextBlocks(ir: IRSceneNode): number {
+  return Object.values(ir.registry).filter((n) => n.props.kind === "text").length;
+}
+
+function irForCanonical(file: string): IRSceneNode {
+  const source = CORPUS_BY_FILE[file];
+  if (source === undefined) throw new Error(`${file} is not in eval/scenes-3b/`);
+  const out = compileSource(source);
+  if (!out.ir) throw new Error(`${file} did not compile: ${out.errors.map((e) => e.message).join("; ")}`);
+  return out.ir;
+}
+
+describe("the canonical scenes export through one sampler (Gate B criterion 5)", () => {
+  it("covers every .marey file in the corpus, so a new scene cannot slip past unclassified", () => {
+    // Without this the table above could silently stop describing the corpus:
+    // a fifth scene would be exported by nothing and no test would notice.
+    expect(Object.keys(CORPUS_BY_FILE).sort()).toEqual(CANONICAL_SCENES.map((s) => s.file));
+    // …and that the glob actually matched something, rather than resolving to
+    // an empty record and making the equality above a comparison of two lists
+    // that only happen to agree because one of them was hand-written.
+    expect(Object.keys(CORPUS_BY_FILE).length).toBe(4);
+  });
+
+  it.each(CANONICAL_SCENES)(
+    "$file compiles, declares a finite duration, and plans exact frame counts at 24/30/60",
+    ({ file, durationSeconds, expectedTextBlocks }) => {
+      const ir = irForCanonical(file);
+      expect(ir.duration).toBe(durationSeconds);
+      // Pins the reason the two text scenes are skipped below to the IR
+      // itself. If `bar-chart` lost its title, this fails and the skip has to
+      // be re-justified rather than quietly outliving its cause.
+      expect(countTextBlocks(ir)).toBe(expectedTextBlocks);
+
+      for (const fps of [24, 30, 60]) {
+        const result = planExport(ir, { fps });
+        if (!result.ok) throw new Error(`${file} @ ${fps}fps: ${result.diagnostics.map((d) => d.code).join(",")}`);
+        // Derived from the scene's own declared seconds and the requested
+        // rate — deliberately NOT from `plan.durationTicks / plan.ticksPerFrame`,
+        // which would restate the implementation's own arithmetic and pass
+        // whatever it computed.
+        expect(result.plan.frameCount).toBe(durationSeconds * fps);
+      }
+    },
+  );
+
+  const buildable = CANONICAL_SCENES.filter((s) => s.expectedTextBlocks === 0);
+
+  it("has at least one headlessly samplable scene, and it is not the whole corpus", () => {
+    // Guards both directions: if `text` ever became buildable in Node the
+    // second assertion fails and the browser-only caveat in RESULTS-GATE-B.md
+    // must be withdrawn; if the last text-free scene were removed, the first
+    // fails and criterion 5 would otherwise be proven by nothing at all.
+    expect(buildable.length).toBeGreaterThan(0);
+    expect(buildable.length).toBeLessThan(CANONICAL_SCENES.length);
+  });
+
+  it.each(buildable)(
+    "$file builds and samples headlessly to exactly its planned frame count",
+    ({ file, durationSeconds }) => {
+      for (const fps of [24, 30, 60]) {
+        const ir = irForCanonical(file);
+        const result = planExport(ir, { fps });
+        if (!result.ok) throw new Error(`plan failed for ${file}`);
+        const world = new MatterWorld(ir.width, ir.height);
+        const root = buildRoot(ir);
+        const runtime = new SceneRuntime(world, root);
+        const frames = sampleFrames(runtime, root, result.plan);
+        runtime.destroy();
+
+        expect(frames).toHaveLength(durationSeconds * fps);
+        expect(frames[0].tick).toBe(0);
+        expect(frames[frames.length - 1].tick).toBe((durationSeconds * fps - 1) * (120 / fps));
+      }
+    },
+  );
+
+  it.each(buildable)("$file exports identically on a repeat run", ({ file }) => {
+    const sampleOnce = (): ReturnType<typeof sampleFrames> => {
+      const ir = irForCanonical(file);
+      const result = planExport(ir, { fps: 30 });
+      if (!result.ok) throw new Error(`plan failed for ${file}`);
+      const world = new MatterWorld(ir.width, ir.height);
+      const root = buildRoot(ir);
+      const runtime = new SceneRuntime(world, root);
+      const frames = sampleFrames(runtime, root, result.plan);
+      runtime.destroy();
+      return frames;
+    };
+    expect(hashFrames(sampleOnce())).toBe(hashFrames(sampleOnce()));
+  });
+
+  it("compound-logo genuinely animates in, hands off to physics, and settles", () => {
+    // The corpus's whole motion claim rests on this one scene: the other
+    // three declare no `animate`, `physics` or `sequence` at all, so their
+    // exports are one still image repeated and would pass every frame-count
+    // and hash assertion above with a sampler that never advanced the world.
+    // Everything below is read off this suite's own run, not copied from the
+    // scene's comments.
+    const ir = irForCanonical("compound-logo.marey");
+    const result = planExport(ir, { fps: 30 });
+    if (!result.ok) throw new Error("plan failed");
+    const world = new MatterWorld(ir.width, ir.height);
+    const root = buildRoot(ir);
+    const runtime = new SceneRuntime(world, root);
+    const frames = sampleFrames(runtime, root, result.plan);
+    runtime.destroy();
+
+    const markAt = (i: number) => frames[i].objects.find((o) => o.id === "scene.mark")!;
+
+    // The mark is a compound: the group plus its three welded rectangles.
+    expect(frames[0].objects.map((o) => o.id)).toEqual([
+      "scene.mark", "scene.mark.stem", "scene.mark.armTop", "scene.mark.armMid",
+    ]);
+
+    // 1 — animates in. The `animate` step runs 1.4s = frame 42 at 30fps,
+    // carrying the group from (150, 130) toward (420, 210).
+    expect(markAt(0).x).toBeCloseTo(150, 6);
+    expect(markAt(0).y).toBeCloseTo(130, 6);
+    expect(markAt(42).x).toBeGreaterThan(400);
+    // Still purely animated: `rotation` is untouched by the animate step, and
+    // a body driven by physics would already have torque on it.
+    expect(markAt(42).rotation).toBeCloseTo(markAt(0).rotation, 6);
+
+    // 2 — hands off. Without `handoff: true` the group would stop dead at
+    // x≈420 and fall straight down; the exit momentum is what keeps it
+    // travelling right after the animation ends.
+    expect(markAt(60).x).toBeGreaterThan(markAt(42).x + 100);
+    expect(markAt(60).y).toBeGreaterThan(markAt(42).y + 100);
+
+    // 3 — settles, under simulation rather than at the freeze. The physics
+    // step ends at 6.0s (the last frame); these frames are 4.0s and 5.0s, so
+    // coming to rest between them is the world settling, not the runner
+    // stopping. Rotation is included because a body that had slid to a halt
+    // but was still spinning would satisfy a position-only check.
+    const settled = markAt(120);
+    const later = markAt(150);
+    expect(later.x).toBeCloseTo(settled.x, 6);
+    expect(later.y).toBeCloseTo(settled.y, 6);
+    expect(later.rotation).toBeCloseTo(settled.rotation, 6);
+    // Guard the guard: "settled" must mean it moved and then stopped, not
+    // that it never moved (AGENT-LESSONS §2a).
+    expect(Math.abs(settled.rotation - markAt(0).rotation)).toBeGreaterThan(0.1);
+    expect(settled.y).toBeGreaterThan(markAt(0).y + 300);
   });
 });
 
