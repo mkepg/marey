@@ -2,26 +2,24 @@ import { lex } from "./lexer";
 import { parse } from "./parser";
 import { typeCheck } from "./typeChecker";
 import type { IRSceneNode } from "./sceneIR";
-import type { AstNode, CompilerError, ObjectNode } from "./types";
+import type { AstNode, CompilerError, ObjectNode, Token } from "./types";
 
 export interface CompileOutcome {
   readonly ok: boolean;
   readonly errors: ReadonlyArray<CompilerError>;
   readonly ir: IRSceneNode | null;
   readonly symbols: ReadonlyArray<string>;
-  // Widened rather than re-lexing for a log line (Step 4's judgment call):
-  // the worker's `[lexer] N tokens` line needs a count, and lexing the same
-  // source twice to get it would be worse than one extra field here. This is
-  // the raw `lex()` output length, EOF sentinel included; trimming it to the
-  // human-facing count is the worker's presentation concern, not this
-  // module's.
+  // Two reported facts about the compilation that are cheap to carry here and
+  // otherwise unrecoverable by a consumer: `lex()`'s raw output length
+  // (Step 4's judgment call — widening this one field is better than a
+  // consumer re-lexing the same source for a log line) and the parsed AST's
+  // top-level child count (the AST itself is not part of this contract, only
+  // the typechecked `ir` is, so this would otherwise be lost between parse
+  // and type-check). Both are 0 when the stage that would produce them did
+  // not complete. `tokenCount` includes the EOF sentinel; trimming that is a
+  // presentation choice left to the caller, same as all other log
+  // formatting.
   readonly tokenCount: number;
-  // Same reasoning, for the worker's `[parser] AST root: scene, N top-level
-  // object(s)` line: the AST itself is not part of this contract (only the
-  // typechecked `ir` is), so the raw child count would otherwise be lost
-  // between parse and type-check. `ast.children.length` when parsing
-  // succeeds, 0 when it does not (the worker only reads this after a
-  // successful parse, same as before).
   readonly topLevelObjectCount: number;
 }
 
@@ -74,11 +72,25 @@ function getAstSymbols(ast: AstNode): string[] {
  *
  * Log formatting deliberately stays with its consumers: the worker's `[lexer]`
  * / `[parser]` / `[type]` lines are presentation for one particular terminal
- * pane, and the CLI wants none of them.
+ * pane, and the CLI wants none of them. `tokenCount` and
+ * `topLevelObjectCount` on `CompileOutcome` are the two raw counts those
+ * lines are built from, not the formatted lines themselves — reported facts
+ * about the compilation that would otherwise be unrecoverable once this
+ * function returns, not a step toward baking any one consumer's log shape in
+ * here.
  */
 export function compileSource(source: string): CompileOutcome {
+  // Hoisted out of the `try` so the catch block below can still report how
+  // many tokens `lex()` produced when a *later* stage is what throws — e.g.
+  // the parser's 50-error abort (`parser/state.ts:112-115`,`:137-139`), which
+  // is reachable from ordinary (if badly malformed) user input, not only an
+  // internal invariant. Without this, the worker's `[lexer]   N tokens` line
+  // — one of the three Global Constraint 3 names by hand — silently dropped
+  // out of the log for any source that lexes cleanly but accumulates more
+  // than 50 parse errors.
+  let tokens: Token[] = [];
   try {
-    const tokens = lex(source);
+    tokens = lex(source);
     const { ast, errors: parseErrors, env } = parse(tokens);
 
     const symbols = new Set<string>();
@@ -103,6 +115,9 @@ export function compileSource(source: string): CompileOutcome {
       topLevelObjectCount: ast.children.length,
     };
   } catch (raw: unknown) {
-    return { ok: false, errors: [normaliseError(raw)], ir: null, symbols: [], tokenCount: 0, topLevelObjectCount: 0 };
+    // `tokens` is `[]` (length 0) if `lex()` itself is what threw, and the
+    // real token count if lexing finished and a later stage threw — see the
+    // hoist comment above.
+    return { ok: false, errors: [normaliseError(raw)], ir: null, symbols: [], tokenCount: tokens.length, topLevelObjectCount: 0 };
   }
 }

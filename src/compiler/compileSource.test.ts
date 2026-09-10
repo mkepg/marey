@@ -15,6 +15,16 @@ describe("compileSource", () => {
     // needs it and the brief only anticipated tokenCount) — pin it here
     // rather than leave it untested.
     expect(out.topLevelObjectCount).toBe(1);
+    // `tokenCount` is the widening the brief *did* anticipate, and the more
+    // dangerous of the two to leave unpinned: `compiler.worker.ts` prints
+    // `out.tokenCount - 1` for `[lexer]   N tokens`, one of the three lines
+    // Global Constraint 3 names by hand, and the worker itself has no
+    // automated test. 26 confirmed by running this exact source through
+    // compileSource and reading the real value (AGENT-LESSONS §3d): "scene"
+    // KEYWORD, "{", "size" IDENT, ":", "(", "800", ",", "600", ")", "circle"
+    // KEYWORD, "c" IDENT, "{", "position" IDENT, ":", "(", "1", ",", "2",
+    // ")", ",", "radius" IDENT, ":", "3", "}", "}" = 25 content tokens + EOF.
+    expect(out.tokenCount).toBe(26);
   });
 
   it("returns parse errors and no IR", () => {
@@ -22,6 +32,12 @@ describe("compileSource", () => {
     expect(out.ok).toBe(false);
     expect(out.ir).toBeNull();
     expect(out.errors.length).toBeGreaterThan(0);
+    // Pins the tag the eval harness's phase partition (Step 5) and the
+    // worker's `firstPhase === "PARSE"` branch both depend on. Without this,
+    // the test above would still pass unchanged if parsing started throwing
+    // instead of returning errors — the exact regression the worker's
+    // `[parser]` branch would silently stop covering (reviewer Minor 7).
+    expect(out.errors[0].phase).toBe("PARSE");
   });
 
   it("returns type errors and no IR", () => {
@@ -33,6 +49,9 @@ describe("compileSource", () => {
     // with a digit — confirmed by running the validator directly on this
     // exact source (AGENT-LESSONS §3d: a verbatim fixture is a claim to check).
     expect(out.errors.map((e) => e.message).join("\n")).toContain("greater than 0");
+    // Same reasoning as the PARSE phase tag above, for the eval harness's
+    // typeErrors bucket and the worker's `firstPhase === "TYPE"` branch.
+    expect(out.errors[0].phase).toBe("TYPE");
   });
 
   it("reports binding and object names as symbols", () => {
@@ -59,5 +78,38 @@ describe("compileSource", () => {
     expect(out.ok).toBe(false);
     expect(out.errors.length).toBeGreaterThan(0);
     expect(out.errors[0].phase).toBe("LEX");
+  });
+
+  it("still reports a real tokenCount when lexing succeeds but parsing throws (the 50-error abort)", () => {
+    // Fix round 1 (Important 1): the parser's 50-error abort
+    // (`parser/state.ts:112-115`,`:137-139`) is reachable from ordinary (if
+    // badly malformed) user input — e.g. pasting a large non-Marey document
+    // into the editor — not an internal invariant, and it throws a plain
+    // `Error` that escapes every `instanceof ParseException` guard. Before
+    // this fix, `compileSource`'s `tokens` variable was declared inside the
+    // `try`, so the `catch` block could not see it and always reported
+    // `tokenCount: 0` here — which silently dropped the worker's
+    // `[lexer]   N tokens` line (one of Global Constraint 3's three named
+    // lines) for this reachable case. `tokens` is now hoisted above the
+    // `try` so the catch block can still read how far lexing got.
+    //
+    // "x: 1" repeated 52 times inside a scene block: the first occurrence is
+    // legitimate, each of the next 50 triggers one "Property 'x' is defined
+    // more than once" PARSE error (pushed to `state.errors`), and the 52nd
+    // clause — the 51st duplicate — is the one `throwError` call that finds
+    // `state.errors.length >= 50` and throws the plain abort Error instead.
+    // Verified empirically (probe run, not guessed): 51 duplicates is the
+    // exact boundary — 50 duplicates produces 50 structured errors and no
+    // throw, 51 throws.
+    const clauses = Array.from({ length: 52 }, () => "x: 1").join(" ");
+    const out = compileSource(`scene { ${clauses} }`);
+    expect(out.ok).toBe(false);
+    expect(out.errors).toHaveLength(1);
+    expect(out.errors[0].phase).toBe("RUNTIME");
+    expect(out.errors[0].message).toContain("Maximum error limit reached");
+    // The load-bearing assertion for this fix: lexing this source succeeds
+    // (it is well-formed at the token level), so tokenCount must reflect the
+    // real token count, not the pre-fix 0.
+    expect(out.tokenCount).toBe(160);
   });
 });
