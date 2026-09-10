@@ -43,7 +43,21 @@ export function applySnapshot(root: Container, frame: FrameSnapshot): void {
         layout.currentPos.y = snap.y;
         layout.currentScale.x = snap.scaleX;
         layout.currentScale.y = snap.scaleY;
-        c.__updateLayout?.();
+        // Not `?.()`: a container that carries `__mareyLayout` but no
+        // `__updateLayout` is unreachable today (`builder.ts` always sets
+        // both together), but a silent no-op here is exactly this task's
+        // headline failure mode in miniature — the position above is
+        // updated in the snapshot's bookkeeping, `snapshotFor` would read it
+        // back as moved, and the drawn container would silently stay put.
+        // Numbers right, pixels wrong, and nothing in `report.json` could
+        // ever see it. Throwing loudly trades an unreachable-today path for
+        // a defect that cannot ship silently if it ever becomes reachable.
+        if (!c.__updateLayout) {
+          throw new Error(
+            `[export] Container '${id}' has __mareyLayout but no __updateLayout, so applySnapshot cannot write its position through to the drawn container.`,
+          );
+        }
+        c.__updateLayout();
         c.rotation = snap.rotation;
         c.alpha = snap.alpha;
       }

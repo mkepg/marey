@@ -286,7 +286,13 @@ scene {
 `;
 
 describe("applySnapshot", () => {
-  it("round-trips: applying a frame's own snapshot changes nothing", () => {
+  it("round-trips: applying a frame's snapshot moves the tree to exactly that state", () => {
+    // `sampleFrames` leaves `root` at frame[frames.length - 1]'s exact state
+    // (the loop's last iteration snapshots the tree immediately after the
+    // last tick, with no further mutation) — so applying that same last
+    // frame straight after sampling is a no-op *before* `applySnapshot` runs
+    // at all, and would pass identically with an empty function body. Moving
+    // the tree to an earlier frame first makes the final apply a real write.
     const ir = irFor(SOURCE);
     const result = planExport(ir, { fps: 30 });
     if (!result.ok) throw new Error("plan failed");
@@ -294,12 +300,16 @@ describe("applySnapshot", () => {
     const root = buildRoot(ir);
     const runtime = new SceneRuntime(world, root);
     const frames = sampleFrames(runtime, root, result.plan);
+    const last = frames[frames.length - 1];
 
-    // Re-applying the last frame to the tree it came from must be a no-op.
-    const before = JSON.stringify(frames[frames.length - 1].objects);
-    applySnapshot(root, frames[frames.length - 1]);
-    const after = JSON.stringify(snapshotFor(root));
-    expect(after).toBe(before);
+    applySnapshot(root, frames[0]);
+    // Guard the guard: if frame 0 and the last frame coincided, the
+    // assertion below would pass whether or not this second apply did
+    // anything.
+    expect(JSON.stringify(snapshotFor(root))).not.toBe(JSON.stringify(last.objects));
+
+    applySnapshot(root, last);
+    expect(snapshotFor(root)).toEqual(last.objects);
 
     runtime.destroy();
   });

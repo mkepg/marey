@@ -79,24 +79,45 @@ async function exportPng(source: string, opts: ExportPngOptions): Promise<Export
     throw new Error(`[export] ${planned.diagnostics.map((d) => d.message).join(" | ")}`);
   }
 
-  const app = new Application();
-  await app.init({
-    width: ir.width,
-    height: ir.height,
-    background: ir.background,
-    backgroundAlpha: 1,
-    antialias: true,
-    resolution: 1,
-    autoDensity: false,
-    autoStart: false,
-  });
-
-  const root = new Container();
-  for (const node of ir.children) root.addChild(buildNode(node));
-
-  const world = new MatterWorld(ir.width, ir.height);
-  const runtime = new SceneRuntime(world, root);
+  // Constructed incrementally below and torn down in `finally`, which
+  // destroys only what actually exists. `app` is assigned before it is known
+  // whether `init()` will succeed, on purpose: `Application.destroy()` reaches
+  // straight into `this.renderer.destroy(...)` with no null check, and
+  // `renderer` is only assigned once `init()`'s `autoDetectRenderer(...)`
+  // resolves — so guarding on `app` alone would turn a failed `init()` into a
+  // second, masking crash inside `finally`. Gating on `app.renderer` instead
+  // means "destroy only if there is a renderer to destroy."
+  //
+  // The `try` starts here, at `new Application()`, rather than lower down:
+  // before this fix it opened only after `app`, `root`, `world` and `runtime`
+  // had all already been constructed, so a throw from `app.init()`, the
+  // `buildNode` loop, or either constructor left an initialised `Application`
+  // — a live canvas and WebGL context — never destroyed. A caller retrying
+  // `window.__mareyExportPng` against a scene that fails to build would
+  // accumulate leaked contexts until the browser's limit is exhausted, which
+  // breaks the live preview too, not just the export.
+  let app: Application | undefined;
+  let root: Container | undefined;
+  let runtime: SceneRuntime | undefined;
   try {
+    app = new Application();
+    await app.init({
+      width: ir.width,
+      height: ir.height,
+      background: ir.background,
+      backgroundAlpha: 1,
+      antialias: true,
+      resolution: 1,
+      autoDensity: false,
+      autoStart: false,
+    });
+
+    root = new Container();
+    for (const node of ir.children) root.addChild(buildNode(node));
+
+    const world = new MatterWorld(ir.width, ir.height);
+    runtime = new SceneRuntime(world, root);
+
     // Sample the whole scene first, then encode. `encodePngSequence` never
     // sees the runtime, so the two phases cannot interleave even by mistake.
     const frames = sampleFrames(runtime, root, planned.plan);
@@ -110,9 +131,9 @@ async function exportPng(source: string, opts: ExportPngOptions): Promise<Export
       height: ir.height,
     };
   } finally {
-    runtime.destroy();
-    root.destroy({ children: true, texture: true });
-    app.destroy(true, { children: true });
+    runtime?.destroy();
+    root?.destroy({ children: true, texture: true });
+    if (app?.renderer) app.destroy(true, { children: true });
   }
 }
 
