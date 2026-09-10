@@ -119,6 +119,82 @@ for determinism.
 Add a scene rather than editing one when checking something new — these are
 regression checks, and their expected images are their value.
 
+## Exporting PNGs
+
+`export-check.mjs` drives the browser's real export path — `renderer.extract`,
+not a naive canvas read — and writes the frames it produces to disk. It exists
+for the same reason `check.mjs` does: the headless suite cannot see a canvas,
+and export has its own failure mode the suite structurally cannot catch
+either. See `tools/visual-check/export-check.mjs`'s own header
+comment for the full design rationale; this section covers what to run and
+what it checks.
+
+**Why there is a `window.__mareyExportPng` seam at all.** No product UI ships
+an export button this phase — that is Phase 6 (`marey export`) — so there is
+nothing in the app for a browser harness to click. `src/main.tsx` installs
+`window.__mareyExportPng` (defined in `src/lib/devExportSeam.ts`) behind
+`if (import.meta.env.DEV)`, using a *dynamic* `import()` inside that `if`
+rather than a top-level import called conditionally — that is the shape that
+lets Vite constant-fold the branch away and drop the whole module from a
+production build, rather than merely leaving the global unset. Confirmed by
+building and grepping `dist/` for `__mareyExportPng`: absent. The seam
+compiles the given source, plans the export, builds a scene tree, samples it,
+and encodes PNGs — the same pipeline `marey export` will eventually drive from
+the CLI — and returns base64 PNG frames plus `hashFrames(frames)` (the
+simulation-state hash, not a pixel hash). A narrow named seam beats both
+driving a button that does not exist and re-implementing the pipeline in page
+script, where a harness-only copy could silently diverge from the one the app
+actually runs.
+
+**The blank-frame trap this all exists to avoid.** Reading the live PixiJS
+canvas in-page returns a blank frame — the same `preserveDrawingBuffer` issue
+noted above — and a sequence of identical blank PNGs hashes perfectly
+consistently, so every numeric check in `report.json` would pass against
+ninety blank images. `renderer.extract.canvas(root)` (`pngSequence.ts`)
+sidesteps it: it renders into a render texture the caller owns and reads back
+from that, so the live drawing buffer's contents never matter. That makes
+`report.json` alone untrustworthy for this specific failure — **looking at the
+PNGs is not optional.**
+
+```bash
+node tools/visual-check/export-check.mjs \
+  --scene tools/visual-check/scenes/logo.marey \
+  --fps 30 --duration 3 --out .visual-check/export/logo
+```
+
+| Flag | Meaning |
+|---|---|
+| `--scene <path>` | A `.marey` file. Required — there is no `default` fallback, because the app's built-in scene declares no `duration` and would need `--duration` anyway. |
+| `--fps <n>` | Export frame rate (default 30). Must divide 120 (`TICK_HZ`) exactly — 24, 30, 60 are supported; `planExport` rejects anything else. |
+| `--duration <s>` | Export bound in seconds, overriding the scene's own `duration:`. Omit to use the scene's declared duration. |
+| `--out <dir>` | Where frames and `report.json` go. |
+| `--url <origin>` | Dev server origin (default `http://localhost:5199`). Same `--strictPort` trap as `check.mjs` applies — see above. |
+| `--headed` | Show the browser window. |
+
+It loads the app, injects the scene through the same `#code=` share-link hash
+`check.mjs` uses, waits for `window.__mareyExportPng` to exist, and calls it
+with the raw source text (the seam does not read the editor's own state, so
+hash injection here is for load-path parity with `check.mjs`, not a functional
+requirement). It then does this **twice, each from a freshly loaded page** —
+not a reload of the same page — and compares the two runs: the per-frame PNG
+bytes (sha256 each) and the returned `hashFrames` value. Divergence in either
+means the export is not reproducible across a real page load, which baked-frame
+export depends on.
+
+Output: `<out>/frame_%04d.png` for the first run (the set to look at),
+`<out>/runB/frame_%04d.png` for the second (kept only for the comparison), and
+`<out>/report.json` with both runs' metadata, hashes, console/page errors, and
+the two match verdicts. Exit code is non-zero if either run failed, produced
+zero frames, or the runs disagree — never on how the PNGs look, which is a
+judgement call for whoever reads them.
+
+**Look at the PNGs — `report.json` cannot substitute for this.** Open
+`frame_0000.png`, a frame from the middle of the export, and the last frame
+with the Read tool. A blank image (solid background colour, no shapes) is
+exactly the failure this script cannot see numerically: identical blank frames
+still hash consistently and still pass `pngFramesMatch` and
+`snapshotHashMatch`.
+
 ## Environment
 
 Needs `playwright` (a devDependency) and its Chromium download:
