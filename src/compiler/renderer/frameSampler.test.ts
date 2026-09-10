@@ -71,6 +71,25 @@ describe("sampleFrames · exact frame counts (Gate B criterion 1)", () => {
     const { frames } = runExport(30);
     expect(frames[0].index).toBe(0);
     expect(frames[0].tick).toBe(0);
+    // The labels above are implementation literals compared to the same
+    // literals (frameSampler.ts writes `{ index: 0, tick: 0 }` verbatim), so
+    // they cannot fail if the label is simply wrong — Step 6 mutation 3 found
+    // exactly that: deleting the frame-0 push and starting the loop at index
+    // 0 left `frames[0].tick` reading `0 * ticksPerFrame`, still `0`, even
+    // though the world had already been advanced. Pin the *content* frame 0
+    // is required to have: the scene exactly as authored, before any tick or
+    // paint. Verified independently (not taken from the brief): builder.ts's
+    // `applyAnchorAndPivot` writes `currentPos`/`currentScale`/`rotation`/
+    // `alpha` once at construction from `props.position`/`props.scale`(default
+    // 1.0)/`props.rotation`(default 0)/`props.alpha`(default 1.0)
+    // (languageContract.ts), and neither `bindPhysicsBodies` (physicsSync.ts)
+    // nor `spawnAnim`/`spawnPhysics` (sceneRuntime.ts) — the only code that
+    // runs between construction and this first snapshot — writes to any of
+    // those fields.
+    expect(frames[0].objects).toEqual([
+      { id: "scene.slider", x: 100, y: 100, rotation: 0, scaleX: 1, scaleY: 1, alpha: 1 },
+      { id: "scene.faller", x: 400, y: 50, rotation: 0, scaleX: 1, scaleY: 1, alpha: 1 },
+    ]);
   });
 
   it("spaces frames by exactly ticksPerFrame", () => {
@@ -78,6 +97,33 @@ describe("sampleFrames · exact frame counts (Gate B criterion 1)", () => {
     for (let i = 0; i < frames.length; i++) {
       expect(frames[i].tick).toBe(i * plan.ticksPerFrame);
     }
+  });
+
+  it("frame intervals are uniform in simulated time, not just labelled that way", () => {
+    // The test above compares the `tick` label to the same formula the
+    // implementation writes it with (`index * plan.ticksPerFrame`), so a
+    // mislabelled frame that still carries a stale tick's *state* would not
+    // be caught — again what mutation 3 demonstrated. This asserts the
+    // physical consequence instead, using the falling body's own motion as
+    // the probe.
+    //
+    // Under constant gravity with this engine's semi-implicit-Euler stepping
+    // (velocity updated then position updated once per tick, from rest), the
+    // displacement between tick 0 and tick n is proportional to n(n+1)/2. At
+    // 60fps (2 ticks/frame) the first two frame-to-frame displacements are
+    // therefore proportional to D(2)-D(0)=3 and D(4)-D(2)=7, a ratio of 7/3 ≈
+    // 2.33 (derived and checked against this suite's own measurements, not
+    // copied from the review that requested this test). A sampler that reads
+    // one tick short on every interval *except* the first — exactly what
+    // `paint(0)` in place of `paintExactTick()` produces, since frame 0 is
+    // captured before any paint at all — instead gives D(1)=1 and D(3)-D(1)=5,
+    // a ratio of 5/1 = 5: a factor-of-two gap no plausible damping closes.
+    const { frames } = runExport(60);
+    const fallerY = (f: (typeof frames)[number]) =>
+      f.objects.find((o) => o.id === "scene.faller")!.y;
+    const d1 = fallerY(frames[1]) - fallerY(frames[0]);
+    const d2 = fallerY(frames[2]) - fallerY(frames[1]);
+    expect(d2 / d1).toBeLessThan(3);
   });
 });
 
@@ -90,6 +136,25 @@ describe("sampleFrames · repeated exports are identical (Gate B criterion 2)", 
     // Guards the other direction: a constant hash would satisfy the test above
     // vacuously (AGENT-LESSONS §2a — name the change that would make it fail).
     expect(hashFrames(runExport(30).frames)).not.toBe(hashFrames(runExport(60).frames));
+  });
+
+  it("distinguishes two same-length sequences that differ only in content", () => {
+    // The test above compares a 150-frame sequence to a 300-frame one, so it
+    // cannot tell a real content hash from one that is sensitive to sequence
+    // *length* alone (e.g. `frames => frames.length.toString(16)`), which
+    // would satisfy both hash tests above vacuously. Hold length fixed and
+    // perturb one coordinate instead.
+    const { frames } = runExport(30);
+    const perturbed = frames.map((f, i) =>
+      i === 0
+        ? {
+            ...f,
+            objects: f.objects.map((o, j) => (j === 0 ? { ...o, x: o.x + 1 } : o)),
+          }
+        : f,
+    );
+    expect(frames).toHaveLength(perturbed.length);
+    expect(hashFrames(frames)).not.toBe(hashFrames(perturbed));
   });
 });
 
@@ -121,15 +186,24 @@ describe("sampleFrames · uses the tick-aligned paint, not the wall-clock one", 
   // Closes a gap the Step 6 delete-and-run check found: swapping
   // `paintExactTick()` for `paint(0)` left every other test in this file
   // green, because the resulting one-tick physics lag is a function of tick
-  // alone and so cancels out in every frame-rate-comparison assertion. This
-  // pins the call itself, which is the only thing that distinguishes the two.
-  it("calls paintExactTick once per advanced tick and never calls paint", () => {
+  // alone and so cancels out in every frame-rate-comparison assertion.
+  //
+  // This pins WHICH method is used, deliberately not how often. An earlier
+  // version of this test also asserted the call count equalled
+  // `(frameCount - 1) * ticksPerFrame` — i.e. once per tick — which silently
+  // promoted `sampleFrames`'s docstring-disclaimed choice of painting every
+  // tick (rather than every frame) into a hard contract, contradicting the
+  // same docstring three lines away and misfiring on two of the Step 6
+  // mutations for a reason unrelated to what the test's own name claimed. Per-
+  // tick painting is kept as the conservative default (see the docstring on
+  // `sampleFrames`), but is not proven necessary by this suite, so nothing
+  // here may assert a specific call count again.
+  it("uses paintExactTick to paint, never paint", () => {
     const spyExact = vi.spyOn(SceneRuntime.prototype, "paintExactTick");
     const spyPaint = vi.spyOn(SceneRuntime.prototype, "paint");
     try {
-      const { plan } = runExport(30);
-      const expectedCalls = (plan.frameCount - 1) * plan.ticksPerFrame;
-      expect(spyExact).toHaveBeenCalledTimes(expectedCalls);
+      runExport(30);
+      expect(spyExact).toHaveBeenCalled();
       expect(spyPaint).not.toHaveBeenCalled();
     } finally {
       spyExact.mockRestore();
