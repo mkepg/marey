@@ -121,9 +121,22 @@ export function checkOne(
   };
 }
 
-/** The only impure part: reads files, prints, and reports an exit code. */
+/**
+ * The only impure part: reads files, prints, and reports an exit code.
+ *
+ * `argv` is `process.argv.slice(2)` from `bin/marey.mjs`, i.e. it still
+ * carries the `check` subcommand token (`marey check <files>`). `check` is
+ * the only command today, so this only strips that one token rather than
+ * building out a subcommand table for a single entry.
+ */
 export async function main(argv: readonly string[]): Promise<number> {
-  const args = parseArgs(argv);
+  const [command, ...rest] = argv;
+  if (command !== "check") {
+    console.error(`Unknown command '${command ?? ""}'. The only command is 'check'.`);
+    return 1;
+  }
+
+  const args = parseArgs(rest);
   if (args.error !== null) {
     console.error(args.error);
     return 1;
