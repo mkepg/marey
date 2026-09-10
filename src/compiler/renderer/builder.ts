@@ -49,6 +49,14 @@ declare module "pixi.js" {
     __bodyShape?: BodyGeometry;
     __sequences?: ReadonlyArray<IRSequence>;
     __baseSize?: { w: number; h: number };
+    /**
+     * This container's IR object id.
+     *
+     * The frame sampler keys snapshots by it. Nothing else in the renderer
+     * needs a stable identity, which is why no such field existed before
+     * Phase 4 — the scene graph was only ever walked, never addressed.
+     */
+    __mareyId?: string;
   }
 }
 
@@ -375,6 +383,7 @@ export function buildNode(node: IRObjectNode): Container {
 
   wrapper.__animations = props.animations;
   wrapper.__sequences  = props.sequences;
+  wrapper.__mareyId    = node.id;
 
   let startPos   = { x: 0, y: 0 };
   let startScale = { x: 1, y: 1 };
