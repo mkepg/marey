@@ -9,9 +9,7 @@
 import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, normalize } from "node:path";
-import { lex } from "../src/compiler/lexer";
-import { parse } from "../src/compiler/parser";
-import { typeCheck } from "../src/compiler/typeChecker";
+import { compileSource } from "../src/compiler/compileSource";
 
 const DIR = process.env.EVAL_DIR ?? "eval/scenes";
 
@@ -61,20 +59,17 @@ it("compiles every scene and writes a report", () => {
   const files = readdirSync(DIR).filter((f) => f.endsWith(".marey")).sort();
   const results = files.map((f) => {
     const src = readFileSync(`${DIR}/${f}`, "utf8");
-    let parseErrors: string[] = [];
-    let typeErrors: string[] = [];
-    let nodeCount = 0;
-    try {
-      const { ast, errors } = parse(lex(src));
-      parseErrors = errors.map((e) => `L${e.line ?? "?"}: ${e.message}`);
-      if (ast) {
-        const { errors: te, ir } = typeCheck(ast);
-        typeErrors = te.map((e) => `L${e.line ?? "?"}: ${e.message}`);
-        nodeCount = ir ? Object.keys(ir.registry).length : 0;
-      }
-    } catch (err) {
-      parseErrors.push(`THREW: ${String(err).slice(0, 200)}`);
-    }
+    // compileSource never throws — it is the pipeline's own try/catch, not
+    // this harness's. Its six `phase` values partition two ways: only
+    // "TYPE" belongs in typeErrors, everything else (PARSE, and LEX /
+    // RUNTIME / SYSTEM / ERROR from compileSource's own catch) belongs in
+    // parseErrors, matching what this harness effectively did before —
+    // it caught thrown lexer errors into parseErrors as `THREW: …`.
+    const out = compileSource(src);
+    const format = (e: { line?: number; message: string }) => `L${e.line ?? "?"}: ${e.message}`;
+    const parseErrors = out.errors.filter((e) => e.phase !== "TYPE").map(format);
+    const typeErrors = out.errors.filter((e) => e.phase === "TYPE").map(format);
+    const nodeCount = out.ir ? Object.keys(out.ir.registry).length : 0;
     return {
       file: f,
       ok: parseErrors.length === 0 && typeErrors.length === 0,
