@@ -29,5 +29,9 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // The CLI is Node-only (reads files with `node:fs`) and has its own
+  // project, tsconfig.cli.json, with Node types instead of this project's
+  // browser (vite/client) types.
+  "exclude": ["src/cli"]
 }

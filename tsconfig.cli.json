@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.cli.tsbuildinfo",
+    "target": "ES2023",
+    // DOM is here only so `sceneIR.ts`'s `IRendererAdapter.render(..., host:
+    // HTMLDivElement, ...)` type-checks: the CLI imports `IRSceneNode` from
+    // the same file (a type-only import), which still requires the whole
+    // file to type-check as one program member. No CLI code runs in a DOM
+    // environment or uses a DOM global at runtime.
+    "lib": ["ES2023", "DOM"],
+    "module": "ESNext",
+    "types": ["node"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true
+  },
+  "include": ["src/cli"]
+}
