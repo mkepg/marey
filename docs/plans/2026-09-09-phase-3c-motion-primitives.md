@@ -19,7 +19,21 @@ where they reach a divisor.
 ## A note on this plan's use of code blocks
 
 Test code below is verbatim and must be typed as written — a test is a
-specification, and its RED run catches it immediately if it is wrong.
+specification.
+
+**That protection did not hold, and this plan's own execution notes record
+why.** "Its RED run catches it immediately if it is wrong" is false whenever the
+verbatim test is wrong *about the fixture rather than about the behaviour*:
+plan defects #1 and #2 below specified tests calling fake-world APIs that do not
+exist (`unpinAll`, `setReadState`, `runtimeWithScaleAnim`, `world.positionCalls`),
+and Task 4's headline test read `world.positionCalls` from a
+`RecordingWorld.setPosition` that was a no-op stub recording nothing. Each would
+have gone RED — for the wrong reason, which is a **false RED** and not a red
+flag. What actually caught them was a human-side pre-flight read of the fake
+before dispatch. So: **verbatim test code is a claim about the fake's API, and
+must be read against the fake before it is dispatched**, exactly as a plan
+sketch citing a signature is a claim about the past. See AGENT-LESSONS §3d.
+
 **Implementation code is given as exact call sites, exact formulas and exact
 message strings, not as pasted function bodies**, for Tasks 3 and 4 in
 particular. This is a deliberate deviation from the writing-plans skill's
@@ -1397,18 +1411,46 @@ inconvenient to fix.
 | Deferred | Why it is safe to defer |
 |---|---|
 | **`TYPE_ZERO_SCALE_PHYSICS` over-rejects** a zero animated `to` on a child of a physics group, and a zero declared `scale` on a rectangle or circle child of one | A **spurious rejection carrying a named diagnostic**, not silent data loss: the author sees the error at the offending line. Design §2.4 chose one teachable rule over a minimal one *in writing*, so this is a measured cost rather than an oversight, and §2.4a now records it beside the rule with its reasoning and the shape any future narrowing should take. Re-verified in this task that no first-party `.marey` file has the shape. The cost stated honestly: in that one nested case an author must still write `0.001` |
-| The compound `readState`-before-`setScale` ordering is untestable with the current fakes | **Stronger than a deferral: it is unreachable.** Only a `group` produces a `kind: "compound"` body (`renderer/builder.ts:360`), `origin` on a group is `TYPE_ORIGIN_ON_GROUP`, and a group's `centreOffset` is hard-coded `(0, 0)` by D16 — so `tracksCentre` is false for every compound and the branch that reads a body's centre around `setScale` never runs on one. A `MatterWorld` compound-plus-origin fixture was therefore **not** written, because it cannot be written in Marey source at all; what was written instead is the structural pin that makes the unreachability load-bearing (mutation B). The ordering is kept, with its reasoning at the call site, so it stays correct if a future phase gives groups an origin |
+| The `readState`-before-`setScale` ordering in `pushAnimToWorld`'s scale branch is **untested** | **Re-graded by the whole-branch review; the earlier grade of "unreachable" was false.** *Reachable:* the vector that read is protecting — a body's own centre-of-mass → bbox-centre offset, `rec.offsetX/Y` — is non-zero for a compound **and for any asymmetric polygon**, because `polygonBodyAtBboxCentre` (`renderer/physicsWorld.ts:238-250`) places the polygon's *bbox centre* at the requested point while `Bodies.fromVertices` places its *centre of mass*, leaving `addBody`'s `x - body.position.x` (`renderer/physicsWorld.ts:354`) equal to the gap — 7.5 px for the default scene's own triangle. `polygon` + `origin` + `physics` + `animate scale` is ordinary source (`tumble.marey` already proves `polygon` + `physics` is legal), so the branch runs with a non-zero offset. What *is* unreachable is only the **compound** half: `origin` on a group is `TYPE_ORIGIN_ON_GROUP` and D16 hard-codes a group's `centreOffset` to `(0, 0)`, so `tracksCentre` is false for every compound (`renderer/builder.ts:367`, mutation B). *Correct by construction:* `setPosition` subtracts the new offset from a base that still carries the old one, so the bbox centre moves by exactly the intended delta; reading *after* `setScale` would be the wrong one. *Untested:* `RecordingWorld.readState` (`renderer/sceneRuntime.test.ts:60-63`) models no offset at all, so reverting the ordering fails nothing. See the fixture filed below |
 | `text`'s origin call site has no headless test | PixiJS `Text` needs a canvas, which `builder.test.ts`'s header comment has recorded since before this phase. The arithmetic is shared with the four kinds that *are* pinned — one `applyAnchorAndPivot`, five call sites — so what is unguarded is the call, not the rule. The browser path covers it |
 | The two write-back sites duplicate ~8 lines | A **deliberate** non-extraction, with a comment saying so. Merging `syncWorldToContainers` and `snapContainerToBody` would collapse two independently-revertible sites into one and destroy the per-site check that proved them separately guarded — the exact failure AGENT-LESSONS §2 records from Phase 3B |
 | A delayed bottom-origin scale animation pushes a zero-delta `setPosition` on every delay tick | A true numeric no-op, and deterministic. `delay × origin × scale` is a newly expressible combination with no test of its own |
-| The dead `!previous` guard in `pushAnimToWorld` | Unreachable twice over: `spawnAnim` seeds a scale for every scale runner, and the per-container ledger is seeded from the bindings in the constructor |
-| `centreInParent`'s layout-less `{x: 0, y: 0}` return is an absolute point, not a null offset | Unreachable from all four call sites, each of which guards on `layout` first. TypeScript rejects deleting the branch, so a revert check is impossible in the §2f sense, and its *contract* is pinned by a direct unit test instead |
+| The dead `!previous` guard in `pushAnimToWorld` | Unreachable, but **not for the reason first recorded here**: `spawnAnim` no longer touches the `worldScale` ledger at all. The live reason is that the `SceneRuntime` constructor seeds `worldScale` for every binding, and `bindPhysicsBodies` only binds a container that has a `__mareyLayout` — so any container that can reach this line already has an entry |
+| `centreInParent`'s layout-less `{x: 0, y: 0}` return is an absolute point, not a null offset | Unreachable, but from **two** production call sites, not four: `renderer/builder.ts:183` (`collectBodyParts`) and `renderer/physicsSync.ts:177` (`bindPhysicsBodies`), each of which guards on `layout` first. The "four" was Task 3's four *handoff sites*, and the other two never call this function. TypeScript rejects deleting the branch, so a revert check is impossible in the §2f sense, and its *contract* is pinned by a direct unit test instead |
 | The zero rule is gated on a hardcoded `key === "scale"` rather than on the constraint kind | The sign half **is** contract-driven; the zero half cannot be a `LocalConstraint` at all, because it depends on the object's place in the tree rather than on the value. A contract flag meaning "this property also has a tree rule" is a design question, not a rename |
 | `physicsParticipationReason`'s ancestor walk duplicates `TYPE_LINE_PHYSICS`'s | Behaviour-identical today; unifying them is a refactor with no behavioural claim attached |
 | The clause *order* in `physicsParticipationReason` is unpinned | The §2f result, established rather than asserted: two clauses can only match the same object when physics nests inside physics, and D17 rejects every such program with `TYPE_PHYSICS_IN_PHYSICS_GROUP`. There is no clean source whose diagnostic differs between the orders, so a test would have to be written against source that is invalid for an unrelated reason. The reasoning sits in a comment beside the ordering, not only in a report |
 | One-tick lag between the centre correction and a concurrent rotation animation | `overrideAngle` is applied inside `step()`, so the offset uses the previous tick's angle. Deterministic and frame-rate independent — the same one-tick cost `pushAnimToWorld` already documents for position. Closing it needs a getter on `IPhysicsWorld` |
 | `applyAnchorAndPivot` returns a value five of its six callers discard | Cosmetic |
 | `from` on `animate`, `stagger`, mirroring via negative scale, `origin` on `group` | Design §9 — deliberate scope, argued there. `stagger` is roadmap Phase 7 and explicitly conditioned on "`delay` having landed in 3C", which it now has |
+
+**Filed for the next phase — the single highest-value test this branch does not
+have.** A **`MatterWorld`-level fixture with a `polygon` carrying an `origin`, a
+`physics` block, and an `animate scale`.** Filing rather than writing it is a
+controller ruling: the code is verified correct, so this closes a *test gap*
+rather than a defect, and one scoped re-review remains with no fix wave after
+it — a new `MatterWorld` test surface would land under the thinnest review of
+the phase.
+
+- **The scene shape.** A single asymmetric `polygon` — the default scene's own
+  triangle `[(0, -30), (26, 15), (-26, 15)]` does it: bbox centre `(0, -7.5)`,
+  centroid `(0, 0)`, so `rec.offsetY` is 7.5 — with `origin: (0.5, 1)`, a
+  `physics` block, and
+  `animate { property: scale }`. `tools/visual-check/scenes/tumble.marey`
+  already proves `polygon` + `physics` compiles; `origin-physics.marey` proves
+  `origin` + `physics` + `animate scale` does. Nothing rejects the combination.
+- **Why `RecordingWorld` cannot see it.** `renderer/sceneRuntime.test.ts:60-63`
+  returns whatever `setPosition` last recorded, with **no** centre-of-mass offset
+  modelled and no `setScale` effect on it — so the whole
+  `readState`-before-`setScale` ordering is invisible to it, and swapping the two
+  statements leaves the suite green. Only a real `MatterWorld` has `rec.offsetX/Y`
+  and only `Matter.Body.scale` rescales them.
+- **What the test would assert.** Drive the runtime against a real `MatterWorld`
+  for the scale animation's ticks and assert the body's **bounding-box centre**
+  (`boundsOf`, or `readState`, which already adds `rotatedOffset`) tracks the
+  drawn bbox centre — i.e. the polygon's bottom edge stays put as it grows.
+  Reverting the ordering to read *after* `setScale` must fail it; that revert is
+  the check the current suite cannot make.
 
 ### Goldens
 
@@ -1442,13 +1484,13 @@ themselves, against the smaller suites named beside them.
 | # | Mutation | Observed |
 |---|---|---|
 | A *(re-run)* | `typeChecker/builder.ts`'s `delay` resolution hardcoded to `0` | **3 failed / 674.** `resolves an animation's explicit delay into the IR`, plus both of Task 6's new `LANGUAGE.md · Animation · delay` facts. At Task 1 this same mutation left **612/612 green** — the wiring between the contract and the IR had no test at all |
-| B *(re-run)* | A group's pivot derived from its children's bounds instead of D16's fixed `(0, 0)` | **1 failed / 677**, and it is the pin added in this task. Before it, the suite had **no opinion** about a rule three separate mechanisms depend on — including the one that makes the compound read-order question unreachable |
+| B *(re-run)* | A group's pivot derived from its children's bounds instead of D16's fixed `(0, 0)` | **1 failed / 676**, and it is the pin added in this task. Before it, the suite had **no opinion** about a rule three separate mechanisms depend on — including the one that keeps `pushAnimToWorld`'s centre correction off compounds. (That is narrower than this row first claimed: it does not make the read-order question unreachable in general — see the deferrals table) |
 | C *(re-run)* | `advanceAnimTime`'s delay-spending branch deleted | **7 failed / 670.** Was 4 of 612 at Task 1; the tests Tasks 4 and 6 added along the same seam pick it up too |
 | D *(re-run)* | `animProgress`'s `delayTicks > 0` early return deleted | **1 failed / 676** — `holds progress at exactly 0 during the delay, at any sub-tick alpha`. Reverted **separately** from C, per AGENT-LESSONS §2c's breadth corollary: reverting both at once would say nothing about which is guarded, and the answer is that each guards a different test |
 | E *(re-run)* | `origin`'s contract default flipped from `(0.5, 0.5)` to `(0, 0)` — design §6.3's required judgment-call flip | **7 failed / 670.** Was 3 of 623 at Task 2, all three determinism goldens; it is now goldens plus the physics-seam tests Tasks 3 and 4 added |
 | F *(re-run)* | The `animate` `to` scale rules neutralised (`if (p === "scale")` → `if (false)`) | **4 failed / 673** — the narrowing test, the negative numeric `to`, and both zero-`to` cases. This is exit criterion 4's regression evidence, re-derived |
 | G *(re-run)* | The scale branch's `setPosition` deleted | **6 failed / 671.** Matches Task 4's post-fix figure exactly |
-| 1 *(ledger, 640)* | Each of Task 3's four sites reverted **individually** | bind **7**, `syncWorldToContainers` **3**, `snapContainerToBody` **2**, `collectBodyParts` **4**. B and C fail on **disjoint** sets — neither write-back path rides on the other's coverage, which is the specific failure AGENT-LESSONS §2 records twice |
+| 1 *(ledger, 640)* | Each of Task 3's four sites reverted **individually** | bind **7**, `syncWorldToContainers` **3**, `snapContainerToBody` **2**, `collectBodyParts` **4**. The two **write-back** sites — `syncWorldToContainers` and `snapContainerToBody` — fail on **disjoint** sets, so neither rides on the other's coverage, which is the specific failure AGENT-LESSONS §2 records twice |
 | 2 *(ledger, 672)* | Each of the three physics-participation clauses reverted individually, then the `to`-side check | clause 1 **4**, clause 2 **3**, clause 3 **2**, `to` side **4**. Plus two unasked: the negative ban's numeric arm **2**, its point arm **2** |
 | 3 *(ledger, 672)* | Clause 2's reading of "a group that declares physics" flipped from `ownsPhysics` (D13: a sequence step counts) to direct `physics` children | **672/672 still green** — a §2d decision with no test. Closed with `rejects a zero scale under a group whose physics is a sequence step`; re-flipping now fails exactly 1 |
 | 4 *(ledger, 672)* | Clause *order* reversed to descendant-first | **672/672 green, and deliberately left that way** — the §2f result in the deferrals table above |
@@ -1484,6 +1526,15 @@ catch**, and not one of them was found by reading the code.
   show. Each was reported rather than quietly reconciled, which is what made
   them cheap; the framing error in particular had primed a reviewer with a
   controller's own conclusion, which is AGENT-LESSONS §3.
+- **One test is owed before Phase 4 bakes anything.** The `MatterWorld`-level
+  `polygon` + `origin` + `physics` + `animate scale` fixture filed at the end of
+  "Deliberate gaps and deferrals". It is the single highest-value test this
+  branch does not have: it is the only way to see the
+  `readState`-before-`setScale` ordering at all, `RecordingWorld` models no
+  centre-of-mass offset, and the combination is ordinary Marey source that this
+  phase was wrongly recorded as making unreachable. Phase 4 is composition and
+  export foundation, so an untested placement rule is exactly the thing a baked
+  keyframe would freeze in.
 - **What is still owed:** the independent whole-branch review by someone with no
   stake in the prior reasoning (AGENT-LESSONS §8), and the merge. Phase 3A
   passed eleven task reviews and a whole-branch review and *then* an outside

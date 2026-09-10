@@ -247,10 +247,6 @@ function physicsChild(
 const SHAPE: BodyGeometry = { kind: "circle", radius: 10 };
 
 /**
- * `cx`/`cy` are the pivot-to-bbox-centre offset, zero at the default origin —
- * which is why every pre-existing caller can leave them out.
- */
-/**
  * The tick-aligned scale to hand `snapContainerToBody`.
  *
  * No scale animation runs anywhere in this file, so nothing is writing
@@ -266,6 +262,10 @@ function tickScaleOf(c: { __mareyLayout?: { currentScale: { x: number; y: number
   return c.__mareyLayout?.currentScale ?? { x: 1, y: 1 };
 }
 
+/**
+ * `cx`/`cy` are the pivot-to-bbox-centre offset, zero at the default origin —
+ * which is why every pre-existing caller can leave them out.
+ */
 function layoutAt(x: number, y: number, sx = 1, sy = 1, cx = 0, cy = 0) {
   return {
     localPivotX: 0,

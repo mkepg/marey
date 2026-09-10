@@ -370,11 +370,16 @@ describe("origin", () => {
     //  * `sceneRuntime.pushAnimToWorld` skips its whole centre correction --
     //    and the `readState` it needs -- when the offset is zero, so a group
     //    with a scale animation must push no position at all;
-    //  * that skip is what makes the compound read-order question Task 4 filed
-    //    *unreachable*: only a group produces a `kind: "compound"` body
-    //    (builder.ts:360), `origin` on a group is TYPE_ORIGIN_ON_GROUP, and
-    //    this zero means the branch that reads a body's centre around
-    //    `setScale` never runs on a compound.
+    //  * that skip is what keeps the branch that reads a body's centre around
+    //    `setScale` from ever running on a COMPOUND: only a group produces a
+    //    `kind: "compound"` body (builder.ts:367), `origin` on a group is
+    //    TYPE_ORIGIN_ON_GROUP, and this zero makes `tracksCentre` false. That
+    //    is narrower than it once read here. The read-order question Task 4
+    //    filed is **not** unreachable — a body's own centre-of-mass-to-bbox
+    //    offset is non-zero for any asymmetric polygon too
+    //    (physicsWorld.ts:238-250), so `polygon` + `origin` + `physics` +
+    //    `animate scale` reaches it on ordinary source. See the call-site
+    //    comment in sceneRuntime.ts's scale branch.
     //
     // The children are deliberately asymmetric and far from the origin: a
     // bounding box derived from them would put the centre nowhere near (0, 0).

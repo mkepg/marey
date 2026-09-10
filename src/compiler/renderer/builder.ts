@@ -12,9 +12,11 @@ declare module "pixi.js" {
       /**
        * The local vector FROM the pivot TO the bounding-box centre, at scale
        * 1 and rotation 0 — `(0, 0)` at the default origin `(0.5, 0.5)`, where
-       * the pivot already sits on the centre. `physicsSync.centreInParent`
-       * reads these: `position` places the pivot, but Matter places a body at
-       * its centre of mass, and the two only coincide at the default origin.
+       * the pivot already sits on the centre. `physicsSync.centreOffsetVector`
+       * is the reader — `centreInParent` delegates to it, as do both write-back
+       * sites and `sceneRuntime.pushAnimToWorld`: `position` places the pivot,
+       * but Matter places a body at its centre of mass, and the two only
+       * coincide at the default origin.
        */
       centreOffsetX: number;
       centreOffsetY: number;
@@ -95,9 +97,14 @@ function applyAnchorAndPivot(
 
   wrapper.__updateLayout = () => {
     const layout = wrapper.__mareyLayout!;
-    
-    // With anchor strictly enforced at 0.5, 0.5, PIXI position IS the exact geometric center. 
-    // No translation math needed!
+
+    // `position` places the container's PIVOT, and the pivot was just set to
+    // the `origin` point above — so the declared value goes straight onto
+    // `position` with no translation, whatever the origin is. What is NOT true
+    // is that this point is the geometric centre: it is only at the default
+    // origin (0.5, 0.5), and reconciling pivot against Matter's centre of mass
+    // is the physics seam's job (`physicsSync.centreOffsetVector`), never this
+    // function's.
     wrapper.position.set(layout.currentPos.x, layout.currentPos.y);
     wrapper.scale.set(layout.currentScale.x, layout.currentScale.y);
   };

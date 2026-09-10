@@ -333,6 +333,22 @@ them and nothing in `src/` reads either. This design gives them their first
 reader. They are therefore treated as unverified rather than as established
 infrastructure, and get their own tests before anything depends on them.
 
+**Falsified in implementation — recorded rather than quietly dropped.** They
+never got that reader. The seam needed the *vector from the pivot to the bbox
+centre*, not the pivot, so `builder.ts` added two new fields —
+`centreOffsetX`/`centreOffsetY` — and `physicsSync.centreOffsetVector` reads
+those. `localPivotX`, `localPivotY` and `__baseSize` are still write-only at the
+close of Phase 3C: assigned in `builder.ts` (and set by test fixtures), read
+nowhere in `src/`. The prediction was wrong because it reasoned from *what the
+design would need to know* (where the pivot is) to *which existing field it would
+read*, and the implementation stored the derived quantity instead — which is the
+better shape, since it is what every one of the five handoffs actually wants.
+
+Deleting the three dead fields is **filed for a later phase, not done here**:
+they are part of the `__mareyLayout` / `declare module "pixi.js"` renderer
+contract, so removing one is behaviour-adjacent and needs its own test, which the
+Phase 3C documentation fix wave deliberately was not.
+
 ---
 
 ## 5. Diagnostics

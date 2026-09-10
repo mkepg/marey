@@ -347,6 +347,38 @@ the same file. A wrong constant (`sin(pi)` stated as `0.0274`; it is `0.0548`) h
 propagated design → plan → commit message → test comment before anyone recomputed it.
 Recompute the arithmetic in a rationale before copying it forward.
 
+### 3d. Verbatim test code is a claim about the fake's API
+
+**Phase 3C, plan error, twice.** A plan may reasonably paste implementation as
+call sites rather than bodies, and Phase 3C's did — on the argument that *test*
+code is safe to specify verbatim, because "a test is a specification, and its RED
+run catches it immediately if it is wrong"
+(`plans/2026-09-09-phase-3c-motion-primitives.md`, "A note on this plan's use of
+code blocks" — quoted as it stood before that note was amended to record that it
+did not).
+
+That argument does not hold, and the same plan's execution notes record the two
+counter-examples. Task 3's verbatim test called `world.unpinAll()` and
+`world.setReadState(...)`; the real fake offers `unpin(id, reason)` and
+`setState(id, state)`. Task 4's headline test read `world.positionCalls` off a
+`RecordingWorld.setPosition(_id, _x, _y)` that was a **no-op stub recording
+nothing**. Typed as written, each goes RED — but for the fixture, not for the
+behaviour. That is a **false RED**, and it is dangerous precisely because it
+looks like the RED the process is waiting for: it is consumed as progress rather
+than raised as a defect, and the risk is an implementer writing production code
+until an assertion about nothing turns green. Neither reached an implementer,
+and what stopped them was a controller reading the fake before dispatch — not a
+run, because a run goes red either way and only its *message* says which kind.
+
+*Do instead:* treat every verbatim test in a plan as an assertion about a file
+the plan did not write — open the fake, and check that each method exists with
+that spelling and that it **records what the assertion reads**. A stub with
+underscore-prefixed parameters records nothing and will not fail to compile.
+And when a RED arrives, read the failure message before accepting it: §3b's rule
+that only execution finds coincidences has a twin — only *reading the output*
+distinguishes a RED that proves the behaviour is missing from one that proves the
+fixture is.
+
 ---
 
 ## 4. Name workflow deviations up front

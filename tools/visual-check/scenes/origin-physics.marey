@@ -24,9 +24,14 @@
 // the bar drawn straight through it.
 //
 // The ledge freezes early (a numeric `duration` that expires), so it is
-// immovable scenery by the time anything touches it. Every animation here
-// finishes, so this scene does settle: `frozen at rest` and `deterministic`
-// both apply.
+// immovable scenery by the time anything touches it. The pillar, the bar and
+// the rider all declare `physics { duration: indefinitely }`, so their physics
+// runners never complete and `isIdle()` deliberately does not wait on them.
+// What makes this scene settle is the BODIES COMING TO REST: `isIdle()` also
+// gates on `world.isIdle()`, which reports idle once every body is asleep or
+// pinned. So `frozen at rest` and `deterministic` apply here because the
+// simulation stops, not because the one animation finishes — a scene whose
+// bodies never sleep has neither measure, however short its animations are.
 
 let ink   = #e2e8f0
 let slate = #334155

@@ -287,7 +287,8 @@ export class SceneRuntime {
    * any — the **last** one on this container that still pushes.
    *
    * Nothing rejects two `animate scale` blocks on one object: `builder.ts`
-   * `.filter`s animations where it `.find`s physics (`validator.ts:229`), and a
+   * `.filter`s animations where it `.find`s physics
+   * (`typeChecker/validator.ts:385`), and a
    * `parallel` step may carry two as well. Both spawn, both push, and
    * `advanceOneTick` pushes in array order, so the last one is the value the
    * body actually carries. That makes it the one runner allowed to correct the
@@ -414,11 +415,32 @@ export class SceneRuntime {
       const owns = tracksCentre && this.scaleOwnerOf(ra.container) === ra;
 
       // Read BEFORE this runner's `setScale` lands. `MatterWorld.setScale`
-      // rescales `rec.offsetX/Y`, the body's own **centre-of-mass → bbox-centre**
-      // vector (`physicsWorld.ts:354`, `410-418`) — a different vector from the
-      // pivot→centre offset corrected below. Reading afterwards would carry
-      // that Matter-side shift into the base and add the Marey-side delta on
-      // top of it. It is zero unless the body is a compound.
+      // updates `rec.scaleX/Y`, which is what `rotatedOffset` multiplies the
+      // body's own **centre-of-mass → bbox-centre** vector by
+      // (`physicsWorld.ts:354`, `410-418`) — a different vector from the
+      // pivot→centre offset corrected below. Both `readState` and `setPosition`
+      // recompute that offset at call time, so the arithmetic only closes one
+      // way round: with a base read BEFORE, `setPosition` subtracts the NEW
+      // offset from a base carrying the OLD one and the bbox centre moves by
+      // exactly `d`. Read afterwards, the base already carries the new offset,
+      // and the centre moves by `d` PLUS the offset's own change under the
+      // rescale.
+      //
+      // That vector is non-zero for a compound **and for any asymmetric
+      // polygon**. `polygonBodyAtBboxCentre` (`physicsWorld.ts:238-250`) places
+      // the polygon's BOUNDING-BOX centre at the requested point, while
+      // `Bodies.fromVertices` places its CENTRE OF MASS there — so `addBody`'s
+      // `offsetX = x - body.position.x` (`physicsWorld.ts:354`) is exactly the
+      // gap between the two, 7.5px for the default scene's own triangle (D15).
+      // A `polygon` carrying an `origin`, a body and an `animate scale` reaches
+      // this line with a non-zero offset, so the ordering is load-bearing on
+      // ordinary source, not merely defensive against a future compound.
+      //
+      // It is also **untested**: `RecordingWorld.readState`
+      // (`sceneRuntime.test.ts:60-63`) returns the recorded position with no
+      // offset modelled, so swapping these two statements fails nothing. The
+      // `MatterWorld`-level fixture that would close it is filed in the plan's
+      // "Deliberate gaps and deferrals".
       const before: BodyState | null = owns ? this.world.readState(id, 1) : null;
 
       this.world.setScale(id, t.sx * sx, t.sy * sy);
@@ -503,9 +525,6 @@ export class SceneRuntime {
         completed: false,
         loop: anim.loop,
         yoyo: anim.yoyo,
-        // secondsToTicks(0) === 1 (it floors at one tick), so converting a
-        // default delay of 0 through it would add one tick of delay to every
-        // animation that never asked for one. Short-circuit at 0 instead.
         // secondsToTicks(0) === 1 (it floors at one tick), so converting a
         // default delay of 0 through it would add one tick of delay to every
         // animation that never asked for one. Short-circuit at 0 instead.

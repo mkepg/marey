@@ -140,6 +140,12 @@ box, which gives rotation about an external point. That is a restriction not
 written rather than a feature added — no arithmetic divides by the origin, so
 a large value is unusual rather than dangerous.
 
+Because it is a fraction of the bounding box, `origin` is **inert on an axis
+whose bounding box has no extent** — the y axis of a perfectly horizontal
+`line`, or either axis of an empty `text` — so the pivot stays on that axis's
+single coordinate whatever fraction is written, even though a horizontal line
+is drawn `thickness` px tall and so has a visible extent there.
+
 **`origin` is not available on a `group`**; writing it there is a compile
 error (`TYPE_ORIGIN_ON_GROUP`). A group's pivot is its own local `(0, 0)` and
 is never derived from where its children sit, so a group already has an

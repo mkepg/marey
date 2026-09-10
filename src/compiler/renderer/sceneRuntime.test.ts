@@ -649,7 +649,8 @@ describe("SceneRuntime · origin through the physics seam", () => {
 
   it("corrects the centre once per body when two scale animations run on it", () => {
     // Nothing rejects two `animate scale` blocks on one object — builder.ts
-    // `.filter`s animations where it `.find`s physics (validator.ts:229) — and
+    // `.filter`s animations where it `.find`s physics
+    // (typeChecker/validator.ts:385) — and
     // a `parallel` step may carry two as well. Both spawn, both push
     // `setScale`, and the LAST one is the scale the body actually carries.
     //
