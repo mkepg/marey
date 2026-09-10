@@ -14,6 +14,10 @@ scene {
   size: (800, 600)
   background: #0a0e1a
   fit: contain
+  // Static scene — no `animate`, `physics` or `sequence` anywhere — so every
+  // exported frame is identical and a short bound is the honest one. 1s is
+  // 24/30/60 whole frames at the three supported rates.
+  duration: 1
 
   circle center { position: (400, 300), radius: 3, color: dim, alpha: 0.5 }
 

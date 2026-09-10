@@ -19,6 +19,12 @@ scene {
   size: (800, 600)
   background: #0a0e1a
   fit: contain
+  // The "one loop" this scene is named for is `generate` — a compile-time
+  // loop that is fully unrolled before the IR exists. There is no runtime
+  // animation here at all, so there are no cycles to pick a whole number of:
+  // every exported frame is the same still image, and 1s (24/30/60 whole
+  // frames at the three supported rates) is the honest bound.
+  duration: 1
 
   text title {
     position: (400, 40)

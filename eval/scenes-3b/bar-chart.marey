@@ -17,6 +17,12 @@ scene {
   size: (800, 600)
   background: #0a0e1a
   fit: contain
+  // This scene declares no `animate`, `physics` or `sequence`, so every
+  // exported frame is the same still image. A short bound is the honest one:
+  // 1s is 24/30/60 whole frames at the three supported rates, and a longer
+  // one would only repeat the frame. `duration` bounds the export, not the
+  // preview, which plays on regardless.
+  duration: 1
 
   text title {
     position: (400, 40)

@@ -7,6 +7,13 @@
     "nodeCount": 9
   },
   {
+    "file": "compound-logo.marey",
+    "ok": true,
+    "parseErrors": [],
+    "typeErrors": [],
+    "nodeCount": 4
+  },
+  {
     "file": "radial-dots.marey",
     "ok": true,
     "parseErrors": [],

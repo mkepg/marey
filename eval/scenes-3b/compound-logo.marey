@@ -1,0 +1,58 @@
+// The canonical export scene: a multi-part visual animates into a
+// deterministic shared-world simulation and exports as baked transforms.
+//
+// Three rectangles form one mark. The group carries the timeline, not any
+// child: `physics` inside a group is only legal under a *static* group (D17),
+// so an animated child of a physics group would be rejected outright — and an
+// `animate` inside a physics group is visual-only anyway (D18), because the
+// welded body is built once from where the contents start. Putting the
+// `sequence` on the group itself is the only shape in which all three parts
+// move together and the collision body follows them.
+//
+// The sequence is the handoff: the mark slides in under `animate`, its exit
+// momentum carries into the simulation via `handoff: true`, and the compound
+// body then falls, strikes the scene floor and settles there. The group's
+// three rectangles are welded into one compound body, so the mark tumbles as
+// one object rather than coming apart.
+//
+// Nothing here is static-by-declaration: Marey has no static-body syntax
+// (`lockPosition`/`lockRotation` are Phase 8), so the mark settles against
+// `collideBounds`' scene floor rather than on a resting platform, which would
+// itself be a dynamic body and drift under the impact.
+
+let sky   = #38bdf8
+let amber = #fbbf24
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  fit: contain
+  // 1.4s of animate-in + 4.6s of simulation = exactly the 6s exported.
+  duration: 6
+
+  group mark {
+    position: (150, 130)
+    rotation: -14
+
+    rectangle stem   { position: (0, 0),    size: (26, 130), color: sky }
+    rectangle armTop { position: (38, -46), size: (52, 26),  color: amber }
+    rectangle armMid { position: (30, 12),  size: (40, 26),  color: amber }
+
+    sequence {
+      animate {
+        property: position
+        to: (420, 210)
+        duration: 1.4
+        easing: easeIn
+        handoff: true
+      }
+      physics {
+        gravity: (0, 900)
+        bounce: 0.3
+        airDrag: 0.006
+        collideBounds: true
+        duration: 4.6
+      }
+    }
+  }
+}
