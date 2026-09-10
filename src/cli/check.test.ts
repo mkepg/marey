@@ -83,4 +83,24 @@ describe("checkOne", () => {
     expect(out.lines.join("\n")).toContain("EXPORT_UNSUPPORTED_FPS");
     expect(checkOne("x.marey", `scene { size: (8, 6) duration: 2 }`, ready).ok).toBe(true);
   });
+
+  // None of the fixtures above actually exercise the --fps-omitted filter:
+  // the scene either has no diagnostics at the probe rate, or its one
+  // diagnostic (EXPORT_UNBOUNDED_SCENE) is rate-independent, so it survives
+  // the filter either way. Confirmed by deleting the filter outright and
+  // re-running this file: all cases above still passed. This case picks a
+  // duration whose frame count at the 30fps probe rate (300s * 30 = 9000
+  // frames) exceeds MAX_EXPORT_FRAMES (7,200 — exportContract.ts), so
+  // EXPORT_FRAME_BUDGET fires only because of *which rate the probe used*.
+  // Without --fps that must not surface; with the same rate given
+  // explicitly, it must.
+  it("does not surface a frame-budget overflow caused only by the probe rate", () => {
+    const longScene = `scene { size: (8, 6) duration: 300 }`;
+    expect(checkOne("x.marey", longScene, ready).ok).toBe(true);
+
+    const at30 = parseArgs(["--export-ready", "--fps", "30", "x.marey"]);
+    const withFps = checkOne("x.marey", longScene, at30);
+    expect(withFps.ok).toBe(false);
+    expect(withFps.lines.join("\n")).toContain("EXPORT_FRAME_BUDGET");
+  });
 });
