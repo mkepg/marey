@@ -6,7 +6,8 @@ import { MatterWorld } from "./physicsWorld";
 import type {
   IPhysicsWorld, BodyGeometry, BodyState, PhysicsParams, PinReason,
 } from "./physicsWorld";
-import type { IRAnimation, IRPhysics, IRSequence } from "../sceneIR";
+import type { IRAnimation, IRPhysics, IRSequence, IRObjectNode, IRObjectProps } from "../sceneIR";
+import { buildNode } from "./builder";
 
 /**
  * A world that records what it was told rather than simulating.
@@ -966,5 +967,82 @@ describe("SceneRuntime · frame pacing must not reach the world", () => {
     const next = positions[firstTargetIndex + 1];
     const x = Number(next.split(":")[2].split(",")[0]);
     expect(x).toBeGreaterThanOrEqual(120);
+  });
+});
+
+describe("SceneRuntime · a bottom-origin polygon body under a scale animation", () => {
+  // The default scene's own triangle: bbox centre (0, -7.5), centroid (0, 0),
+  // so MatterWorld's centre-of-mass-to-bbox-centre offset is 7.5px. That is the
+  // vector `pushAnimToWorld`'s read-before-setScale ordering exists to protect,
+  // and RecordingWorld models none of it (sceneRuntime.test.ts:60-63).
+  const TRIANGLE = [{ x: 0, y: -30 }, { x: 26, y: 15 }, { x: -26, y: 15 }];
+
+  function triangleNode(): IRObjectNode {
+    return {
+      id: "tri",
+      props: {
+        kind: "polygon",
+        points: TRIANGLE,
+        position: { x: 400, y: 300 },
+        color: "#ff0000",
+        rotation: 0,
+        scale: { x: 1, y: 1 },
+        alpha: 1,
+        layer: 0,
+        // Bottom-centre: the pivot sits on the triangle's base, so growing it
+        // must keep that base still.
+        origin: { x: 0.5, y: 1 },
+        animations: [
+          {
+            property: "scale",
+            to: { x: 1, y: 2 },
+            duration: 20 / TICK_HZ,
+            delay: 0,
+            easing: "linear",
+            loop: false,
+            yoyo: false,
+            handoff: false,
+          },
+        ],
+        sequences: [],
+        physics: {
+          velocity: { x: 0, y: 0 },
+          // No gravity: the only thing that may move this body is the scale
+          // correction under test. Gravity would swamp a 7.5px effect.
+          gravity: { x: 0, y: 0 },
+          airDrag: 0,
+          bounce: 0,
+          collideBounds: false,
+          duration: "indefinitely",
+        },
+      } as unknown as IRObjectProps,
+      children: [],
+    };
+  }
+
+  it("keeps the polygon's bottom edge still while its scale animates", () => {
+    const world = new MatterWorld(800, 600);
+    const container = buildNode(triangleNode());
+    const root = new Container();
+    root.addChild(container);
+    const rt = new SceneRuntime(world, root);
+
+    const id = container.__body!;
+    const bottomAtStart = world.boundsOf(id)!.max.y;
+
+    for (let t = 0; t < 20; t++) {
+      rt.advanceOneTick();
+      rt.paint(0);
+    }
+
+    const boundsAtEnd = world.boundsOf(id)!;
+
+    // The base is the origin, so it must not move at all.
+    expect(boundsAtEnd.max.y).toBeCloseTo(bottomAtStart, 3);
+    // ...and the body must actually have grown, or the assertion above is
+    // vacuously true for a body that never scaled.
+    expect(boundsAtEnd.max.y - boundsAtEnd.min.y).toBeGreaterThan(55);
+
+    world.destroy();
   });
 });
