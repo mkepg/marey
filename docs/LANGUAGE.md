@@ -142,7 +142,7 @@ a large value is unusual rather than dangerous.
 
 Because it is a fraction of the bounding box, `origin` is **inert on an axis
 whose bounding box has no extent** — the y axis of a perfectly horizontal
-`line`, or either axis of an empty `text` — so the pivot stays on that axis's
+`line`, or the x axis of an empty `text` — so the pivot stays on that axis's
 single coordinate whatever fraction is written, even though a horizontal line
 is drawn `thickness` px tall and so has a visible extent there.
 

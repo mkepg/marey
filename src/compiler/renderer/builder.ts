@@ -101,7 +101,7 @@ function applyAnchorAndPivot(
     // `position` places the container's PIVOT, and the pivot was just set to
     // the `origin` point above — so the declared value goes straight onto
     // `position` with no translation, whatever the origin is. What is NOT true
-    // is that this point is the geometric centre: it is only at the default
+    // is that this point is the bounding-box centre: it is only at the default
     // origin (0.5, 0.5), and reconciling pivot against Matter's centre of mass
     // is the physics seam's job (`physicsSync.centreOffsetVector`), never this
     // function's.

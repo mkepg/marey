@@ -627,7 +627,7 @@ describe("LANGUAGE.md · Physics · Physics and groups", () => {
 
 describe("LANGUAGE.md · Physics · line has zero collision geometry", () => {
   it("TYPE_LINE_PHYSICS fires for a line whose sequence — not just its direct physics — declares physics", () => {
-    // The reference (L467-473) claims a line "cannot have physics, directly,
+    // The reference (docs/LANGUAGE.md:635-641) claims a line "cannot have physics, directly,
     // in a sequence step, or as part of a physics group." The direct-physics
     // and physics-group cases are covered by validator.test.ts's physical-line
     // permission matrix; this pins the middle clause specifically, because a

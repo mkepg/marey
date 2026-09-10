@@ -1443,8 +1443,11 @@ the phase.
   returns whatever `setPosition` last recorded, with **no** centre-of-mass offset
   modelled and no `setScale` effect on it — so the whole
   `readState`-before-`setScale` ordering is invisible to it, and swapping the two
-  statements leaves the suite green. Only a real `MatterWorld` has `rec.offsetX/Y`
-  and only `Matter.Body.scale` rescales them.
+  statements leaves the suite green. Only a real `MatterWorld` has `rec.offsetX/Y`,
+  and only there does `setScale` update `rec.scaleX/Y` (`physicsWorld.ts:482-491`),
+  which `rotatedOffset` multiplies the offsets by at read time
+  (`physicsWorld.ts:410-418`) — the offsets themselves are `readonly` and are
+  never rewritten.
 - **What the test would assert.** Drive the runtime against a real `MatterWorld`
   for the scale animation's ticks and assert the body's **bounding-box centre**
   (`boundsOf`, or `readState`, which already adds `rotatedOffset`) tracks the
