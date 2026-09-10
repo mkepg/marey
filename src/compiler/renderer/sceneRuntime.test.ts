@@ -1046,3 +1046,40 @@ describe("SceneRuntime · a bottom-origin polygon body under a scale animation",
     world.destroy();
   });
 });
+
+describe("SceneRuntime · paintExactTick places both subsystems at the same tick", () => {
+  it("paints a free body at its current tick, not interpolated toward the previous one", () => {
+    const world = new MatterWorld(800, 600);
+    const c = makeContainer({
+      physics: { ...PHYSICS, gravity: { x: 0, y: 980 }, duration: "indefinitely" },
+      position: { x: 100, y: 100 },
+    });
+    const rt = new SceneRuntime(world, makeRoot(c));
+
+    for (let t = 0; t < 60; t++) rt.advanceOneTick();
+    rt.paintExactTick();
+
+    const id = c.__body!;
+    const exact = world.readState(id, 1)!;
+    // `paint(0)` would land on readState(0) — one whole tick behind.
+    expect(c.__mareyLayout!.currentPos.y).toBeCloseTo(exact.y, 6);
+
+    world.destroy();
+  });
+
+  it("paints an animation at its current tick, not one tick ahead", () => {
+    const world = new RecordingWorld();
+    const c = makeContainer({
+      animations: [anim({ to: { x: 1200, y: 100 }, duration: 10 })],
+      position: { x: 100, y: 100 },
+    });
+    const rt = new SceneRuntime(world, makeRoot(c));
+
+    for (let t = 0; t < 60; t++) rt.advanceOneTick();
+    rt.paintExactTick();
+
+    // Linear, 10s = 1200 ticks, 100 -> 1200. After 60 ticks: 100 + 1100*60/1200.
+    // `paint(1)` would land one tick further along.
+    expect(c.__mareyLayout!.currentPos.x).toBeCloseTo(100 + (1100 * 60) / 1200, 6);
+  });
+});

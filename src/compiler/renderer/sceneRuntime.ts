@@ -436,11 +436,14 @@ export class SceneRuntime {
       // this line with a non-zero offset, so the ordering is load-bearing on
       // ordinary source, not merely defensive against a future compound.
       //
-      // It is also **untested**: `RecordingWorld.readState`
-      // (`sceneRuntime.test.ts:60-63`) returns the recorded position with no
-      // offset modelled, so swapping these two statements fails nothing. The
-      // `MatterWorld`-level fixture that would close it is filed in the plan's
-      // "Deliberate gaps and deferrals".
+      // `RecordingWorld.readState` (`sceneRuntime.test.ts:60-63`) returns the
+      // recorded position with no offset modelled, so swapping these two
+      // statements fails nothing there — a `MatterWorld`-level fixture is
+      // required to pin the ordering. That fixture now exists: "SceneRuntime
+      // · a bottom-origin polygon body under a scale animation"
+      // (`sceneRuntime.test.ts`), which builds a real polygon body with a
+      // non-zero bbox-centre-to-centroid offset and asserts its bottom edge
+      // stays still while it scales.
       const before: BodyState | null = owns ? this.world.readState(id, 1) : null;
 
       this.world.setScale(id, t.sx * sx, t.sy * sy);
@@ -721,14 +724,44 @@ export class SceneRuntime {
    * effect, and moving it would be an unrequested behaviour change.
    */
   paint(alpha: number): void {
+    this.paintAt(alpha, alpha);
+  }
+
+  /**
+   * Paint the state at exactly the tick just advanced, with no sub-tick term.
+   *
+   * The two subsystems read `alpha` in **opposite temporal directions**, so no
+   * single value places both at tick N:
+   *
+   * - `animProgress` computes `(elapsedTicks + alpha) / durationTicks`
+   *   (`timeline.ts`), extending FORWARD from tick N into N+1 — so `0` is exact.
+   * - `readState` lerps `prevX -> body.position` by alpha, and `prevX` is
+   *   captured at the top of `step()` (`physicsWorld.ts`), so it interpolates
+   *   BACKWARD across [N-1, N] — so `1` is exact. `snapContainerToBody` already
+   *   relies on this and says so.
+   *
+   * Measured, not assumed: over 60 ticks, `paint(0)` placed a falling body
+   * exactly one tick of fall short of `readState(id, 1)`, and `paint(1)` placed
+   * a linear animation exactly one tick of travel past its tick-60 value.
+   *
+   * Live, that 8.3ms disagreement is invisible and `paint(driver.alpha)` stays
+   * correct. Baked into an exported frame it is a permanent skew between
+   * animated and simulated objects, which is why the frame sampler calls this
+   * instead.
+   */
+  paintExactTick(): void {
+    this.paintAt(0, 1);
+  }
+
+  private paintAt(animAlpha: number, physicsAlpha: number): void {
     for (let i = 0; i < this.runningAnims.length; i++) {
-      applyAnim(this.runningAnims[i], alpha);
+      applyAnim(this.runningAnims[i], animAlpha);
     }
 
     // Physics writes after animations, so a dynamic body's position wins over
     // a stale one. A body driven by a position animation is pinned, and
     // syncWorldToContainers skips pinned bodies, so the two never fight.
-    syncWorldToContainers(this.bindings, this.world, alpha);
+    syncWorldToContainers(this.bindings, this.world, physicsAlpha);
 
     for (let i = this.runningAnims.length - 1; i >= 0; i--) {
       // The rotation-override release lives in tickAnim (the tick phase),
