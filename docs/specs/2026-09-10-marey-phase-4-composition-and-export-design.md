@@ -426,6 +426,18 @@ such field. `buildNode` gains `__mareyId`, written once, in the existing
   rasterisation differs across machines and drivers, so cross-machine PNG
   equality is **not promised**. Stating the limit is preferred to implying more.
 
+> **Correction (2026-09-11, Phase 4 execution):** the snapshot-hash bullet's
+> "including across machines" clause was measured false — see
+> `eval/RESULTS-GATE-B.md` §"Criterion 2" and `frameHash.ts`'s docstring.
+> `compound-logo.marey`'s hash matches bit-for-bit between headless Node and
+> Chromium; `radial-dots.marey`'s does not, traced to `Math.sin` returning a
+> different last bit at 240° between Node's V8 and Playwright's bundled
+> Chromium V8 — `Math.sin`/`Math.cos` are "implementation-approximated" by
+> ECMA-262 and carry no cross-engine guarantee, unlike `+ - * /` and
+> `Math.sqrt`. Cross-*environment* equality is not a corpus-wide property;
+> same-machine, same-process and cross-reload determinism are what this
+> phase actually established for the whole corpus.
+
 Gate B asks for *repeated* exports to produce identical frame hashes. Both
 levels satisfy that; each is reported with its own scope.
 
