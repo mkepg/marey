@@ -152,6 +152,15 @@ export function checkOne(
  * building out a subcommand table for a single entry.
  */
 export async function main(argv: readonly string[]): Promise<number> {
+  // A bare `marey` (empty argv) is a request for guidance, not a typo'd
+  // command name — printing `Unknown command ''.` reads as a bug report
+  // about the empty quotes, and buries USAGE (below) under a confusing
+  // message instead of showing it.
+  if (argv.length === 0) {
+    console.error(USAGE);
+    return 1;
+  }
+
   const [command, ...rest] = argv;
   if (command !== "check") {
     console.error(`Unknown command '${command ?? ""}'. The only command is 'check'.`);

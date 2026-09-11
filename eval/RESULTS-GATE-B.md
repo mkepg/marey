@@ -9,7 +9,7 @@ revert, the revert was actually performed, watched RED, and restored;
 `git diff --stat` was empty before and after every revert in this document.
 
 Gate B (`docs/specs/2026-09-09-marey-engineering-roadmap-design.md`
-§8) is five criteria. Five sections below, one per criterion.
+§6.4) is five criteria. Five sections below, one per criterion.
 
 ---
 

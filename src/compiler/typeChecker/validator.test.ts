@@ -1200,8 +1200,12 @@ describe("scene duration", () => {
     // digit — the same wording `animate.duration` and `physics.duration`
     // already get. Asserting the real string here rather than the one that
     // never matches (AGENT-LESSONS §3d: a verbatim fixture is a claim to check).
-    const out = errorsFor(`scene { size: (100, 100) duration: 0 }`);
-    expect(out.join("\n")).toContain("must be strictly greater than 0");
+    const zero = errorsFor(`scene { size: (100, 100) duration: 0 }`);
+    expect(zero.join("\n")).toContain("must be strictly greater than 0");
+
+    // The name says "zero OR negative"; until now only zero was exercised.
+    const negative = errorsFor(`scene { size: (100, 100) duration: -2 }`);
+    expect(negative.join("\n")).toContain("must be strictly greater than 0");
   });
 
   it("rejects 'indefinitely' on a scene with its own named diagnostic", () => {

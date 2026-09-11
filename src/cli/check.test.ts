@@ -85,7 +85,14 @@ describe("checkOne", () => {
   });
 
   it("ignores export-readiness unless asked", () => {
-    expect(checkOne("x.marey", `scene { size: (8, 6) }`, plain).ok).toBe(true);
+    // Byte-identical to "passes a valid scene" above until this contrast was
+    // added: same source, `plain` args, same `.ok` check. The source here is
+    // deliberately the *same unbounded* scene the next test below fails under
+    // `ready`, so this test actually shows that it is the --export-ready flag
+    // controlling the outcome, not something about the scene itself.
+    const unbounded = `scene { size: (8, 6) }`;
+    expect(checkOne("x.marey", unbounded, ready).ok).toBe(false);
+    expect(checkOne("x.marey", unbounded, plain).ok).toBe(true);
   });
 
   it("reports an unbounded scene under --export-ready with no fps", () => {

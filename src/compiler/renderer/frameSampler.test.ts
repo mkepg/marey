@@ -440,10 +440,11 @@ describe("the canonical scenes export through one sampler (Gate B criterion 5)",
     expect(markAt(75).y).toBeGreaterThan(markAt(48).y + 100);
 
     // 3 — settles, under simulation rather than at the freeze. The physics
-    // step runs to 8.0s, one tick past the last sampled frame (tick 960 vs
-    // 956), so coming to rest at 5.5s is the world settling and not the
-    // runner stopping. Rotation is included because a body that had slid to a
-    // halt while still spinning would satisfy a position-only check.
+    // step runs to 8.0s, four ticks (one 30fps frame) past the last sampled
+    // frame (tick 960 vs 956), so coming to rest at 5.5s is the world
+    // settling and not the runner stopping. Rotation is included because a
+    // body that had slid to a halt while still spinning would satisfy a
+    // position-only check.
     const settled = markAt(180);
     const later = markAt(239);
     expect(later.x).toBeCloseTo(settled.x, 6);
