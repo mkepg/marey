@@ -98,8 +98,8 @@ describe("sampleFrames · exact frame counts (Gate B criterion 1)", () => {
     // runs between construction and this first snapshot — writes to any of
     // those fields.
     expect(frames[0].objects).toEqual([
-      { id: "scene.slider", x: 100, y: 100, rotation: 0, scaleX: 1, scaleY: 1, alpha: 1 },
-      { id: "scene.faller", x: 400, y: 50, rotation: 0, scaleX: 1, scaleY: 1, alpha: 1 },
+      { id: "scene.slider", x: 100, y: 100, rotation: 0, scaleX: 1, scaleY: 1, alpha: 1, visible: true },
+      { id: "scene.faller", x: 400, y: 50, rotation: 0, scaleX: 1, scaleY: 1, alpha: 1, visible: true },
     ]);
   });
 
@@ -581,6 +581,87 @@ describe("applySnapshot", () => {
     // Scale's own write-through, for the reason spelled out in the test above.
     expect(containerFor(root, "scene.grower").scale.x)
       .toBeCloseTo(fieldOf(mid.objects, "scene.grower").scaleX, 6);
+
+    runtime.destroy();
+  });
+});
+
+/**
+ * A scene that actually escapes `CULL_MARGIN` (Important 1, final whole-branch
+ * review). `collideBounds: false` plus strong gravity lets the body fall
+ * straight through the scene's bottom edge rather than resting on it — the
+ * only way to reach `cullEscapedBodies` (`physicsSync.ts`) in today's corpus,
+ * since every other physics scene defaults `collideBounds: true`.
+ */
+const CULL_SOURCE = `
+scene {
+  size: (200, 200)
+  duration: 3
+
+  circle faller {
+    position: (100, 50)
+    radius: 10
+    color: red
+    physics { gravity: (0, 6000), duration: indefinitely, collideBounds: false }
+  }
+}
+`;
+
+describe("ObjectSnapshot carries `visible` (Important 1, final whole-branch review)", () => {
+  it("records a frame before the cull as visible:true and a frame after as visible:false", () => {
+    const ir = irFor(CULL_SOURCE);
+    const result = planExport(ir, { fps: 30 });
+    if (!result.ok) throw new Error("plan failed");
+    const world = new MatterWorld(ir.width, ir.height);
+    const root = buildRoot(ir);
+    const runtime = new SceneRuntime(world, root);
+    const frames = sampleFrames(runtime, root, result.plan);
+    runtime.destroy();
+
+    const visibleOf = (i: number) =>
+      frames[i].objects.find((o) => o.id === "scene.faller")!.visible;
+
+    // Guard the guard: the fixture must actually cross both states inside the
+    // sampled range, or every assertion below would pass vacuously — either
+    // because the body never escapes CULL_MARGIN (800px) within the scene's
+    // 3s duration, or because it is already gone by frame 0.
+    const firstCulled = frames.findIndex(
+      (f) => f.objects.find((o) => o.id === "scene.faller")!.visible === false,
+    );
+    expect(firstCulled).toBeGreaterThan(0);
+    expect(firstCulled).toBeLessThan(frames.length - 1);
+
+    expect(visibleOf(0)).toBe(true);
+    expect(visibleOf(firstCulled - 1)).toBe(true);
+    expect(visibleOf(firstCulled)).toBe(false);
+  });
+
+  it("replaying a frame sampled before the cull restores visible:true on the tree", () => {
+    // This is the assertion that requires `applySnapshot` to write `visible`
+    // back, not merely that `snapshotFor` records it: `sampleFrames` leaves
+    // `root` at its final, real, post-cull state (`container.visible ===
+    // false`, set once by `cullEscapedBodies` and never reset), so replaying
+    // an earlier frame is a real write only if `applySnapshot` touches
+    // `visible` at all.
+    const ir = irFor(CULL_SOURCE);
+    const result = planExport(ir, { fps: 30 });
+    if (!result.ok) throw new Error("plan failed");
+    const world = new MatterWorld(ir.width, ir.height);
+    const root = buildRoot(ir);
+    const runtime = new SceneRuntime(world, root);
+    const frames = sampleFrames(runtime, root, result.plan);
+
+    const firstCulled = frames.findIndex(
+      (f) => f.objects.find((o) => o.id === "scene.faller")!.visible === false,
+    );
+    expect(firstCulled).toBeGreaterThan(0);
+
+    const faller = containerFor(root, "scene.faller");
+    // Sanity: the tree really is left in its culled, real-runtime state.
+    expect(faller.visible).toBe(false);
+
+    applySnapshot(root, frames[firstCulled - 1]);
+    expect(faller.visible).toBe(true);
 
     runtime.destroy();
   });

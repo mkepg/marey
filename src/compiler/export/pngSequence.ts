@@ -19,9 +19,13 @@ import { snapshotFor, type FrameSnapshot } from "../renderer/frameSampler";
  * is the single place that knows that convention; writing `position` directly
  * here would be a second copy of it, free to drift.
  *
- * Rotation is written in radians and alpha unmodified, which is exactly what
+ * Rotation, alpha and `visible` are written unmodified, which is exactly what
  * `snapshotFor` read off the container — so a round trip is byte-identical
- * rather than merely close.
+ * rather than merely close. `visible` matters specifically because
+ * `cullEscapedBodies` (`renderer/physicsSync.ts`) can set it `false` mid-scene
+ * and never sets it back: without writing it here, replaying a frame sampled
+ * *before* a later cull would silently leave a culled-away object invisible
+ * in every exported PNG, including the ones where it was genuinely on screen.
  *
  * Containers with no `__mareyId`, and ids the frame does not mention, are left
  * alone: a `Graphics` leaf inside a shape's wrapper has no id, and the mask
@@ -60,6 +64,7 @@ export function applySnapshot(root: Container, frame: FrameSnapshot): void {
         c.__updateLayout();
         c.rotation = snap.rotation;
         c.alpha = snap.alpha;
+        c.visible = snap.visible;
       }
     }
     for (const child of c.children) visit(child as Container);

@@ -1,10 +1,18 @@
 import type { Container } from "pixi.js";
 import type { SceneRuntime } from "./sceneRuntime";
 import type { SamplerPlan } from "../export/exportContract";
+import type { IRObjectId } from "../sceneIR";
 
 /** One object's transform at one sampled frame. */
 export interface ObjectSnapshot {
-  readonly id: string;
+  readonly id: IRObjectId;
+  /**
+   * Parent-local, exactly as `layout.currentPos` holds it — a group's
+   * children are in the group's local frame, not scene space, so two
+   * snapshots with the same `x`/`y` are only at the same drawn position if
+   * they also share a parent. `rotation`/`scaleX`/`scaleY`/`alpha` below are
+   * likewise local to the container, not composed with any ancestor's.
+   */
   readonly x: number;
   readonly y: number;
   /** Radians, as the scene graph holds it. */
@@ -12,6 +20,16 @@ export interface ObjectSnapshot {
   readonly scaleX: number;
   readonly scaleY: number;
   readonly alpha: number;
+  /**
+   * Whether the container is drawn at all. Written by `cullEscapedBodies`
+   * (`physicsSync.ts`) inside `advanceOneTick()` when a body leaves the scene
+   * by `CULL_MARGIN` — the only runtime display property the renderer
+   * mutates that this snapshot omitted before this field existed. Omitting
+   * it silently dropped a culled object from every exported frame, including
+   * ones sampled before the cull happened, because `pngSequence.ts` replays
+   * frames onto the same tree `sampleFrames` just drove to its final state.
+   */
+  readonly visible: boolean;
 }
 
 /** One output frame: immutable, and the only thing an encoder ever sees. */
@@ -45,6 +63,7 @@ export function snapshotFor(root: Container): ObjectSnapshot[] {
         scaleX: layout.currentScale.x,
         scaleY: layout.currentScale.y,
         alpha: c.alpha,
+        visible: c.visible,
       }));
     }
     for (const child of c.children) visit(child as Container);
