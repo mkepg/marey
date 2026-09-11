@@ -441,7 +441,7 @@ describe("the canonical scenes export through one sampler (Gate B criterion 5)",
 
     // 3 — settles, under simulation rather than at the freeze. The physics
     // step runs to 8.0s, one tick past the last sampled frame (tick 960 vs
-    // 956), so coming to rest at 5.6s is the world settling and not the
+    // 956), so coming to rest at 5.5s is the world settling and not the
     // runner stopping. Rotation is included because a body that had slid to a
     // halt while still spinning would satisfy a position-only check.
     const settled = markAt(180);

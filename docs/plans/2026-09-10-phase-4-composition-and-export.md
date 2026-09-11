@@ -2179,15 +2179,20 @@ needed, and it was not. Anything resting on the browser is cited from an
 existing, reproducible document rather than re-demonstrated fresh; the
 commands to reproduce it are in that document.
 
-Branch shape: **24 commits**, `main..HEAD` (merge base `f032991`), **48 files,
-+6,076 / −171**. Tasks 1–8a (`ad4b16e..0519ea3`, 18 commits) are **36 files,
-+4,550 / −149**; Task 8b (`0519ea3..HEAD`, 6 commits — `8a8bd38`, `0995d5e`,
-`cc552b3` from the first two attempts, plus this session's `b4b6ad1`,
-`5024bd5`, `ad7f04e`) adds **15 files, +905 / −28** on top of that, almost
-entirely documentation and the one four-scene test addition to
-`frameSampler.test.ts`. As Phase 3C's notes observed, a single grand total is
-not quoted as a round-trip check against itself — both figures above are
-stable because neither is measured over a file this section lives in.
+Branch shape, **as of `ad7f04e`, the commit immediately before this execution-notes
+commit** (a commit cannot contain its own diffstat, so these figures are a
+snapshot rather than a live count — running the same commands after this
+commit lands will show one more commit and this document's own line count
+added to the diff): **24 commits**, `main..HEAD` (merge base `f032991`),
+**48 files, +6,076 / −171**. Tasks 1–8a (`ad4b16e..0519ea3`, **17 commits**) are
+**36 files, +4,550 / −149**; Task 8b (`0519ea3..ad7f04e`, 6 commits —
+`8a8bd38`, `0995d5e`, `cc552b3` from the first two attempts, plus this
+session's `b4b6ad1`, `5024bd5`, `ad7f04e`) adds **15 files, +905 / −28** on
+top of that, almost entirely documentation and the one four-scene test
+addition to `frameSampler.test.ts`. As Phase 3C's notes observed, a single
+grand total is not quoted as a round-trip check against itself — both figures
+above are stable because neither is measured over a file this section lives
+in.
 
 **Baseline check.** The suite at the branch base `f032991` (Global Constraint
 1) was 20 files / 677 tests. Task 8b's own dispatch base, `0519ea3` (Task 8a's

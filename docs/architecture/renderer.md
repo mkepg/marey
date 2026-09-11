@@ -192,7 +192,11 @@ of that file. One of them, `__mareyId` (Phase 4), is the container's IR
 object id — nothing before the frame sampler needed a stable per-container
 identity, since the scene graph was only ever walked, not addressed, so the
 field did not exist until `frameSampler.ts`'s `snapshotFor` needed something
-to key snapshots by. It is written once, in `buildNode`, and read only there.
+to key snapshots by. It is written once, in `buildNode`, and read at two
+sites: `frameSampler.ts`'s `snapshotFor` (sampling) and
+`../export/pngSequence.ts`'s `applySnapshot` (writing a sampled frame back
+onto a tree for re-rendering) — the same inverse pair that module's own
+docstring names.
 
 ## Non-obvious gotchas
 
