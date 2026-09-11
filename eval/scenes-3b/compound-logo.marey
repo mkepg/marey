@@ -27,11 +27,13 @@ scene {
   size: (800, 600)
   background: #0a0e1a
   fit: contain
-  // 1.4s of animate-in + 4.6s of simulation = exactly the 6s exported.
-  duration: 6
+  // 1.6s of animate-in + 6.4s of simulation = exactly the 8s exported. The
+  // mark comes to rest at 5.5s, so the last 2.5s are genuinely settled frames
+  // rather than the frames the physics runner happens to freeze on.
+  duration: 8
 
   group mark {
-    position: (150, 130)
+    position: (140, 120)
     rotation: -14
 
     rectangle stem   { position: (0, 0),    size: (26, 130), color: sky }
@@ -39,11 +41,16 @@ scene {
     rectangle armMid { position: (30, 12),  size: (40, 26),  color: amber }
 
     sequence {
+      // `linear` hands off at exactly the animation's average speed: the
+      // handoff multiplier is 1.0 for linear, 2.0 for easeIn and 0.5 for the
+      // two ease-outs. `easeIn` here threw the mark hard enough to settle in
+      // the corner with its arms clipped by the scene edge, which is a worse
+      // frame to look at and a worse thing to assert on.
       animate {
         property: position
-        to: (420, 210)
-        duration: 1.4
-        easing: easeIn
+        to: (360, 200)
+        duration: 1.6
+        easing: linear
         handoff: true
       }
       physics {
@@ -51,7 +58,7 @@ scene {
         bounce: 0.3
         airDrag: 0.006
         collideBounds: true
-        duration: 4.6
+        duration: 6.4
       }
     }
   }

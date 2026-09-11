@@ -295,7 +295,7 @@ interface CanonicalScene {
 
 const CANONICAL_SCENES: ReadonlyArray<CanonicalScene> = [
   { file: "bar-chart.marey", durationSeconds: 1, expectedTextBlocks: 1 },
-  { file: "compound-logo.marey", durationSeconds: 6, expectedTextBlocks: 0 },
+  { file: "compound-logo.marey", durationSeconds: 8, expectedTextBlocks: 0 },
   { file: "radial-dots.marey", durationSeconds: 1, expectedTextBlocks: 0 },
   { file: "timeline-ticks.marey", durationSeconds: 1, expectedTextBlocks: 1 },
 ];
@@ -388,7 +388,16 @@ describe("the canonical scenes export through one sampler (Gate B criterion 5)",
       runtime.destroy();
       return frames;
     };
-    expect(hashFrames(sampleOnce())).toBe(hashFrames(sampleOnce()));
+    const hash = hashFrames(sampleOnce());
+    expect(hash).toBe(hashFrames(sampleOnce()));
+    // Printed, not asserted against a literal. `hashFrames` hashes simulation
+    // output rather than pixels, so this same value is what
+    // `export-check.mjs` reports as "runA snapshot hash" from Chromium — the
+    // one number that carries determinism ACROSS environments rather than
+    // twice within one. `eval/RESULTS-GATE-B.md` pairs the two commands.
+    // Deliberately not a golden: a legitimate physics change should redden
+    // the tests that describe physics, not this one.
+    console.log(`[gate-b] ${file} @30fps snapshot hash: ${hash}`);
   });
 
   it("compound-logo genuinely animates in, hands off to physics, and settles", () => {
@@ -414,28 +423,29 @@ describe("the canonical scenes export through one sampler (Gate B criterion 5)",
       "scene.mark", "scene.mark.stem", "scene.mark.armTop", "scene.mark.armMid",
     ]);
 
-    // 1 — animates in. The `animate` step runs 1.4s = frame 42 at 30fps,
-    // carrying the group from (150, 130) toward (420, 210).
-    expect(markAt(0).x).toBeCloseTo(150, 6);
-    expect(markAt(0).y).toBeCloseTo(130, 6);
-    expect(markAt(42).x).toBeGreaterThan(400);
-    // Still purely animated: `rotation` is untouched by the animate step, and
-    // a body driven by physics would already have torque on it.
-    expect(markAt(42).rotation).toBeCloseTo(markAt(0).rotation, 6);
+    // 1 — animates in. The `animate` step runs 1.6s = frame 48 at 30fps,
+    // carrying the group from (140, 120) to (360, 200).
+    expect(markAt(0).x).toBeCloseTo(140, 6);
+    expect(markAt(0).y).toBeCloseTo(120, 6);
+    expect(markAt(48).x).toBeGreaterThan(340);
+    expect(markAt(48).y).toBeGreaterThan(190);
+    // Still purely animated at that point: `rotation` is untouched by the
+    // animate step, and a body under physics would already have torque on it.
+    expect(markAt(48).rotation).toBeCloseTo(markAt(0).rotation, 6);
 
     // 2 — hands off. Without `handoff: true` the group would stop dead at
-    // x≈420 and fall straight down; the exit momentum is what keeps it
-    // travelling right after the animation ends.
-    expect(markAt(60).x).toBeGreaterThan(markAt(42).x + 100);
-    expect(markAt(60).y).toBeGreaterThan(markAt(42).y + 100);
+    // x≈360 and fall straight down; the exit momentum is what keeps it
+    // travelling right after the animation ends. Measured dx here is ≈105px.
+    expect(markAt(75).x).toBeGreaterThan(markAt(48).x + 60);
+    expect(markAt(75).y).toBeGreaterThan(markAt(48).y + 100);
 
     // 3 — settles, under simulation rather than at the freeze. The physics
-    // step ends at 6.0s (the last frame); these frames are 4.0s and 5.0s, so
-    // coming to rest between them is the world settling, not the runner
-    // stopping. Rotation is included because a body that had slid to a halt
-    // but was still spinning would satisfy a position-only check.
-    const settled = markAt(120);
-    const later = markAt(150);
+    // step runs to 8.0s, one tick past the last sampled frame (tick 960 vs
+    // 956), so coming to rest at 5.6s is the world settling and not the
+    // runner stopping. Rotation is included because a body that had slid to a
+    // halt while still spinning would satisfy a position-only check.
+    const settled = markAt(180);
+    const later = markAt(239);
     expect(later.x).toBeCloseTo(settled.x, 6);
     expect(later.y).toBeCloseTo(settled.y, 6);
     expect(later.rotation).toBeCloseTo(settled.rotation, 6);
