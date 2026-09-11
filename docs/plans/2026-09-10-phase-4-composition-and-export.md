@@ -2125,3 +2125,477 @@ tells the implementer what to do in *either* outcome — including correcting th
 docstring and reporting it if the hypothesis is wrong. A plan that only handled
 the outcome it expected would be the §3b failure: a check whose result nobody is
 allowed to act on.
+
+---
+
+## Execution notes
+
+Written 2026-09-11 at the close of Task 8b, from `git log`/`git diff
+main..HEAD`, the nine task reports, and the SDD ledger
+(`.sdd/2026-09-10-phase-4-composition-and-export/progress.md`) —
+**not** from any single task's self-report, per AGENT-LESSONS §1. Every number
+in "Final evidence" was re-derived first-hand on a clean tree while writing
+this. Three of the mutation rows below were re-run first-hand for this
+document specifically (marked *(re-run, 8b)*); the rest are drawn from the
+ledger, each beside the suite size it was measured against, exactly as Phase
+3C's notes did. Every mutated file was restored afterwards with
+`git diff --stat` confirmed empty before moving to the next.
+
+Task 8b itself was interrupted twice by API rate limits (infrastructure, not
+the diff) and completed by a third agent — this one. Commit-as-you-go held
+both times: `8a8bd38` and `0995d5e` survived the first kill, `cc552b3` and the
+Gate B evidence document survived the second. Both inheritances were
+independently checked before being built on, not assumed sound because they
+were already committed — see "The inherited work" below.
+
+### Final evidence
+
+| Check | Command | Result |
+|---|---|---|
+| Unit suite | `npx vitest run` | **24 files / 760 tests / exit 0** |
+| Typecheck | `npx tsc -b --noEmit` | exit 0 |
+| Production build | `npm run build` | exit 0; only the pre-existing >500 kB chunk-size advisory |
+| Production build carries no dev seam | `npm run build` then grep `dist/` for `__mareyExportPng`, `devExportSeam`, `installExportSeam` | **zero matches** — the DEV-only `window.__mareyExportPng` seam is dropped by Vite's dead-branch elimination, not merely left ungrepped |
+| CLI build | `npm run build:cli` | exit 0, `dist/cli/marey.mjs` 92.10 kB |
+| R1 corpus | `npx vitest run --config eval/vitest.config.ts` | **20/20 compiled clean**, `eval/report.json` unmoved |
+| R2 corpus | `EVAL_DIR=eval/scenes-r2 npx vitest run --config eval/vitest.config.ts` | **20/20 compiled clean**, `eval/report-r2.json` unmoved |
+| 3B demonstration corpus | `EVAL_DIR=eval/scenes-3b npx vitest run --config eval/vitest.config.ts` | **4/4 compiled clean** (was 3/3 before this task — see "`eval/report-3b.json` diff" below) |
+| Visual-check fixtures | `EVAL_DIR=tools/visual-check/scenes npx vitest run --config eval/vitest.config.ts` | **17/17 compiled clean**, unchanged from Phase 3C's own count — this phase added no scene to that directory. Its report JSON was written to `tools/visual-check/report.json`, inspected, then **deleted rather than committed**, matching the Phase 3C precedent recorded in that phase's own execution notes |
+| Reference examples | `npx vitest run src/compiler/languageDocs.test.ts` | 46/46 — the `duration` wording fix in this task did not touch a fenced block, and the suite confirms it |
+| Tree | `git ls-files --others --exclude-standard`; `git diff --stat` | both empty |
+| Port 5199 | `netstat -ano` grepped for `:5199` | no LISTENING socket. (One was found orphaned at the second kill — PID 3424 — and killed by the controller before the third dispatch; recorded in the ledger, not rediscovered here) |
+
+**The Chromium evidence in this document is not re-run in this session.**
+`eval/RESULTS-GATE-B.md`'s cross-environment section (`compound-logo.marey`
+and `radial-dots.marey` through `export-check.mjs`) and Task 8a's own
+Chromium run (`logo.marey`, three frames read with the Read tool) were both
+performed and recorded before this task began, at a commit essentially
+identical to this one (`cc552b3`, three documentation-only commits behind
+`HEAD`). This task re-derived every **headless** number in this document on a
+clean tree, and read `eval/RESULTS-GATE-B.md` in full before committing it,
+but did not re-launch `npx vite --port 5199 --strictPort` or re-drive
+Chromium itself — the environment note said the dev server should not be
+needed, and it was not. Anything resting on the browser is cited from an
+existing, reproducible document rather than re-demonstrated fresh; the
+commands to reproduce it are in that document.
+
+Branch shape: **24 commits**, `main..HEAD` (merge base `f032991`), **48 files,
++6,076 / −171**. Tasks 1–8a (`ad4b16e..0519ea3`, 18 commits) are **36 files,
++4,550 / −149**; Task 8b (`0519ea3..HEAD`, 6 commits — `8a8bd38`, `0995d5e`,
+`cc552b3` from the first two attempts, plus this session's `b4b6ad1`,
+`5024bd5`, `ad7f04e`) adds **15 files, +905 / −28** on top of that, almost
+entirely documentation and the one four-scene test addition to
+`frameSampler.test.ts`. As Phase 3C's notes observed, a single grand total is
+not quoted as a round-trip check against itself — both figures above are
+stable because neither is measured over a file this section lives in.
+
+**Baseline check.** The suite at the branch base `f032991` (Global Constraint
+1) was 20 files / 677 tests. Task 8b's own dispatch base, `0519ea3` (Task 8a's
+end), was 24 files / 749 tests; its own Steps 1–3 (the canonical scene plus
+the four-canonical-scene describe block, 11 new cases) brought it to 24 files
+/ 760 before this session began, confirmed by `git show
+0519ea3:src/compiler/renderer/frameSampler.test.ts` carrying 16 `it`/`it.each`
+call sites against the current file's 29 individual cases. This session added
+no test. Net for the whole phase, base to current `HEAD`: **+4 files, +83
+tests**.
+
+### The inherited work (Task 8b, third attempt)
+
+Verified before building on it, per AGENT-LESSONS §6's rule that an
+interrupted agent's tree must be checked, not assumed:
+
+- `src/compiler/export/frameHash.ts`'s docstring correction — read in full,
+  cross-checked against `eval/RESULTS-GATE-B.md`'s own measured numbers
+  (`-0.86602540378443848557` in Node, and the Chromium value one ULP away),
+  and against a fresh `npx vitest run src/compiler/renderer/frameSampler.test.ts`
+  (29/29 before touching anything). Coherent; committed as this task's first
+  action, unmodified.
+- `eval/RESULTS-GATE-B.md` (435 lines, untracked) — read in full. Verdict:
+  sound. It performs and restores five reverts (one per Gate B criterion),
+  each with `git diff --stat` confirmed empty afterward per its own text, and
+  its central finding — the cross-machine hash gap — is independently
+  reproducible from the commands it prints. Two of those five reverts were
+  re-performed independently in this session (see "Mutation tests" below)
+  rather than taken on the document's word alone, and matched exactly.
+- `eval/scenes-3b/compound-logo.marey` and
+  `src/compiler/renderer/frameSampler.test.ts` (already committed at
+  `8a8bd38`/`cc552b3`/`0995d5e` by the time this attempt started) — the scene
+  was retuned from a 6s to an 8s duration so the mark settles at 5.5s with
+  2.5s of genuinely-settled frames remaining, `easeIn` was replaced with
+  `linear` because `easeIn` threw the mark into the scene corner with its arms
+  clipped, and `frameSampler.test.ts`'s canonical-corpus test moved with it
+  (handoff frame 42→48). Confirmed by reading the scene's own comments against
+  the test's assertions and by the full suite passing.
+
+### `eval/report-3b.json` diff, read deliberately
+
+Per the environment note, this file was expected to move and the diff was
+read before committing it (already committed at `8a8bd38`, re-confirmed here
+by regenerating on a clean tree and diffing against the committed blob — zero
+difference):
+
+```
++  {
++    "file": "compound-logo.marey",
++    "ok": true,
++    "parseErrors": [],
++    "typeErrors": [],
++    "nodeCount": 4
++  },
+```
+
+One addition, nothing else — `bar-chart.marey`, `radial-dots.marey` and
+`timeline-ticks.marey` each gained a `duration` property in the same task, and
+none of their `nodeCount`s moved, because `duration` is a scene-level property
+in the IR, not a node. `compound-logo.marey`'s `nodeCount: 4` is the group
+plus its three welded rectangles — the same four ids
+(`scene.mark`, `.stem`, `.armTop`, `.armMid`) `frameSampler.test.ts` asserts.
+
+### Gate B criteria, each with the evidence that settles it
+
+Full detail, commands and reverts are in `eval/RESULTS-GATE-B.md`; this is
+the index the roadmap (§6.4) asks for.
+
+| # | Criterion | Proven headlessly | Rests on the browser |
+|---|---|---|---|
+| 1 | Exact frame counts at 24/30/60fps | Yes — `it.each` over all three rates, plus a physical-consequence check reading displacement ratios rather than labels | — |
+| 2 | Repeated exports produce identical hashes | Yes, **same-machine and cross-reload** (headless-to-headless, and Chromium-to-Chromium via `export-check.mjs` twice-from-cold) | **Cross-machine (Node vs. Chromium) equality is not a corpus-wide property.** Proven for `compound-logo` (no trig in source); measured **false** for `radial-dots` (`Math.sin` at 240°, one ULP apart between V8 builds) |
+| 3 | Frame pacing cannot affect exported state | Yes — 30-vs-60 and 24-vs-60 coincident-frame tests, both comparing full object content | — |
+| 4 | Invalid/unbounded requests fail before rendering | Yes — 21/21 in `exportContract.test.ts`, including multi-diagnostic reporting | — |
+| 5 | The canonical scenes export through one sampler | **Compile-and-plan half: all four scenes**, via `it.each(CANONICAL_SCENES)`. **Build-and-sample half: two of four** (`compound-logo`, `radial-dots`) | `bar-chart` and `timeline-ticks` declare `text`, which needs `document.createElement("canvas")` — absent under Vitest's `node` environment, confirmed with a scratch probe (deleted after use) rather than inferred. `bar-chart`'s build-and-sample half **is** demonstrated in the browser (`export-check.mjs`, this task); `timeline-ticks`'s is not separately re-verified here |
+
+**Narrow evidentiary base, stated rather than hidden.** `bar-chart`,
+`radial-dots` and `timeline-ticks` are all static by declaration — no
+`animate`/`physics`/`sequence` anywhere in any of the three, confirmed by
+reading each file. Every claim this corpus makes about *motion* — animating
+in, handing off, settling under simulation — rests on `compound-logo.marey`
+alone, the one scene this task added. `eval/RESULTS-GATE-B.md` names this
+explicitly and is why its "compound-logo genuinely animates in..." test is
+detailed rather than a one-line frame-count check.
+
+### Defects found in source beyond the plan
+
+Each names the commit it was fixed in. Ordered by task, not by severity.
+
+1. **Task 5 — three Important review findings, all in the test layer, none in
+   the sampler itself.** A `vi.spyOn` call-count assertion pinned per-tick
+   paint *cadence* as a hard contract while the sampler's own docstring
+   disclaims that cadence — one of the two had to change, and the test did.
+   Two literal-vs-literal assertions (`frame 0 tick === 0`, `tick === i *
+   ticksPerFrame`) could not distinguish a correct label from a lying one —
+   the implementer's own mutation-3 finding was direct proof. And the
+   reviewer's claim that "no behavioural assertion can distinguish
+   `paintExactTick()` from `paint(0)`" was itself wrong: frame 0 is captured
+   *before* any paint, so the lag does not cancel across that boundary the
+   way it does in a cross-rate comparison. Fixed in `a8a59be` with a
+   displacement-ratio assertion (~7/3 correct vs. 5/1 under the mutation, the
+   choice of `3` as threshold independently confirmed to sit strictly between
+   by a scoped re-review).
+2. **Task 5 — `hashFrames` had no test file of its own**, so
+   `frames.length.toString(16)` would have satisfied every existing hash
+   assertion (both compare sequences of *different* length). Graded Minor by
+   the reviewer, upgraded by the controller because it makes Gate B criterion
+   2 vacuous regardless of the label on the finding. Fixed in `a8a59be`; this
+   is the same test independently re-run in this session (see "Mutation
+   tests").
+3. **Task 6 — a false "unreachable" claim, on a path that drops a log line
+   the CLI's own contract names.** The 51-error parser abort
+   (`parser/state.ts:112-115`) is not an invariant violation; it is what
+   happens when a user pastes a non-Marey document into the playground. It
+   escapes every `ParseException` guard, lands in `compileSource`'s catch,
+   normalises to `RUNTIME`, and on that path the worker dropped
+   `[lexer]   N tokens` — one of the three log lines Global Constraint 3 names
+   by hand. Fixed in `9c16cc6`, verified against the real 51-error boundary
+   rather than by argument.
+4. **Task 6 — the field the brief specifically asked for was the one field
+   nothing asserted.** `tokenCount` was pinned for the wrong reason (padding
+   in a log line, in a comment) while the suite's own rationale for pinning
+   `topLevelObjectCount` was "don't leave a new field untested" — applied to
+   one field and not its sibling. Fixed in `9c16cc6`.
+5. **Task 6 — three byte-identical eval reports proved less than they
+   sounded like.** All 43 entries across the three corpora are `ok: true`
+   with empty error arrays, so the refactor's new three-way LEX/PARSE/TYPE
+   phase partition was never exercised by any corpus file or test. Fixed by
+   pinning the phase tags directly in `compileSource.test.ts` rather than by
+   adding a failing file to an exit-criteria corpus, which would have changed
+   what those corpora mean. Fixed in `9c16cc6`.
+6. **Task 7 — a truncation bug real CI would have hit and the evidence
+   structurally could not.** `bin/marey.mjs`'s `process.exit(await main(...))`
+   (specified verbatim in the brief) forces Node to exit with async writes
+   still pending; POSIX stdout to a **pipe** is asynchronous, so `marey check
+   … | tee` can lose trailing diagnostics while still reporting exit 1. Every
+   run in the original report went to a Windows TTY, where stdout is
+   synchronous, so the existing evidence could not have found this — only
+   reasoning about the target environment did. Fixed in `e7b3a4f` with
+   `process.exitCode = await main(...)`, overriding the brief's own specified
+   line.
+7. **Task 7 — two false-pass argument-handling gaps, found and fixed
+   together.** `--fps` without `--export-ready` was silently accepted and
+   ignored, so a mistyped flag pair reported `ok` for a scene that would
+   actually fail an export check — a verification tool's worst failure mode.
+   Unknown `--`-prefixed flags were silently collected as filenames, so
+   `--fps=30` (the common CLI idiom this parser does not accept) produced
+   `ENOENT: … open '--fps=30'`, blaming a missing file for a syntax mistake.
+   Both fixed in `e7b3a4f`.
+8. **Task 8a — the inherited `devExportSeam.ts` leaked a live WebGL context
+   on any setup throw.** Its `try` opened *after* `new Application()`,
+   `app.init()`, the `buildNode` loop and `MatterWorld`/`SceneRuntime`
+   construction, so the `finally` that destroys them never ran if any of that
+   setup threw — a developer repeatedly calling the seam against a scene that
+   fails to build would exhaust the browser's WebGL context limit and break
+   the live preview too. The second implementer's own "verified and kept
+   unchanged" review of the file missed this. Fixed in `0519ea3`, gated on
+   `app.renderer` specifically rather than `app` — `app.destroy()`
+   dereferences `this.renderer` with no null check, so gating on `app` alone
+   would have thrown a second error from the cleanup path and masked the
+   first.
+9. **Task 8a — a silent no-op on the export write-back path**, the exact
+   failure class ("moves in the JSON, stands still in the PNG") this task
+   exists to defend against. `pngSequence.ts`'s `c.__updateLayout?.()` would
+   silently do nothing for a container with a layout but no updater.
+   Unreachable today (traced: `builder.ts`'s two assignment sites are
+   unconditional and back-to-back across all six `buildNode` call sites), but
+   made to throw loudly rather than stay a silent optional call. Fixed in
+   `0519ea3`.
+
+**Not fixed, and named as such.** Task 8a's controller recorded a residual
+leak *beneath* the fix above, inside PixiJS itself: `autoDetectRenderer`
+constructs a renderer and awaits `renderer.init()` before returning, so a
+throw in that window allocates a context that is never exposed as
+`app.renderer` and is therefore unreachable from any call site in this
+codebase. Not introduced by this phase, not fixable from it, and it does not
+make the Task 8a fix unsafe.
+
+### Defects found in this plan
+
+Ten in total — the running count the ledger kept live as implementers found
+them, each treating a plan's code block as a claim to verify rather than text
+to paste (AGENT-LESSONS §3d). All ten were caught before or during
+implementation and none reached a merged commit uncorrected.
+
+1–2. **Task 3.** The brief asserted the validator emits "greater than zero";
+it emits "greater than 0" — a permanent false RED if pasted verbatim. The
+brief's diagnostic snippet for `duration: indefinitely` produces **two**
+diagnostics, contradicting its own `toHaveLength(1)`. Both found and corrected
+by the implementer while implementing, inside `7799601`; both corrections
+independently re-verified by an escalated (opus) reviewer, who confirmed the
+reworded assertion is a *longer, more specific* substring than the one it
+replaced (tightened, not loosened) and that the added `continue` is provably
+unreachable without the diagnostic having already fired.
+
+3. **Task 4.** The brief's own frame-budget test derived its input from the
+live `MAX_EXPORT_FRAMES` constant it was meant to pin
+(`(MAX_EXPORT_FRAMES + 1) / 60`), making it tautological under *any* positive
+ceiling — it could not fail. Diagnosed by the implementer, not merely noted:
+supplemented with literal `7_200`/`7_201` boundary values inside `d8c75d5`,
+independently confirmed load-bearing by the reviewer (flipping the ceiling to
+`72_000` genuinely reddens the literal-boundary test and leaves the
+constant-derived one green either way).
+
+4. **Task 5.** The brief's test asserted bare object names as snapshot ids
+(`["slider", "faller"]`); real top-level IR ids are scope-qualified
+(`scene.slider`). Corrected inside `20a62b3`.
+
+5–8. **Task 6, four more in one brief.** Wrong error wording (a second
+instance of the Task 3 pattern, in a different fixture), bare-vs-scope-qualified
+registry ids (a second instance of the Task 5 pattern), a throw-test fixture
+that did not actually throw, and an unpinned new field. All corrected inside
+`692ba57`. This is the point the ledger's running count reached eight.
+
+9. **Task 7.** The implementer applied the plan's own "flip the judgment call
+and run the suite" check to a filter the brief never asked it to check, and
+found a hole: removing the `--export-ready`-without-`--fps` rate-dependent
+diagnostic filter left all of the brief's own tests green. Self-caught, fixed
+by adding a fixture that makes the filter load-bearing (confirmed RED first),
+committed separately as `6f97ec3`.
+
+10. **Task 8a.** The brief's round-trip test would pass against an empty
+`applySnapshot` body: `sampleFrames` leaves `root` already at the last sampled
+frame's exact state, so re-applying that same frame and asserting nothing
+changed asserts nothing at all. Found by review, fixed in `0519ea3` by moving
+the tree to a different state first, then round-tripping.
+
+**Pattern across all ten:** every one is a test-layer defect in specified
+fixtures, not a specified behaviour that was wrong — the plan's *prose*
+requirements held up; its *verbatim code blocks*, treated as claims about a
+codebase they were written before or without re-reading, did not. This is the
+same lesson Phase 3C's notes recorded under "Defects found in this plan," now
+with three times the count, because Phase 4 had more tasks with fixture-heavy
+verbatim tests (frame sampler assertions, CLI argument fixtures, a Playwright
+round trip) than Phase 3C did.
+
+### Two falsified claims, both mine, both caught by measurement
+
+1. **The paint-cadence hypothesis (Task 5).** The plan argued the sampler
+   *must* paint every tick because `spawnAnim` seeds a new runner's start
+   value from paint-written container state. The plan's own prescribed
+   experiment — moving `paintExactTick()` to run once per frame instead of
+   once per tick — disproved it: the 30-vs-60 coincident-frame test still
+   passed. Root cause: `tickAnim` already snaps a completing runner's value in
+   the **tick** phase, independently of when paint next runs, so nothing in
+   this suite's fixture was left for paint cadence to affect. Per-tick
+   painting was **kept anyway**, as the conservative choice rather than a
+   proven necessity — it is never less tick-aligned than per-frame painting,
+   and a `sequence`-bearing scene remains untested for cadence sensitivity,
+   which is a live reason not to loosen the rule on one fixture's evidence.
+   The docstring in `frameSampler.ts` was rewritten from the unverified claim
+   to the measurement (`20a62b3`/`a8a59be`).
+2. **The cross-machine hash claim (Task 8b, this document and
+   `frameHash.ts`'s own docstring).** Both claimed that because `hashFrames`
+   hashes simulation output rather than pixels, it "carries the determinism
+   claim across machines as well as across runs." Measured false:
+   `compound-logo.marey`'s hash matches bit-for-bit between headless Node and
+   Chromium; `radial-dots.marey`'s does not. Traced to `Math.sin` returning a
+   different last bit at exactly 240° between Node's V8 and Playwright's
+   bundled Chromium V8 (`-0.86602540378443848557` vs.
+   `-0.86602540378443837454`) — IEEE-754 and ECMA-262 require `+ - * /` and
+   `Math.sqrt` to be correctly rounded on every conformant engine;
+   `Math.sin`/`Math.cos` are explicitly implementation-approximated and carry
+   no such guarantee. `parseExpr.ts` folds `sin`/`cos` to literals at parse
+   time, so any scene using trig can bake the divergence into its IR;
+   `compound-logo.marey` has none, so its match is evidence that *that*
+   scene has no source of the gap, not evidence the gap is corpus-wide.
+   Corrected in `frameHash.ts`'s docstring and in
+   `eval/RESULTS-GATE-B.md` (`b4b6ad1`).
+
+Both were caught for the same reason: an implementer was told to measure a
+claim rather than confirm it, and did. Both are the strongest evidence in this
+phase for the roadmap's "commands, not claims" rule (§14.2) — a Gate B
+document asserting cross-machine determinism on the strength of the original
+argument alone would have shipped a falsehood the next phase built on.
+
+### Deliberate gaps and deferrals
+
+Structural gaps, each with what makes it harmless *today* — distinct from the
+smaller findings in the next section.
+
+| Deferred | Why it is safe to defer |
+|---|---|
+| `compiler.worker.ts` has **no automated test at all** | The largest untested surface the phase touched (Task 6, confirmed still true — no test file for it exists anywhere in the suite). Its branch order and its six exact log strings are guarded by nothing; a one-time manual browser observation during Task 6 is not a regression guard. Harmless only in the sense that nothing has reordered those branches since; it is not structurally protected |
+| Criterion 5's build-and-sample half is unproven headlessly for `bar-chart` and `timeline-ticks` | Both declare `text`, which needs `document.createElement("canvas")` — absent under Vitest's `node` environment. `bar-chart`'s browser half **was** demonstrated this task (`export-check.mjs`); `timeline-ticks`'s was not separately re-verified. Harmless today because both scenes are static by declaration — a build failure would be immediately visible in the live preview, which every `.marey` file in this corpus is also exercised through |
+| A `sequence`-bearing scene remains untested for paint-cadence sensitivity | The paint-cadence experiment's fixture had no `sequence` block. Per-tick painting is kept as the conservative superset, so this is a gap in *proof*, not in *behaviour* — nothing suggests a `sequence` step would behave differently, only that it has not been checked |
+| `ObjectSnapshot.x`/`y` frame is undocumented for a nested child, and **is now partially, not fully, exercised** | Flagged in Task 5 as "no scene with a group appears anywhere in the suite" — no longer accurate as stated: `compound-logo.marey`'s `group mark` is now in the corpus and `frameSampler.test.ts` asserts its own `x`/`y` and its three children's **ids**. But the children's **coordinates** are still never read by any assertion, so whether `stem`/`armTop`/`armMid`'s `x`/`y` are parent-local (as `layout.currentPos` suggests) or scene-space is still unverified by a test, only inferable by reading `frameSampler.ts` itself. The premise moved; the gap it named did not close |
+| `logo.marey`'s grey ledge is a dynamic body, not a static platform, and visibly tilts under impact | A language-capability gap (no lock-body syntax before Phase 8), not an export defect — `eval/RESULTS-GATE-B.md`'s appendix traces the mechanism (`physics` + zero gravity + no lock) and the scene's own commit history, and finds no evidence the tilt is deliberate. Harmless to Gate B specifically because no criterion depends on the ledge staying still; it does make `logo.marey` a weaker "lands on a fixed surface" reference than a first look suggests |
+| `hashFrames` materialises the whole frame sequence as one JSON string before hashing | Tens of MB at the 7,200-frame ceiling. Correct today because nothing in this phase exports at the ceiling; a streaming hash would be needed before Phase 5B's longer video exports |
+
+### Deferred minor findings (25)
+
+Every line in the ledger beginning `Task <N>: minor (deferred)` — 25 of them,
+confirmed by grep count on a clean tree, one per task from Task 1 through
+Task 8a. Full text is in
+`.sdd/2026-09-10-phase-4-composition-and-export/progress.md`
+(search that exact string); not reproduced verbatim here because at full
+length they exceed this section. By task: Task 1 — 1, Task 3 — 4, Task 4 — 1,
+Task 5 — 6, Task 6 — 4, Task 7 — 8, Task 8a — 1. **One of the 25 (Task 1's
+stale `sceneRuntime.ts` comment about an "untested" ordering) was already
+closed as a side effect of Task 2's own edit to the same file** — confirmed by
+grepping the current source for the quoted phrase: zero matches. The other 24
+were checked for continued relevance where this document's own edits touched
+the same file (`frameSampler.ts`, `frameHash.ts`, `docs/LANGUAGE.md`) and
+found still accurate; the remainder were not individually re-verified in this
+session, consistent with "deferred" rather than "resolved."
+
+**The largest, restated because it is the one future work is most likely to
+regret:** `compiler.worker.ts` has no automated test at all (Task 6, line 152
+of the ledger). It is promoted to "Deliberate gaps and deferrals" above rather
+than left in this list alone, because its blast radius — the Terminal pane and
+`visual-check`'s own output-scraping both depend on those six exact log
+strings — is larger than "minor" describes.
+
+### Mutation tests
+
+Rows marked *(re-run, 8b)* were re-run first-hand while writing this document,
+on a clean tree at this task's `HEAD`, each mutation applied alone and the
+file restored afterward with `git diff --stat` confirmed empty. Rows marked
+*(ledger)* are the checks performed during the tasks themselves, against the
+suite size named beside them, and were not re-run in this session.
+
+| # | Mutation | Observed |
+|---|---|---|
+| *(re-run, 8b)* | `hashFrames` replaced with `frames.length.toString(16)` | **1 failed / 29** (`frameSampler.test.ts`) — `"distinguishes two same-length sequences that differ only in content"`. The two "same hash twice" / "different hash at a different rate" tests stay green under this mutation, which is why the third test is the one that matters (AGENT-LESSONS §2a) |
+| *(re-run, 8b)* | `runtime.paintExactTick()` → `runtime.paint(0)` in the sampler's loop | **2 failed / 29** — the physical-consequence displacement-ratio test (`expected 5 to be less than 3`) and the `paintExactTick`-not-`paint` spy assertion. Matches `eval/RESULTS-GATE-B.md`'s own recorded numbers for the same revert exactly |
+| *(re-run, 8b)* | `check.ts`'s `--export-ready`-without-`--fps` rate-dependent-code filter removed | **1 failed / 17** (`check.test.ts`) — `"does not surface a frame-budget overflow caused only by the probe rate"`. Confirms the fixture Task 7 added is now load-bearing, closing the hole the same revert found vacuous (0/13) before that fixture existed |
+| *(ledger, 678)* | Task 1: `readState` moved after `setScale` in `pushAnimToWorld`'s scale branch | **1 failed** — `expected 292.5 to be close to 300, difference is 7.5`, the predicted bbox-centre/centroid gap for the default scene's triangle, not a coincidental number |
+| *(ledger, 680)* | Task 2: `paintAt(0, 0)` | **1 failed / 680** — the physics test |
+| *(ledger, 680)* | Task 2: `paintAt(1, 1)` | **1 failed / 680** — the animation test (different test than above; each alpha argument is independently load-bearing) |
+| *(ledger, 687)* | Task 3: three Step 10 mutations, each reverted separately | **2, 1, 4 failed** respectively, each restored clean |
+| *(ledger, ~708)* | Task 4: `Math.floor` → `Math.round` in `frameCount`; `MAX_EXPORT_FRAMES` 7,200 → 72,000 | Both **genuinely redden** the implementer-added literal-boundary tests (`floor(29.75)=29` vs `round=30`; `7201` stops exceeding a flipped `72_000` ceiling) while the brief's own constant-derived test stays green either way — the reason mutation 3 above exists |
+| *(ledger, 21)* | Task 4: invalid `fps` traced to the arithmetic it could reach | Reviewer confirmed **no NaN/Infinity/div-zero path exists** — `!fpsOk` forces an early return before the division, so the invalid-fps guard is provably not decorative |
+| *(ledger, 723)* | Task 5: `vi.spyOn` mutation 1, post-fix | **2 independent failures** — call-identity and the displacement ratio, the latter measuring exactly 5 (the value the reviewer derived by hand before the test existed) |
+| *(ledger, 729→729)* | Task 6: 51-error abort miscategorised as unreachable | Verified empirically against the real 51-error boundary — pre-fix, the catch path returned a hardcoded `tokenCount: 0`; `expect(out.tokenCount).toBe(160)` would have failed against it |
+| *(ledger, 746)* | Task 7: `--fps` without `--export-ready` silently accepted; unknown `--flag=val` read as a filename | Both traced by hand to genuinely redden their new rejection tests when reverted — deleting either branch leaves `error` as `null` and the assertion throws rather than passing vacuously |
+| *(ledger, 749)* | Task 8a: stubbed empty `applySnapshot` against the fixed round-trip test | Failed **exactly at the guard**, confirming the tree really was moved to a different state before the round trip, not that the guard is decorative |
+| *(RESULTS-GATE-B.md, 29)* | `ticksPerFrame = TICK_HZ / request.fps` → `+ 1` | **12/29** failed, including the three `it.each` frame-count cases and the canonical-corpus tests sharing the same arithmetic |
+| *(RESULTS-GATE-B.md, 21)* | `EXPORT_UNBOUNDED_SCENE` branch replaced with a silent `seconds = 5` default | **2/21** failed (`exportContract.test.ts`) — the unbounded-refusal test and the multi-diagnostic test |
+| *(RESULTS-GATE-B.md, 29)* | `compound-logo`'s `durationSeconds` in `CANONICAL_SCENES` changed from 8 to 6 | **2/29** failed, against the real committed `.marey` file, not a hypothetical |
+
+The pattern Phase 3C's notes recorded repeats here at greater scale: reading
+finds contradictions (the ten plan-fixture defects, all caught by an
+implementer or reviewer reading the specified test against real source before
+or instead of trusting it), but only execution finds coincidences (every row
+above that measured a number nobody had computed by hand until the revert ran
+— the displacement ratio, the 7.5 px gap, the exact failure counts).
+
+### Process notes for Phase 5A
+
+- **Commit-as-you-go is no longer optional advice; it is the reason this
+  phase has a record at all.** Three separate rate-limit kills (Task 4's
+  reviewer — infrastructure, no work lost; Task 7's implementer — died before
+  writing anything, safe to re-dispatch cold; Task 8a's and Task 8b's
+  implementers — both mid-flight, both saved by an incremental commit) hit
+  this phase. Every one of the two that could have lost real work did not,
+  because the controller had told implementers to commit each increment
+  rather than save one commit for the end — a lesson Task 7's dispatch
+  applied *after* Task 4's kill lost nothing only because it happened to die
+  before writing code. Phase 5A should carry the instruction from the start
+  of every task, not add it after the first kill that could have cost
+  something.
+- **Checking a killed agent's wreckage before resuming it paid for itself
+  every time.** Task 8a's port-5199 check found no orphan; Task 8b's found one
+  (PID 3424) and killed it before the third dispatch — exactly the condition
+  that produces this repo's signature false pass. Task 8a's file check found
+  one real, coherent, but completely unverified module
+  (`devExportSeam.ts`) that the next implementer was told about explicitly
+  rather than silently inheriting. Never assume an interrupted agent left
+  nothing behind, and never assume what it left behind is either junk or
+  trustworthy without checking — both assumptions have been wrong in this
+  repo before.
+- **Escalating review to opus tracked risk, not task size.** Task 3 (a
+  validator control-flow change plus a language-surface change), Task 5 (a
+  falsified hypothesis plus a deliberately implementation-shaped test), Task 6
+  (a 133-line worker deletion plus a behaviour-preservation claim across three
+  consumers), and Task 7 (a repo-wide tsconfig expansion) were escalated;
+  Tasks 1, 2, 4 and 8b's reviews were not. Every escalated review found at
+  least one Important-or-above defect; none of the non-escalated ones did.
+  That is a small sample and not proof the calibration was exactly right, but
+  it is consistent with AGENT-LESSONS §7b's tiering advice rather than
+  contradicting it.
+- **Named risks kept finding real problems, not clean bills of health.** Task
+  4's two judgment-call risks, Task 5's implementation-shaped-test risk, Task
+  6's twice-widened-type risk, Task 7's tsconfig-blast-radius risk, and Task
+  8a's two named risks (the inherited file, and the harness matching its
+  sibling) — every one of them surfaced a finding when checked rather than
+  confirmed clean. AGENT-LESSONS §8's point holds again: budget the review
+  that shares none of the prior reasoning, and give it a real question to
+  answer rather than a conclusion to ratify.
+- **Two controller-authored claims were falsified by the agents told to
+  verify them, both published in a document meant to be relied on later.**
+  The paint-cadence argument and the cross-machine hash claim were both
+  written with confidence, both wrong, and both caught only because an
+  implementer was instructed to measure rather than believe. Phase 5A's own
+  design work should expect the same ratio: a plan's *prose requirements*
+  survived this phase intact; its *specific technical claims* did not, at a
+  rate of two per phase across the last two phases (3C had none recorded this
+  way; this is the first phase to falsify a claim about the language runtime
+  itself rather than about a test fixture).
+- **What is still owed**, restated from Task 8b's own brief and unchanged by
+  this session's work: an independent whole-branch review by someone with no
+  stake in this reasoning (AGENT-LESSONS §8), and the merge, with both
+  phase-status locations — `docs/architecture/README.md`'s "Current phase"
+  and `roadmap-and-process.md`'s Phase 4 bullet — updated together. They were
+  written this task to say exactly that, because all three prior transitions
+  shipped stale (AGENT-LESSONS §5b), and a search for a third phase-status
+  location (root `README.md` — does not exist yet; `AGENTS.md` —
+  8-line forwarding files with no phase content; `package.json` — no phase
+  field) found none, which is not proof none exists, only that this session's
+  search did not find a third.
