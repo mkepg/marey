@@ -15,8 +15,20 @@ import type { FrameSnapshot } from "../renderer/frameSampler";
  * honest and equally stable. Rounding would hide a real divergence smaller
  * than its own precision.
  *
- * This hashes *simulation output*, so unlike a PNG byte hash it carries the
- * determinism claim across machines as well as across runs.
+ * This hashes *simulation output*, so unlike a PNG byte hash it is not tied
+ * to one machine's GPU or rasteriser. **But it is not a cross-engine
+ * guarantee either, and measurement (not argument) found the gap:**
+ * `eval/scenes-3b/compound-logo.marey`'s hash matches bit-for-bit between a
+ * headless Node run and a Chromium run (`eval/RESULTS-GATE-B.md`), while
+ * `radial-dots.marey`'s does not — traced to `Math.sin` returning a
+ * different last bit at exactly 240° between Node's V8 and Playwright's
+ * bundled Chromium V8. `+`, `-`, `*`, `/` and `Math.sqrt` are the operations
+ * IEEE-754 (and ECMA-262) require to be correctly rounded everywhere;
+ * `Math.sin`/`Math.cos` are explicitly "implementation-approximated" by the
+ * spec and are not. `parseExpr.ts`'s `sin`/`cos` fold to literals at parse
+ * time, so any scene using them can carry this gap into its baked IR; a
+ * scene with no trig (arithmetic and Matter.js collision response only, as
+ * `compound-logo.marey` measured) is not shown to have it.
  */
 export function hashFrames(frames: ReadonlyArray<FrameSnapshot>): string {
   let h = 0x811c9dc5;
