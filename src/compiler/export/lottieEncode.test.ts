@@ -234,6 +234,28 @@ describe("encodeLottie · constant-track collapse", () => {
     expect(p.k.map((kf: { s: number[] }) => kf.s[0])).toEqual([7, 99, 7]);
   });
 
+  it("does not collapse a SCALAR track whose first and last frames agree but whose middle does not", () => {
+    // The test above only covers `p`/`s`. `r` and `o` are scalars and go
+    // through a separate code path, and the Step 4 delete-and-run check
+    // measured the gap directly: collapsing the scalar path on first-vs-last
+    // left all 810 tests green. A full rotation, a pulse, or a fade out and
+    // back is exactly the motion that would then vanish into a static value.
+    const doc = encodeLottie(
+      [circle("scene.c")],
+      framesOf(
+        [snap("scene.c", { rotation: 0, alpha: 1 })],
+        [snap("scene.c", { rotation: Math.PI / 2, alpha: 0.5 })],
+        [snap("scene.c", { rotation: 0, alpha: 1 })],
+      ),
+      planFor(3, 30), SCENE,
+    );
+    const ks = layerNamed(doc, "c").ks;
+    expect(ks.r.a).toBe(1);
+    expect(ks.r.k.map((kf: { s: number[] }) => kf.s[0])).toEqual([0, 90, 0]);
+    expect(ks.o.a).toBe(1);
+    expect(ks.o.k.map((kf: { s: number[] }) => kf.s[0])).toEqual([100, 50, 100]);
+  });
+
   it("collapses each track independently", () => {
     // A layer that moves but never rotates must still get a static `r`, and
     // an all-or-nothing collapse (one flag for the whole transform) would
