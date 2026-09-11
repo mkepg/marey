@@ -56,3 +56,70 @@ describe("planLottie · refusals", () => {
     expect(planLottie(ir).ok).toBe(true);
   });
 });
+
+describe("planLottie · layer specs", () => {
+  const layersOf = (source: string) => {
+    const r = planLottie(irFor(source));
+    if (!r.ok) throw new Error(`unexpected refusal: ${r.diagnostics.map(d => d.code).join(",")}`);
+    return r.layers;
+  };
+
+  it("puts a default-origin circle's anchor at its centre", () => {
+    const [c] = layersOf(`scene { size: (100,100) duration: 1 circle c { position: (10,10), radius: 5 } }`);
+    expect(c.shape).toEqual({ kind: "circle", radius: 5 });
+    // bbox is (0,0)-(10,10) and origin defaults to (0.5, 0.5), so the pivot
+    // sits at (5, 5) — NOT at (0, 0). A circle is drawn at .circle(r, r, r),
+    // so its own centre is (r, r) in local space too.
+    expect(c.anchor).toEqual({ x: 5, y: 5 });
+  });
+
+  it("moves a bottom-origin rectangle's anchor to its baseline", () => {
+    // origin (0.5, 1) is the "grow from a baseline" idiom Phase 3C added.
+    // anchor = (w*0.5, h*1) = (2, 6). If the implementation ignores origin and
+    // always centres, this is (2, 3) and the test reddens.
+    const [r] = layersOf(`scene { size: (100,100) duration: 1 rectangle r { position: (20,20), size: (4,6), origin: (0.5, 1) } }`);
+    expect(r.anchor).toEqual({ x: 2, y: 6 });
+  });
+
+  it("offsets a polygon's anchor by its bbox minimum", () => {
+    // Points (0,-30), (26,15), (-26,15): minX -26, minY -30, w 52, h 45.
+    // Default origin: anchor = (-26 + 26, -30 + 22.5) = (0, -7.5).
+    // The -7.5 is the same bbox-centre/centroid gap D15 exists to correct and
+    // that Phase 3C's filed MatterWorld fixture measured at 7.5px.
+    const [p] = layersOf(`scene { size: (100,100) duration: 1 polygon p { position: (0,0), points: [(0,-30), (26,15), (-26,15)] } }`);
+    expect(p.anchor).toEqual({ x: 0, y: -7.5 });
+  });
+
+  it("fixes a group's anchor at its own origin regardless of where its children sit", () => {
+    // D16. A group whose only child sits at (40, 40) still anchors at (0, 0).
+    const layers = layersOf(`scene { size: (100,100) duration: 1 group g { position: (5,5) circle inner { position: (40,40), radius: 2 } } }`);
+    const g = layers.find(l => l.id === "scene.g")!;
+    expect(g.shape).toEqual({ kind: "group" });
+    expect(g.anchor).toEqual({ x: 0, y: 0 });
+    expect(g.color).toBeNull();
+  });
+
+  it("links a child to its parent and leaves a top-level object unparented", () => {
+    const layers = layersOf(`scene { size: (100,100) duration: 1 group g { position: (5,5) circle inner { position: (1,1), radius: 2 } } }`);
+    expect(layers.find(l => l.id === "scene.g")!.parentId).toBeNull();
+    expect(layers.find(l => l.id === "scene.g.inner")!.parentId).toBe("scene.g");
+  });
+
+  it("emits layers in IR order, which is already layer-sorted", () => {
+    // typeChecker/builder.ts:265-269 sorts children by `layer` ascending with a
+    // stable index tiebreak, and nothing in the renderer reads `layer` again.
+    // So IR order IS paint order and this walk must not re-sort.
+    const layers = layersOf(`scene { size: (100,100) duration: 1
+      circle top { position: (0,0), radius: 1, layer: 5 }
+      circle bottom { position: (0,0), radius: 1, layer: 1 }
+    }`);
+    expect(layers.map(l => l.id)).toEqual(["scene.bottom", "scene.top"]);
+  });
+
+  it("converts a hex colour to three 0-1 floats", () => {
+    const [c] = layersOf(`scene { size: (100,100) duration: 1 circle c { position: (0,0), radius: 1, color: #ff8000 } }`);
+    expect(c.color![0]).toBe(1);
+    expect(c.color![1]).toBeCloseTo(128 / 255, 10);
+    expect(c.color![2]).toBe(0);
+  });
+});
