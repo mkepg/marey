@@ -447,13 +447,16 @@ describe("encodeLottie · per-kind geometry", () => {
  */
 describe("encodeLottie · invariant violations throw rather than degrade", () => {
   it("throws, naming the id and the frame, when a spec has no snapshot in some frame", () => {
-    expect(() =>
+    // Asserted on wording only this guard produces, not a short substring a
+    // neighbouring message could also emit (AGENT-LESSONS §2b).
+    const run = () =>
       encodeLottie(
         [circle("scene.c")],
         framesOf([snap("scene.c")], [snap("scene.other")]),
         planFor(2, 30), SCENE,
-      ),
-    ).toThrow(/scene\.c[\s\S]*frame 1|frame 1[\s\S]*scene\.c/);
+      );
+    expect(run).toThrow("no snapshot for object 'scene.c'");
+    expect(run).toThrow("Frame 1");
   });
 
   it("throws when a parentId names no layer in the array", () => {
@@ -463,7 +466,22 @@ describe("encodeLottie · invariant violations throw rather than degrade", () =>
         framesOf([snap("scene.inner")]),
         planFor(1, 30), SCENE,
       ),
-    ).toThrow(/scene\.ghost/);
+    ).toThrow("names parent 'scene.ghost', which is not a layer in this export");
+  });
+
+  it("throws on a parent cycle rather than walking it forever", () => {
+    // Not one of the brief's two guards. Added because the alternative to
+    // throwing here is a HANG, not a wrong file: the ancestor walk has no
+    // other termination condition, and `lottie §layers` forbids reference
+    // cycles outright. Unreachable through `planLottie`, which assigns
+    // `parentId` from the enclosing node of a depth-first walk.
+    expect(() =>
+      encodeLottie(
+        [circle("scene.a", "scene.b"), circle("scene.b", "scene.a")],
+        framesOf([snap("scene.a"), snap("scene.b")]),
+        planFor(1, 30), SCENE,
+      ),
+    ).toThrow("has a parent cycle through");
   });
 });
 
