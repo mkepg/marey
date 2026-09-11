@@ -131,15 +131,19 @@ for a **complete, provable engineering artifact with a declarable finish
 line**, and acquisition work moved past that line. Read its §1 before
 proposing anything the old roadmap justified by adoption.
 
-Current phase: **4 — composition and export foundation**. All tasks are
-complete on `phase-4-composition-and-export`, including Task 8b's Gate B
-evidence; **not yet merged**. The independent whole-branch review
-AGENT-LESSONS §8 requires has now run and found three Important defects and
-twenty Minor findings — consistent with every phase that has had one so far —
-and a fix wave has addressed all of them (`.sdd/2026-09-10-phase-4-composition-and-export/final-fix-wave-report.md`).
-A scoped re-review against that fix wave's diff is the last step outstanding.
-Do not treat Phase 4 as finished until it has passed and the branch is
-merged. **3C — motion primitives is done and merged** (`delay` on
+Current phase: **5A — next**. **4 — composition and export foundation is done
+and merged**, fast-forwarded onto `main` with no merge commit; its last commit
+is `2e72ef7`. The independent whole-branch review AGENT-LESSONS §8 requires
+found three Important defects and twenty Minor findings — consistent with
+every phase that has had one so far — a single fix wave addressed all of them,
+and the scoped re-review of that wave passed with no finding left open.
+**Read `docs/plans/2026-09-10-phase-4-composition-and-export.md`'s
+execution notes before Phase 5A**: they record two of the plan's own claims
+that execution measured false, the ten fixture defects implementers found by
+verifying its code blocks rather than pasting them, and the deferred findings
+Phase 5A inherits — the first of which is that `compiler.worker.ts` still has
+no automated test and was rewritten wholesale in this phase.
+**3C — motion primitives is done and merged** (`delay` on
 `animate`, `origin` on shapes, and a zero-`scale` rule scoped to the objects
 that take part in physics), and its independent whole-branch review is
 complete. **Read

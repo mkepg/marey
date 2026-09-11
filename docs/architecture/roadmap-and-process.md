@@ -110,14 +110,20 @@ explicitly rather than quietly deviating.
   `2026-09-09-marey-phase-3c-motion-primitives-design.md`; **read the plan's
   execution notes before Phase 4.** Current-phase status is stated once, in
   `docs/architecture/README.md` — update that line and this bullet together.
-- **Phase 4 — composition and export foundation: tasks complete on
-  `phase-4-composition-and-export`, not yet merged.** The independent
-  whole-branch review AGENT-LESSONS §8 requires has now run, found three
-  Important defects and twenty Minor findings, and a fix wave has addressed
-  all of them
-  (`.sdd/2026-09-10-phase-4-composition-and-export/final-fix-wave-report.md`).
-  A scoped re-review against that diff is the last step outstanding — do not
-  treat this phase as finished until it has passed and the branch is merged.
+- **Phase 4 — composition and export foundation: done and merged.**
+  Fast-forwarded onto `main` with no merge commit; the phase's last commit is
+  `2e72ef7`. The independent whole-branch review AGENT-LESSONS §8 requires
+  found three Important defects and twenty Minor findings, a single fix wave
+  addressed all of them, and the scoped re-review of that wave passed with no
+  finding left open. The three Important defects are worth knowing because
+  nine task reviews missed all of them: `FrameSnapshot` silently dropped
+  `visible`, which the renderer writes inside `advanceOneTick()`, so a culled
+  object would have vanished from every exported frame while the hash stayed
+  byte-identical; `SamplerPlan` was structurally typed, so "holding a plan is
+  proof the request was validated" was a convention until it was branded; and
+  the cross-machine hash claim this phase measured false survived in its own
+  spec, now carrying a dated correction rather than a silent rewrite.
+  **Read the plan's execution notes before Phase 5A.**
   Adds a
   finite scene-level `duration` (validated; orthogonal to any per-object
   `animate`/`physics` duration, which it does not replace); one deterministic
