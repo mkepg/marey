@@ -114,6 +114,7 @@ describe("compiler.worker · thrown errors", () => {
     // lie and the parser never ran. This is the `tokenCount === 0` branch.
     expect(texts(out)[1]).toContain("Unexpected character '!'");
     expect(texts(out)[1]).toContain("— line 1, column 1");
+    expect(texts(out)[1]).toMatch(/^\[lexer\] /);   // was "[lex]  "
     expect(out[0].errors[0].phase).toBe("LEX");
   });
 
@@ -130,6 +131,7 @@ describe("compiler.worker · thrown errors", () => {
     expect(texts(out)[1]).toBe("[lexer]   159 tokens");
     expect(texts(out)[2]).toBe("[parser]  building AST...");
     expect(texts(out)[3]).toContain("Maximum error limit reached");
+    expect(texts(out)[3]).toMatch(/^\[system\] /);  // was "[runtime]  "
     expect(out[0].errors[0].phase).toBe("RUNTIME");
   });
 });
@@ -151,5 +153,26 @@ describe("compiler.worker · lint", () => {
     const out = fire({ id: 7, source: `scene { size: (1, 1) }` });
     expect(out[0].action).toBe("compile");
     expect(out[0].success).toBe(true);
+  });
+});
+
+describe("compiler.worker · scraped-prefix contract", () => {
+  it("emits nothing outside the six prefixes check.mjs scrapes", () => {
+    // The exact regex from tools/visual-check/check.mjs:89. A line that
+    // does not match is dropped from every captured visual-check report, so a
+    // compile can fail there with no reason shown.
+    const SCRAPED = /^\[(lexer|parser|type|pixi|render|system)\]/;
+    const sources = [
+      `scene { size: (800, 600) circle c { position: (1, 2), radius: 3 } }`,
+      `circle c { }`,
+      `scene { size: (800, 600) circle c { position: (1, 2), radius: -3 } }`,
+      "!",
+      `scene { ${Array.from({ length: 52 }, () => "x: 1").join(" ")} }`,
+    ];
+    for (const source of sources) {
+      for (const text of texts(fire({ id: 99, action: "compile", source }))) {
+        expect(text).toMatch(SCRAPED);
+      }
+    }
   });
 });

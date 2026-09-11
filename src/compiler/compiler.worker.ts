@@ -1,6 +1,21 @@
 import { compileSource } from "./compileSource";
 import type { LogEntry, CompilerError } from "./types";
 
+// `check.mjs:89` filters the Terminal's output on exactly six prefixes:
+// /^\[(lexer|parser|type|pixi|render|system)\]/. A raw `err.phase` is not one
+// of them for either reachable thrown phase — LEX renders as `[lex]`, and the
+// parser's 51-error abort renders as `[runtime]` — so both lines were dropped
+// from every scraped visual-check capture. The IDE was unaffected
+// (`Terminal.tsx` renders text verbatim and styles by `kind`), which is why
+// this survived a manual browser observation.
+const PHASE_PREFIX: Record<string, string> = {
+  LEX: "[lexer]   ",
+  PARSE: "[parser]  ",
+  TYPE: "[type]    ",
+};
+
+const prefixFor = (phase: string): string => PHASE_PREFIX[phase] ?? "[system]  ";
+
 self.addEventListener("message", (e: MessageEvent) => {
   const { id, source, action = "compile" } = e.data;
 
@@ -48,7 +63,7 @@ self.addEventListener("message", (e: MessageEvent) => {
         : "";
     logs.push({
       kind:  "error",
-      text:  `[${err.phase.toLowerCase()}]  ${err.message}${location}`,
+      text:  `${prefixFor(err.phase)}${err.message}${location}`,
     });
     outErrors.push(err);
     self.postMessage({ id, action: "compile", success: false, logs, errors: outErrors, ir: null });
