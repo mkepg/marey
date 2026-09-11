@@ -63,3 +63,93 @@ describe("compiler.worker · success", () => {
     expect(JSON.parse(out[0].ir).registry["scene.c"].props.radius).toBe(3);
   });
 });
+
+describe("compiler.worker · returned errors", () => {
+  it("stops after 'building AST...' for a PARSE error and lists every one", () => {
+    const out = fire({ id: 2, action: "compile", source: `circle c { }` });
+
+    expect(out[0].success).toBe(false);
+    expect(out[0].ir).toBeNull();
+    expect(texts(out)).toEqual([
+      "[lexer]   tokenizing...",
+      "[lexer]   4 tokens",
+      "[parser]  building AST...",
+      "[parser]  A Marey program must begin with the 'scene' keyword, but found keyword 'circle'. 'circle' is an object keyword — objects must be placed inside a scene block.",
+    ]);
+    // The load-bearing half: no `[parser] AST root` line and no `[type]` line.
+    // Reordering the PARSE branch after the type-check block would emit both.
+    expect(out[0].errors[0].phase).toBe("PARSE");
+  });
+
+  it("emits the AST-root line and the type header before a TYPE error", () => {
+    const out = fire({
+      id: 3,
+      action: "compile",
+      source: `scene { size: (800, 600) circle c { position: (1, 2), radius: -3 } }`,
+    });
+
+    expect(out[0].success).toBe(false);
+    expect(texts(out)).toEqual([
+      "[lexer]   tokenizing...",
+      "[lexer]   26 tokens",
+      "[parser]  building AST...",
+      "[parser]  AST root: scene, 1 top-level object(s)",
+      "[type]    checking + building Scene IR...",
+      "[type]    'circle' object 'c': 'radius' must be greater than 0, but got -3.",
+    ]);
+    expect(out[0].errors[0].phase).toBe("TYPE");
+  });
+});
+
+describe("compiler.worker · thrown errors", () => {
+  it("emits only the tokenizing line when lexing itself throws", () => {
+    // `lex()` throws a raw { phase: "LEX", ... } before `parse()` is called,
+    // so nothing internal catches it and tokenCount is 0.
+    const out = fire({ id: 4, action: "compile", source: "!" });
+
+    expect(out[0].success).toBe(false);
+    expect(texts(out)).toHaveLength(2);
+    expect(texts(out)[0]).toBe("[lexer]   tokenizing...");
+    // No "N tokens" line and no "building AST..." line: the count would be a
+    // lie and the parser never ran. This is the `tokenCount === 0` branch.
+    expect(texts(out)[1]).toContain("Unexpected character '!'");
+    expect(texts(out)[1]).toContain("— line 1, column 1");
+    expect(out[0].errors[0].phase).toBe("LEX");
+  });
+
+  it("keeps the token count and the AST header when a later stage throws", () => {
+    // The parser's 51-duplicate abort throws a plain Error that escapes every
+    // ParseException guard. Phase 4 fixed `compileSource` to hoist `tokens`
+    // above its try precisely so this line survives; that fix is what this
+    // assertion protects.
+    const clauses = Array.from({ length: 52 }, () => "x: 1").join(" ");
+    const out = fire({ id: 5, action: "compile", source: `scene { ${clauses} }` });
+
+    expect(out[0].success).toBe(false);
+    expect(texts(out)).toHaveLength(4);
+    expect(texts(out)[1]).toBe("[lexer]   159 tokens");
+    expect(texts(out)[2]).toBe("[parser]  building AST...");
+    expect(texts(out)[3]).toContain("Maximum error limit reached");
+    expect(out[0].errors[0].phase).toBe("RUNTIME");
+  });
+});
+
+describe("compiler.worker · lint", () => {
+  it("answers a lint request with errors and symbols and no logs at all", () => {
+    const out = fire({ id: 6, action: "lint", source: `scene { size: (1, 1) }` });
+
+    expect(out).toHaveLength(1);
+    expect(out[0]).toEqual({ id: 6, action: "lint", errors: [], symbols: [] });
+    // No `logs` key whatsoever: the lint branch returns before the log array
+    // is even declared (`compiler.worker.ts:7-11`).
+    expect("logs" in out[0]).toBe(false);
+  });
+
+  it("defaults a message with no action to compile", () => {
+    // `action = "compile"` is a destructuring default (`compiler.worker.ts:5`).
+    // `index.ts` always sends one, so this is the only guard on that default.
+    const out = fire({ id: 7, source: `scene { size: (1, 1) }` });
+    expect(out[0].action).toBe("compile");
+    expect(out[0].success).toBe(true);
+  });
+});
