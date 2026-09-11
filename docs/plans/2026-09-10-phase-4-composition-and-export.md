@@ -2445,6 +2445,17 @@ round trip) than Phase 3C did.
    which is a live reason not to loosen the rule on one fixture's evidence.
    The docstring in `frameSampler.ts` was rewritten from the unverified claim
    to the measurement (`20a62b3`/`a8a59be`).
+   **Named explicitly, once, because the other mentions of this decision call
+   it conservatism and stop there (final whole-branch review):** flipping
+   paint-per-tick to paint-per-frame and finding the suite green is precisely
+   §7 obligation 2's "the decision is unpinned and a test is owed" condition.
+   No such test was added — deliberately, and correctly, because a cadence
+   test would pin a contract this docstring explicitly disclaims (the
+   `sequence`-bearing gap above) rather than one the code actually commits
+   to. That correctness does not make the gap between it and obligation 2
+   fewer than a real, un-closed deviation from the plan's own verification
+   obligations; it is one, named here rather than left implicit in four
+   descriptions of the same choice as "conservative."
 2. **The cross-machine hash claim (Task 8b, this document and
    `frameHash.ts`'s own docstring).** Both claimed that because `hashFrames`
    hashes simulation output rather than pixels, it "carries the determinism
@@ -2476,7 +2487,7 @@ smaller findings in the next section.
 
 | Deferred | Why it is safe to defer |
 |---|---|
-| `compiler.worker.ts` has **no automated test at all** | The largest untested surface the phase touched (Task 6, confirmed still true — no test file for it exists anywhere in the suite). Its branch order and its six exact log strings are guarded by nothing; a one-time manual browser observation during Task 6 is not a regression guard. Harmless only in the sense that nothing has reordered those branches since; it is not structurally protected |
+| `compiler.worker.ts` has **no automated test at all** | The largest untested surface the phase touched (Task 6, confirmed still true — no test file for it exists anywhere in the suite). Its branch order is guarded by nothing; a one-time manual browser observation during Task 6 is not a regression guard. **Correction (final whole-branch review):** this row previously said its "six exact log strings" were also guarded by nothing — overstated. `tools/visual-check/check.mjs:89` filters output on `/^\[(lexer\|parser\|type\|pixi\|render\|system)\]/`, six **prefixes**, not the full message text, and those prefixes survive a message rewrite. Harmless only in the sense that nothing has reordered the branches since; the branch order is not structurally protected, though the log prefixes the skill actually depends on are more durable than "six exact log strings" implied |
 | Criterion 5's build-and-sample half is unproven headlessly for `bar-chart` and `timeline-ticks` | Both declare `text`, which needs `document.createElement("canvas")` — absent under Vitest's `node` environment. `bar-chart`'s browser half **was** demonstrated this task (`export-check.mjs`); `timeline-ticks`'s was not separately re-verified. Harmless today because both scenes are static by declaration — a build failure would be immediately visible in the live preview, which every `.marey` file in this corpus is also exercised through |
 | A `sequence`-bearing scene remains untested for paint-cadence sensitivity | The paint-cadence experiment's fixture had no `sequence` block. Per-tick painting is kept as the conservative superset, so this is a gap in *proof*, not in *behaviour* — nothing suggests a `sequence` step would behave differently, only that it has not been checked |
 | `ObjectSnapshot.x`/`y` frame is undocumented for a nested child, and **is now partially, not fully, exercised** | Flagged in Task 5 as "no scene with a group appears anywhere in the suite" — no longer accurate as stated: `compound-logo.marey`'s `group mark` is now in the corpus and `frameSampler.test.ts` asserts its own `x`/`y` and its three children's **ids**. But the children's **coordinates** are still never read by any assertion, so whether `stem`/`armTop`/`armMid`'s `x`/`y` are parent-local (as `layout.currentPos` suggests) or scene-space is still unverified by a test, only inferable by reading `frameSampler.ts` itself. The premise moved; the gap it named did not close |
@@ -2504,8 +2515,10 @@ session, consistent with "deferred" rather than "resolved."
 regret:** `compiler.worker.ts` has no automated test at all (Task 6, line 152
 of the ledger). It is promoted to "Deliberate gaps and deferrals" above rather
 than left in this list alone, because its blast radius — the Terminal pane and
-`visual-check`'s own output-scraping both depend on those six exact log
-strings — is larger than "minor" describes.
+`visual-check`'s own output-scraping both depend on its log output carrying
+one of six `[lexer]`/`[parser]`/`[type]`/`[pixi]`/`[render]`/`[system]`
+prefixes (`check.mjs:89`), not the exact message text after the prefix — is
+larger than "minor" describes.
 
 ### Mutation tests
 

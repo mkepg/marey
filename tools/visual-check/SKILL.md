@@ -179,7 +179,11 @@ requirement). It then does this **twice, each from a freshly loaded page** —
 not a reload of the same page — and compares the two runs: the per-frame PNG
 bytes (sha256 each) and the returned `hashFrames` value. Divergence in either
 means the export is not reproducible across a real page load, which baked-frame
-export depends on.
+export depends on. Both runs share **one** launched Chromium process
+(`chromium.launch()` runs once); what resets between them is the page — a
+fresh `browser.newPage()` and navigation each time, not a fresh browser. That
+is the granularity this check actually exercises, and it is what "cold" means
+everywhere below: page-cold, not process-cold.
 
 Output: `<out>/frame_%04d.png` for the first run (the set to look at),
 `<out>/runB/frame_%04d.png` for the second (kept only for the comparison), and

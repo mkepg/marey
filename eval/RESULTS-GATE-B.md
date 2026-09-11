@@ -124,7 +124,11 @@ environment, agrees with itself:
   `"produces the same hash twice from cold"` test.
 - Chromium-to-Chromium (`runA` vs `runB`, two independent cold page loads):
   matches for both scenes — `snapshotHashMatch: true` and
-  `pngFramesMatch: true` in both `report.json`s.
+  `pngFramesMatch: true` in both `report.json`s. "Cold" describes the
+  *page*, not the browser: `export-check.mjs` launches Chromium **once**
+  (`chromium.launch()`) and calls `runOnce(browser)` twice, each opening a
+  fresh page (`browser.newPage()`) — one browser process, two independent
+  page navigations, not two separate browser launches.
 
 **Criterion 2 as literally worded — "repeated exports produce identical
 frame hashes" — holds fully, in both environments, for both scenes,
@@ -199,6 +203,19 @@ npx vitest run src/compiler/renderer/frameSampler.test.ts
 `5k/2` (coincident on even `k`, since 24 and 60 share tick 5 vs 2). Both
 compare full object content, not just the tick label.
 
+**A substitution, made explicit here.** Spec §8's prescribed revert for this
+criterion is "move paint to frame boundaries → must fail" — i.e. move
+`paintExactTick()` out of the per-tick loop to run once per *frame* instead.
+That revert was tried first, and it **stayed green**: this is exactly the
+falsified paint-cadence hypothesis (`tickAnim` already snaps a completing
+runner's value in the tick phase, so nothing in this suite's fixture was
+left for paint cadence to affect — see the execution notes' "Two falsified
+claims" section). Criterion 3 still holds regardless — per-frame painting
+producing identical results *strengthens* the "frame pacing cannot affect
+exported state" claim, it does not weaken it — but a revert that cannot
+fail proves nothing about implementation correctness, so the revert below is
+a different one, substituted for that reason:
+
 **Revert performed:** `runtime.paintExactTick()` → `runtime.paint(0)` in
 `frameSampler.ts`'s sampling loop (the historical defect class this file's
 own comments describe — a wall-clock paint in place of a tick-aligned one).
@@ -245,6 +262,26 @@ an unbounded scene instead of refusing it). 2/21 reddened:
 `"refuses an indefinite scene with no explicit bound"` and
 `"reports every applicable diagnostic, not only the first"`. Restored;
 `git diff --stat` empty; 21/21 green again.
+
+**The other four `EXPORT_*` diagnostics, each reverted separately (final
+whole-branch review — spec §8 asks for each, not one standing for five).**
+Same method each time: disable one diagnostic's `push` (or its guarding
+condition) in `exportContract.ts`, run
+`npx vitest run src/compiler/export/exportContract.test.ts`, record which
+tests redden, restore, confirm `git diff --stat` empty and 21/21 green
+before moving to the next:
+
+| Diagnostic disabled | Reddened | Failing tests |
+|---|---|---|
+| `EXPORT_UNSUPPORTED_FPS` | 7/21 | the `it.each([25, 0, -30, 7, 1.5, 240])("rejects %pfps...")` row (6 cases) and `"reports every applicable diagnostic, not only the first"` |
+| `EXPORT_INVALID_DURATION` | 4/21 | the `it.each([0, -1, NaN, +Infinity])("rejects the explicit bound %p")` row (4 cases) |
+| `EXPORT_EMPTY_SEQUENCE` | 1/21 | `"rejects a bound too short to yield a single frame"` |
+| `EXPORT_FRAME_BUDGET` | 2/21 | `"rejects a request over the frame budget"` and `"accepts exactly MAX_EXPORT_FRAMES and rejects one frame over it"` |
+
+All four restored individually; `git diff --stat` empty and 21/21 green
+after each. Combined with `EXPORT_UNBOUNDED_SCENE` above, every one of the
+five `EXPORT_*` diagnostics has now been independently deleted-and-run
+rather than inferred from the others.
 
 **Reproducible end-to-end, post-fix — constraint 4.** Task 7 Step 5's own
 evidence cited `marey check --export-ready bar-chart.marey` exiting 1 with

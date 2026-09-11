@@ -113,8 +113,12 @@ function pngBytesOf(canvas: ICanvas): Promise<Uint8Array> {
  * **It receives `FrameSnapshot[]` and no runtime, no world and no driver**, so
  * it cannot advance the simulation even by accident. That is roadmap §6.2's
  * "encoders never advance the simulation and never see a wall clock" made
- * structural rather than conventional: there is nothing here to advance and no
- * clock to read.
+ * structural rather than conventional, for the *simulation* half: there is
+ * nothing here to advance. The wall-clock half is precise rather than
+ * absolute — the `Application` parameter owns a `Ticker` (`app.ticker`), so a
+ * wall clock is technically reachable through it; this function simply never
+ * reads it, the same way it never reads anything else off `app` besides
+ * `renderer`.
  *
  * **Size and background come from the `Application` the caller built for the
  * export**, which must be initialised at the scene's logical size and
