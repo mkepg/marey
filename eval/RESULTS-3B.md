@@ -28,7 +28,17 @@ Reproduce the corpus itself with:
 EVAL_DIR=eval/scenes-3b npx vitest run --config eval/vitest.config.ts
 ```
 
-**3 / 3 compiled clean**, written to `eval/report-3b.json`.
+**3 / 3 compiled clean**, written to `eval/report-3b.json`, as it stood at
+Task 14. Phase 4 Task 8b later added a fourth file to the same directory,
+`compound-logo.marey` — the canonical export scene, not a Phase 3B rewrite
+and not part of this measurement — and gave the three scenes below a
+`duration` each, so re-running the command above today reports **4 / 4**
+against a `report-3b.json` with four entries. See `scenes-3b/README.md` and
+`eval/RESULTS-GATE-B.md` for what the fourth scene demonstrates. Nothing
+below this line changed: the three scenes' IR node counts, coordinates and
+object graphs are exactly as measured at Task 14 — `duration` is a scene
+property, not a node, so it does not move `nodeCount` or anything derived
+from it.
 
 ---
 
