@@ -133,10 +133,13 @@ proposing anything the old roadmap justified by adoption.
 
 Current phase: **4 — composition and export foundation**. All tasks are
 complete on `phase-4-composition-and-export`, including Task 8b's Gate B
-evidence; **not yet merged**, and the independent whole-branch review
-AGENT-LESSONS §8 requires — which found real defects in every phase that has
-had one so far — has not yet run. Do not treat Phase 4 as finished until both
-have happened. **3C — motion primitives is done and merged** (`delay` on
+evidence; **not yet merged**. The independent whole-branch review
+AGENT-LESSONS §8 requires has now run and found three Important defects and
+twenty Minor findings — consistent with every phase that has had one so far —
+and a fix wave has addressed all of them (`.sdd/2026-09-10-phase-4-composition-and-export/final-fix-wave-report.md`).
+A scoped re-review against that fix wave's diff is the last step outstanding.
+Do not treat Phase 4 as finished until it has passed and the branch is
+merged. **3C — motion primitives is done and merged** (`delay` on
 `animate`, `origin` on shapes, and a zero-`scale` rule scoped to the objects
 that take part in physics), and its independent whole-branch review is
 complete. **Read

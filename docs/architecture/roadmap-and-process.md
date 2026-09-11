@@ -112,8 +112,13 @@ explicitly rather than quietly deviating.
   `docs/architecture/README.md` — update that line and this bullet together.
 - **Phase 4 — composition and export foundation: tasks complete on
   `phase-4-composition-and-export`, not yet merged.** The independent
-  whole-branch review AGENT-LESSONS §8 requires has not yet run — do not
-  treat this phase as finished until it has and the branch is merged. Adds a
+  whole-branch review AGENT-LESSONS §8 requires has now run, found three
+  Important defects and twenty Minor findings, and a fix wave has addressed
+  all of them
+  (`.sdd/2026-09-10-phase-4-composition-and-export/final-fix-wave-report.md`).
+  A scoped re-review against that diff is the last step outstanding — do not
+  treat this phase as finished until it has passed and the branch is merged.
+  Adds a
   finite scene-level `duration` (validated; orthogonal to any per-object
   `animate`/`physics` duration, which it does not replace); one deterministic
   frame sampler, `frameSampler.ts`'s `sampleFrames`, a headless sibling of

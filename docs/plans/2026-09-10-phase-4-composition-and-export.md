@@ -2152,11 +2152,11 @@ were already committed — see "The inherited work" below.
 
 | Check | Command | Result |
 |---|---|---|
-| Unit suite | `npx vitest run` | **24 files / 760 tests / exit 0** |
+| Unit suite | `npx vitest run` | **24 files / 760 tests / exit 0** (final whole-branch review fix wave: **762**, see below) |
 | Typecheck | `npx tsc -b --noEmit` | exit 0 |
 | Production build | `npm run build` | exit 0; only the pre-existing >500 kB chunk-size advisory |
 | Production build carries no dev seam | `npm run build` then grep `dist/` for `__mareyExportPng`, `devExportSeam`, `installExportSeam` | **zero matches** — the DEV-only `window.__mareyExportPng` seam is dropped by Vite's dead-branch elimination, not merely left ungrepped |
-| CLI build | `npm run build:cli` | exit 0, `dist/cli/marey.mjs` 92.10 kB |
+| CLI build | `npm run build:cli` | exit 0, `dist/cli/marey.mjs` 92.10 kB (final whole-branch review fix wave: 92.15 kB) |
 | R1 corpus | `npx vitest run --config eval/vitest.config.ts` | **20/20 compiled clean**, `eval/report.json` unmoved |
 | R2 corpus | `EVAL_DIR=eval/scenes-r2 npx vitest run --config eval/vitest.config.ts` | **20/20 compiled clean**, `eval/report-r2.json` unmoved |
 | 3B demonstration corpus | `EVAL_DIR=eval/scenes-3b npx vitest run --config eval/vitest.config.ts` | **4/4 compiled clean** (was 3/3 before this task — see "`eval/report-3b.json` diff" below) |
@@ -2203,6 +2203,17 @@ the four-canonical-scene describe block, 11 new cases) brought it to 24 files
 call sites against the current file's 29 individual cases. This session added
 no test. Net for the whole phase, base to current `HEAD`: **+4 files, +83
 tests**.
+
+**Post-review update (2026-09-11, final whole-branch review fix wave).** The
+figures above describe the suite as it stood at `ad7f04e`, this document's own
+commit, and are left as written rather than rewritten out from under their own
+citation — the same self-reference limit the branch-shape paragraph above
+states explicitly. The independent review that followed found three Important
+defects and twenty minors; the fix wave that closed them added **2** tests
+(`frameSampler.test.ts`'s `visible`-culling fixture, Important 1) and no new
+test *files*, bringing the suite to **24 files / 762 tests** as of this fix
+wave's own final commit. No file or diffstat figure above changed, since no
+fix added or removed a non-test file.
 
 ### The inherited work (Task 8b, third attempt)
 
