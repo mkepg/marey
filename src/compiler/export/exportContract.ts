@@ -27,7 +27,22 @@ export interface ExportRequest {
   readonly durationSeconds?: number;
 }
 
+/**
+ * A private brand, not exported. Its only purpose is to make `SamplerPlan`
+ * a nominal type rather than a structural one: without it, any object
+ * literal with the right four number fields would satisfy `SamplerPlan`,
+ * and `sampleFrames` (`renderer/frameSampler.ts`) would accept a
+ * hand-built plan that never passed through `planExport`'s validation —
+ * e.g. a non-integer `ticksPerFrame`, which advances a fractional number of
+ * ticks per frame and labels frames with `tick` values that do not
+ * correspond to any sampled state. There is no legitimate way to produce a
+ * value of this branded type outside this module, because nothing outside
+ * it can write a `unique symbol`-keyed property.
+ */
+declare const PLAN_BRAND: unique symbol;
+
 export interface SamplerPlan {
+  readonly [PLAN_BRAND]: true;
   readonly fps: number;
   readonly ticksPerFrame: number;
   readonly durationTicks: number;
@@ -128,6 +143,11 @@ export function planExport(ir: IRSceneNode, request: ExportRequest): ExportPlanR
 
   return {
     ok: true,
-    plan: Object.freeze({ fps: request.fps, ticksPerFrame, durationTicks, frameCount }),
+    // The one cast for the one brand: every field above has just been
+    // validated, so this literal is a legitimate SamplerPlan, but it cannot
+    // satisfy the type structurally because it has no PLAN_BRAND property
+    // (nothing can, outside this module). This is the single site allowed
+    // to assert that; do not copy the cast anywhere else; use `planExport`.
+    plan: Object.freeze({ fps: request.fps, ticksPerFrame, durationTicks, frameCount }) as SamplerPlan,
   };
 }
