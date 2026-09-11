@@ -21,4 +21,11 @@ if (import.meta.env.DEV) {
   import("./lib/devExportSeam")
     .then((m) => m.installExportSeam())
     .catch((err) => console.error("[devExportSeam] failed to install:", err));
+
+  // Same reasoning, same shape, for Task 4's Lottie browser harness
+  // (`tools/visual-check/lottie-check.mjs`): a separate dynamic
+  // import so a production build's constant-folding drops this module too.
+  import("./lib/devLottieSeam")
+    .then((m) => m.installLottieSeam())
+    .catch((err) => console.error("[devLottieSeam] failed to install:", err));
 }
