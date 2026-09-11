@@ -195,6 +195,27 @@ exactly the failure this script cannot see numerically: identical blank frames
 still hash consistently and still pass `pngFramesMatch` and
 `snapshotHashMatch`.
 
+**The canonical Gate B scene.** `eval/scenes-3b/compound-logo.marey` is the
+corpus's one scene that genuinely animates in, hands off to physics, and
+settles — the other three canonical scenes are static by declaration. Run it
+the same way as any other scene, from outside this skill's own `scenes/`
+directory:
+
+```bash
+node tools/visual-check/export-check.mjs \
+  --scene eval/scenes-3b/compound-logo.marey \
+  --fps 30 --out .visual-check/export/compound-logo
+```
+
+`eval/RESULTS-GATE-B.md` is the worked example: it runs this scene and
+`eval/scenes-3b/radial-dots.marey` through this exact script and pairs each
+Chromium hash against the headless suite's own printed hash, which is how it
+found that `hashFrames` agrees between Node and Chromium for one scene and not
+the other — a real, measured gap in trigonometric rounding between engines,
+not a bug in this script or the sampler. Read that document before assuming
+`export-check.mjs`'s cold-reload match proves cross-machine determinism; it
+proves cross-*reload* determinism, which is a different and narrower claim.
+
 ## Environment
 
 Needs `playwright` (a devDependency) and its Chromium download:

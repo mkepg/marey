@@ -52,10 +52,11 @@ logical dimensions are mapped onto the preview area, which may be any size:
 `fit` affects presentation only. It does not change any coordinate you
 write, and physics is simulated in logical units regardless of it.
 
-`duration` is optional and takes a positive number of seconds. It declares how
-long the scene runs, which is what an exporter samples. A scene that omits it is
-**indefinite** — it still plays in the preview, but it cannot be exported without
-an explicit export bound.
+`duration` is optional and takes a positive number of seconds. It declares
+the scene's finite length, which is what an exporter samples — nothing
+consumes it for playback, and the preview plays on regardless of whether it
+is set. A scene that omits it is **indefinite** — it still plays in the
+preview, but it cannot be exported without an explicit export bound.
 
 Unlike `physics`, `scene` does **not** accept `duration: indefinitely`
 (`TYPE_SCENE_DURATION_INDEFINITE`). An indefinite scene is written by leaving

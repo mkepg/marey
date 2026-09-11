@@ -11,7 +11,16 @@ documents in `docs/research/` own the underlying measurements.
 
 `2026-09-01-marey-product-roadmap-design.md` remains the historical record of
 Phases 3A and 3B and of why export was pulled ahead of physics breadth. It is
-superseded from Phase 4 onward. The earlier
+superseded from Phase 4 onward — that is the 2026-09-09 document's own §16.
+**Its §6 (the Phase 4 section itself) complicates that**, opening with "Unchanged
+from the previous roadmap §9, and still authoritative as written there." Both
+cannot be true as general statements about the same document. They agree on
+every actual Phase 4 requirement — §6.1–6.4 restate the old §9 verbatim in
+substance — so nothing in Phase 4's execution ever turned on which one governs.
+Where the distinction would matter, the specific statement governs the general
+one: §6 speaks to Phase 4 by name, §16 speaks to document authority overall, so
+treat the old roadmap's §9 as authoritative for what Phase 4 requires and §16
+as authoritative for everything else about the old document's standing. The earlier
 `2026-08-26-physics-shared-world-design.md` remains authoritative for the
 motion-graphics direction, decisions D1–D18, and completed Phases 0–2; its
 Sections 8–12 are historical and superseded. **Treat all three documents'
@@ -101,12 +110,49 @@ explicitly rather than quietly deviating.
   `2026-09-09-marey-phase-3c-motion-primitives-design.md`; **read the plan's
   execution notes before Phase 4.** Current-phase status is stated once, in
   `docs/architecture/README.md` — update that line and this bullet together.
-- **Phase 4 — composition and export foundation.** Finite scene duration, one
-  deterministic frame sampler above `SceneRuntime`, a PNG sequence, a compiler
-  surface decoupled from the Web Worker, and `marey check`. Exit is Gate B.
-  **Read the roadmap's §6.3 trap before writing the PNG exporter** — PixiJS
-  does not set `preserveDrawingBuffer`, so a naive in-page pixel read produces
-  blank images and reports success.
+- **Phase 4 — composition and export foundation: tasks complete on
+  `phase-4-composition-and-export`, not yet merged.** The independent
+  whole-branch review AGENT-LESSONS §8 requires has not yet run — do not
+  treat this phase as finished until it has and the branch is merged. Adds a
+  finite scene-level `duration` (validated; orthogonal to any per-object
+  `animate`/`physics` duration, which it does not replace); one deterministic
+  frame sampler, `frameSampler.ts`'s `sampleFrames`, a headless sibling of
+  `LiveDriver` that drives `SceneRuntime.advanceOneTick()` and
+  `paintExactTick()` from an output-frame index rather than a wall clock; a
+  PNG sequence exporter (`pngSequence.ts`'s `applySnapshot`, reached through
+  `renderer.extract.canvas`, which sidesteps the `preserveDrawingBuffer` trap
+  §6.3 warned about rather than enabling that flag); a compiler surface
+  (`compileSource.ts`) decoupled from the Web Worker, so the CLI and the
+  export path share one pipeline with the editor; and `marey check`,
+  including `--export-ready`. The dev-only `window.__mareyExportPng` seam
+  (`src/lib/devExportSeam.ts`) lets a browser harness drive the same export
+  path a future `marey export` CLI will, constant-folded out of production
+  builds (confirmed by building and grepping `dist/`). Exit is Gate B (roadmap
+  §6.4): full evidence in `eval/RESULTS-GATE-B.md`, one section per
+  criterion with the reproducing command and a performed-and-restored revert.
+  **Two claims were falsified by measurement, not argument, and both matter
+  beyond this phase.** (1) The frame sampler's per-tick painting was
+  originally justified by an argument that `spawnAnim` *must* see
+  paint-written state; the plan's own prescribed experiment disproved it —
+  `tickAnim` already snaps a completing runner's value in the tick phase
+  regardless of paint cadence — so per-tick painting is kept as the
+  conservative choice, not a proven necessity, and a `sequence`-bearing scene
+  remains untested for cadence sensitivity. (2) `hashFrames`'s docstring
+  claimed that hashing simulation state rather than pixels "carries the
+  determinism claim across machines as well as across runs"; measured false —
+  `compound-logo.marey`'s hash matches bit-for-bit between headless Node and
+  Chromium, `radial-dots.marey`'s does not, traced to `Math.sin` returning a
+  different last bit at 240° between Node's V8 and Playwright's bundled
+  Chromium V8. `Math.sin`/`Math.cos` are "implementation-approximated" by
+  ECMA-262 and carry no IEEE-754 correctly-rounded guarantee, unlike
+  `+ - * /` and `Math.sqrt`; `parseExpr.ts` folds `sin`/`cos` to literals at
+  parse time, so any scene using trig can bake the divergence into its IR.
+  Corrected in `frameHash.ts`'s docstring and recorded in
+  `eval/RESULTS-GATE-B.md`. **Read the plan's execution notes before Phase
+  5A** — they carry the full defect list (source and plan both), mutation-test
+  counts against their suite sizes, and the deferred findings (25 of them; the
+  largest is that `compiler.worker.ts` has no automated test at all, so its
+  branch order and its six exact log strings are guarded by nothing).
 - **Phase 5A — baked Lottie.** A bounded subset; `text` is excluded because the
   Lottie spec's text layer has been open 19 months.
 - **Phase 5B — video.** WebM and MP4 via WebCodecs and a muxer, never

@@ -7,11 +7,15 @@ lifecycle: the tick phase, the paint phase and the idle test. Lifting it out of
 to call, since `advanceOneTick()` takes no time argument and now nothing but a
 caller stands between it and a bare loop.
 
-Four pure modules sit under `adapter.ts` and **must not import `pixi.js`** at
-runtime, so they stay testable headlessly in Node. `sceneRuntime.ts`,
-`physicsSync.ts` and `transform.ts` are the ones most likely to be edited by
-someone reaching for `Graphics` or `Ticker`; every `pixi.js` import in them is
-`import type`.
+Five pure modules sit under `adapter.ts` and **must not import `pixi.js`** at
+runtime, so they stay testable headlessly in Node: `sceneRuntime.ts`,
+`physicsSync.ts`, `transform.ts`, `clock.ts`, and (Phase 4) `frameSampler.ts`.
+`sceneRuntime.ts`, `physicsSync.ts` and `transform.ts` are the ones most
+likely to be edited by someone reaching for `Graphics` or `Ticker`; every
+`pixi.js` import in them is `import type`. **There is no automated guard for
+this rule** — no lint rule, no import-boundary test — so this document is the
+only thing enforcing it; check it by grepping the five files above for
+`from "pixi.js"` and confirming every hit is `import type`.
 
 - **`transform.ts`** — 2D transform algebra, zero imports. One copy of the
   parent-child composition that both the builder's group flattening and
@@ -20,6 +24,34 @@ someone reaching for `Graphics` or `Ticker`; every `pixi.js` import in them is
 - **`clock.ts`** — the fixed **120Hz** simulation tick. `LiveDriver.pump(deltaMS)`
   converts a wall-clock frame delta into a whole number of ticks, carrying the
   remainder as `alpha` for interpolation.
+
+- **`frameSampler.ts`** — a headless sibling of `LiveDriver`, not a
+  replacement: `LiveDriver.pump(deltaMS)` maps wall-clock milliseconds to
+  ticks for the live preview, while `frameSampler.ts`'s `sampleFrames` maps an
+  export plan's output-frame index straight to a tick count and never sees a
+  clock at all. Both call the same tick-argument-free `advanceOneTick()`
+  (invariant 1). It paints with `SceneRuntime.paintExactTick()`, never with
+  `paint(alpha)` — the two exist because the renderer's two subsystems read
+  `alpha` in **opposite temporal directions**, so no single value tick-aligns
+  both: `animProgress` (`timeline.ts`) computes
+  `(elapsedTicks + alpha) / durationTicks`, extending *forward* from tick N
+  into N+1, so `alpha = 0` is exact; `readState` (`physicsWorld.ts`) lerps
+  `prevX -> body.position` by alpha, interpolating *backward* across
+  `[N-1, N]`, so `alpha = 1` is exact. `paintExactTick()` is
+  `paintAt(0, 1)` — animations at 0, physics at 1 — for exactly this reason.
+  Measured, not assumed (`sceneRuntime.ts`'s own docstring): over 60 ticks,
+  `paint(0)` placed a falling body exactly one tick of fall short of
+  `readState(id, 1)`, and `paint(1)` placed a linear animation exactly one
+  tick of travel past its tick-60 value. Live, at 8.3ms per tick, that
+  disagreement is invisible and `paint(driver.alpha)` stays correct; baked
+  into an exported frame it would be a permanent skew between animated and
+  simulated objects, which is why the sampler calls `paintExactTick()`
+  instead of reusing `paint()`. It paints every tick, not every frame — kept
+  as the conservative choice, not a proven necessity; see its own docstring
+  for the paint-cadence experiment that failed to find a scene sensitive to
+  the difference, and for the one case (a `sequence`-bearing scene) that
+  experiment did not cover.
+
 - **`timeline.ts`** — `AnimTime`/`PhysicsTime` state, advanced one tick at a
   time. Durations are converted from IR seconds to ticks at runner creation.
 - **`physicsWorld.ts`** — `MatterWorld`, the shared Matter world. Owns every
@@ -156,7 +188,11 @@ rather than the other way round. A `group`
 with `physics` gets a **compound** body, one part per shape inside it, flattened
 across nested groups. Runtime state is attached via
 `__`-prefixed fields declared in a `declare module "pixi.js"` block at the top
-of that file.
+of that file. One of them, `__mareyId` (Phase 4), is the container's IR
+object id — nothing before the frame sampler needed a stable per-container
+identity, since the scene graph was only ever walked, not addressed, so the
+field did not exist until `frameSampler.ts`'s `snapshotFor` needed something
+to key snapshots by. It is written once, in `buildNode`, and read only there.
 
 ## Non-obvious gotchas
 
