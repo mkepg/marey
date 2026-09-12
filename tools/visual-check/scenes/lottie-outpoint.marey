@@ -1,0 +1,24 @@
+// Phase 5A Task 4, design §11.5: `op` inclusive-vs-exclusive. 4 frames at
+// 30fps (frameCount = 4, indices 0..3). `mover` slides from x=20 (frame 0) to
+// x=180 (frame 3, the LAST sampled frame) over exactly 3 output-frame
+// intervals, so frame 3's position is the animation's true end value, not an
+// interpolated in-between one. Sampling frame 0 and frame 3 must show visibly
+// different positions (the tell for a duplicated/dropped final frame); a
+// deliberate over-read at frame 4 (== op) probes what a player does exactly
+// at the boundary the design's `op = frameCount` choice describes.
+scene {
+  size: (200, 60)
+  duration: 0.1333333333
+  background: #000000
+
+  rectangle mover {
+    position: (20, 30)
+    size: (20, 20)
+    color: #ffcc00
+    animate {
+      property: position
+      to: (180, 30)
+      duration: 0.1
+    }
+  }
+}

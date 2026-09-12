@@ -1,0 +1,13 @@
+// Phase 5A Task 4, design §11.4: a minimal static scene, exported once and
+// then re-saved with the top-level `v`/`ver` field patched by
+// lottie-check.mjs's --set/--unset flags, to see which field lottie-web 5.13.0
+// actually reads. The scene content itself does not matter for this
+// question — a single visible shape is enough to confirm the file still
+// parses and draws after each patch.
+scene {
+  size: (100, 100)
+  duration: 0.0333333333
+  background: #000000
+
+  circle c { position: (50, 50), radius: 30, color: #22cc88 }
+}

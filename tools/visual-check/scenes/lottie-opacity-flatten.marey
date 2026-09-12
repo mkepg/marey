@@ -1,0 +1,24 @@
+// Phase 5A Task 4, design §11.2: a group at alpha 0.5 with a child at alpha
+// 0.5. Child colour is pure white on a pure black background, so the
+// composited channel value at the child's centre IS the composed opacity
+// times 255, read directly off the pixel: ~64 (25%) means the flattening in
+// lottieEncode.ts's composedOpacity is right; ~32 (12.5%) means lottie-web
+// ALSO propagates opacity through its own parent chain and the flattening
+// double-applies.
+scene {
+  size: (100, 100)
+  duration: 0.0333333333
+  background: #000000
+
+  group g {
+    position: (50, 50)
+    alpha: 0.5
+
+    rectangle child {
+      position: (0, 0)
+      size: (40, 40)
+      color: #ffffff
+      alpha: 0.5
+    }
+  }
+}

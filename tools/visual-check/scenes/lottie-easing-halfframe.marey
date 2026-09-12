@@ -1,0 +1,26 @@
+// Phase 5A Task 4, design §11.6: a two-keyframe linear translation, sampled
+// at a HALF-FRAME time. 2 frames at 30fps (frameCount = 2, indices 0 and 1):
+// `mover` starts at x=0 (frame 0) and reaches x=100 exactly at frame 1, so the
+// Lottie doc carries exactly two position keyframes, t=0 and t=1. Sampling
+// frame 0.5 (goToAndStop(0.5, true)) must land the shape at x=50 if the
+// emitted (0,0)/(1,1) handles are truly linear. lottieEncode.test.ts already
+// pins that the handles are present and explicit (§11.6 is settled from
+// primary source — lottie-web 5.13.0's own PropertyFactory.js/BezierEaser.js
+// — per the controller's ruling); this fixture is the half-frame sample the
+// ruling still calls for, in a real player rather than read from source.
+scene {
+  size: (120, 40)
+  duration: 0.0666666667
+  background: #000000
+
+  rectangle mover {
+    position: (10, 20)
+    size: (10, 10)
+    color: #ffffff
+    animate {
+      property: position
+      to: (110, 20)
+      duration: 0.0333333333
+    }
+  }
+}

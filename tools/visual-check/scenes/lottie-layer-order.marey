@@ -1,0 +1,19 @@
+// Phase 5A Task 4, design §11.1 (and §11.3 for free): two OVERLAPPING opaque
+// rectangles of different colours, one fully containing the other so a single
+// centre sample is unambiguous. `back` is declared first, `front` second, so
+// IR child order (already paint order per typeChecker/builder.ts) is
+// [back, front] and PixiJS's own addChild order draws front on top in Marey's
+// own renderer. Whichever colour lottie-web shows at the centre answers
+// whether the `.reverse()` in lottieEncode.ts's layer array is the right way
+// round. Point (30,100) is covered by `back` only (outside `front`'s smaller
+// span) — a sanity check that `back` is drawn at all, independent of order.
+// Any file that renders anything here also confirms §11.3 (the shape-list
+// field is `shapes`) for free: a wrong field name draws nothing.
+scene {
+  size: (200, 200)
+  duration: 0.0333333333
+  background: #000000
+
+  rectangle back  { position: (100, 100), size: (160, 160), color: #ff0000 }
+  rectangle front { position: (100, 100), size: (80, 80),   color: #0000ff }
+}
