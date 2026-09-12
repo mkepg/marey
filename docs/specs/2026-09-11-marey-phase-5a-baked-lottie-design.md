@@ -533,6 +533,88 @@ Items 1, 2 and 5 are the dangerous ones: each produces a file that parses
 without error and plays without warning, and each is invisible to every headless
 assertion in §8.3's numeric half.
 
+> **Correction (2026-09-12, Phase 5A Task 4 execution):** all six items were
+> measured in a real player — lottie-web 5.13.0's `canvas` renderer, in
+> Chromium via `tools/visual-check/lottie-check.mjs` — rather than
+> left as this document's confidence in them. **Every one of this document's
+> assumptions was confirmed; none was falsified**, so Task 3's output
+> (`lottieEncode.ts`) needed no code change. Recorded here per AGENT-LESSONS
+> §1 and §2d — a judgment call that happens to be correct still needs the
+> measurement on record, not just the confidence.
+>
+> 1. **Stacking order — CONFIRMED.** Fixture
+>    `scenes/lottie-layer-order.marey`: two overlapping opaque rectangles,
+>    `back` (red, declared first) fully containing `front` (blue, declared
+>    second). Sampled via `getImageData`: centre `(100,100)` (covered by
+>    both) → `rgba(0,0,255,255)` — blue, i.e. `front`, is on top, matching
+>    Marey's own PixiJS paint order (later `addChild` draws on top).
+>    `(30,100)` (covered by `back` only) → `rgba(255,0,0,255)`, confirming
+>    `back` is drawn at all. Array-earlier layers draw **above** later ones,
+>    exactly as assumed; `lottieEncode.ts`'s `.reverse()` and the two tests
+>    that pin the reversed order stand unchanged.
+> 2. **Opacity propagation — CONFIRMED.** Fixture
+>    `scenes/lottie-opacity-flatten.marey`: a `group` at `alpha: 0.5`
+>    containing a white `rectangle` at `alpha: 0.5`, on a black background.
+>    Sampled at the child's centre `(50,50)`: `rgba(64,64,64,255)`.
+>    `64 / 255 ≈ 0.251`, i.e. 25% — the flattened, non-propagating value —
+>    not the ~12.5% a double-application would produce. lottie-web does
+>    **not** propagate opacity through its own parent chain, matching After
+>    Effects' model as assumed; `composedOpacity`'s flattening stands
+>    unchanged.
+> 3. **Shape-list field name — CONFIRMED, for free.** Both fixtures above
+>    render visible geometry at all, which is only possible if `shapes` is
+>    the field lottie-web's shape-layer parser reads. No dedicated fixture
+>    needed, per the controller's ruling.
+> 4. **Version field — CONFIRMED.** Fixture
+>    `scenes/lottie-version-field.marey`, exported once and then rendered
+>    twice: once as emitted (`v: "5.5.2"`), once patched via
+>    `--unset v --set ver=550502` to carry only the community-spec `ver`
+>    integer. Both rendered the pixel-identical circle
+>    (`rgba(34,204,136,255)` at `(50,50)`, matching `#22cc88` exactly), with
+>    zero console or page errors either way. Reading lottie-web 5.13.0's own
+>    bundled source (`build/player/lottie.js`) resolves why: `animationData.v`
+>    is read directly by `checkVersion()` (defined at line 612, consulted by
+>    `checkText`/`checkChars` and several other version-gated compatibility
+>    branches at lines 655, 672, 779, 839 and 915) wherever a version check
+>    happens; `animationData.ver` is never read anywhere in the bundle. `v`
+>    is confirmed as both the field
+>    lottie-web actually consults and the one real bodymovin files carry, as
+>    assumed; `LOTTIE_VERSION = "5.5.2"` under the key `v` stands unchanged.
+> 5. **`op` inclusive vs. exclusive — CONFIRMED exclusive.** Fixture
+>    `scenes/lottie-outpoint.marey`: `frameCount = 4` (indices 0..3), a
+>    rectangle sliding from `x=20` (frame 0) to `x=180` (frame 3, its true
+>    end value, not an in-between one). Sampled frames 0 and 3 each show the
+>    mover at its correct endpoint with no duplication or drop. Sampling
+>    frame **4** (`== op`) is the sharpest evidence: **the entire
+>    composition — the moving rectangle and the opaque background solid
+>    alike — renders fully transparent** (`rgba(0,0,0,0)` at every sampled
+>    point, and the capture visibly shows the host page through the canvas).
+>    This is consistent with `lottie-web`'s own `totalFrames = op - ip`
+>    (`AnimationItem.prototype.configAnimation`, `build/player/lottie.js:1653`),
+>    which makes frames `[ip, op)` — `0..frameCount-1` here — the entire
+>    playable content and frame `op` itself already past it. `op =
+>    frameCount` is correct as emitted; no change.
+> 6. **Linear easing handles — CONFIRMED** (§11.3's sibling: already settled
+>    from primary source per the controller's ruling, but still given its
+>    own half-frame sample). Fixture `scenes/lottie-easing-halfframe.marey`:
+>    a two-keyframe position track, `x=10` at frame 0 to `x=110` at frame 1.
+>    Sampling frame **0.5** with the emitted `i: {x:[1],y:[1]}` /
+>    `o: {x:[0],y:[0]}` handles places the shape at exactly `x=60` — the
+>    arithmetic midpoint, confirming true linear interpolation rather than
+>    an approximation. A supplementary probe (not one of the six required
+>    fixtures) stripped `i`/`o` from the same document and re-sampled frame
+>    0.5: no JS exception was thrown and no `error` event fired on the
+>    `AnimationItem`, but the shape rendered **nowhere** — a fully black
+>    frame at all three sampled x-positions. This refines, without
+>    reversing, `lottieEncode.ts`'s own docstring claim of a thrown
+>    `TypeError`: in lottie-web 5.13.0's `canvas` renderer the failure is
+>    swallowed even more silently than that — a wrong-but-loud crash would
+>    be the *better* outcome — which if anything strengthens the case for
+>    always emitting explicit handles. No change to the emitted values.
+>
+> Evidence, commands to reproduce, and the PNGs read back for each fixture
+> are in `.sdd/2026-09-11-phase-5a-baked-lottie/task-4-report.md`.
+
 ---
 
 ## 12. Task shape
