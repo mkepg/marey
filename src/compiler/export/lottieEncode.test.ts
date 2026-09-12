@@ -313,6 +313,23 @@ describe("encodeLottie · the document envelope", () => {
       expect(layer.op).toBe(1);
     }
   });
+
+  it("writes the Lottie version as a dotted string under 'v', never an integer under 'ver'", () => {
+    // Design §11.4, resolved empirically in Task 4's browser harness
+    // (dated correction appended to design §11): lottie-web 5.13.0 reads
+    // `animationData.v` directly (its own `checkVersion()`, which expects a
+    // dotted string like "5.5.2" to `.split('.')`) and never reads `ver`
+    // anywhere in the bundle. A doc carrying only `ver` rendered
+    // pixel-identical to one carrying `v` for supported content, precisely
+    // because nothing reads it — which means this field was, until now, a
+    // judgment call the suite had NO opinion about (AGENT-LESSONS §2d): a
+    // typo'd key or an accidental switch to the community spec's integer
+    // `ver` would still type-check (LottieDoc.v is just `string`) and still
+    // pass every other test in this file.
+    const doc = encodeLottie([circle("scene.c")], framesOf([snap("scene.c")]), planFor(1, 30), SCENE);
+    expect(doc.v).toBe("5.5.2");
+    expect("ver" in doc).toBe(false);
+  });
 });
 
 describe("encodeLottie · layer order and the background", () => {
