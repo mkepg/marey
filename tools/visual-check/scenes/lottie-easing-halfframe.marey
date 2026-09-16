@@ -1,13 +1,18 @@
-// Phase 5A Task 4, design §11.6: a two-keyframe linear translation, sampled
-// at a HALF-FRAME time. 2 frames at 30fps (frameCount = 2, indices 0 and 1):
-// `mover` starts at x=0 (frame 0) and reaches x=100 exactly at frame 1, so the
-// Lottie doc carries exactly two position keyframes, t=0 and t=1. Sampling
-// frame 0.5 (goToAndStop(0.5, true)) must land the shape at x=50 if the
-// emitted (0,0)/(1,1) handles are truly linear. lottieEncode.test.ts already
-// pins that the handles are present and explicit (§11.6 is settled from
-// primary source — lottie-web 5.13.0's own PropertyFactory.js/BezierEaser.js
-// — per the controller's ruling); this fixture is the half-frame sample the
-// ruling still calls for, in a real player rather than read from source.
+// Phase 5A Task 4, design §11.6: a two-keyframe linear translation. 2 frames
+// at 30fps (frameCount = 2, indices 0 and 1): `mover` starts at x=10 (frame 0)
+// and reaches x=110 exactly at frame 1, so the Lottie doc carries exactly two
+// position keyframes, t=0 and t=1. lottieEncode.test.ts already pins that the
+// handles are present and explicit (§11.6 is settled from primary source —
+// lottie-web 5.13.0's own PropertyFactory.js/BezierEaser.js).
+//
+// Sampling only frame 0.5 (the exact midpoint, x=60) does NOT discriminate
+// linear from a symmetric ease — the review that caught this demonstrated a
+// symmetric (0.42,0)/(0.58,1) ease also reads x=60 at frame 0.5, since any
+// cubic bezier symmetric about (0.5,0.5) passes through the midpoint. Frame
+// 0.25 discriminates: linear reads x=35 there; the symmetric counterfactual
+// reads nothing (the shape has barely started moving, still under the sample
+// window). Sample BOTH 0.25 and 0.5 — 0.5 alone answers nothing about the
+// shape of the curve, only that some curve exists.
 scene {
   size: (120, 40)
   duration: 0.0666666667

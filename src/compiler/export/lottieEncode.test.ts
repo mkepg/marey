@@ -125,9 +125,10 @@ describe("encodeLottie · the opacity asymmetry", () => {
     );
     const inner = layerNamed(doc, "inner");
     // 0.5 * 0.5 = 0.25 -> 25. Lottie parenting does NOT propagate opacity
-    // (design §5, and §11.2 records that the published specification does not
-    // settle it), so without this flattening the child renders at 50%
-    // instead of 25%.
+    // (design §5; §11.2 was open on this until Task 4 confirmed it in
+    // lottie-web 5.13.0 — a nested-alpha fixture read 25%, not the 12.5% a
+    // double-application would produce), so without this flattening the
+    // child renders at 50% instead of 25%.
     expect(inner.ks.o.k).toBe(25);          // static: one frame, constant
     // The transform is NOT composed: 3, not 13.
     expect(inner.ks.p.k).toEqual([3, 0]);
@@ -273,13 +274,14 @@ describe("encodeLottie · constant-track collapse", () => {
   });
 
   it("gives every keyframe explicit linear easing handles", () => {
-    // Design §11.6 is open on what a player does when `i`/`o` are absent.
-    // Measured against lottie-web 5.13.0 rather than assumed: its
-    // `interpolateValue` reads `keyData.o.x` unguarded
-    // (`player/js/utils/PropertyFactory.js:146`) on any sub-frame sample, so
-    // omitting the handles is a TypeError rather than a default. (0,0)/(1,1)
-    // hits `BezierEaser.js:98`'s `mX1 === mY1 && mX2 === mY2` linear fast
-    // path exactly.
+    // Design §11.6 was open on what a player does when `i`/`o` are absent,
+    // until Task 4 measured lottie-web 5.13.0 directly: omitting the handles
+    // throws no exception and fires no 'error' event, at integer frames as
+    // well as sub-frame ones -- the position property is simply never
+    // evaluated, so it keeps lottie-web's own uninitialised sentinel value
+    // and the layer draws off-canvas. (0,0)/(1,1) hits `BezierEaser.js:98`'s
+    // `mX1 === mY1 && mX2 === mY2` linear fast path exactly, confirmed at a
+    // discriminating sample (design §11's dated correction).
     const doc = encodeLottie(
       [circle("scene.c")],
       framesOf([snap("scene.c", { x: 1 })], [snap("scene.c", { x: 2 })]),
@@ -355,11 +357,11 @@ describe("encodeLottie · layer order and the background", () => {
   it("emits the drawn layers in reverse IR order", () => {
     // Design §6.1: IR child order IS paint order, and Lottie draws
     // array-earlier layers above later ones, so the array is the reverse.
-    // §11.1 records that the published specification does not settle the
-    // stacking direction — this pins the design's choice so that Task 4
-    // flipping it in the browser is a deliberate edit here rather than a
-    // silent one (AGENT-LESSONS §2d). Nothing headless can see draw order;
-    // what this can see is the order the encoder chose.
+    // §11.1 was open on the stacking direction until Task 4 confirmed it in
+    // a real player — this pins the design's choice so that a browser
+    // finding contradicting it would have been a deliberate edit here rather
+    // than a silent one (AGENT-LESSONS §2d). Nothing headless can see draw
+    // order; what this can see is the order the encoder chose.
     const doc = encodeLottie(
       [circle("scene.first"), circle("scene.second"), circle("scene.third")],
       framesOf([snap("scene.first"), snap("scene.second"), snap("scene.third")]),
