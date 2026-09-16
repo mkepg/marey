@@ -323,11 +323,18 @@ describe("encodeLottie · the document envelope", () => {
     // dotted string like "5.5.2" to `.split('.')`) and never reads `ver`
     // anywhere in the bundle. A doc carrying only `ver` rendered
     // pixel-identical to one carrying `v` for supported content, precisely
-    // because nothing reads it — which means this field was, until now, a
-    // judgment call the suite had NO opinion about (AGENT-LESSONS §2d): a
-    // typo'd key or an accidental switch to the community spec's integer
-    // `ver` would still type-check (LottieDoc.v is just `string`) and still
-    // pass every other test in this file.
+    // because nothing reads it.
+    //
+    // The gap this test closes is narrower than a field-name swap: `v` is
+    // REQUIRED on `LottieDoc`, so replacing it with `ver` is a compile error
+    // (`tsc`: "Property 'v' is missing in type ... but required in type
+    // 'LottieDoc'", TS2741) and was never the unguarded case. What `tsc` has
+    // NO opinion about is the STRING VALUE: `LottieDoc.v` is typed as a bare
+    // `string`, so `LOTTIE_VERSION` drifting to the wrong string (e.g. the
+    // community spec's `"550502"`, still a string) type-checks cleanly and
+    // would have passed every other test in this file — confirmed by mutating
+    // exactly that, restoring, and re-confirming green (Task 4 fix round 1's
+    // report). That is the AGENT-LESSONS §2d judgment call this test pins.
     const doc = encodeLottie([circle("scene.c")], framesOf([snap("scene.c")]), planFor(1, 30), SCENE);
     expect(doc.v).toBe("5.5.2");
     expect("ver" in doc).toBe(false);
