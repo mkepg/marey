@@ -615,6 +615,95 @@ assertion in §8.3's numeric half.
 > Evidence, commands to reproduce, and the PNGs read back for each fixture
 > are in `.sdd/2026-09-11-phase-5a-baked-lottie/task-4-report.md`.
 
+> **Correction (2026-09-16, Phase 5A Task 4 fix round 1):** the review of the
+> commits above (`.sdd/2026-09-11-phase-5a-baked-lottie/
+> task-4-review.md`) found item 6 overclaimed what a single half-frame sample
+> can show, and found item 5's two original sample points could not rule out
+> the alternative they were presented as ruling out. Both are corrected here.
+> Items 1–4 were independently reproduced by the reviewer and are unchanged.
+>
+> **Item 6, corrected.** A sample at frame 0.5 alone cannot distinguish
+> linear interpolation from any cubic-bezier ease symmetric about
+> `(0.5, 0.5)` — a symmetric ease also passes through the midpoint. The
+> reviewer demonstrated this directly: patching the same document's handles
+> to a symmetric ease-in-out, `(0.42,0)`/`(0.58,1)`, reads the identical
+> `x=60` at frame 0.5. **Re-measured at frame 0.25, which does discriminate:**
+> ```
+> node tools/visual-check/lottie-check.mjs \
+>   --scene tools/visual-check/scenes/lottie-easing-halfframe.marey \
+>   --fps 30 --frames 0,0.25,0.5,0.75,1 \
+>   --at 10,20 --at 35,20 --at 60,20 --at 85,20 --at 110,20 \
+>   --out .visual-check/lottie/easing-halfframe-redo
+> ```
+> the mover sits at exactly `x = 10, 35, 60, 85, 110` at frames
+> `0, 0.25, 0.5, 0.75, 1` respectively — the exact linear progression at
+> every quarter-frame, not only the midpoint. This is what "true linear
+> interpolation, not an approximation" should have been measured against; it
+> was not. The corrected claim: the emitted `(0,0)`/`(1,1)` handles produce
+> exact linear interpolation, confirmed at quarter-frame resolution, ruling
+> out a symmetric ease specifically (an asymmetric ease that happens to also
+> pass through all four points is not excluded by any finite sample count —
+> the fast-path source read in `lottieEncode.ts`'s docstring is what closes
+> that gap, not the sampling).
+>
+> The no-handles probe is also corrected. The original had no command, no
+> `doc.json`/`report.json`, cited a field (`internalError`) the harness never
+> emitted, and named a PNG the harness's `pad()` could not generate — not
+> reproducible from committed artifacts, though the reviewer independently
+> confirmed the underlying result was true. Re-run through the harness
+> itself, via a new `--strip-easing` flag (deletes `i`/`o` from every
+> keyframe in every layer), with real recorded artifacts:
+> ```
+> node tools/visual-check/lottie-check.mjs \
+>   --scene tools/visual-check/scenes/lottie-easing-halfframe.marey \
+>   --fps 30 --frames 0,0.25,0.5,0.75,1 \
+>   --at 10,20 --at 35,20 --at 60,20 --at 85,20 --at 110,20 \
+>   --strip-easing --out .visual-check/lottie/easing-halfframe-stripped
+> ```
+> Frame 0 renders **nothing at all** — `rgba(0,0,0,0)` at every sampled
+> point, the opaque background solid included — and frames
+> `0.25, 0.5, 0.75, 1` render the background only (`rgba(0,0,0,255)`), the
+> mover absent at all five points every time. `lottie 'error' events: 0` in
+> every case (the harness's own persistent `'error'`-event listener, added in
+> this fix round — see below). This also corrects the original wording:
+> "swallowed even more silently than [a TypeError]" implied an exception was
+> raised and caught; none is raised. The accurate statement is that omitting
+> the handles throws no exception, fires no `AnimationItem` `'error'` event,
+> and leaves the position property unevaluated (kept at lottie-web's own
+> `-999999` sentinel — see `lottieEncode.ts`'s corrected docstring) at every
+> frame, not only sub-frame ones.
+>
+> **Item 5, strengthened, not reversed.** The original two sample points
+> (`x=20`, `x=180`) showed the mover only at its two endpoints; frames 1 and
+> 2 read background at both points, consistent with "mover genuinely in
+> between" but equally consistent with "mover absent" — the two hypotheses
+> were not distinguished. Re-measured with two added coordinates at the
+> mover's actual computed positions for frames 1 and 2:
+> ```
+> node tools/visual-check/lottie-check.mjs \
+>   --scene tools/visual-check/scenes/lottie-outpoint.marey \
+>   --fps 30 --frames 0,1,2,3,4 \
+>   --at 20,30 --at 55,30 --at 144,30 --at 180,30 --at 100,5 \
+>   --out .visual-check/lottie/outpoint-redo
+> ```
+> Frame 1 reads `rgba(255,204,0,255)` at `(55,30)`; frame 2 reads the same
+> colour at `(144,30)` — the mover is genuinely present and moving between
+> the endpoints, not merely absent from two lucky sample points. The
+> exclusive-`op` conclusion (item 5 above) is unchanged.
+>
+> **Also corrected, adjacent to item 4's "zero console or page errors
+> either way":** that phrase was presented as evidence alongside the source
+> reading, but the harness's only document-rejection diagnostic at the time
+> (`data_failed`) could never fire for inline `animationData` — the mode this
+> harness always uses — so "zero errors" was not evidence of anything. The
+> harness (`lottie-check.mjs`) now listens for the path that IS reachable — a
+> synchronous `loadAnimation` throw, and the `AnimationItem` `'error'` event
+> — and its own header comment states plainly that a clean run is evidence
+> lottie-web did not complain, not evidence the document is well-formed.
+> Item 4's source-reading conclusion (`v` is the only field read) is
+> unaffected; only the weight the "zero errors" observation was given is
+> corrected.
+
 ---
 
 ## 12. Task shape
