@@ -58,6 +58,11 @@
  *                        lottie-web. Repeatable. Applied after `--unset`.
  *   --unset <field>      delete the document's top-level `field` before
  *                        handing it to lottie-web. Repeatable.
+ *   --strip-easing       delete `i`/`o` from every keyframe in every layer's
+ *                        `ks`, everywhere in the document (used by §11.6's
+ *                        no-handles probe; general enough for any future
+ *                        "what does the player do without X" question).
+ *                        Applied after `--set`/`--unset`.
  *   --out <dir>          where doc.json, frame_<label>.png and report.json go
  *   --url <origin>       dev server origin (default http://localhost:5199)
  *   --lottie-path <path> path to the lottie-web UMD build (default
@@ -68,11 +73,30 @@
  * Writes `<out>/doc.json` (the document actually handed to lottie-web, i.e.
  * post-patch), `<out>/frame_<label>.png` per requested frame (label is the
  * frame value with `.` replaced by `p`, e.g. `frame_0p5.png`), and
- * `<out>/report.json` with the export metadata, every sampled pixel, and
- * page/console errors. Exit code is non-zero only on a hard failure (export
- * threw, lottie-web failed to load the document, or a page error was
- * recorded) — never on what a sampled pixel says, which is this script's
- * whole reason to exist and is a judgement call for whoever reads the report.
+ * `<out>/report.json` — written on every exit path, including every failure
+ * one below, not only on success — with the export metadata, every sampled
+ * pixel, and page/console/lottie errors. Exit code is non-zero on a hard
+ * failure (export threw, `loadAnimation` threw, an `AnimationItem` `'error'`
+ * event fired, or a page/console error was recorded) — never on what a
+ * sampled pixel says, which is this script's whole reason to exist and is a
+ * judgement call for whoever reads the report.
+ *
+ * **What this harness does NOT validate, stated plainly rather than left to
+ * a dead guard (Global Constraint 10):** lottie-web's `data_failed` event
+ * fires only for `path`-based or segment loads (`onSetupError`,
+ * `build/player/lottie.js:1517` and `:1624`); this harness always passes
+ * inline `animationData`, so `data_failed` can never fire here and is not
+ * listened for. The failure path that IS reachable is a synchronous throw
+ * from `loadAnimation()` itself, or the `AnimationItem` `'error'` event
+ * (`triggerConfigError`/`triggerRenderFrameError`) — both are caught below.
+ * Neither is a general document validator: lottie-web is lenient about many
+ * structurally-missing fields (a document missing `op` entirely loads and
+ * renders without complaint — measured, not assumed) and a render/config
+ * error that fires SYNCHRONOUSLY inside `loadAnimation()` itself, before this
+ * script's listeners are attached, would not be captured either. This
+ * harness reports exactly the failures lottie-web itself surfaces through
+ * one of those two channels, no more — a clean run is evidence that lottie-web
+ * did not complain, not evidence that the document is well-formed.
  */
 import { chromium } from "playwright";
 import LZString from "lz-string";
@@ -169,6 +193,24 @@ if (!exportResult.ok) {
 const doc = exportResult.doc;
 for (const field of unsetFields) delete doc[field];
 for (const { field, value } of setFields) doc[field] = value;
+if (has("strip-easing")) {
+  const stripKeyframeEasing = (node) => {
+    if (Array.isArray(node)) {
+      node.forEach(stripKeyframeEasing);
+      return;
+    }
+    if (node && typeof node === "object") {
+      if (Array.isArray(node.k)) {
+        for (const kf of node.k) {
+          delete kf.i;
+          delete kf.o;
+        }
+      }
+      for (const v of Object.values(node)) stripKeyframeEasing(v);
+    }
+  };
+  stripKeyframeEasing(doc.layers);
+}
 writeFileSync(`${outDir}/doc.json`, JSON.stringify(doc, null, 2));
 
 // `addScriptTag({ path })` reads the file locally and injects its contents
@@ -180,7 +222,9 @@ writeFileSync(`${outDir}/doc.json`, JSON.stringify(doc, null, 2));
 await page.addScriptTag({ path: lottiePath });
 const lottieGlobalOk = await page.evaluate(() => typeof window.lottie === "object" && window.lottie !== null);
 if (!lottieGlobalOk) {
-  console.error(`lottie-web did not attach window.lottie after addScriptTag({ path: '${lottiePath}' })`);
+  const error = `lottie-web did not attach window.lottie after addScriptTag({ path: '${lottiePath}' })`;
+  console.error(error);
+  writeFileSync(`${outDir}/report.json`, JSON.stringify({ scene: scenePath, lottiePath, error }, null, 2));
   await browser.close();
   process.exit(1);
 }
@@ -193,6 +237,12 @@ if (!lottieGlobalOk) {
 const loadResult = await page.evaluate(
   ({ doc }) =>
     new Promise((resolvePromise) => {
+      // Collected for the whole run, not just the load phase: a render
+      // error can also fire later, during frame sampling below (e.g. a
+      // document deliberately malformed via --strip-easing), and that is
+      // exactly the kind of thing this harness exists to surface rather
+      // than crash on. Read back after the frame-sampling loop finishes.
+      window.__lottieCheckErrors = [];
       const container = document.createElement("div");
       container.id = "__lottieCheck";
       // `position: fixed` at a high z-index, ABOVE the app's own fixed
@@ -208,27 +258,69 @@ const loadResult = await page.evaluate(
       container.style.width = `${doc.w}px`;
       container.style.height = `${doc.h}px`;
       document.body.appendChild(container);
-      const anim = window.lottie.loadAnimation({
-        container,
-        renderer: "canvas",
-        loop: false,
-        autoplay: false,
-        animationData: doc,
-        rendererSettings: { dpr: 1, clearCanvas: true },
-      });
+
+      // Settles the promise once, on whichever of load-success/load-failure
+      // happens first. Only meaningful during the load phase — later calls
+      // (an 'error' event after the promise already resolved `ok: true`)
+      // are no-ops here and rely on `window.__lottieCheckErrors` instead.
+      let settled = false;
+      const settle = (r) => {
+        if (settled) return;
+        settled = true;
+        resolvePromise(r);
+      };
+
+      // The real failure path a document without a `path` can hit:
+      // `loadAnimation` itself throws synchronously (e.g. a document with
+      // no `layers` at all) rather than returning a live AnimationItem.
+      // Previously uncaught, this crashed the whole node process with a raw
+      // stack and no report.json (review finding 12). `data_failed` is NOT
+      // listened for here: it fires only from `onSetupError` (path loads,
+      // `lottie.js:1517`) and segment loads (`:1624`), never for inline
+      // `animationData`, so it is unreachable in this harness's own
+      // configuration — a guard that cannot fire, per Global Constraint 10.
+      let anim;
+      try {
+        anim = window.lottie.loadAnimation({
+          container,
+          renderer: "canvas",
+          loop: false,
+          autoplay: false,
+          animationData: doc,
+          rendererSettings: { dpr: 1, clearCanvas: true },
+        });
+      } catch (e) {
+        settle({ ok: false, stage: "loadAnimation", error: String(e && e.message ? e.message : e) });
+        return;
+      }
       window.__lottieCheckAnim = anim;
-      anim.addEventListener("data_failed", () => resolvePromise({ ok: false, error: "data_failed" }));
+
+      // The path that DOES fire for a malformed inline document:
+      // `triggerConfigError`/`triggerRenderFrameError` both call
+      // `triggerEvent('error', ...)` on the AnimationItem. Registered
+      // before yielding control back to the event loop, so it is in place
+      // whether `checkLoaded` resolves synchronously or asynchronously.
+      anim.addEventListener("error", (e) => {
+        const msg = e && e.nativeError && e.nativeError.message ? e.nativeError.message : String(e);
+        window.__lottieCheckErrors.push(msg);
+        settle({ ok: false, stage: "error-event", error: msg });
+      });
+
       if (anim.isLoaded) {
-        resolvePromise({ ok: true });
+        settle({ ok: true });
       } else {
-        anim.addEventListener("DOMLoaded", () => resolvePromise({ ok: true }));
+        anim.addEventListener("DOMLoaded", () => settle({ ok: true }));
       }
     }),
   { doc },
 );
 
 if (!loadResult.ok) {
-  console.error(`lottie-web failed to load the document: ${loadResult.error}`);
+  console.error(`lottie-web failed to load the document (${loadResult.stage}): ${loadResult.error}`);
+  writeFileSync(
+    `${outDir}/report.json`,
+    JSON.stringify({ scene: scenePath, exportMeta: { fps: exportResult.fps, frameCount: exportResult.frameCount }, loadResult }, null, 2),
+  );
   await browser.close();
   process.exit(1);
 }
@@ -256,6 +348,12 @@ for (const frame of requestedFrames) {
   frameSamples.push({ frame, png: pngPath, pixels });
 }
 
+// Errors lottie-web raised AFTER load succeeded — a render/config error
+// during frame sampling (e.g. under --strip-easing) does not abort the run
+// above (`settle` is a no-op post-load), but it is real evidence and belongs
+// in the report rather than being silently dropped.
+const lottieErrors = await page.evaluate(() => window.__lottieCheckErrors ?? []);
+
 await browser.close();
 
 const report = {
@@ -264,19 +362,22 @@ const report = {
   requestedDurationSeconds: durationSeconds ?? null,
   url,
   lottiePath,
-  patched: { set: setFields, unset: unsetFields },
+  patched: { set: setFields, unset: unsetFields, stripEasing: has("strip-easing") },
   exportMeta: { fps: exportResult.fps, frameCount: exportResult.frameCount, hash: exportResult.hash },
   frameSamples,
   consoleErrors,
   pageErrors,
+  lottieErrors,
 };
 writeFileSync(`${outDir}/report.json`, JSON.stringify(report, null, 2));
 
 console.log(`scene                    ${scenePath}`);
 console.log(`fps / frameCount         ${exportResult.fps} / ${exportResult.frameCount}`);
 console.log(`snapshot hash            ${exportResult.hash}`);
-if (setFields.length || unsetFields.length) {
-  console.log(`patched                  set ${JSON.stringify(setFields)}, unset ${JSON.stringify(unsetFields)}`);
+if (setFields.length || unsetFields.length || has("strip-easing")) {
+  console.log(
+    `patched                  set ${JSON.stringify(setFields)}, unset ${JSON.stringify(unsetFields)}, stripEasing ${has("strip-easing")}`,
+  );
 }
 for (const fs_ of frameSamples) {
   console.log(`frame ${fs_.frame}:`);
@@ -289,10 +390,14 @@ console.log(`page errors              ${pageErrors.length}`);
 for (const e of pageErrors) console.log(`  ! ${e}`);
 console.log(`console errors           ${consoleErrors.length}`);
 for (const e of consoleErrors) console.log(`  ! ${e}`);
+console.log(`lottie 'error' events    ${lottieErrors.length}`);
+for (const e of lottieErrors) console.log(`  ! ${e}`);
 console.log(`\nwrote ${outDir}/doc.json, ${outDir}/report.json, and ${frameSamples.length} frame PNG(s)`);
 console.log(
   "\nThis script's numbers are the evidence, not a substitute for looking: read the frame_*.png\n" +
-    "files with an image viewer (or the Read tool) before trusting a sampled pixel in isolation.",
+    "files with an image viewer (or the Read tool) before trusting a sampled pixel in isolation.\n" +
+    "Zero errors above is evidence lottie-web did not complain, not evidence the document is\n" +
+    "well-formed -- lottie-web is lenient about fields this harness does not independently check.",
 );
 
-process.exit(pageErrors.length > 0 ? 1 : 0);
+process.exit(pageErrors.length > 0 || lottieErrors.length > 0 ? 1 : 0);
