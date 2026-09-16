@@ -33,6 +33,39 @@
  * coordinates are recorded — a screenshot alone is an "impression"; the
  * numeric samples are the actual evidence.
  *
+ * **`--compare-png` (Task 5, design §8.3's pixel half / exit criterion 2).**
+ * Also calls `window.__mareyExportPng` (the same seam `export-check.mjs`
+ * drives) with the same source/fps/duration, and for every REQUESTED FRAME
+ * THAT IS A WHOLE NUMBER within the PNG export's frame range, compares that
+ * PNG frame against the lottie-web canvas at the identical frame index,
+ * pixel for pixel. The two exports are comparable index-for-index because
+ * both are built from the same `sampleFrames(runtime, root, planned.plan)`
+ * call inside their respective dev seams (`devLottieSeam.ts` /
+ * `devExportSeam.ts`) — same plan, same fps, same duration — and
+ * `lottieEncode.ts` bakes each keyframe's `t` as "the output-frame index
+ * directly" (its own comment), so lottie-web's `goToAndStop(N, true)` reads
+ * back exactly frame `N` of the same sampled sequence `encodePngSequence`
+ * rasterised as PNG frame `N`. Fractional frames (used elsewhere in this
+ * file for sub-frame easing checks) have no PNG counterpart and are skipped
+ * for this comparison, recorded as `{ skipped: "..." }` rather than silently
+ * dropped.
+ *
+ * The comparison itself runs entirely inside the page via `page.evaluate`:
+ * the PNG frame (already base64-encoded bytes from `__mareyExportPng`, no
+ * Node-side decoding needed) is drawn into an off-screen `<canvas>` through
+ * a plain `Image` element, and its `getImageData` is diffed byte-for-byte
+ * against the live lottie-web canvas's own `getImageData` — no screenshot
+ * re-encoding on either side, same reasoning as the named-point sampling
+ * above. For every pixel the per-channel (R,G,B,A) absolute difference is
+ * taken and reduced to that pixel's max; the report records, per compared
+ * frame, the single largest such value found anywhere in the frame
+ * (`maxDelta`, plus the `(x,y)` it occurred at) and the share of pixels
+ * whose max-channel delta is greater than zero (`share, mismatchCount /
+ * totalPixels`) — i.e. what fraction of the frame is not byte-identical
+ * between the two renderers. Both numbers are measured, not chosen: this
+ * script does not accept or apply a tolerance, it only reports what was
+ * found, per the brief's "measure first, then document."
+ *
  * Usage:
  *   node tools/visual-check/lottie-check.mjs \
  *     --scene tools/visual-check/scenes/lottie-layer-order.marey \
@@ -63,6 +96,11 @@
  *                        no-handles probe; general enough for any future
  *                        "what does the player do without X" question).
  *                        Applied after `--set`/`--unset`.
+ *   --compare-png        also export via `window.__mareyExportPng` at the
+ *                        same fps/duration and pixel-diff each whole-number
+ *                        requested frame against Marey's own PNG render of
+ *                        the same frame. See the header comment above for
+ *                        the full methodology.
  *   --out <dir>          where doc.json, frame_<label>.png and report.json go
  *   --url <origin>       dev server origin (default http://localhost:5199)
  *   --lottie-path <path> path to the lottie-web UMD build (default
@@ -186,6 +224,37 @@ if (!exportResult.ok) {
   writeFileSync(`${outDir}/report.json`, JSON.stringify({ scene: scenePath, exportResult }, null, 2));
   await browser.close();
   process.exit(1);
+}
+
+// `--compare-png`: fetch Marey's own PNG export of the identical scene at the
+// identical fps/duration, on the SAME page (so `window.__mareyExportPng` is
+// already installed — both dev seams load together, see main.tsx). This is a
+// hard failure if requested and it does not succeed: a caller who asked for a
+// pixel comparison and silently got none is worse than one who is told to
+// look elsewhere.
+let pngExport = null;
+if (has("compare-png")) {
+  const pngExportResult = await page.evaluate(
+    async ({ source, fps, durationSeconds }) => {
+      try {
+        const r = await window.__mareyExportPng(source, { fps, durationSeconds });
+        return { ok: true, ...r };
+      } catch (e) {
+        return { ok: false, error: String(e && e.message ? e.message : e) };
+      }
+    },
+    { source, fps, durationSeconds },
+  );
+  if (!pngExportResult.ok) {
+    console.error(`--compare-png: __mareyExportPng failed: ${pngExportResult.error}`);
+    writeFileSync(
+      `${outDir}/report.json`,
+      JSON.stringify({ scene: scenePath, exportResult: { ok: true }, pngExportResult }, null, 2),
+    );
+    await browser.close();
+    process.exit(1);
+  }
+  pngExport = pngExportResult;
 }
 
 // Patch, then write the document actually handed to lottie-web — not the
@@ -345,7 +414,127 @@ for (const frame of requestedFrames) {
     );
     pixels.push({ x, y, rgba });
   }
-  frameSamples.push({ frame, png: pngPath, pixels });
+
+  // `--compare-png`: only whole-number frames have a PNG-export counterpart
+  // (`__mareyExportPng` produces one raster per sampled tick, not a
+  // continuous timeline), so a fractional frame requested for sub-frame
+  // easing checks elsewhere in this file is recorded as skipped rather than
+  // silently compared against the wrong integer frame or dropped with no
+  // trace.
+  let pngCompare = null;
+  if (pngExport) {
+    if (!Number.isInteger(frame)) {
+      pngCompare = { skipped: `frame ${frame} is fractional; PNG export has no sub-frame counterpart` };
+    } else if (frame < 0 || frame >= pngExport.frameCount) {
+      pngCompare = { skipped: `frame ${frame} outside PNG export range [0, ${pngExport.frameCount})` };
+    } else {
+      const pngBase64 = pngExport.frames[frame];
+      const pngFramePath = `${outDir}/frame_${pad(frame)}_pngexport.png`;
+      writeFileSync(pngFramePath, Buffer.from(pngBase64, "base64"));
+      pngCompare = await page.evaluate(
+        async ({ pngBase64 }) => {
+          const img = new Image();
+          const loaded = new Promise((res, rej) => {
+            img.onload = () => res();
+            img.onerror = () => rej(new Error("PNG export frame failed to decode as an <img>"));
+          });
+          img.src = `data:image/png;base64,${pngBase64}`;
+          await loaded;
+
+          const off = document.createElement("canvas");
+          off.width = img.naturalWidth;
+          off.height = img.naturalHeight;
+          const octx = off.getContext("2d");
+          octx.drawImage(img, 0, 0);
+          const pngData = octx.getImageData(0, 0, off.width, off.height).data;
+
+          const lottieCanvas = document.querySelector("#__lottieCheck canvas");
+          const lottieData = lottieCanvas
+            .getContext("2d")
+            .getImageData(0, 0, lottieCanvas.width, lottieCanvas.height).data;
+
+          if (off.width !== lottieCanvas.width || off.height !== lottieCanvas.height) {
+            return {
+              error: `size mismatch: png export ${off.width}x${off.height} vs lottie canvas ${lottieCanvas.width}x${lottieCanvas.height}`,
+            };
+          }
+
+          // Per pixel, per-channel (R,G,B,A) absolute delta, reduced to that
+          // pixel's max channel delta. `maxDelta` is the single largest value
+          // found anywhere in the frame; `share` is the fraction of pixels
+          // whose max-channel delta is greater than zero, i.e. not
+          // byte-identical between the two renderers. Neither is a chosen
+          // tolerance — both are what this specific comparison measured.
+          // A diff-visualization canvas alongside the numbers: black where
+          // the two renders agree, opaque red where any channel differs at
+          // all — so a human can SEE whether mismatches sit at shape edges
+          // (antialiasing, expected) or inside flat fills (a real defect,
+          // per the brief). This is not optional evidence; report.json's
+          // numbers alone cannot distinguish those two cases.
+          const diffCanvas = document.createElement("canvas");
+          diffCanvas.width = off.width;
+          diffCanvas.height = off.height;
+          const dctx = diffCanvas.getContext("2d");
+          const diffImageData = dctx.createImageData(off.width, off.height);
+          const diffData = diffImageData.data;
+
+          let maxDelta = 0;
+          let maxDeltaAtIndex = -1;
+          let mismatchCount = 0;
+          const totalPixels = pngData.length / 4;
+          for (let i = 0; i < pngData.length; i += 4) {
+            let pixelMax = 0;
+            for (let c = 0; c < 4; c++) {
+              const d = Math.abs(pngData[i + c] - lottieData[i + c]);
+              if (d > pixelMax) pixelMax = d;
+            }
+            if (pixelMax > 0) {
+              mismatchCount++;
+              diffData[i] = 255;
+              diffData[i + 1] = 0;
+              diffData[i + 2] = 0;
+              diffData[i + 3] = 255;
+            } else {
+              diffData[i] = 0;
+              diffData[i + 1] = 0;
+              diffData[i + 2] = 0;
+              diffData[i + 3] = 255;
+            }
+            if (pixelMax > maxDelta) {
+              maxDelta = pixelMax;
+              maxDeltaAtIndex = i / 4;
+            }
+          }
+          dctx.putImageData(diffImageData, 0, 0);
+          const diffPngBase64 = diffCanvas.toDataURL("image/png").split(",")[1];
+
+          return {
+            maxDelta,
+            maxDeltaAt:
+              maxDeltaAtIndex === -1
+                ? null
+                : { x: maxDeltaAtIndex % off.width, y: Math.floor(maxDeltaAtIndex / off.width) },
+            mismatchCount,
+            totalPixels,
+            share: mismatchCount / totalPixels,
+            width: off.width,
+            height: off.height,
+            diffPngBase64,
+          };
+        },
+        { pngBase64 },
+      );
+      pngCompare.pngExportPng = pngFramePath;
+      if (pngCompare.diffPngBase64) {
+        const diffPath = `${outDir}/frame_${pad(frame)}_diff.png`;
+        writeFileSync(diffPath, Buffer.from(pngCompare.diffPngBase64, "base64"));
+        delete pngCompare.diffPngBase64;
+        pngCompare.diffPng = diffPath;
+      }
+    }
+  }
+
+  frameSamples.push({ frame, png: pngPath, pixels, ...(pngExport ? { pngCompare } : {}) });
 }
 
 // Errors lottie-web raised AFTER load succeeded — a render/config error
@@ -364,6 +553,9 @@ const report = {
   lottiePath,
   patched: { set: setFields, unset: unsetFields, stripEasing: has("strip-easing") },
   exportMeta: { fps: exportResult.fps, frameCount: exportResult.frameCount, hash: exportResult.hash },
+  pngExportMeta: pngExport
+    ? { fps: pngExport.fps, frameCount: pngExport.frameCount, hash: pngExport.hash, width: pngExport.width, height: pngExport.height }
+    : null,
   frameSamples,
   consoleErrors,
   pageErrors,
@@ -385,6 +577,20 @@ for (const fs_ of frameSamples) {
     console.log(`  (${p.x},${p.y}) -> rgba(${p.rgba.join(",")})`);
   }
   console.log(`  png: ${fs_.png}`);
+  if (fs_.pngCompare) {
+    if (fs_.pngCompare.skipped) {
+      console.log(`  --compare-png: skipped (${fs_.pngCompare.skipped})`);
+    } else if (fs_.pngCompare.error) {
+      console.log(`  --compare-png: ERROR ${fs_.pngCompare.error}`);
+    } else {
+      const c = fs_.pngCompare;
+      console.log(
+        `  --compare-png: maxDelta=${c.maxDelta} at ${JSON.stringify(c.maxDeltaAt)}, ` +
+          `mismatching pixels=${c.mismatchCount}/${c.totalPixels} (share=${(c.share * 100).toFixed(4)}%)`,
+      );
+      console.log(`    pngExportPng: ${c.pngExportPng}`);
+    }
+  }
 }
 console.log(`page errors              ${pageErrors.length}`);
 for (const e of pageErrors) console.log(`  ! ${e}`);
