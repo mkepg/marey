@@ -198,6 +198,63 @@ sites: `frameSampler.ts`'s `snapshotFor` (sampling) and
 onto a tree for re-rendering) — the same inverse pair that module's own
 docstring names.
 
+## The Lottie encoder boundary (Phase 5A)
+
+Lottie export is **two modules with one structural rule each**, and the rules
+are the point: they are what make the exported file independent of Marey and
+of Matter.js at playback.
+
+- **`export/lottieGeometry.ts`** turns the IR into `LayerSpec`s and refusals.
+  It may not import `pixi.js` at all, not even as a type.
+- **`export/lottieEncode.ts`** turns `LayerSpec`s plus sampled
+  `FrameSnapshot`s into a Lottie document. It may not import `pixi.js`
+  **or `sceneIR`** in any form.
+
+`lottieEncode.ts` sees snapshots, never the scene graph. That is why it can be
+reasoned about as pure data transport, and it is checkable with a grep rather
+than an argument — do that before believing it.
+
+Geometry walks **`ir.children`**, which is layer-sorted, not `ir.registry`,
+whose key order is source order. The plan originally specified `registry` and
+that was caught before dispatch; a fixture whose objects happen to share a
+layer cannot tell the two apart, so the mistake survives casual testing.
+
+**The opacity asymmetry — transforms stay parented, opacity flattens.** These
+pull in opposite directions and the split is deliberate:
+
+- Pixi multiplies a container's `alpha` into its children, and `visible:false`
+  hides a whole subtree.
+- Lottie/After Effects parenting propagates **only the transform**. Opacity
+  does not inherit.
+
+So the encoder keeps the parent links for position/rotation/scale — composing
+a transform down the tree is exactly what parenting exists to avoid, since
+rotation with non-uniform scale produces a shear that only `sk`/`sa` can
+express and whose decomposition varies between players — and it flattens
+opacity into a per-layer product of `visible ? alpha : 0` up the ancestor
+chain. `visible` folds into that same product because Lottie has no per-frame
+visibility flag at all: `ip`/`op` are per-layer, so they cannot express
+"hidden for frames 40–70". Baking a cull as opacity 0 is visually identical
+and is the only encoding the format offers.
+
+**This was measured, not assumed.** Phase 5A's design listed six Lottie facts
+the published specification did not settle, and forbade any task from treating
+them as known until a browser answered them. Opacity non-propagation was
+confirmed in lottie-web 5.13.0 and independently in
+`@lottiefiles/dotlottie-web`: a group at `alpha: 0.5` containing a child at
+`alpha: 0.5` renders at ~25%, not ~12.5%. The fixture is
+`tools/visual-check/scenes/lottie-opacity-flatten.marey` and the
+harness is `tools/visual-check/lottie-check.mjs`. A dated correction
+recording all six answers is appended to §11 of
+`docs/specs/2026-09-11-marey-phase-5a-baked-lottie-design.md`.
+
+**One consequence worth knowing before you change any of this.** Because
+opacity is flattened, the encoder writes a group's own alpha onto its null
+layer *and* the fully composed product onto each descendant. In both renderers
+measured this is inert, because neither propagates. In a renderer that *did*
+propagate, every nested alpha would double-apply. That is filed, not fixed —
+and the fixture above is the one that would catch it.
+
 ## Non-obvious gotchas
 
 - **`physics` inside a group is only legal under a *static* group.** D17: the
