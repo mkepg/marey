@@ -594,7 +594,12 @@ assertion in §8.3's numeric half.
 >    which makes frames `[ip, op)` — `0..frameCount-1` here — the entire
 >    playable content and frame `op` itself already past it. `op =
 >    frameCount` is correct as emitted; no change.
-> 6. **Linear easing handles — CONFIRMED** (§11.3's sibling: already settled
+> 6. **Linear easing handles — CONFIRMED** — **but this item's reasoning is
+>    superseded; read the 2026-09-16 correction below before relying on it.**
+>    A single half-frame sample cannot establish what this item claims from
+>    it, and the "swallowed even more silently" wording below is also
+>    corrected there. The conclusion survives; the evidence offered for it
+>    did not. (§11.3's sibling: already settled
 >    from primary source per the controller's ruling, but still given its
 >    own half-frame sample). Fixture `scenes/lottie-easing-halfframe.marey`:
 >    a two-keyframe position track, `x=10` at frame 0 to `x=110` at frame 1.
