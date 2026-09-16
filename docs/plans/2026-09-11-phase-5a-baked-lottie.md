@@ -1341,3 +1341,283 @@ The pattern matches Phase 4's exactly: the plan's **prose requirements** held
 up; its **verbatim fixtures**, written against a codebase they had not been run
 against, did not. Two of the three were invisible to reading and surfaced only
 by execution.
+
+---
+
+## Execution notes
+
+Written 2026-09-16 at the close of Task 6, from `git log`, the six task
+reports, the five reviews and two re-reviews, and the SDD ledger
+(`.sdd/2026-09-11-phase-5a-baked-lottie/progress.md`) — **not**
+from any single task's self-report, per AGENT-LESSONS §1. Every number in
+"Final evidence" was re-derived first-hand on a clean tree while writing this.
+Mutation rows are drawn from the ledger, each beside the suite size it was
+measured against.
+
+**Written by the controller rather than a dispatched implementer**, and the
+deviation is named rather than left to be inferred: the Task 6 implementer was
+killed by a rate limit having committed nothing, and both the standard and
+most-capable model tiers were session-limited at that moment. The work is
+documentation whose source material is the ledger the controller authored, and
+the independent whole-branch review AGENT-LESSONS §8 requires still follows and
+covers it. No check was skipped; only the writing moved.
+
+### Final evidence
+
+| Check | Command | Result |
+|---|---|---|
+| Unit suite | `npx vitest run` | **28 files / 817 tests / exit 0** |
+| Typecheck | `npx tsc -b --noEmit` | exit 0 |
+| Production build | `npm run build` | exit 0; only the pre-existing >500 kB chunk-size advisory |
+| Production build carries no dev seam | `npm run build`, then grep `dist/` for `__mareyExportLottie`, `__mareyExportPng`, `devLottieSeam`, `devExportSeam`, `installLottieSeam` | **zero matches** — both DEV-only seams are dropped by Vite's dead-branch elimination, not merely left ungrepped |
+| CLI build | `npm run build:cli` | exit 0, `dist/cli/marey.mjs` 92.15 kB |
+| R1 corpus | `npx vitest run --config eval/vitest.config.ts` | **20/20 compiled clean** |
+| R2 corpus | `EVAL_DIR=eval/scenes-r2 npx vitest run --config eval/vitest.config.ts` | **20/20 compiled clean** |
+| 3B demonstration corpus | `EVAL_DIR=eval/scenes-3b npx vitest run --config eval/vitest.config.ts` | **4/4 compiled clean** |
+| Visual-check fixtures | `EVAL_DIR=tools/visual-check/scenes npx vitest run --config eval/vitest.config.ts` | **22/22 compiled clean** — was 17 at Phase 4's close; this phase added the five `lottie-*.marey` fixtures. Its report JSON was written, inspected, then **deleted rather than committed**, per the Phase 3C and Phase 4 precedent |
+| Tree | `git diff --stat`; `git ls-files --others --exclude-standard` | both empty |
+| Port 5199 | `netstat -ano`, filtered for a LISTENING socket on a boundary-matched `:5199` | no LISTENING socket |
+
+**The port check must match on a boundary.** A plain `grep ":5199"` also
+matches `:51999` and will report a phantom listener from an unrelated ephemeral
+socket. The controller's own first check during this phase did exactly that.
+
+**Branch shape, as of `4c5ab4e`**, the commit immediately before this
+execution-notes commit (a commit cannot contain its own diffstat, so this is a
+snapshot rather than a live count): **28 commits** from merge base `6d8db3d`,
+**22 files, +5,646 / −2**.
+
+**Baseline check.** Global Constraint 1 records the suite at the branch base
+`6d8db3d` as 24 files / 762 tests, re-derived for this plan on 2026-09-11.
+Current `HEAD` is 28 files / 817 tests: **+4 test files, +55 tests** for the
+phase. Six source files were added in total — `compiler.worker.test.ts`,
+`lottieGeometry.ts` and its test, `lottieEncode.ts` and its test, and
+`lottieRoundTrip.test.ts` — of which two are not test files.
+
+### Defects found in this plan, beyond the three its self-review names
+
+The self-review above records three defects found *before* dispatch. Execution
+found four more in the plan itself. Recorded as plan defects rather than as
+coverage gaps, because that is what they were.
+
+1. **The pre-flight scan found four cross-task conflicts, all ruled on before
+   Task 1 was dispatched.** (A) Task 1's `LottiePlanResult` referenced
+   `LayerSpec`, which only Task 2 defined — the file could not have
+   typechecked, and Global Constraint 3 requires committing from the first
+   step. (B) Task 2's `LayerSpec` block contained `readonly background: never;`
+   which the next paragraph ordered dropped. (D) `LottieDoc` appeared in
+   Task 3's signature and was defined nowhere. (E) Task 0's `PHASE_PREFIX`
+   padded to column 9 while the worker's existing seven lines pad to column 10.
+2. **Task 0's Mutation 1 was a provable no-op.** The plan asked for the
+   `thrown` block and the `firstPhase === "PARSE"` block to be swapped, and
+   predicted a red. But `thrown` is *defined* as `errors.length > 0 &&
+   firstPhase !== "PARSE" && firstPhase !== "TYPE"`, so the two guards are
+   mutually exclusive by construction with nothing executing between them. No
+   fixture can observe the swap. The implementer established this structurally
+   **and** empirically, then ran a faithful variant (swapping PARSE with TYPE)
+   that did redden two tests. A defect in the plan, not a gap in the suite.
+3. **Task 3's Mutation 8 prediction was wrong.** The plan predicted the layer
+   reversal mutation would leave the suite green, reasoning that nothing
+   headless can see draw order. Measured: **2 of 811 red.** The reasoning about
+   *rendering* was right; what it missed is that the committed tests pin the
+   encoder's own array-order *decision* with direct equality assertions, which
+   is observable without a renderer.
+4. **Task 4's brief framed six §11 questions as six equal investigations.** Two
+   (§11.3, §11.6) had already been settled from primary sources during Task 3,
+   and one (§11.4) turned out to be unanswerable by the browser at all — both
+   documents rendered byte-identically, because nothing in the supported shape
+   subset reaches lottie-web's version-gated branches. That answer came from
+   reading the bundled source instead. The plan's table implied a measurement
+   the question could not support.
+
+The pattern matches Phase 4's and Phase 3C's: the plan's **prose requirements**
+held up; its **verbatim code, and its predictions about outcomes**, did not.
+
+### Defects found in source
+
+1. **Task 0 — `compiler.worker.ts:51` emitted prefixes nothing consumes.**
+   `[${err.phase.toLowerCase()}]` produced `[lex]` and `[runtime]`, neither of
+   which is among the six prefixes `check.mjs:89` scrapes. Fixed with a
+   `PHASE_PREFIX` map padded to column 10, with `[system] ` as the widened
+   default. This is the deferred Phase 4 finding the phase inherited —
+   `compiler.worker.ts` had no automated test and had been rewritten wholesale
+   — and putting it under test first was the plan's opening move for exactly
+   this reason.
+2. **Task 4 — a falsified claim left in a source docstring.** `lottieEncode.ts`
+   asserted lottie-web throws a `TypeError` on missing easing handles.
+   Measurement showed no exception is raised at all: the shape silently
+   vanishes and the position property is left at lottie-web's own `-999999`
+   sentinel. The implementer initially recorded this only in the design
+   correction; the review found that inverted the precedent it cited, which
+   corrects the source first and the spec last. Fixed in `be23725`.
+3. **Task 4 — §11.6's evidence did not support its claim.** A single half-frame
+   sample cannot distinguish linear interpolation from any ease symmetric about
+   `(0.5, 0.5)`; the reviewer demonstrated a symmetric `(0.42,0)/(0.58,1)` ease
+   reading identically at frame 0.5. Re-measured at quarter-frame resolution
+   (`x = 10, 35, 60, 85, 110` at frames `0, 0.25, 0.5, 0.75, 1`). The
+   conclusion survived; the evidence offered for it did not.
+4. **Task 4 — the harness's only document-rejection diagnostic could not
+   fire.** `data_failed` is unreachable with inline `animationData`; the
+   reviewer demonstrated `--unset op` passing cleanly with zero errors. A guard
+   that cannot fire is a Global Constraint 10 violation. Fixed in `e64453f`.
+5. **Task 4 — seven locations still described §11 as open** and named Task 4 as
+   what would settle it, after Task 4 had settled it. Four in
+   `lottieEncode.ts`, three in `lottieEncode.test.ts`.
+6. **Task 4 — a mutation that demonstrated nothing.** The version-field
+   mutation (`v:` → `ver:`) is also caught by `tsc` (TS2741), since `v` is
+   required by `LottieDoc`. The real gap is the *string value*, which is
+   type-invisible: `LOTTIE_VERSION = "550502"` leaves `tsc` clean and reddens
+   exactly the new test. The test was load-bearing; the stated rationale was
+   wrong. **A red mutation table is not evidence that the mutation was the
+   right one.**
+7. **Task 5 — a false checkable claim in the phase's own evidence document.**
+   `eval/RESULTS-PHASE-5A.md` claimed its snapshot hash `26cca4e9` matched
+   `eval/RESULTS-GATE-B.md`'s; GATE-B records `b0b119ad`. The number was
+   genuine and reproduces live — the *citation* was never checked against the
+   document it cited. See "Inherited, still open" for the cause.
+8. **Task 5 — a regression check narrower than its framing.** After a ~500-line
+   `--renderer` refactor, one of Task 4's six §11 fixtures had been
+   re-verified, and the document presented an argument-from-diff as a
+   measurement. All six were then re-run; all six reproduced Task 4's recorded
+   values exactly.
+
+### Mutation results, each beside its suite size
+
+| Task | Mutation | Suite at the time | Result |
+|---|---|---|---|
+| 0 | Five individual worker mutations | 770 | Four reddened as predicted; Mutation 1 was a provable no-op (see plan defects), and a faithful variant reddened 2 |
+| 1 | Top-level-only geometry scan | 775 | Reddens **1 of 5** — load-bearing, but by exactly one test (the nested-group case) |
+| 2 | Child-ordering mutation | 782 | The implementer's first attempt was a **false negative** — it sorted only a nested node's `.children`, not the outer `ir.children` loop, which the top-level fixture could not detect. Self-caught, corrected, re-run for the right red |
+| 3 | Nine mutations, re-run from scratch | 811–816 | Eight as predicted; Mutation 8 predicted green, measured **2/811 red** |
+| 4 | Version-field string value | 817 (30 in file) | `LOTTIE_VERSION = "550502"`: `tsc` clean, **1 of 30 red**, restored byte-exact |
+| 5 | `LOTTIE_UNSUPPORTED_TEXT` branch deleted | 817 (12 in file) | **3 of 12 red** |
+| 5 | `LOTTIE_UNSUPPORTED_LINE` branch deleted | 817 (12 in file) | **2 of 12 red** |
+
+Task 3's nine mutations were **re-run from scratch by a replacement
+implementer** after a rate limit killed the first one mid-run. The ruling was
+that unrecorded evidence is not evidence (AGENT-LESSONS §1): one datum had
+survived only inside a test comment, and a sentence in a comment is not a
+mutation table.
+
+### Deliberate gaps and deferrals, each with what makes it harmless today
+
+**Still open:**
+
+1. **`compiler.worker.test.ts:117,134,164` — padding is not regression-pinned.**
+   The Step-8 assertions use `toMatch(/^\[lexer\] /)`, which matches any
+   trailing space count. Column-10 padding ships correctly, but a regression to
+   column 9 would pass. *Harmless today:* the consequence is cosmetic
+   misalignment in the Terminal pane; the six-prefix scraping contract
+   `check.mjs` depends on stays protected, because that regex reads only the
+   bracketed prefix.
+2. **No test covers a three-level ancestry chain with `visible: false` at the
+   MIDDLE ancestor.** Verified still open while writing these notes:
+   `lottieEncode.test.ts` covers an object's own `visible` and a two-level
+   ancestor case, not a three-level middle one. *Harmless today:*
+   `composedOpacity` multiplies over the whole chain and is correct at any
+   depth, by hand-trace and by construction. A refactor to "check only the
+   immediate parent" would pass silently — that is the risk, and it is a
+   coverage gap rather than a live bug.
+3. **`hexToRgb01` now has three copies** (`lottieRoundTrip.test.ts`,
+   `devLottieSeam.ts`, and the private original in `lottieGeometry.ts`). Filed
+   under the scope tie-break as adjacent rather than required. *Harmless
+   today:* each copy is three lines of `parseInt` over a fixed-width hex string
+   with no branching. *Watch for:* a fourth copy makes this a real
+   AGENT-LESSONS §5 hand-synced-list problem.
+4. **The encoder writes a group's own alpha onto its null layer *and* the
+   composed product onto each descendant.** *Harmless today, and now measured
+   twice:* neither lottie-web 5.13.0 nor `@lottiefiles/dotlottie-web`
+   propagates opacity through parenting, so a null layer's opacity never
+   reaches the child — confirmed at 25.1% and 24.7% respectively, against the
+   ~12.5% a double-application would produce. In a renderer that *did*
+   propagate, every nested alpha would double-apply. Deliberately not "fixed",
+   because this is also the property that makes the opacity fixture
+   discriminating: changing it on speculation would have destroyed the evidence
+   that settled §11.2.
+5. **`package.json`'s `"bin"` key was reformatted onto three lines** by npm's
+   own rewrite during `npm install`. *Harmless today:* semantically identical
+   JSON.
+6. **ThorVG was not tried** as a third renderer. *Harmless today:*
+   `@lottiefiles/dotlottie-web` already gave a clean, decisive second-renderer
+   result, and design §10 promised an evaluation, not a specific outcome.
+   Padding the phase with a half-maintained third harness serves nothing.
+7. **dotlottie-web was exercised against two of Task 4's six §11 fixtures**
+   (opacity, layer order) plus a regression check, not all six.
+8. **Criterion 1's "no Marey/Matter.js reference" check is a grep of the
+   emitted `doc.json`**, not a formal schema audit.
+
+**Closed during execution** — recorded because the ledger deferred them, and a
+reader of the ledger alone would believe they are still open:
+
+- **`LayerSpec.name` had no test reading it** (deferred at Task 2). Closed by
+  Task 3: `lottieEncode.test.ts:388` asserts `["inner", "g", "background"]` for
+  the scope-qualified id `scene.g.inner`, so returning the full id would fail.
+- **`lottieEncode.ts`'s docstring undercounted the open-question surface**
+  (deferred at Task 3). Closed by Task 4's fix round, which removed the
+  separately-flagged §11.4 note; the count and the text now agree.
+
+### The process record
+
+This is the section the next phase's plan should read first.
+
+**Seven interruptions.** Five agents were killed by API rate limits (Task 1's
+reviewer, Task 3's implementer, Task 3's reviewer, Task 4's implementer,
+Task 5's reviewer) and two more were lost to stream stalls (Task 4's reviewer,
+Task 4's fix round). Phase 4 had three. **The variable that decided what each
+one cost was Global Constraint 3.** Where the agent had committed as it went, a
+kill cost minutes. Where it batched commits at the end — Task 4's first pass —
+the kill cost that task's entire evidence trail, and its mutation run had to be
+redone from scratch. The constraint is now measured twice over rather than
+asserted.
+
+**A stalled agent is not a failed agent until you check its output.** Task 4's
+reviewer stalled *after* completing its analysis and *before* writing the file,
+losing only the write. Resuming it recovered a full review that a fresh
+dispatch would have paid for twice. Check for the output file before
+re-dispatching.
+
+**Two Global Constraint violations, both disclosed rather than discovered
+late.** Task 4's implementer created all three of its commits in a 16-second
+burst after the work was finished (Constraint 3) — on the very task whose
+predecessor had been lost to a kill mid-work. And a killed agent left a Vite
+server bound to port 5199 (Constraint 12), which the controller killed before
+trusting any later capture: the **third** occurrence in this repo's history of
+the exact condition that constraint exists to prevent, and a direct
+confirmation of its own warning that "a killed agent will not clean up after
+itself."
+
+**Two forced model downgrades.** Task 3's review and Task 5's review both ran a
+tier below what Model Selection calls for, because the capable tier was
+session-limited at the moment of dispatch. Both are recorded in the ledger with
+the cost named. The Task 5 downgrade cost less than feared: that reviewer
+verified *harder* than the controller had, recomputing the pixel diffs from raw
+PNGs and proving the edge-only claim by connected-component analysis rather
+than by reading a diff image.
+
+**What the reviews actually caught.** Across Tasks 0–5 the task reviews
+returned one changes-requested verdict with six Important findings, one
+pass-with-findings verdict with two Important, and **no Critical finding at any
+point**. The two most valuable findings were of the same family — a fixture or
+a mutation that **could not have produced the other answer**. That is the
+AGENT-LESSONS §2a trap in two new disguises: once as an image, once as a
+mutation the type checker already caught. Neither was visible to the
+controller; both were found by a reviewer told specifically to ask whether each
+fixture discriminates. **That question is worth putting in every review
+dispatch of the next phase.**
+
+### Inherited, still open
+
+**`eval/RESULTS-GATE-B.md` records a snapshot hash that no longer
+reproduces.** It carries `b0b119ad` for `compound-logo.marey`; the scene now
+produces `26cca4e9`. The cause is a later Phase-4 commit, `f5deb12`, which
+added a `visible` field to `ObjectSnapshot` — and `frameHash.ts` digests the
+whole JSON, so any field addition necessarily changes every hash. Confirmed
+first-hand during Task 5's re-review by reading both the commit and
+`frameHash.ts`.
+
+Phase 5A **documented this in `eval/RESULTS-PHASE-5A.md` rather than editing
+Phase 4's record**, on the ruling that rewriting a prior phase's results
+document is out of scope and would retcon it. It is left open deliberately.
+Whoever next touches Gate B's evidence should decide whether GATE-B.md is
+re-derived or annotated; it is currently wrong-but-documented in two places
+rather than silently wrong in one.
