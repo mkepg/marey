@@ -131,28 +131,45 @@ for a **complete, provable engineering artifact with a declarable finish
 line**, and acquisition work moved past that line. Read its §1 before
 proposing anything the old roadmap justified by adoption.
 
-Current phase: **5A — next**. **4 — composition and export foundation is done
+Current phase: **5B — next**. **5A — baked Lottie is complete on branch
+`phase-5a-baked-lottie`**, with the independent whole-branch review
+AGENT-LESSONS §8 requires and the merge still owed — this line moves to "done
+and merged" only once both have happened. It emits a bounded Lottie subset
+(static circle/rectangle/polygon/group geometry; baked position, rotation,
+scale and alpha; fixed duration and frame rate; `text` refused outright per
+R17) that plays with no Marey or Matter.js code at playback.
+**Read `docs/plans/2026-09-11-phase-5a-baked-lottie.md`'s execution
+notes before Phase 5B**: they record four defects execution found in the plan
+itself beyond the three its self-review names, the two review findings that
+matter most (a fixture and a mutation that each **could not have produced the
+other answer** — the §2a trap in two new disguises), and the phase's process
+record of seven interruptions, which is the strongest evidence yet for
+committing as you go. The encoder boundary and the opacity asymmetry are
+documented in `renderer.md`; design §11's two dated corrections record what was
+measured in a real player and what an earlier draft overclaimed.
+**4 — composition and export foundation is done
 and merged**, fast-forwarded onto `main` with no merge commit; its last commit
 is `2e72ef7`. The independent whole-branch review AGENT-LESSONS §8 requires
 found three Important defects and twenty Minor findings — consistent with
 every phase that has had one so far — a single fix wave addressed all of them,
 and the scoped re-review of that wave passed with no finding left open.
-**Read `docs/plans/2026-09-10-phase-4-composition-and-export.md`'s
-execution notes before Phase 5A**: they record two of the plan's own claims
+Its execution notes record two of the plan's own claims
 that execution measured false, the ten fixture defects implementers found by
 verifying its code blocks rather than pasting them, and the deferred findings
-Phase 5A inherits — the first of which is that `compiler.worker.ts` still has
-no automated test and was rewritten wholesale in this phase.
+Phase 5A inherited — the first of which was that `compiler.worker.ts` had
+no automated test and was rewritten wholesale in that phase. **Phase 5A closed
+that one**; one Phase 4 finding remains open, recorded under "Inherited, still
+open" in 5A's notes.
 **3C — motion primitives is done and merged** (`delay` on
 `animate`, `origin` on shapes, and a zero-`scale` rule scoped to the objects
 that take part in physics), and its independent whole-branch review is
 complete. **Read
 `docs/plans/2026-09-09-phase-3c-motion-primitives.md`'s execution
-notes before starting Phase 5A** — export bakes whatever the language can
+notes before starting Phase 5B** — export bakes whatever the language can
 express, and 3C's notes record which of its guarantees are pinned by tests and
 which rest on an unreachability argument. Phase 3B is **done and merged**. Full
 phase history and prior decisions (D1–D18, R1) are in
-`roadmap-and-process.md`, whose Phase 4 bullet must be updated in the same
+`roadmap-and-process.md`, whose Phase 5A bullet must be updated in the same
 edit as this line.
 
 Work on a branch, not `main`.

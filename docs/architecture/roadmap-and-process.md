@@ -164,8 +164,32 @@ explicitly rather than quietly deviating.
   counts against their suite sizes, and the deferred findings (25 of them; the
   largest is that `compiler.worker.ts` has no automated test at all, so its
   branch order and its six exact log strings are guarded by nothing).
-- **Phase 5A — baked Lottie.** A bounded subset; `text` is excluded because the
-  Lottie spec's text layer has been open 19 months.
+- **Phase 5A — baked Lottie: complete on branch `phase-5a-baked-lottie`**, with
+  the independent whole-branch review AGENT-LESSONS §8 requires and the merge
+  still owed. A bounded subset; `text` is excluded because the Lottie spec's
+  text layer has been open 19 months. Static circle/rectangle/polygon/group
+  geometry with baked position, rotation, scale and alpha, fixed duration and
+  frame rate, and physics baked to keyframes — the emitted file carries no
+  Marey or Matter.js dependency at playback. Unsupported input is refused
+  outright rather than degraded: `LOTTIE_UNSUPPORTED_TEXT` and
+  `LOTTIE_UNSUPPORTED_LINE` are the whole refusal surface, and both are pinned
+  by delete-and-run. Two structural rules carry the independence claim and are
+  grep-checkable: neither `lottieGeometry.ts` nor `lottieEncode.ts` imports
+  `pixi.js`, and `lottieEncode.ts` does not import `sceneIR` — it sees
+  `FrameSnapshot`s only. The encoder boundary and the **opacity asymmetry**
+  (transforms stay parented, opacity flattens, because Lottie parenting
+  propagates only the transform) are documented in `renderer.md`.
+  Design §11 listed six Lottie facts the published specification did not
+  settle; all six were measured in lottie-web 5.13.0 and carry two dated
+  corrections — the second because a first draft overclaimed what a half-frame
+  sample can establish. Exit evidence is `eval/RESULTS-PHASE-5A.md`: a physics
+  scene in a third-party player, and a measured tolerance against Marey's own
+  PNG export of **max per-channel delta 81 across 0.1185% of pixels**, every
+  one of them on an antialiased edge with flat interiors byte-identical.
+  A second renderer, `@lottiefiles/dotlottie-web`, was evaluated and added.
+  **Read the plan's execution notes before Phase 5B.** Current-phase status is
+  stated once, in `docs/architecture/README.md` — update that line and this
+  bullet together.
 - **Phase 5B — video.** WebM and MP4 via WebCodecs and a muxer, never
   `MediaRecorder`.
 - **Phase 6 — packaging and legibility.** Public package, `LICENSE`, a root
