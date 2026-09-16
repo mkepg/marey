@@ -106,35 +106,52 @@
  *   --lottie-path <path> path to the lottie-web UMD build (default
  *                        node_modules/lottie-web/build/player/lottie.min.js,
  *                        resolved from the current working directory)
+ *   --renderer <name>    "lottie-web" (default) or "dotlottie-web" (Task 5,
+ *                        design §10's second-renderer evaluation). Both
+ *                        branches converge on the same
+ *                        `window.__lottieCheckAnim.goToAndStop(frame, isFrame)`
+ *                        shim and `#__lottieCheck canvas` selector, so every
+ *                        other flag (`--at`, `--compare-png`,
+ *                        `--strip-easing`, ...) works unchanged either way.
+ *   --dotlottie-path <p> path to dotlottie-web's ESM bundle (default
+ *                        node_modules/@lottiefiles/dotlottie-web/dist/index.js)
+ *   --dotlottie-wasm-path <p> path to dotlottie-web's WASM binary, served
+ *                        locally via Playwright route interception instead of
+ *                        the bundle's own jsdelivr/unpkg CDN default (default
+ *                        node_modules/@lottiefiles/dotlottie-web/dist/dotlottie-player.wasm)
  *   --headed             show the browser window
  *
- * Writes `<out>/doc.json` (the document actually handed to lottie-web, i.e.
+ * Writes `<out>/doc.json` (the document actually handed to the player, i.e.
  * post-patch), `<out>/frame_<label>.png` per requested frame (label is the
  * frame value with `.` replaced by `p`, e.g. `frame_0p5.png`), and
  * `<out>/report.json` — written on every exit path, including every failure
  * one below, not only on success — with the export metadata, every sampled
  * pixel, and page/console/lottie errors. Exit code is non-zero on a hard
- * failure (export threw, `loadAnimation` threw, an `AnimationItem` `'error'`
- * event fired, or a page/console error was recorded) — never on what a
- * sampled pixel says, which is this script's whole reason to exist and is a
+ * failure (export threw; the player failed to construct or load — lottie-web's
+ * `loadAnimation` throwing or its `AnimationItem` `'error'` event, or
+ * dotlottie-web's constructor throwing or its `'loadError'`/`'renderError'`
+ * events; or a page/console error was recorded) — never on what a sampled
+ * pixel says, which is this script's whole reason to exist and is a
  * judgement call for whoever reads the report.
  *
  * **What this harness does NOT validate, stated plainly rather than left to
- * a dead guard (Global Constraint 10):** lottie-web's `data_failed` event
- * fires only for `path`-based or segment loads (`onSetupError`,
- * `build/player/lottie.js:1517` and `:1624`); this harness always passes
- * inline `animationData`, so `data_failed` can never fire here and is not
- * listened for. The failure path that IS reachable is a synchronous throw
- * from `loadAnimation()` itself, or the `AnimationItem` `'error'` event
- * (`triggerConfigError`/`triggerRenderFrameError`) — both are caught below.
- * Neither is a general document validator: lottie-web is lenient about many
- * structurally-missing fields (a document missing `op` entirely loads and
- * renders without complaint — measured, not assumed) and a render/config
- * error that fires SYNCHRONOUSLY inside `loadAnimation()` itself, before this
- * script's listeners are attached, would not be captured either. This
- * harness reports exactly the failures lottie-web itself surfaces through
- * one of those two channels, no more — a clean run is evidence that lottie-web
- * did not complain, not evidence that the document is well-formed.
+ * a dead guard (Global Constraint 10).** For `--renderer lottie-web`:
+ * lottie-web's `data_failed` event fires only for `path`-based or segment
+ * loads (`onSetupError`, `build/player/lottie.js:1517` and `:1624`); this
+ * harness always passes inline `animationData`, so `data_failed` can never
+ * fire here and is not listened for. The failure path that IS reachable is a
+ * synchronous throw from `loadAnimation()` itself, or the `AnimationItem`
+ * `'error'` event (`triggerConfigError`/`triggerRenderFrameError`) — both are
+ * caught below. Neither is a general document validator: lottie-web is
+ * lenient about many structurally-missing fields (a document missing `op`
+ * entirely loads and renders without complaint — measured, not assumed) and a
+ * render/config error that fires SYNCHRONOUSLY inside `loadAnimation()`
+ * itself, before this script's listeners are attached, would not be captured
+ * either. For `--renderer dotlottie-web`, only `'loadError'`/`'renderError'`
+ * and a constructor throw are checked; how lenient dotlottie-web's WASM core
+ * is about a structurally-incomplete document was not independently measured
+ * the way lottie-web's was. A clean run is evidence the selected renderer did
+ * not complain, not evidence the document is well-formed.
  */
 import { chromium } from "playwright";
 import LZString from "lz-string";
@@ -177,6 +194,24 @@ const setFields = argAll("set").map((s) => {
 });
 const unsetFields = argAll("unset");
 const lottiePath = resolve(arg("lottie-path", "node_modules/lottie-web/build/player/lottie.min.js"));
+// Task 5, design §10's "second renderer, evaluated not promised": swaps
+// which player renders the document. Both branches end by exposing the
+// exact same two things the rest of this script already depends on —
+// `window.__lottieCheckAnim.goToAndStop(f, true)` and a canvas reachable via
+// `#__lottieCheck canvas` — so the frame-sampling loop, the `--at` pixel
+// reads, the PNG screenshot, and `--compare-png` all work unmodified against
+// either renderer. That shim is what makes a second renderer cheap here:
+// there is no parallel harness, only a different few lines building the
+// player itself.
+const renderer = arg("renderer", "lottie-web");
+if (renderer !== "lottie-web" && renderer !== "dotlottie-web") {
+  console.error(`--renderer must be 'lottie-web' or 'dotlottie-web', got '${renderer}'`);
+  process.exit(2);
+}
+const dotlottiePath = resolve(arg("dotlottie-path", "node_modules/@lottiefiles/dotlottie-web/dist/index.js"));
+const dotlottieWasmPath = resolve(
+  arg("dotlottie-wasm-path", "node_modules/@lottiefiles/dotlottie-web/dist/dotlottie-player.wasm"),
+);
 
 const source = readFileSync(resolve(scenePath), "utf8");
 
@@ -199,6 +234,21 @@ const consoleErrors = [];
 const pageErrors = [];
 page.on("console", (m) => m.type() === "error" && consoleErrors.push(m.text()));
 page.on("pageerror", (e) => pageErrors.push(String(e)));
+
+// dotlottie-web's default build fetches its WASM binary from jsdelivr/unpkg
+// at `https://.../@lottiefiles/dotlottie-web@<version>/dist/dotlottie-player.wasm`
+// (measured directly by reading its bundle: `dist/index.js` contains that
+// literal URL template). Playwright's headless Chromium DOES have outbound
+// network access here (confirmed directly: a `fetch(...)` to that same
+// jsdelivr URL returned `200`) — unlike this repository's Bash tool, whose
+// `curl` returns `000` — so the CDN fetch would actually succeed. Routing it
+// to the LOCAL copy already sitting in `node_modules` anyway, rather than
+// depending on that network access, matches how lottie-web is already loaded
+// (`addScriptTag({ path })`, no network) and keeps this harness reproducible
+// somewhere that outbound access is unavailable. Registered unconditionally
+// and harmlessly no-ops under `--renderer lottie-web`, since nothing ever
+// requests that URL in that mode.
+await page.route(/dotlottie-player\.wasm/, (route) => route.fulfill({ path: dotlottieWasmPath }));
 
 await page.goto(sceneUrl, { waitUntil: "load" });
 
@@ -282,29 +332,67 @@ if (has("strip-easing")) {
 }
 writeFileSync(`${outDir}/doc.json`, JSON.stringify(doc, null, 2));
 
-// `addScriptTag({ path })` reads the file locally and injects its contents
-// as an inline <script>, rather than requesting it through the page's own
-// origin — confirmed working here against the real dev-server page (not
-// just `about:blank`), so a bare `import "lottie-web"` for Vite to resolve
-// is unnecessary. `lottie.min.js` is a UMD build; it attaches `window.lottie`
-// because `document`/`navigator` both exist on this page.
-await page.addScriptTag({ path: lottiePath });
-const lottieGlobalOk = await page.evaluate(() => typeof window.lottie === "object" && window.lottie !== null);
-if (!lottieGlobalOk) {
-  const error = `lottie-web did not attach window.lottie after addScriptTag({ path: '${lottiePath}' })`;
-  console.error(error);
-  writeFileSync(`${outDir}/report.json`, JSON.stringify({ scene: scenePath, lottiePath, error }, null, 2));
-  await browser.close();
-  process.exit(1);
+if (renderer === "lottie-web") {
+  // `addScriptTag({ path })` reads the file locally and injects its contents
+  // as an inline <script>, rather than requesting it through the page's own
+  // origin — confirmed working here against the real dev-server page (not
+  // just `about:blank`), so a bare `import "lottie-web"` for Vite to resolve
+  // is unnecessary. `lottie.min.js` is a UMD build; it attaches `window.lottie`
+  // because `document`/`navigator` both exist on this page.
+  await page.addScriptTag({ path: lottiePath });
+  const lottieGlobalOk = await page.evaluate(() => typeof window.lottie === "object" && window.lottie !== null);
+  if (!lottieGlobalOk) {
+    const error = `lottie-web did not attach window.lottie after addScriptTag({ path: '${lottiePath}' })`;
+    console.error(error);
+    writeFileSync(`${outDir}/report.json`, JSON.stringify({ scene: scenePath, lottiePath, error }, null, 2));
+    await browser.close();
+    process.exit(1);
+  }
+} else {
+  // dotlottie-web ships as a plain ESM bundle ending `export{be as
+  // DotLottie,...}`. An ESM `export` clause does NOT create a `DotLottie`
+  // binding inside the module's OWN scope, only in its external interface —
+  // so `addScriptTag({ path })`'s inline-script trick (which works for
+  // lottie-web's UMD build because UMD assigns to `window` itself) needs one
+  // extra step here: read the bundle, find the actual local name the export
+  // statement aliases, and assign THAT to a window global once the script
+  // runs. Measured directly against 0.80.0, not assumed: this regex is a
+  // real dependency on the bundler's output shape, named here so a future
+  // dotlottie-web upgrade that changes it fails loudly rather than silently.
+  const dotlottieJs = readFileSync(dotlottiePath, "utf8");
+  const exportMatch = dotlottieJs.match(/export\{(\w+) as DotLottie/);
+  if (!exportMatch) {
+    const error = `could not find DotLottie's internal export alias in '${dotlottiePath}' -- bundle shape may have changed since this was written against 0.80.0`;
+    console.error(error);
+    writeFileSync(`${outDir}/report.json`, JSON.stringify({ scene: scenePath, dotlottiePath, error }, null, 2));
+    await browser.close();
+    process.exit(1);
+  }
+  await page.addScriptTag({ content: `${dotlottieJs}\nwindow.__DotLottie = ${exportMatch[1]};`, type: "module" });
+  const dotlottieGlobalOk = await page.evaluate(() => typeof window.__DotLottie === "function");
+  if (!dotlottieGlobalOk) {
+    const error = `dotlottie-web did not attach window.__DotLottie after addScriptTag({ path: '${dotlottiePath}' })`;
+    console.error(error);
+    writeFileSync(`${outDir}/report.json`, JSON.stringify({ scene: scenePath, dotlottiePath, error }, null, 2));
+    await browser.close();
+    process.exit(1);
+  }
 }
 
-// A container sized in CSS pixels to EXACTLY the document's own w/h, with
-// `dpr: 1` in rendererSettings, so the canvas backing store is `doc.w x
-// doc.h` physical pixels with no letterboxing and no devicePixelRatio scale
-// — coordinates a caller passes to `--at` are then Lottie-space coordinates
-// directly, with no conversion.
+// A container sized in CSS pixels to EXACTLY the document's own w/h, so the
+// canvas backing store is `doc.w x doc.h` physical pixels with no
+// letterboxing and no devicePixelRatio scale — coordinates a caller passes
+// to `--at` are then Lottie-space coordinates directly, with no conversion.
+// Both renderer branches below end by setting `window.__lottieCheckAnim` to
+// something exposing `goToAndStop(frame, isFrame)` and leaving a canvas
+// reachable via `#__lottieCheck canvas` — the shim that lets every later
+// section of this script (frame loop, `--at`, `--compare-png`) stay
+// renderer-agnostic. `dpr: 1` (lottie-web's `rendererSettings`) achieves the
+// same "no devicePixelRatio scale" property lottie-web's branch needs;
+// dotlottie-web has no equivalent setting because a caller-provided canvas's
+// pixel dimensions ARE its backing store, with no separate DPR concept.
 const loadResult = await page.evaluate(
-  ({ doc }) =>
+  ({ doc, renderer }) =>
     new Promise((resolvePromise) => {
       // Collected for the whole run, not just the load phase: a render
       // error can also fire later, during frame sampling below (e.g. a
@@ -330,8 +418,8 @@ const loadResult = await page.evaluate(
 
       // Settles the promise once, on whichever of load-success/load-failure
       // happens first. Only meaningful during the load phase — later calls
-      // (an 'error' event after the promise already resolved `ok: true`)
-      // are no-ops here and rely on `window.__lottieCheckErrors` instead.
+      // (an error after the promise already resolved `ok: true`) are no-ops
+      // here and rely on `window.__lottieCheckErrors` instead.
       let settled = false;
       const settle = (r) => {
         if (settled) return;
@@ -339,56 +427,96 @@ const loadResult = await page.evaluate(
         resolvePromise(r);
       };
 
-      // The real failure path a document without a `path` can hit:
-      // `loadAnimation` itself throws synchronously (e.g. a document with
-      // no `layers` at all) rather than returning a live AnimationItem.
-      // Previously uncaught, this crashed the whole node process with a raw
-      // stack and no report.json (review finding 12). `data_failed` is NOT
-      // listened for here: it fires only from `onSetupError` (path loads,
-      // `lottie.js:1517`) and segment loads (`:1624`), never for inline
-      // `animationData`, so it is unreachable in this harness's own
-      // configuration — a guard that cannot fire, per Global Constraint 10.
-      let anim;
-      try {
-        anim = window.lottie.loadAnimation({
-          container,
-          renderer: "canvas",
-          loop: false,
-          autoplay: false,
-          animationData: doc,
-          rendererSettings: { dpr: 1, clearCanvas: true },
+      if (renderer === "lottie-web") {
+        // The real failure path a document without a `path` can hit:
+        // `loadAnimation` itself throws synchronously (e.g. a document with
+        // no `layers` at all) rather than returning a live AnimationItem.
+        // Previously uncaught, this crashed the whole node process with a raw
+        // stack and no report.json (review finding 12). `data_failed` is NOT
+        // listened for here: it fires only from `onSetupError` (path loads,
+        // `lottie.js:1517`) and segment loads (`:1624`), never for inline
+        // `animationData`, so it is unreachable in this harness's own
+        // configuration — a guard that cannot fire, per Global Constraint 10.
+        let anim;
+        try {
+          anim = window.lottie.loadAnimation({
+            container,
+            renderer: "canvas",
+            loop: false,
+            autoplay: false,
+            animationData: doc,
+            rendererSettings: { dpr: 1, clearCanvas: true },
+          });
+        } catch (e) {
+          settle({ ok: false, stage: "loadAnimation", error: String(e && e.message ? e.message : e) });
+          return;
+        }
+        window.__lottieCheckAnim = anim;
+
+        // The path that DOES fire for a malformed inline document:
+        // `triggerConfigError`/`triggerRenderFrameError` both call
+        // `triggerEvent('error', ...)` on the AnimationItem. Registered
+        // before yielding control back to the event loop, so it is in place
+        // whether `checkLoaded` resolves synchronously or asynchronously.
+        anim.addEventListener("error", (e) => {
+          const msg = e && e.nativeError && e.nativeError.message ? e.nativeError.message : String(e);
+          window.__lottieCheckErrors.push(msg);
+          settle({ ok: false, stage: "error-event", error: msg });
         });
-      } catch (e) {
-        settle({ ok: false, stage: "loadAnimation", error: String(e && e.message ? e.message : e) });
-        return;
-      }
-      window.__lottieCheckAnim = anim;
 
-      // The path that DOES fire for a malformed inline document:
-      // `triggerConfigError`/`triggerRenderFrameError` both call
-      // `triggerEvent('error', ...)` on the AnimationItem. Registered
-      // before yielding control back to the event loop, so it is in place
-      // whether `checkLoaded` resolves synchronously or asynchronously.
-      anim.addEventListener("error", (e) => {
-        const msg = e && e.nativeError && e.nativeError.message ? e.nativeError.message : String(e);
-        window.__lottieCheckErrors.push(msg);
-        settle({ ok: false, stage: "error-event", error: msg });
-      });
-
-      if (anim.isLoaded) {
-        settle({ ok: true });
+        if (anim.isLoaded) {
+          settle({ ok: true });
+        } else {
+          anim.addEventListener("DOMLoaded", () => settle({ ok: true }));
+        }
       } else {
-        anim.addEventListener("DOMLoaded", () => settle({ ok: true }));
+        // dotlottie-web takes a caller-owned canvas directly rather than a
+        // container it builds its own canvas inside, so this branch creates
+        // one, sized identically to the lottie-web branch's container, and
+        // appends it as `#__lottieCheck`'s only child -- satisfying the same
+        // `#__lottieCheck canvas` selector every later section already uses.
+        const canvas = document.createElement("canvas");
+        canvas.width = doc.w;
+        canvas.height = doc.h;
+        container.appendChild(canvas);
+
+        let player;
+        try {
+          player = new window.__DotLottie({ canvas, data: JSON.stringify(doc), autoplay: false, loop: false });
+        } catch (e) {
+          settle({ ok: false, stage: "construct", error: String(e && e.message ? e.message : e) });
+          return;
+        }
+        // Same shim shape as lottie-web's `AnimationItem.goToAndStop(frame,
+        // isFrame)`: the second argument is accepted and ignored, since
+        // dotlottie-web's `setFrame` only ever takes a frame number, never a
+        // time value.
+        window.__lottieCheckAnim = { goToAndStop: (frame) => player.setFrame(frame) };
+
+        player.addEventListener("loadError", (e) => {
+          const msg = e && e.error && e.error.message ? e.error.message : String(e);
+          settle({ ok: false, stage: "loadError", error: msg });
+        });
+        // Post-load render errors, the dotlottie-web analogue of
+        // lottie-web's post-load 'error' events above: collected into the
+        // same `window.__lottieCheckErrors` array so this harness's later
+        // reporting does not need to know which renderer produced them.
+        player.addEventListener("renderError", (e) => {
+          const msg = e && e.error && e.error.message ? e.error.message : String(e);
+          window.__lottieCheckErrors.push(msg);
+          settle({ ok: false, stage: "renderError", error: msg });
+        });
+        player.addEventListener("load", () => settle({ ok: true }));
       }
     }),
-  { doc },
+  { doc, renderer },
 );
 
 if (!loadResult.ok) {
-  console.error(`lottie-web failed to load the document (${loadResult.stage}): ${loadResult.error}`);
+  console.error(`${renderer} failed to load the document (${loadResult.stage}): ${loadResult.error}`);
   writeFileSync(
     `${outDir}/report.json`,
-    JSON.stringify({ scene: scenePath, exportMeta: { fps: exportResult.fps, frameCount: exportResult.frameCount }, loadResult }, null, 2),
+    JSON.stringify({ scene: scenePath, renderer, exportMeta: { fps: exportResult.fps, frameCount: exportResult.frameCount }, loadResult }, null, 2),
   );
   await browser.close();
   process.exit(1);
