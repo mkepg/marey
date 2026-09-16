@@ -32,20 +32,26 @@ import type { SamplerPlan } from "./exportContract";
  * `(Math.PI / 2) × 180 / Math.PI` is `90`, `0.25 × 100` is `25`, and doubles
  * round-trip through `JSON.parse`/`stringify` at full precision.
  *
- * **Three choices here rest on a design §11 item the published specification
- * did not settle, and Task 4 resolves them in a real player:**
+ * **Three choices here rested on a design §11 item the published
+ * specification did not settle. Task 4 measured all three in a real player**
+ * (lottie-web 5.13.0, Chromium — see design §11's 2026-09-12 dated
+ * correction for the fixtures and pixel evidence) **and confirmed every one
+ * of this module's assumptions; none was falsified:**
  *
  * 1. **§11.1 — stacking order.** {@link encodeLottie} reverses the layer
- *    array because the design assumes array-earlier layers draw *above* later
- *    ones (§6.1). A browser must confirm that with an overlapping fixture.
+ *    array because array-earlier layers draw *above* later ones (§6.1).
+ *    Confirmed with an overlapping fixture: the array-earlier (later-declared)
+ *    layer rendered on top.
  * 2. **§11.2 — whether parenting propagates opacity.** {@link composedOpacity}
- *    flattens the ancestor product on the assumption that it does *not*. If
- *    lottie-web propagates it, every nested alpha double-applies.
+ *    flattens the ancestor product because it does *not* propagate. Confirmed
+ *    with a nested-alpha fixture: the flattened 25% is what rendered, not the
+ *    12.5% double-application would have produced.
  * 3. **§11.5 — whether `op` is inclusive or exclusive.** `op = frameCount`
- *    for frames indexed `0 … frameCount − 1`.
+ *    for frames indexed `0 … frameCount − 1`. Confirmed exclusive: sampling
+ *    frame `op` itself renders nothing at all, background included.
  *
- * Two §11 items *are* settled here, by reading the sources rather than
- * assuming: §11.3's shape-list field is `shapes` (the published layers page),
+ * Two §11 items were settled without a browser, by reading the sources
+ * directly: §11.3's shape-list field is `shapes` (the published layers page),
  * and §11.6's easing handles must be present and explicit — see
  * {@link LINEAR_IN}.
  */
@@ -60,13 +66,20 @@ export interface LottieBezierHandle {
  * Linear interpolation, written out rather than omitted.
  *
  * Design §11.6 left open what a player does when `i`/`o` are absent.
- * **Measured against lottie-web 5.13.0 rather than assumed:**
- * `interpolateValue` reads `keyData.o.x.constructor`
- * (`player/js/utils/PropertyFactory.js:146`) with no guard whenever the
- * requested frame falls strictly between two keyframes, so omitting the
- * handles is a `TypeError` at the first sub-frame sample, not a default. A
- * 60Hz display showing a 30fps export samples sub-frame constantly, so this
- * is the common case, not the corner.
+ * **Measured against lottie-web 5.13.0 rather than assumed — and the first
+ * measurement here was itself wrong and corrected by Task 4's reviewer, per
+ * AGENT-LESSONS §1: omitting the handles is NOT a `TypeError`.** Stripping
+ * `i`/`o` from every keyframe and re-rendering throws no exception and fires
+ * no `AnimationItem` `'error'` event, at integer frames as well as sub-frame
+ * ones — this is not "a TypeError at the first sub-frame sample", it never
+ * happens at all. What actually happens: the position property is never
+ * evaluated, so it keeps lottie-web's own uninitialised sentinel value
+ * (`initialDefaultFrame = -999999`, `build/player/lottie.js:10`, the value
+ * `KeyframedValueProperty`/`KeyframedMultidimensionalProperty` assign to
+ * `this.v`/`this.pv` at construction, `lottie.js:3146-3147`) — so the layer
+ * is drawn roughly a million pixels off-canvas rather than at any
+ * interpolated position. Silent and invisible, not loud: a wrong-but-loud
+ * crash would have been the easier failure to catch.
  *
  * `(0, 0)` → `(1, 1)` is the identity cubic. `BezierEaser.js:98` short-circuits
  * it — `if (mX1 === mY1 && mX2 === mY2) return x; // linear` — so this is
@@ -173,7 +186,11 @@ export type LottieLayer = LottieShapeLayer | LottieNullLayer | LottieSolidLayer;
  * `MMmmpp` while shipped bodymovin files carry `v` as `"5.7.4"`, and directs
  * implementation to prefer what real files use. `@lottie-animation-community/
  * lottie-types@1.3.0` types it `v?: string` with a `5.5.2` default, which is
- * the same reading. A browser must confirm it (Task 4).
+ * the same reading. **Confirmed in lottie-web 5.13.0 (Task 4): `v` is the
+ * only field its own `checkVersion()` ever reads** (five call sites; `ver`
+ * is read nowhere in the bundle) — the Marey shape subset never reaches the
+ * version-gated branches those calls guard, so a document could not have
+ * discriminated by rendering differently, but the source reading is direct.
  */
 export interface LottieDoc {
   readonly v: string;
@@ -514,8 +531,9 @@ export function encodeLottie(
   // Reversed: Lottie draws array-earlier layers ABOVE later ones, the
   // opposite of PixiJS child order, so the array is the reverse of traversal
   // order and the background — the bottom of the stack — is last. Design
-  // §11.1 records that the published specification does not settle the
-  // stacking direction; Task 4 confirms it in a real player.
+  // §11.1 records that the published specification did not settle the
+  // stacking direction; Task 4 confirmed it in a real player (design §11's
+  // 2026-09-12 dated correction) — array-earlier draws above, as assumed.
   return Object.freeze({
     v: LOTTIE_VERSION,
     ddd: 0,
