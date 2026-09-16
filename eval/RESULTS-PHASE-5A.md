@@ -37,9 +37,31 @@ node tools/visual-check/lottie-check.mjs \
 ```
 
 **Result:** exit 0. `fps / frameCount 30 / 240`, snapshot hash `26cca4e9`
-(the simulation-state hash, matching the headless suite's own printed value
-for this scene per `eval/RESULTS-GATE-B.md`'s Criterion 2). Zero page
-errors, zero console errors, zero lottie `'error'` events.
+(the simulation-state hash). Zero page errors, zero console errors, zero
+lottie `'error'` events.
+
+**The load-bearing hash claim for this document is not a match against
+GATE-B — it is that the Lottie export and Marey's own PNG export of the
+same scene produce the *same* hash as each other**: Criterion 2 below
+independently exports the same scene via `window.__mareyExportPng` and
+records `pngExportMeta.hash: 26cca4e9`, identical to this section's
+`26cca4e9`. That equality is what makes the Criterion 2 pixel comparison a
+comparison of two renderings of *one* simulation run rather than of two
+different simulation runs — the actual property this document needs.
+
+**A prior draft of this section additionally claimed `26cca4e9` "match[ed]
+… `eval/RESULTS-GATE-B.md`'s Criterion 2" — that was checked and found
+false** (task-5-review.md, Important 1): GATE-B.md's own text
+(`eval/RESULTS-GATE-B.md:91,102,103,114`) records `b0b119ad` for this same
+scene, not `26cca4e9`. `26cca4e9` itself is genuine — reproduced
+independently by the reviewer, and it is what `compound-logo.marey`
+produces on this tree today. The divergence is a **pre-existing Phase 4
+staleness, not a Task 5 defect**: a later Phase-4 commit added a field to
+`ObjectSnapshot`, and `hashFrames`'s JSON-based digest necessarily picks
+that up, so GATE-B.md's recorded value no longer reproduces on current
+source. `eval/RESULTS-GATE-B.md` is a prior phase's record and is not
+edited here; this divergence is being carried forward to Task 6's execution
+notes as an inherited finding rather than retconned into GATE-B.md.
 
 **No Marey or Matter.js reference in the emitted document:**
 
@@ -55,8 +77,9 @@ Read tool — not inferred from the harness's pass line):
 |---|---|
 | 0 | The three-bar "F" logo at its authored animate-in start position, upper-left, upright |
 | 48 | Animated further in, moved and grown toward centre, still upright — animation phase, not yet handed to physics |
-| 75 | Tumbled and fallen down-right, rotated off-axis — physics has taken over and is mid-fall |
-| 180 | Settled, resting on its own arms in a "table" orientation, rotated roughly 90° from its start | 239 | Pixel-identical to frame 180 (see below) — still settled |
+| 75 | Displaced well down and to the right of frame 48's position — physics has visibly taken over. Rotation at this frame is subtle: the logo reads as close to its original upright orientation, not clearly tipped, in clear contrast to frame 180's obvious ~90° tip. (An earlier draft of this row described frame 75 as "rotated off-axis" — a generous reading of what the image actually shows; task-5-review.md, Minor 4) |
+| 180 | Settled, resting on its own arms in a "table" orientation, rotated roughly 90° from its start |
+| 239 | Pixel-identical to frame 180 (see below) — still settled |
 
 This is design §9's whole story for Criterion 1 — genuinely animates in,
 hands off to physics, settles under simulation — played entirely inside a
@@ -368,8 +391,77 @@ node tools/visual-check/lottie-check.mjs \
 Both points match lottie-web's own §11.1 measurement exactly: array-earlier
 layers draw above later ones in dotlottie-web too.
 
-**Regression check on the refactor itself** (default renderer, `--compare-png`
-still functioning identically after the `--renderer` branch was added):
+**Regression check on the refactor itself, against all six of Task 4's §11
+fixtures — not just one.** A prior draft of this section re-verified only
+`opacity-flatten` against lottie-web after the ~500-line `--renderer`
+refactor and presented that single fixture, plus a one-frame
+`--compare-png` arithmetic check, as "the regression check" — narrower than
+its framing implied (task-5-review.md, Important 2: the diff shows the
+lottie-web branch was moved essentially verbatim into a conditional rather
+than rewritten, which is real mitigation, but an argument is not a
+measurement). The remaining five fixtures are re-run here, each against the
+exact command and expected values from design §11's 2026-09-12 correction:
+
+```bash
+node tools/visual-check/lottie-check.mjs \
+  --scene tools/visual-check/scenes/lottie-layer-order.marey \
+  --fps 30 --frames 0 --at 100,100 --at 30,100 \
+  --out .visual-check/lottie/layer-order-refactor-recheck
+# (100,100) -> rgba(0,0,255,255)   [expected: blue, front]
+# (30,100)  -> rgba(255,0,0,255)   [expected: red, back]
+```
+
+```bash
+node tools/visual-check/lottie-check.mjs \
+  --scene tools/visual-check/scenes/lottie-version-field.marey \
+  --fps 30 --frames 0 --at 50,50 \
+  --out .visual-check/lottie/version-field-refactor-recheck
+# (50,50) -> rgba(34,204,136,255)   [as emitted (v); expected #22cc88]
+
+node tools/visual-check/lottie-check.mjs \
+  --scene tools/visual-check/scenes/lottie-version-field.marey \
+  --fps 30 --frames 0 --at 50,50 --unset v --set ver=550502 \
+  --out .visual-check/lottie/version-field-patched-refactor-recheck
+# (50,50) -> rgba(34,204,136,255)   [patched to ver; expected identical #22cc88]
+```
+
+```bash
+node tools/visual-check/lottie-check.mjs \
+  --scene tools/visual-check/scenes/lottie-outpoint.marey \
+  --fps 30 --frames 0,1,2,3,4 \
+  --at 20,30 --at 55,30 --at 144,30 --at 180,30 --at 100,5 \
+  --out .visual-check/lottie/outpoint-refactor-recheck
+# frame 0: (20,30)  -> rgba(255,204,0,255)   [mover at start]
+# frame 1: (55,30)  -> rgba(255,204,0,255)   [mover mid-slide]
+# frame 2: (144,30) -> rgba(255,204,0,255)   [mover mid-slide]
+# frame 3: (180,30) -> rgba(255,204,0,255)   [mover at end]
+# frame 4: every sampled point -> rgba(0,0,0,0)   [op is exclusive: fully transparent]
+```
+
+```bash
+node tools/visual-check/lottie-check.mjs \
+  --scene tools/visual-check/scenes/lottie-easing-halfframe.marey \
+  --fps 30 --frames 0,0.25,0.5,0.75,1 \
+  --at 10,20 --at 35,20 --at 60,20 --at 85,20 --at 110,20 \
+  --out .visual-check/lottie/easing-halfframe-refactor-recheck
+# frame 0:    (10,20)  -> rgba(255,255,255,255), all other points black
+# frame 0.25: (35,20)  -> rgba(255,255,255,255), all other points black
+# frame 0.5:  (60,20)  -> rgba(255,255,255,255), all other points black
+# frame 0.75: (85,20)  -> rgba(255,255,255,255), all other points black
+# frame 1:    (110,20) -> rgba(255,255,255,255), all other points black
+```
+
+**All five reproduce design §11's recorded values exactly** — same colours,
+same coordinates, same exclusive-`op` transparency at frame 4, same exact
+linear positions at every quarter-frame. Combined with `opacity-flatten`
+(re-verified earlier in this section: `rgba(64,64,64,255)`, unchanged from
+Task 4), **all six of Task 4's §11 fixtures now have a confirmed,
+post-refactor reproduction against lottie-web, not five gaps covered by an
+argument about the diff's shape.** No regression from the `--renderer`
+refactor was found in any of the six.
+
+A one-frame `--compare-png` arithmetic check was also re-run and remains
+identical to Criterion 2's frame-0 row above:
 
 ```bash
 node tools/visual-check/lottie-check.mjs \
@@ -379,9 +471,9 @@ node tools/visual-check/lottie-check.mjs \
 # --compare-png: maxDelta=61 at {"x":185,"y":47}, mismatching pixels=373/480000 (share=0.0777%)
 ```
 
-Identical to Criterion 2's frame-0 row above. `npm test` (817/817) and
-`npx tsc -b --noEmit` (clean) were also re-run after both commits in this
-task; no regression in either.
+`npm test` (817/817) and `npx tsc -b --noEmit` (clean) were also re-run
+after every commit in this task, including this fix round; no regression in
+either.
 
 **Decision: added.** Measured cost was ~150 net lines reusing 100% of the
 existing per-frame sampling/reporting/comparison logic through the
