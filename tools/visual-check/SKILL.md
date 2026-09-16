@@ -220,6 +220,89 @@ not a bug in this script or the sampler. Read that document before assuming
 `export-check.mjs`'s cold-reload match proves cross-machine determinism; it
 proves cross-*reload* determinism, which is a different and narrower claim.
 
+## Exporting Lottie
+
+`lottie-check.mjs` exports a scene to Lottie, plays it back in a REAL
+lottie-web (or, with `--renderer dotlottie-web`, dotlottie-web) player inside
+Chromium, and reads back actual pixel values — both a full PNG per requested
+frame (for a human to look at with the Read tool) and precise `getImageData`
+samples at named coordinates, which is exact-byte evidence a screenshot's own
+re-encoding is not. It exists for the same headless-blind-spot reason
+`check.mjs` and `export-check.mjs` do, sharpened for this phase: a Lottie
+document can parse and play in a real third-party player while encoding the
+wrong thing, and nothing in the Vitest suite — which never opens a player —
+can see that. See `src/compiler/export/lottieEncode.ts` and
+`docs/specs/2026-09-11-marey-phase-5a-baked-lottie-design.md`.
+
+It calls `window.__mareyExportLottie` (installed dev-only by
+`src/lib/devLottieSeam.ts`, wired in `main.tsx` behind `import.meta.env.DEV`)
+rather than driving any UI — same reasoning as `export-check.mjs`'s
+`window.__mareyExportPng`: no export button ships this phase, and a narrow
+named seam beats re-implementing compile → plan → build → sample → encode in
+page script, where a harness-only copy could silently diverge from the
+pipeline the app actually runs.
+
+```bash
+node tools/visual-check/lottie-check.mjs \
+  --scene tools/visual-check/scenes/lottie-layer-order.marey \
+  --fps 30 --frames 0 \
+  --at 100,100 --at 30,100 \
+  --out .visual-check/lottie/layer-order
+```
+
+| Flag | Meaning |
+|---|---|
+| `--scene <path>` | A `.marey` file. Required — no `default` fallback |
+| `--fps <n>` | export frame rate (default 30) |
+| `--duration <s>` | export bound in seconds, overriding the scene's own `duration:` |
+| `--frames <list>` | comma-separated frame values to sample, INTEGER OR FRACTIONAL (lottie-web's subframe rendering is on by default in 5.13.0). Default `0` |
+| `--at <x,y>` | a pixel coordinate to sample at every requested frame via `getImageData`. Repeatable |
+| `--set <field=json>` / `--unset <field>` | patch the exported document's top-level fields before handing it to the player. Repeatable |
+| `--strip-easing` | delete `i`/`o` from every keyframe in every layer, everywhere in the document |
+| `--compare-png` | also export via `window.__mareyExportPng` at the same fps/duration and pixel-diff each whole-number requested frame against Marey's own PNG render of the identical frame. Reports the measured maximum per-channel delta and the share of pixels that are not byte-identical, and writes a red-on-black diff-visualization PNG per compared frame — see the script's own header comment for the full methodology |
+| `--renderer <name>` | `lottie-web` (default) or `dotlottie-web` — design §10's second-renderer evaluation. Both converge on the same internal shim, so every other flag works unchanged either way |
+| `--out <dir>` | where `doc.json`, `frame_<label>.png` and `report.json` go |
+| `--url <origin>` | dev server origin (default `http://localhost:5199`). Same `--strictPort` trap as `check.mjs` applies |
+| `--lottie-path` / `--dotlottie-path` / `--dotlottie-wasm-path` | override the bundled build each renderer loads from `node_modules`, if you need a different version |
+| `--headed` | show the browser window |
+
+Output: `<out>/doc.json` (the document actually handed to the player, i.e.
+post-`--set`/`--unset`/`--strip-easing`), `<out>/frame_<label>.png` per
+requested frame, and `<out>/report.json` with the export metadata, every
+sampled pixel, and page/console/player errors. Under `--compare-png`, also
+`<out>/frame_<label>_pngexport.png` (Marey's own PNG render of the same
+frame) and `<out>/frame_<label>_diff.png` (black where the two renders
+agree, red where any channel differs). Exit code is non-zero on a hard
+failure (export threw, the player failed to construct or load, or a
+page/console error was recorded) — never on what a sampled pixel or a pixel
+comparison says, which is this script's whole reason to exist and is a
+judgement call for whoever reads the report.
+
+**Look at the PNGs, including the diff visualization under `--compare-png`.**
+`report.json`'s `maxDelta`/`share` numbers cannot tell you WHERE mismatches
+are; only the diff image distinguishes "antialiasing at shape edges" (a thin
+red outline, expected) from "a real defect" (a filled red region inside a
+flat colour, not expected) — see `eval/RESULTS-PHASE-5A.md` for a worked
+example of reading exactly this.
+
+### Lottie export fixtures
+
+`scenes/lottie-*.marey` each isolate one of design §11's six claims the
+Lottie spec alone could not settle, resolved by measurement in Phase 5A
+Task 4 (see the 2026-09-12 correction appended to that document's §11):
+
+| Scene | Property |
+|---|---|
+| `lottie-layer-order.marey` | Two overlapping opaque rectangles. Confirms array-earlier layers draw ABOVE later ones (§11.1) |
+| `lottie-opacity-flatten.marey` | A `group` at alpha 0.5 containing a child at alpha 0.5. Confirms Lottie does NOT propagate opacity through parenting — the composed/flattened value (~25%) is what renders, not a double-applied ~12.5% (§11.2). Task 5 re-tested this specifically against a second renderer, `dotlottie-web`, with the same result — see `eval/RESULTS-PHASE-5A.md` |
+| `lottie-version-field.marey` | Confirms lottie-web reads `v` (a string like `"5.5.2"`), not the community-spec `ver` integer (§11.4) |
+| `lottie-outpoint.marey` | A rectangle sliding across four frames. Confirms `op` is EXCLUSIVE — frame `op` itself renders nothing (§11.5) |
+| `lottie-easing-halfframe.marey` | A two-keyframe position track. Confirms the emitted `(0,0)`/`(1,1)` handles produce true linear interpolation, not an approximation (§11.6) |
+
+Add a scene rather than editing one when checking something new — same rule
+as the PixiJS-preview `scenes/` fixtures above: these are regression checks,
+and their expected pixel values are their value.
+
 ## Environment
 
 Needs `playwright` (a devDependency) and its Chromium download:
@@ -227,6 +310,15 @@ Needs `playwright` (a devDependency) and its Chromium download:
 ```bash
 npx playwright install chromium
 ```
+
+`lottie-check.mjs` additionally needs `lottie-web` (devDependency, its UMD
+build loaded from `node_modules` with no network access) and, only under
+`--renderer dotlottie-web`, `@lottiefiles/dotlottie-web` (also a
+devDependency). dotlottie-web's bundle defaults to fetching its WASM binary
+from a jsdelivr/unpkg CDN; `lottie-check.mjs` routes that request to the
+local copy in `node_modules` instead (`page.route`), so `--renderer
+dotlottie-web` does not depend on outbound network access either, even
+though Playwright's Chromium here happens to have it.
 
 Headless Chromium has no GPU, so the launch args force SwiftShader. Without them
 PixiJS cannot get a WebGL context and every capture is blank. WebGPU is
