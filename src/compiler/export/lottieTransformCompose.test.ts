@@ -128,6 +128,16 @@ describe("lottieTransformCompose · composed CTM through a parent chain", () => 
     // returns — which is the same `.append` order used below for the Lottie
     // side, so both halves of this test compose parent-then-child the same
     // way.
+    //
+    // Both halves do import `Matrix` from `pixi.js`, so "two independent
+    // implementations" needs to be read precisely: the independence is in the
+    // *container-transform algorithm*, not in who supplies the 2×3 multiply.
+    // Pixi computes a layer's local matrix with a fused closed-form
+    // expression (`Container.updateLocalTransform`, precomputed `_cx`/`_sx`
+    // terms); `lottieLocal` below builds it as four sequential affine calls
+    // from Lottie's documented factor order. `Matrix.translate/scale/rotate`
+    // are textbook primitives shared by both, which is why agreement here is
+    // evidence rather than tautology.
     const pixiWorld = new Map<string, Matrix>();
     const collect = (c: Container): void => {
       if (c.__mareyId !== undefined) pixiWorld.set(c.__mareyId, c.getGlobalTransform());
@@ -149,7 +159,12 @@ describe("lottieTransformCompose · composed CTM through a parent chain", () => 
       return composed;
     };
 
-    expect(geo.layers.length).toBeGreaterThan(0);
+    // Exactly the fixture's four — `g` and its three children — not merely
+    // "some". The loop below iterates whatever `planLottie` returns, so a
+    // regression that silently stopped descending into the group would leave
+    // this file green while testing no parent chain at all: the one way this
+    // test could decay into the thing it exists to rule out.
+    expect(geo.layers.map((l) => l.id)).toEqual(["scene.g", "scene.g.r", "scene.g.c", "scene.g.p"]);
 
     for (const spec of geo.layers) {
       const layer = doc.layers.find((l): l is LottieLayer => l.nm === spec.name);

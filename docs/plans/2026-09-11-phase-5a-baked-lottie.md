@@ -1492,6 +1492,51 @@ held up; its **verbatim code, and its predictions about outcomes**, did not.
 | 4 | Version-field string value | 817 (30 in file) | `LOTTIE_VERSION = "550502"`: `tsc` clean, **1 of 30 red**, restored byte-exact |
 | 5 | `LOTTIE_UNSUPPORTED_TEXT` branch deleted | 817 (12 in file) | **3 of 12 red** |
 | 5 | `LOTTIE_UNSUPPORTED_LINE` branch deleted | 817 (12 in file) | **2 of 12 red** |
+| final | `lottieTransformCompose.test.ts` — six mutations, three of them against the production encoder | 818 | All six red — see below |
+| final | `lottieGeometry.ts` — group walk stops descending | 818 | **Red** at the layer-list assertion, `['scene.g']` vs the expected four |
+
+**The final round's composed-transform test is where this phase's own
+mutation discipline nearly failed one last time.** `lottieTransformCompose
+.test.ts` pins that a Lottie player's composed CTM — `T(p)·R(r)·S(s)·T(-a)`
+walked up `layer.parent` — equals Pixi's own world transform through a parent
+chain with rotation and non-uniform scale. It was written against behaviour
+that already passed, so it was green on its first run, which is exactly the
+shape of a test that asserts nothing.
+
+The implementer ran the three mutations the brief required, and all three
+reddened. But all three were applied to **the test's own decode logic**, not
+to `lottieEncode.ts`. The re-review caught that and ran the missing half:
+
+| # | Side | Mutation | Failing layer | Component | lottie vs pixi |
+|---|---|---|---|---|---|
+| 1 | test | drop `.translate(-ax, -ay)` in `lottieLocal` | `scene.g.r` | `tx` | 132.14101615137756 vs 153.34726442009878 |
+| 2 | test | compose without walking `layer.parent` | `scene.g.r` | `a` | 1.4095389311788626 vs 2.3131354903009957 |
+| 3 | test | decode `r` without `× π/180` | `scene.g` | `a` | 0.3085028997751611 vs 1.7320508075688774 |
+| 4 | **production** | `a: staticVector([0, 0])` — zero the emitted anchor | `scene.g.r` | `tx` | identical to row 1 |
+| 5 | **production** | never emit the `parent` field | `scene.g.r` | `a` | identical to row 2 |
+| 6 | **production** | `rotations.push(snap.rotation)` — emit radians | `scene.g` | `a` | 1.9999164879860007 vs 1.7320508075688774 |
+
+Rows 4 and 5 land on the same numbers as rows 1 and 2 **by force, not by
+luck**: `T(-0,-0)` is the identity, and the decode's `parent === undefined`
+branch already computes `composed = local`. So for the anchor and parent-chain
+categories, a test-side mutation and a production-side one are the same
+experiment. Row 6 is the one that is genuinely new — corrupting the production
+conversion emits radians into a field the decode still reads as degrees, a
+different wrong number than row 3's, and it reddens. Row 6 was re-run by the
+controller first-hand and reproduced to the digit.
+
+The lesson generalises past this test: **mutating a test's own mirror of a
+production formula proves the mirror is self-consistent, not that the test
+guards the formula.** Whether the two are equivalent is a question to answer
+per mutation, not to assume — here two of three were equivalent and one was
+not, and only the one that was not carried new information.
+
+The last row of the table above is the same discipline applied to the test's
+coverage rather than its arithmetic: the loop iterates whatever `planLottie`
+returns, so the file pins the returned layer ids exactly (`scene.g` and its
+three children) rather than merely asserting the list is non-empty. A walk
+that stopped descending into groups would otherwise have left the test green
+while testing no parent chain at all.
 
 Task 3's nine mutations were **re-run from scratch by a replacement
 implementer** after a rate limit killed the first one mid-run. The ruling was
