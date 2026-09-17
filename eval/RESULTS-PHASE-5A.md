@@ -151,6 +151,59 @@ simulation run):
 | 180 | 81 | (516,569) | 569 / 480000 | 0.1185% |
 | 239 | 81 | (516,569) | 569 / 480000 | 0.1185% |
 
+### These numbers are session-history-dependent, not a fixed property of "frame N"
+
+**This is a property of the stated command above, not of "frame 180" (or any
+other single frame) in the abstract.** A reader who simplifies the documented
+command to a single frame gets a different, equally valid number:
+
+| Run | Frame 180 result |
+|---|---|
+| `--frames 0,48,75,180,239` (the documented command, reproduced above) | maxDelta **81** at (516,569), 569/480000 = **0.1185%** |
+| `--frames 180` alone | maxDelta **60** at (596,551), 300/480000 = **0.0625%** |
+
+The table above and the two headline numbers that follow this subsection are
+exactly what the **documented command** produces — reproduced exactly, and
+left as they stand. The published 81 / 0.1185% is the **larger** of the two
+measured values, so the stated tolerance is conservative, not flattering: a
+reader who re-runs the isolated single-frame form will measure a *smaller*
+mismatch than this document states, never a larger one.
+
+**The Marey side is bit-identical across both conditions.** Across the two
+runs above: the simulation-state hash (`snapshotFor`-derived) is `26cca4e9`
+in both; the emitted `doc.json` is byte-identical in both; Marey's own
+`frame_180_pngexport.png` is byte-identical across both. The variation is
+entirely in lottie-web's canvas screenshot (5,899 B vs 3,939 B, not
+byte-equal) — i.e. lottie-web renders the same document's same frame
+differently depending on what `goToAndStop` calls preceded it in that page
+session.
+
+**What was ruled out, and what was not.** Tested directly rather than
+assumed:
+
+- **Not a screenshot-before-render race.** Both PNGs were read as images:
+  both are complete and show the settled logo identically.
+- **Not a first-render artifact.** `--frames 179,180` → frame 180 is still 60.
+- **Not a draw-call or readback count effect.** `--frames
+  176,177,178,179,180` → all five are 60.
+- It tracks how much the content **moves** between the frames visited. The
+  documented run's deltas climb monotonically (61, 61, 71, 81, 81) across
+  frames with large motion; five near-identical settled frames stay flat at
+  60.
+- **The root cause is not established.** In particular, this is not evidence
+  that Chromium changes its canvas backend after N draw calls — that specific
+  hypothesis was tested and is disproved by the 5-frame result immediately
+  above, which stays flat at 60 across five consecutive draw calls instead of
+  climbing.
+
+**The qualitative conclusion holds under both conditions.** `frame_180_diff.png`
+was read from both the isolated single-frame run and the documented
+multi-frame run: under both, every mismatching pixel sits on a shape edge,
+with solid-black interiors and background in both. (The warm — multi-frame —
+outline is continuous; the cold — isolated — one is dotted, consistent with a
+smaller share of edge pixels differing.) Edges-only, no interior or
+background defect, is not conditioned on which run produced it.
+
 **The two numbers, as design §8.3 asks for them, taken as the maximum
 across the five sampled frames:**
 
@@ -190,8 +243,13 @@ independent antialiasing implementations (PixiJS's WebGL rasterizer vs.
 lottie-web's `canvas` 2D renderer) drawing the same rotated geometry.
 
 **Net for this document:** Criterion 2 holds, with the tolerance stated as
-measured: **max per-channel delta 81, max share of pixels exceeding an exact
-match 0.1185%, confined to shape edges in every sampled frame.**
+measured **by the stated command** (`--frames 0,48,75,180,239`, above): **max
+per-channel delta 81, max share of pixels exceeding an exact match 0.1185%,
+confined to shape edges in every sampled frame.** These are not context-free
+properties of the artifact — see "These numbers are session-history-dependent"
+above for the smaller number an equally valid single-frame invocation
+measures, for what was ruled out, and for why the qualitative edges-only
+conclusion holds regardless.
 
 ---
 
