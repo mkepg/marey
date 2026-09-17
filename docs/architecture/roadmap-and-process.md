@@ -184,8 +184,11 @@ explicitly rather than quietly deviating.
   corrections — the second because a first draft overclaimed what a half-frame
   sample can establish. Exit evidence is `eval/RESULTS-PHASE-5A.md`: a physics
   scene in a third-party player, and a measured tolerance against Marey's own
-  PNG export of **max per-channel delta 81 across 0.1185% of pixels**, every
-  one of them on an antialiased edge with flat interiors byte-identical.
+  PNG export of **max per-channel delta 81 across 0.1185% of pixels** —
+  produced by the documented multi-frame command and session-dependent (a
+  single-frame invocation measures less; see Criterion 2's subsection on this
+  in `RESULTS-PHASE-5A.md`) — every one of them on an antialiased edge with
+  flat interiors byte-identical.
   A second renderer, `@lottiefiles/dotlottie-web`, was evaluated and added.
   **Read the plan's execution notes before Phase 5B.** Current-phase status is
   stated once, in `docs/architecture/README.md` — update that line and this
