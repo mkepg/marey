@@ -388,9 +388,15 @@ function shapeItemsFor(shape: LottieShapeSpec, color: LayerSpec["color"], name: 
   }
   if (color !== null) {
     // AFTER the geometry, not before. lottie-web's `searchShapes` walks the
-    // item list backwards (`elements/svgElements/SVGShapeElement.js:247`),
-    // collecting styles and applying them to items at LOWER indices — so a
-    // fill placed first paints nothing at all and the shape vanishes.
+    // item list backwards, collecting styles and applying them to items at
+    // LOWER indices — so a fill placed first paints nothing at all and the
+    // shape vanishes. `SVGShapeElement` and `CVShapeElement` each implement
+    // `searchShapes` separately (not via a shared mixin) but with the same
+    // backward-iteration ordering; every browser measurement in this phase
+    // used the canvas renderer (`tools/visual-check/lottie-check.mjs`
+    // configures `renderer: "canvas"`), so the renderer that actually matters
+    // here is `elements/canvasElements/CVShapeElement.js:186`, the backward
+    // loop inside `CVShapeElement.prototype.searchShapes` (`.js:175`).
     items.push({ ty: "fl", nm: `${name} fill`, c: { a: 0, k: [...color] }, o: staticScalar(100), r: 1 });
   }
   return items;
