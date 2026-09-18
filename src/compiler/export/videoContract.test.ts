@@ -24,6 +24,11 @@ function irFor(source: string): IRSceneNode {
 
 const EVEN = irFor(`scene { size: (800, 600) duration: 5 }`);
 const ODD = irFor(`scene { size: (801, 601) duration: 5 }`);
+// A second, differently-sized even fixture. EVEN alone cannot distinguish
+// "planVideo passes the scene's own dimensions through" from "planVideo
+// hardcodes 800x600" -- both produce the same numbers against EVEN. Only a
+// fixture with different dimensions makes that distinction load-bearing.
+const OTHER_EVEN = irFor(`scene { size: (640, 480) duration: 5 }`);
 
 function planFor(ir: IRSceneNode, fps = 30): SamplerPlan {
   const r = planExport(ir, { fps });
@@ -103,6 +108,14 @@ describe("planVideo · container and codec", () => {
     expect(r.plan.fps).toBe(24);
     expect(r.plan.frameCount).toBe(120);
   });
+
+  it("passes through a different scene's dimensions, not a hardcoded 800x600", () => {
+    const r = planVideo(OTHER_EVEN, planFor(OTHER_EVEN), { container: "mp4" });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.plan.width).toBe(640);
+    expect(r.plan.height).toBe(480);
+  });
 });
 
 describe("planVideo · pinned encoder configuration", () => {
@@ -119,13 +132,21 @@ describe("planVideo · pinned encoder configuration", () => {
       latencyMode: "quality",
       bitrateMode: "constant",
     });
-    expect(r.plan.encoderOptions.keyFrameInterval).toBeGreaterThan(0);
+    // Literal, not toBeGreaterThan(0): a keyFrameInterval of 1 (a keyframe
+    // every frame) is > 0 and would still pass a sign check, but it is not
+    // the pinned value and silently changes the emitted bitstream. toBe(30)
+    // strictly subsumes the sign check, so the weaker assertion is replaced
+    // rather than kept alongside it.
+    expect(r.plan.encoderOptions.keyFrameInterval).toBe(30);
   });
 
   it("uses an explicit bitrate rather than a library default", () => {
     const r = planVideo(EVEN, planFor(EVEN), { container: "mp4" });
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.plan.bitrate).toBeGreaterThan(0);
+    // Literal, not toBeGreaterThan(0), for the same reason as
+    // keyFrameInterval above: a sign check cannot tell 8_000_000 apart from
+    // 1, and DEFAULT_BITRATE is a pinned value the spec requires exact.
+    if (r.ok) expect(r.plan.bitrate).toBe(8_000_000);
   });
 
   it("lets the request override the bitrate", () => {
