@@ -220,7 +220,37 @@ const source = readFileSync(resolve(scenePath), "utf8");
 // needs even though the Lottie playback this script cares about is a plain
 // 2D canvas. Without it PixiJS cannot initialise at all and the export seam
 // (which builds a real Application) throws before ever reaching lottie-web.
-const LAUNCH_ARGS = ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--use-gl=angle"];
+//
+// `--disable-accelerated-2d-canvas` pins WHICH rasterizer draws lottie-web's
+// 2D canvas, and it is the whole reason `--compare-png`'s tolerance is a
+// property of the artifact rather than of the command that measured it.
+// Chromium can rasterize a 2D canvas on the GPU or in software, and the two
+// antialias the same geometry differently — measured on this scene as two
+// stable, discrete answers and nothing in between:
+//
+//   GPU-accelerated : maxDelta 60 at (596,551), 300/480000 = 0.0625%
+//   software        : maxDelta 81 at (516,569), 569/480000 = 0.1185%
+//
+// Without this flag Chromium starts accelerated and demotes to software part
+// way through a multi-frame run, so `--frames 180` measured 60 while
+// `--frames 0,48,75,180,239` measured 81 FOR THE SAME FRAME of the same
+// document — the session-dependence Phase 5A documented but could not
+// explain. Marey's own side is bit-identical across both (`doc.json` and the
+// `__mareyExportPng` PNG both byte-equal); the variation was entirely
+// Chromium's. Forcing software makes the number identical under every
+// `--frames` list, and 81 is the conservative of the two, so the published
+// tolerance is unchanged and now reproduces.
+//
+// Note this is NOT a readback count: `--frames 176,177,178,179,180` stays
+// accelerated across five compared frames while `--frames 0,48,180` demotes
+// by the third. The precise demotion heuristic is Chromium-internal and is
+// deliberately not relied on here — the flag removes the question instead.
+const LAUNCH_ARGS = [
+  "--use-angle=swiftshader",
+  "--enable-unsafe-swiftshader",
+  "--use-gl=angle",
+  "--disable-accelerated-2d-canvas",
+];
 
 const sceneUrl = `${url}/#code=${LZString.compressToEncodedURIComponent(source)}`;
 
