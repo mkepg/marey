@@ -28,4 +28,10 @@ if (import.meta.env.DEV) {
   import("./lib/devLottieSeam")
     .then((m) => m.installLottieSeam())
     .catch((err) => console.error("[devLottieSeam] failed to install:", err));
+
+  // Same reasoning, same shape, for Phase 5B's video harness
+  // (`tools/visual-check/video-check.mjs`).
+  import("./lib/devVideoSeam")
+    .then((m) => m.installVideoSeam())
+    .catch((err) => console.error("[devVideoSeam] failed to install:", err));
 }
