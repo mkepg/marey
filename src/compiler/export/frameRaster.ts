@@ -57,7 +57,8 @@ export function applySnapshot(root: Container, frame: FrameSnapshot): void {
         // both together), but a silent no-op here would mean the position is
         // updated in the snapshot's bookkeeping, `snapshotFor` would read it
         // back as moved, and the drawn container would silently stay put.
-        // Numbers right, pixels wrong. Throwing loudly trades an
+        // Numbers right, pixels wrong, and nothing in an export's
+        // `report.json` could ever see it. Throwing loudly trades an
         // unreachable-today path for a defect that cannot ship silently.
         if (!c.__updateLayout) {
           throw new Error(
