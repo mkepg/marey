@@ -42,9 +42,12 @@ export class VideoExportError extends Error {
  * simulation even by accident, and it reads no clock: every timestamp is
  * derived from the frame's index (`videoContract.ts`).
  *
- * Every encoder field comes from `plan.encoderOptions` rather than being
- * written here, because each was measured to change the emitted bitstream and
- * each is pinned by a test in `videoContract.test.ts`.
+ * Every encoder field is read from `plan.encoderOptions` rather than being
+ * invented here, because each was measured to change the emitted bitstream
+ * and each is pinned by a test in `videoContract.test.ts` — with one
+ * exception: `keyFrameInterval` is *derived* from `plan.encoderOptions`, not
+ * passed through as-is, for a unit mismatch measured against mediabunny
+ * itself (see the comment at its call site below).
  *
  * The parameter stays `Iterable<CanvasImageSource>` rather than PixiJS's
  * `ICanvas` (what `frameRaster.ts`'s rasterizer actually returns): `ICanvas`
@@ -122,18 +125,47 @@ export async function encodeVideo(
 
   let index = 0;
   const duration = frameDurationSeconds(plan.fps);
-  for (const canvas of canvases) {
-    const sample = new VideoSample(canvas, {
-      timestamp: frameTimestampSeconds(index, plan.fps),
-      duration,
-    });
-    // Awaited per frame, not fired-and-forgotten: the returned promise is the
-    // encoder's backpressure signal, and ignoring it on a 7,200-frame export
-    // queues every frame at once.
-    await source.add(sample);
-    sample.close();
-    index += 1;
-    onProgress?.(index, plan.frameCount);
+  try {
+    for (const canvas of canvases) {
+      const sample = new VideoSample(canvas, {
+        timestamp: frameTimestampSeconds(index, plan.fps),
+        duration,
+      });
+      try {
+        // Awaited per frame, not fired-and-forgotten: the returned promise is
+        // the encoder's backpressure signal, and ignoring it on a
+        // 7,200-frame export queues every frame at once.
+        await source.add(sample);
+      } finally {
+        // Closed whether `add` succeeded or threw. Mediabunny does not take
+        // ownership of this for us -- `VideoSampleSource.add()` hands the
+        // sample to its internal encoder with `shouldClose: false`
+        // (`mediabunny.mjs:35866`) -- and `VideoSample.close()`'s own doc
+        // says samples "should be closed as soon as they are not needed
+        // anymore" (`mediabunny.d.ts:4950-4953`). Without the `finally`, a
+        // throw on `add` (a codec error, an OOM, a dropped frame) leaks the
+        // in-flight `VideoFrame`'s system/GPU memory on top of every frame
+        // already added and never closed.
+        sample.close();
+      }
+      index += 1;
+      onProgress?.(index, plan.frameCount);
+    }
+  } catch (error) {
+    // Release mediabunny's own internal encoder/track resources before this
+    // export's failure propagates. `Output.cancel()` is documented to do
+    // exactly that -- "releasing internal resources like encoders"
+    // (`mediabunny.d.ts:3753-3758`) -- and reading its implementation
+    // (`mediabunny.mjs:39529-39550`) confirms it is safe to call from every
+    // state reachable here: a no-op if the output somehow already finished
+    // (`finalizing`/`finalized`, with only a console warning), idempotent if
+    // called twice, and never thrown from `started`. Its own failure is
+    // swallowed rather than awaited bare, so a problem in cleanup can never
+    // replace the real error the caller needs to see and act on -- the
+    // original `error` is always what gets rethrown, never whatever
+    // `cancel()` did or didn't do.
+    await output.cancel().catch(() => {});
+    throw error;
   }
 
   await output.finalize();
