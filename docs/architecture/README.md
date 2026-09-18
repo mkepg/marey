@@ -131,13 +131,11 @@ for a **complete, provable engineering artifact with a declarable finish
 line**, and acquisition work moved past that line. Read its §1 before
 proposing anything the old roadmap justified by adoption.
 
-Current phase: **5B — next**. **5A — baked Lottie is complete on branch
-`phase-5a-baked-lottie`**, with the independent whole-branch review
-AGENT-LESSONS §8 requires and the merge still owed — this line moves to "done
-and merged" only once both have happened. It emits a bounded Lottie subset
-(static circle/rectangle/polygon/group geometry; baked position, rotation,
-scale and alpha; fixed duration and frame rate; `text` refused outright per
-R17) that plays with no Marey or Matter.js code at playback.
+Current phase: **5B — next**. **5A — baked Lottie is done and merged.** It
+emits a bounded Lottie subset (static circle/rectangle/polygon/group geometry;
+baked position, rotation, scale and alpha; fixed duration and frame rate;
+`text` refused outright per R17) that plays with no Marey or Matter.js code at
+playback.
 **Read `docs/plans/2026-09-11-phase-5a-baked-lottie.md`'s execution
 notes before Phase 5B**: they record four defects execution found in the plan
 itself beyond the three its self-review names, the two review findings that

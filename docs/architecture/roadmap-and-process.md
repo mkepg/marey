@@ -164,9 +164,15 @@ explicitly rather than quietly deviating.
   counts against their suite sizes, and the deferred findings (25 of them; the
   largest is that `compiler.worker.ts` has no automated test at all, so its
   branch order and its six exact log strings are guarded by nothing).
-- **Phase 5A — baked Lottie: complete on branch `phase-5a-baked-lottie`**, with
-  the independent whole-branch review AGENT-LESSONS §8 requires and the merge
-  still owed. A bounded subset; `text` is excluded because the Lottie spec's
+- **Phase 5A — baked Lottie is done and merged.** The independent whole-branch
+  review AGENT-LESSONS §8 requires found **no behavioural defect** — its one
+  Important finding was that Criterion 2's pixel tolerance is a property of the
+  command that measures it, not a fixed number, and the fix was disclosure
+  rather than re-measurement. The scoped re-review that followed found the
+  phase's own composed-transform test had been proved load-bearing only against
+  its own decode logic, never against the encoder; the missing half was run and
+  reddens. Both are recorded in the plan's execution notes.
+  A bounded subset; `text` is excluded because the Lottie spec's
   text layer has been open 19 months. Static circle/rectangle/polygon/group
   geometry with baked position, rotation, scale and alpha, fixed duration and
   frame rate, and physics baked to keyframes — the emitted file carries no
