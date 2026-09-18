@@ -167,8 +167,10 @@ explicitly rather than quietly deviating.
 - **Phase 5A — baked Lottie is done and merged.** The independent whole-branch
   review AGENT-LESSONS §8 requires found **no behavioural defect** — its one
   Important finding was that Criterion 2's pixel tolerance is a property of the
-  command that measures it, not a fixed number, and the fix was disclosure
-  rather than re-measurement. The scoped re-review that followed found the
+  command that measures it, not a fixed number, and the fix at the time was
+  disclosure rather than re-measurement. **That is closed as of 2026-09-18**:
+  the root cause was found (two Chromium rasterizers, below) and the harness
+  now pins one, so the tolerance is a fixed number again. The scoped re-review that followed found the
   phase's own composed-transform test had been proved load-bearing only against
   its own decode logic, never against the encoder; the missing half was run and
   reddens. Both are recorded in the plan's execution notes.
@@ -190,11 +192,18 @@ explicitly rather than quietly deviating.
   corrections — the second because a first draft overclaimed what a half-frame
   sample can establish. Exit evidence is `eval/RESULTS-PHASE-5A.md`: a physics
   scene in a third-party player, and a measured tolerance against Marey's own
-  PNG export of **max per-channel delta 81 across 0.1185% of pixels** —
-  produced by the documented multi-frame command and session-dependent (a
-  single-frame invocation measures less; see Criterion 2's subsection on this
-  in `RESULTS-PHASE-5A.md`) — every one of them on an antialiased edge with
-  flat interiors byte-identical.
+  PNG export of **max per-channel delta 81 across 0.1185% of pixels** — every
+  one of them on an antialiased edge with flat interiors byte-identical.
+  That tolerance **was** session-dependent, and is not any more: it was
+  root-caused on 2026-09-18 to Chromium rasterizing lottie-web's 2D canvas on
+  the GPU or in software — two rasterizers, two discrete answers (60 and 81),
+  with the demotion happening part way through a multi-frame run so the
+  `--frames` list decided which one drew the compared frame. Marey's own
+  output never varied. `lottie-check.mjs` now pins the software rasterizer
+  with `--disable-accelerated-2d-canvas`, and 81 / 0.1185% reproduces under
+  every `--frames` list. Phase 5A's recorded explanation — that the delta
+  tracked how much the content moved between visited frames — was falsified
+  by that work, not refined. See Criterion 2 in `RESULTS-PHASE-5A.md`.
   A second renderer, `@lottiefiles/dotlottie-web`, was evaluated and added.
   **Read the plan's execution notes before Phase 5B.** Current-phase status is
   stated once, in `docs/architecture/README.md` — update that line and this

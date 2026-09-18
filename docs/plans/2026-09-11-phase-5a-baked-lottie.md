@@ -1650,6 +1650,40 @@ controller; both were found by a reviewer told specifically to ask whether each
 fixture discriminates. **That question is worth putting in every review
 dispatch of the next phase.**
 
+### Closed after the phase
+
+**Criterion 2's session-dependent tolerance — root-caused and fixed
+2026-09-18**, on branch `fix-5a-criterion-2-rasterizer`, before Phase 5B
+began. The whole-branch review's one Important finding was that the measured
+pixel tolerance was a property of the command rather than of the artifact
+(`--frames 180` → 60; `--frames 0,48,75,180,239` → 81, same frame). The phase
+disclosed that rather than explaining it, and recorded a hypothesis: that the
+delta "tracks how much the content moves between the frames visited."
+
+**That hypothesis was falsified by measurement, not refined.** `--frames
+0,180` spans the largest motion in the scene and measures the *low* value;
+`--frames 0,48,180` measures the high one. The actual cause is that Chromium
+rasterizes a 2D canvas either on the GPU or in software, the two antialias
+identically-specified geometry differently, and it demotes part way through a
+multi-frame run — so the `--frames` list decided which rasterizer drew the
+compared frame. `lottie-check.mjs` now launches with
+`--disable-accelerated-2d-canvas`; 81 / 0.1185% then reproduces under every
+`--frames` list tried, including the `176,177,178,179,180` case that was the
+counterexample to every count-based theory.
+
+Two process points worth carrying forward:
+
+1. **The phase's own "what was ruled out" list ruled out the right things for
+   the wrong reason.** It correctly rejected "draw-call or readback count"
+   using the 5-frame result — and then adopted a motion hypothesis that the
+   same kind of two-point test would have killed immediately. Ruling out one
+   explanation is not evidence for the next one.
+2. **A probe that fails to reproduce is a finding, not a failed probe.** The
+   step that localised this was an isolated lottie-web probe that showed *no*
+   variation at all — bitwise-identical canvases and identical composed
+   matrices. That negative result is what moved the search off lottie-web's
+   document state and onto the page's GPU state.
+
 ### Inherited, still open
 
 **`eval/RESULTS-GATE-B.md` records a snapshot hash that no longer
