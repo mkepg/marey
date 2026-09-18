@@ -194,9 +194,11 @@ identity, since the scene graph was only ever walked, not addressed, so the
 field did not exist until `frameSampler.ts`'s `snapshotFor` needed something
 to key snapshots by. It is written once, in `buildNode`, and read at two
 sites: `frameSampler.ts`'s `snapshotFor` (sampling) and
-`../export/pngSequence.ts`'s `applySnapshot` (writing a sampled frame back
+`../export/frameRaster.ts`'s `applySnapshot` (writing a sampled frame back
 onto a tree for re-rendering) — the same inverse pair that module's own
-docstring names.
+docstring names. `frameRaster.ts` is the shared rasterization seam both the
+PNG and (Phase 5B) video exporter replay frames through, so they cannot
+disagree about the exported size, background or frame identity.
 
 ## The Lottie encoder boundary (Phase 5A)
 
