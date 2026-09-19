@@ -14,6 +14,7 @@ import { describe, it, expect } from "vitest";
 // file it claims to read" reason the fourth test below exists.
 import videoEncodeSource from "./videoEncode.ts?raw";
 import videoContractSource from "./videoContract.ts?raw";
+import videoPipelineSource from "./videoPipeline.ts?raw";
 
 /**
  * True if `source` imports a module whose specifier contains `moduleFragment`,
@@ -142,5 +143,28 @@ describe("export boundary", () => {
     // They catch different mutations.
     expect(videoEncodeSource).toContain("export async function encodeVideo");
     expect(videoContractSource).toContain("export function planVideo");
+  });
+});
+
+/**
+ * Task 5's R3: `useExportVideo.ts` needs the same compile -> plan -> build ->
+ * sample -> rasterize -> encode pipeline `src/lib/devVideoSeam.ts` runs, but
+ * must not reach it through `window.__mareyExportVideo` (dev-only, constant-
+ * folded out of a production build) and must not import `devVideoSeam.ts`
+ * itself (that module's own docstring is written for a Node harness, not a
+ * shipped button, and importing it would pull its whole dev-seam shape --
+ * base64 encoding, reference-frame re-extraction, `window` global assignment
+ * -- into the production bundle regardless of whether it is ever called).
+ * `videoPipeline.ts` is the extracted answer. This is a different property
+ * from the two "must not import pixi.js" guards above -- `videoPipeline.ts`
+ * legitimately imports `pixi.js` and `sceneIR`-adjacent renderer modules,
+ * because unlike the encoder it is the orchestration layer that builds the
+ * scene tree -- so it is guarded against the one import R3 actually
+ * forbids, not against pixi.js.
+ */
+describe("export boundary — R3 shared pipeline", () => {
+  it("videoPipeline.ts does not import devVideoSeam.ts in any form", () => {
+    expect(videoPipelineSource).toContain("export async function runVideoExport");
+    expect(importsModule(videoPipelineSource, "devVideoSeam")).toBe(false);
   });
 });
