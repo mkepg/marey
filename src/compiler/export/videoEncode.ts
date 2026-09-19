@@ -170,7 +170,18 @@ export async function encodeVideo(
 
   await output.finalize();
   if (!target.buffer) {
-    throw new Error("[export] The muxer finalized without producing a buffer.");
+    // No `[export] ` prefix. That prefix is the dev harness's marker
+    // (`devVideoSeam.ts` adds it to every failure it rethrows, for a Node
+    // author reading a stack trace); this module is shared production code,
+    // and since Task 5 shipped the export button its throws reach a real
+    // user's toast verbatim -- `useExportVideo.ts` shows `error.message`
+    // unchanged, by design (R23). A bracketed harness tag in a toast is
+    // noise to the only person now reading it. The seam keeps its own
+    // prefix for the `VideoExportError` path it wraps; this one plain
+    // `Error` simply passes through it unmarked, which is the correct
+    // trade when the same string has two audiences and only one of them is
+    // a person.
+    throw new Error("The muxer finalized without producing a buffer.");
   }
   return new Uint8Array(target.buffer);
 }

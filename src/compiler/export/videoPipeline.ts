@@ -64,14 +64,24 @@ export async function runVideoExport(opts: RunVideoExportOptions): Promise<Uint8
   }
   const ir = outcome.ir;
 
+  // `" | "`, not `" "`. `planExport` accumulates: an unbounded scene
+  // requested at an unsupported frame rate returns EXPORT_UNSUPPORTED_FPS
+  // *and* EXPORT_UNBOUNDED_SCENE (`exportContract.ts:87-114`), and each
+  // diagnostic message is a complete sentence ending in a full stop. Joined
+  // with a space, two of them run together into one paragraph in a toast
+  // and read as a single confused message; joined with `" | "` they read as
+  // two refusals, which is what they are. `" | "` also matches what all
+  // three dev seams already use (`devVideoSeam.ts:110/117/122`,
+  // `devExportSeam.ts`, `devLottieSeam.ts`) and what line 62 above already
+  // used for compile errors -- this file was inconsistent with itself.
   const planned = planExport(ir, { fps: opts.fps, durationSeconds: opts.durationSeconds });
   if (!planned.ok) {
-    throw new Error(planned.diagnostics.map((d) => d.message).join(" "));
+    throw new Error(planned.diagnostics.map((d) => d.message).join(" | "));
   }
 
   const video = planVideo(ir, planned.plan, { container: opts.container });
   if (!video.ok) {
-    throw new Error(video.diagnostics.map((d) => d.message).join(" "));
+    throw new Error(video.diagnostics.map((d) => d.message).join(" | "));
   }
 
   // Same reasoning as `devVideoSeam.ts`: `app` is assigned before it is known
