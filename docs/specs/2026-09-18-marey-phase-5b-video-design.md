@@ -280,6 +280,45 @@ produces a different bitstream. Determinism is claimed **across runs on one
 machine with a pinned configuration**, which is what the criterion asks, and the
 limit is stated rather than left to be assumed.
 
+### 7.5 Dated correction, 2026-09-19 — narrowing this section for Q5
+
+Task 4 (`.sdd/2026-09-18-phase-5b-video/task-4-report.md`, §Q5)
+tried four independent ways to confirm whether `hardwareAcceleration:
+"prefer-software"` genuinely excludes a real hardware encoder when one is
+reachable: `VideoEncoder.isConfigSupported` (uninformative — it echoes the
+requested config, not what actually ran); `chrome://gpu`
+(Playwright-driven Chromium refuses to navigate to it, `net::ERR_FAILED`);
+`navigator.mediaCapabilities.encodingInfo` (rejects both spec-legal `type`
+values, `"record"` and `"transmission"`, as invalid on this Chromium 151
+build); and a direct timing/byte-length comparison between
+`hardwareAcceleration: "prefer-hardware"` and `"prefer-software"` encodes of
+identical content (`prefer-hardware` was not faster — the opposite of what a
+genuine hardware path would produce — which is suggestive but not
+conclusive evidence against one being reached).
+
+The development machine used for every measurement in this document **does**
+have hardware video encoders — an NVIDIA RTX 3060 Laptop GPU and an Intel
+Iris Xe Graphics, confirmed via `Get-CimInstance Win32_VideoController` —
+which falsifies this section's original premise ("SwiftShader means there is
+no hardware encoder to prefer against"). The real reason Q5 is unanswered is
+narrower and more durable than "the wrong test machine": every measurement
+in this document, and every measurement `tools/visual-check/
+video-check.mjs` will ever produce, runs headless Chromium launched with
+explicit software-rendering flags (`--use-angle=swiftshader`,
+`--enable-unsafe-swiftshader`, `--use-gl=angle`) chosen deliberately for
+reproducibility. **The determinism claims in §7.1–§7.4 are therefore claims
+about this project's own headless, software-rendering-forced test harness,
+on one machine, with a pinned configuration — not a claim about what
+`hardwareAcceleration: "prefer-software"` does in an ordinary user's browser
+session**, where the GPU process runs normally and a real hardware encoder
+is reachable. Whether `prefer-software` is honoured there was not tested and
+is not claimed. This matters concretely for the export button (§9): a user
+exporting from their own browser is exactly the untested case, and
+non-reproducibility there (if `prefer-software` turns out to be an
+unenforced hint on some Chromium build or platform) would not be caught by
+this harness, structurally, no matter how many times it is run — the harness
+cannot reach the code path in question by design.
+
 ---
 
 ## 8. Refusals
@@ -404,6 +443,139 @@ and is the reason its Lottie facts are trustworthy.
 Q5 is the one most likely to embarrass this phase later, because the development
 machine cannot answer it. If it cannot be settled, §7's claim must be narrowed to
 what was actually measured rather than stated generally.
+
+---
+
+### 11.1 Dated correction — 2026-09-19, Task 4 measurement
+
+Everything below was measured on this machine, per the process AGENT-LESSONS
+§1 requires: a command run, its raw output kept, and the answer derived from
+that output rather than from what earlier sections predicted. Full commands
+and raw output are in `.sdd/2026-09-18-phase-5b-video/
+task-4-report.md`. This entry does not rewrite §§2–10 above; where a measured
+answer differs from what those sections assumed, this entry is the correction
+of record — except §7, which is separately narrowed in a new §7.5, per Step 3
+of Task 4's brief.
+
+**Q1 — no, and it is not merely untried, it does not exist.** Reading
+`node_modules/mediabunny/dist/modules/src/matroska/matroska-muxer.js`'s
+`createSegmentInfo()` shows `{ id: EBMLId.TimestampScale, data: 1e6 }` written
+as a literal, not read from `this.format._options` (only `appendOnly` is read
+there). `MkvOutputFormatOptions`/`WebMOutputFormatOptions` (`output-format.d.ts`)
+expose no timestamp-scale field at all. §6's 1ms WebM quantisation is
+therefore a hard format/library constraint on this mediabunny version, not a
+default this project declined to change. Cost at the frame rates
+`planExport` admits (24–120fps, must divide `TICK_HZ`): at most ±0.5ms per
+independently-rounded timestamp, i.e. at most 6% of one frame's duration at
+120fps and proportionally less at every slower rate, with no accumulation
+(§6's "each timestamp is rounded independently from an exact source" already
+covers this; that claim stands unmodified).
+
+**Q2 — codec-dependent, and the existing scoping is exactly right.**
+Measured via `VideoEncoder.isConfigSupported` at 801x601 for both pinned
+codec strings, then a real mediabunny encode-and-decode round trip of one
+801x601 frame per codec. MP4/H.264 (`avc1.42001f`): `isConfigSupported`
+reports `supported: false`, and an actual encode attempt throws
+`"The dimensions 801x601 are not supported for codec 'avc'; both width and
+height must be even numbers"` — a clean rejection, both predicted and
+actual. **`VIDEO_ODD_DIMENSIONS` stands as written for MP4.** WebM/VP9
+(`vp09.00.10.08`): `isConfigSupported` reports `supported: true`, and the
+full round trip decodes back at exactly 801x601 with the true corner pixel
+content intact (ordinary VP9 lossy rounding aside, no structural crop or
+pad). §8's diagnostic already scopes the refusal to `container === "mp4"`
+only; measurement confirms that scoping is correct on both sides — no
+change was needed to `videoContract.ts`'s refusal logic, and the existing
+test asserting WebM accepts odd dimensions (`videoContract.test.ts`, which
+flagged itself as needing to change "if Task 4 Q2 measures that VP9 also
+requires even dimensions") is confirmed correct rather than falsified.
+
+**Q3 — default is 2 seconds, confirmed by source and by measurement, and it
+is byte-stable.** `media-source.js:443`:
+`const keyFrameInterval = this.encodingConfig.keyFrameInterval ?? 2;`.
+Empirically, via WebM (chosen over MP4 because MP4's known non-determinism,
+below, would make a byte comparison unable to distinguish "the option
+changed the output" from "MP4 is just nondeterministic"): two independent
+90-frame runs with `keyFrameInterval` omitted produced byte-identical output
+and identical `EncodedPacketSink` key-frame indices, `[0, 60]` — every 60
+frames at 30fps is exactly every 2 seconds. The same content encoded with
+`keyFrameInterval: 1` (one second, matching Marey's own pinned
+`KEY_FRAME_INTERVAL = 30` frames ÷ 30fps) produced different bytes, a
+different length, and key-frame indices `[0, 30, 60]` — proof the option is
+live, not inert. `videoEncode.ts` always sets it explicitly (never relies on
+the default), so production output was never affected either way; this
+confirms the existing pinning decision was correct. `videoContract.ts`'s
+`KEY_FRAME_INTERVAL` docstring is corrected (frames-vs-seconds, and naming
+`videoEncode.ts` as the conversion site) — see the code diff.
+
+**Q4 — measured on this machine: 4,800 frames succeeded, 6,000 failed.**
+`SamplerPlan`'s branding makes it impossible to drive `sampleFrames`/
+`encodeVideo` past `MAX_EXPORT_FRAMES` (7,200) without editing the Phase 4
+boundary, which this task does not do — so this was measured through the
+real `window.__mareyExportVideo` seam, at 800x600, with increasing
+`durationSeconds` at a fixed 30fps. 1,200/2,400/3,600/4,800 frames all
+completed (elapsed time growing super-linearly: 38s / 101s / 103s / 223s,
+consistent with rising memory pressure). 6,000 frames failed after 166s —
+faster than 4,800's successful 223s, consistent with a mid-job failure
+rather than a slow completion — with Playwright reporting "Execution context
+was destroyed, most likely because of a navigation," which nothing in the
+export path could trigger as a real navigation; the credible explanation is
+the renderer process being killed for memory, though `page.on("crash")` did
+not independently confirm that (see the report's full caveat). This is
+consistent with `devVideoSeam.ts`'s own existing estimate — "roughly 2MB per
+frame uncompressed" — which puts 4,800 frames at ~9.2GB and 6,000 at
+~11.5GB, on this 16GB-RAM machine. **The shipped `MAX_EXPORT_FRAMES = 7,200`
+ceiling does not protect this machine**: 7,200 was never reached because
+6,000 already failed, with no named diagnostic, only a generic
+browser-crash-shaped error. No code change was authorized or made for this
+finding (Task 4's authorized `videoContract.ts` changes are scoped to Q2 and
+Q3 only); it is recorded here so the task that next touches export memory
+behaviour does not have to re-derive it.
+
+**§7.2 falsification — MP4 is not "exactly six bytes" different, on two
+separate axes.** First reported in Task 3
+(`.sdd/2026-09-18-phase-5b-video/task-3-report.md`), restated
+here because Task 4's own brief requires it in this correction: (1) each of
+the six *fields* §7.2's table names is 4-or-8 bytes wide depending on the
+containing box's ISOBMFF version byte, so "exactly six bytes" was never
+literally true even for the metadata fields it was about; masking is
+therefore six *fields*, not six *bytes*. (2) Separately and more materially,
+real scene content produces two encodes of **different overall file length**
+(7297 vs 7294 bytes measured on one pair; 7310 vs 7309 on a repeat), with
+roughly 61–63% of the overlapping bytes differing in large contiguous runs
+starting well past `moov`, inside `mdat` — the compressed H.264 bitstream
+itself. Masking the six timestamp fields changes nothing about this: the
+divergence starts around byte 2544 in a ~7.3KB file, nowhere near where the
+masked ranges sit. The two runs' *lossless reference PNGs* — the exact
+pixels each run fed to its own encoder — were independently confirmed
+bit-identical (15/15 frames), which rules out rendering nondeterminism and
+places the cause inside Chromium's H.264 encoder itself, on identical
+input, across separate invocations. §7.2's specific "exactly six bytes"
+claim is falsified; §7.3's decision (document rather than hand-roll a box
+walker for byte-identity) and §7.4's cross-machine disclaimer both still
+hold, but §7.2's table should be read as "at least these six *fields*
+differ, and — separately, not fixed by masking them — so does the
+compressed media itself, run to run, for reasons internal to the browser's
+H.264 encoder that this repository's code does not control and did not
+pinpoint further." `video-check.mjs` already reflects this: it computes and
+reports the *raw* (unmasked) MP4 comparison unconditionally, and only gates
+on the masked comparison when `--mask-mp4-times` is passed — so the
+falsified "exactly six bytes" claim was never load-bearing on the harness's
+own pass/fail behaviour, only on this document's prose.
+
+**Q5 — see new §7.5, immediately below.** The short version: the brief's
+premise that this machine has no hardware encoder is measured false (it has
+two: an NVIDIA RTX 3060 Laptop GPU and an Intel Iris Xe), but Q5 is still
+unanswerable here, for a different and more precise reason — the harness
+itself runs headless Chromium with software rendering forced
+(`--use-angle=swiftshader` and friends, chosen for reproducibility, the same
+reasoning `video-check.mjs` already documents for those flags elsewhere),
+and every channel tried to confirm whether that configuration can still
+reach either physical GPU's hardware encoder returned either "closed" (
+`chrome://gpu` refuses automated navigation; `mediaCapabilities.encodingInfo`
+rejects both spec-legal `type` values on this Chromium build) or
+"inconclusive-but-suggestive-against" (direct timing/byte-length comparison
+of `prefer-hardware` vs `prefer-software`: `prefer-hardware` was not faster,
+the opposite of what a real hardware path would produce).
 
 ---
 

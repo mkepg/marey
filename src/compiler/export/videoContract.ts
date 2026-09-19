@@ -43,9 +43,25 @@ export const WEBM_CODEC_STRING = "vp09.00.10.08";
 export const DEFAULT_BITRATE = 8_000_000;
 
 /**
- * Frames between keyframes. Explicit because an implicit muxer default is a
- * library-version dependency: a mediabunny upgrade that changed it would
- * change every emitted file while this repository's code stayed identical.
+ * Frames between keyframes, **in frames** — not the unit mediabunny's own
+ * `keyFrameInterval` field takes. mediabunny's `VideoSampleSource` expects
+ * this in *seconds* (its default, when the field is omitted, is a literal
+ * `2`, i.e. two seconds — measured directly against
+ * `node_modules/mediabunny/dist/modules/src/media-source.js`,
+ * `const keyFrameInterval = this.encodingConfig.keyFrameInterval ?? 2;`, and
+ * confirmed empirically via `EncodedPacketSink` key-frame indices, Task 4
+ * §11 Q3). `videoEncode.ts` is the single site that converts this constant
+ * to mediabunny's unit, dividing by `plan.fps` at its `VideoSampleSource`
+ * call site — see the comment there for the measurement that caught the
+ * mismatch (`EncodedPacketSink` returned key-frame indices `[0, 17, 30, 47]`
+ * before that conversion existed, instead of every 30 frames).
+ *
+ * Explicit here (rather than left unset) because an implicit muxer default
+ * is a library-version dependency: a mediabunny upgrade that changed it
+ * would change every emitted file while this repository's code stayed
+ * identical. Task 4 also confirmed the *default itself* is byte-stable
+ * across repeated unset runs — this constant exists to pin the *value*, not
+ * to work around instability in mediabunny's own default.
  */
 export const KEY_FRAME_INTERVAL = 30;
 
