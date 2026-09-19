@@ -1,6 +1,5 @@
 import { useCallback, useState } from "preact/hooks";
 import { useAppStore } from "../store";
-import { runVideoExport } from "../compiler/export/videoPipeline";
 import type { VideoContainer } from "../compiler/export/videoContract";
 
 /** The frame rate every export uses. Matches `video-check.mjs`'s own default. */
@@ -58,6 +57,17 @@ function downloadVideo(bytes: Uint8Array, container: VideoContainer): void {
  * `videoPipeline.ts` exists as a separate module rather than this hook
  * calling the compiler/renderer/export modules directly.
  *
+ * `runVideoExport` is loaded with a dynamic `import()` inside the callback,
+ * not a static top-level import, so `mediabunny` (and the rest of the export
+ * path) is not in the eager entry chunk every page load pays for. Measured
+ * (`task-5-report.md`, "FIX 1"): a static import put +283,561 bytes
+ * (+6.6%, ~+74 kB gzipped) of new weight into the chunk every visitor
+ * downloads, for a feature only exporters use — this app has no other
+ * lazy-loading precedent (`monaco-editor` and `pixi.js` are both needed for
+ * first paint, so their static imports don't answer this question), but
+ * `mediabunny` is the first heavy dependency here that the median visitor
+ * never causes to execute, so it gets its own boundary.
+ *
  * `isExporting` is set in a `finally`, not just on the success path: a
  * failed export (an unsupported codec, an out-of-memory 6,000-frame
  * request) must not leave the export buttons disabled forever, and the
@@ -77,6 +87,7 @@ export function useExportVideo(): {
       setIsExporting(true);
       setProgress({ container, done: 0, total: 0 });
       try {
+        const { runVideoExport } = await import("../compiler/export/videoPipeline");
         const bytes = await runVideoExport({
           source: code,
           container,
