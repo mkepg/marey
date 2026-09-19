@@ -187,6 +187,17 @@
   background: rgba(248, 113, 113, 0.08) !important;
 }
 
+.btnExporting {
+  color: var(--accent) !important;
+  border-color: var(--accent) !important;
+  background: var(--accent-dim) !important;
+  // Digits change every progress tick; a monospace font already gives every
+  // digit the same advance width, so this just stops "starting…" and "42%"
+  // from nudging neighbouring buttons sideways as the export runs.
+  font-variant-numeric: tabular-nums;
+  min-width: 52px;
+}
+
 .tooltipWrap {
   position: relative;
   display: flex;

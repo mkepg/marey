@@ -2,6 +2,8 @@ import { useState } from "preact/hooks";
 import type { FunctionComponent } from "preact";
 import { useAppStore } from "../../store";
 import { useShare } from "../../hooks/useShare";
+import { useExportVideo } from "../../hooks/useExportVideo";
+import type { VideoContainer } from "../../compiler/export/videoContract";
 import styles from "./TopBar.module.scss";
 
 const SunIcon: FunctionComponent = () => (
@@ -56,6 +58,13 @@ const ExampleIcon: FunctionComponent = () => (
   </svg>
 );
 
+const VideoIcon: FunctionComponent = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="6" width="14" height="12" rx="2" />
+    <path d="M16 10l6-4v12l-6-4z" />
+  </svg>
+);
+
 interface TopBarProps {
   onRun: () => void;
 }
@@ -71,6 +80,8 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
   const setAutoRun  = useAppStore((s) => s.setAutoRun);
   const handleShare = useShare();
   const code        = useAppStore((s) => s.code);
+  const isExporting = useAppStore((s) => s.isExporting);
+  const { exportVideo, progress } = useExportVideo();
 
   const [confirmingNew, setConfirmingNew] = useState(false);
   const [confirmingExample, setConfirmingExample] = useState(false);
@@ -108,6 +119,23 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
 
   const handleExampleBlur = (): void => {
     setTimeout(() => setConfirmingExample(false), 150);
+  };
+
+  // The New/Example buttons reflect their confirm state in the label; this
+  // does the same for the one button currently mid-export, showing a percent
+  // rather than static text so a several-second export does not read as a
+  // hung tab. The other export button just goes disabled.
+  const exportLabel = (container: VideoContainer): string => {
+    if (progress && progress.container === container) {
+      return progress.total > 0
+        ? `${Math.round((progress.done / progress.total) * 100)}%`
+        : "starting…";
+    }
+    return container;
+  };
+
+  const handleExportClick = (container: VideoContainer): void => {
+    void exportVideo(container);
   };
 
   return (
@@ -184,6 +212,38 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
             </span>
           )}
         </div>
+
+        <div className={styles.divider} />
+
+        <button
+          className={`${styles.btnIcon}${progress?.container === "mp4" ? ` ${styles.btnExporting}` : ""}`}
+          onClick={() => handleExportClick("mp4")}
+          disabled={isExporting}
+          aria-label={
+            progress?.container === "mp4"
+              ? `Exporting MP4 video, ${exportLabel("mp4")}`
+              : "Export scene as MP4 video"
+          }
+          title="Export MP4 video"
+        >
+          <VideoIcon />
+          {exportLabel("mp4")}
+        </button>
+
+        <button
+          className={`${styles.btnIcon}${progress?.container === "webm" ? ` ${styles.btnExporting}` : ""}`}
+          onClick={() => handleExportClick("webm")}
+          disabled={isExporting}
+          aria-label={
+            progress?.container === "webm"
+              ? `Exporting WebM video, ${exportLabel("webm")}`
+              : "Export scene as WebM video"
+          }
+          title="Export WebM video"
+        >
+          <VideoIcon />
+          {exportLabel("webm")}
+        </button>
 
         <div className={styles.divider} />
 
