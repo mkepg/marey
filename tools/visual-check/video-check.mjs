@@ -112,10 +112,12 @@
  * dimensions do not match the scene's; decoded timestamps are not strictly
  * increasing; decoded timestamps do not match the claimed fps's schedule
  * within half a frame; any frame's nearest-neighbour match is STRICT and
- * wrong; the two cold runs' snapshot hashes disagree; or (webm only, always
- * gating; mp4, gating only under --mask-mp4-times) the two cold runs'
- * container bytes disagree. Never on how the PNGs look, or on how many
- * frames tied -- both are reported, neither gates.
+ * wrong; the two cold runs' snapshot hashes disagree; the two cold runs'
+ * lossless reference-frame PNGs (the exact rasterized pixels each run fed to
+ * its own encoder) disagree; or (webm only, always gating; mp4, gating only
+ * under --mask-mp4-times) the two cold runs' container bytes disagree. Never
+ * on how the PNGs look, or on how many frames tied -- both are reported,
+ * neither gates.
  */
 import { chromium } from "playwright";
 import LZString from "lz-string";
@@ -646,6 +648,61 @@ if (container === "mp4") {
   );
 }
 
+// --- reference-frame reproducibility across cold reload ---
+// `hashesEqual` is simulation STATE (object transforms), not pixels, and
+// `rawBytesEqual`/`maskedBytesEqual` are downstream of the encoder -- neither
+// can say WHICH side of the encoder boundary a container-byte divergence
+// comes from. A container that differs between two cold runs could be
+// non-deterministic rendering (the rasterized canvas itself differs) OR a
+// non-deterministic encoder fed IDENTICAL pixels. This comparison answers
+// that question directly, by diffing the LOSSLESS reference PNGs of the
+// exact canvases each run fed to its own encoder -- `devVideoSeam.ts`
+// documents that `canvases` (what `referenceFrames` is built from) is the
+// SAME array `encodeVideo` consumed, so this is not a re-render, it is the
+// encoder's actual input, captured before either encoder ever saw it. This
+// is a real, permanent, gating check -- not a one-off diagnostic -- because
+// an unmeasured claim about which side of the boundary failed is exactly the
+// gap a byte-for-byte container difference cannot resolve on its own.
+const refFramesA = (runA.result.referenceFrames ?? []).map((b64) => Buffer.from(b64, "base64"));
+const refFramesB = (runB.result.referenceFrames ?? []).map((b64) => Buffer.from(b64, "base64"));
+const referenceFrameCountsMatch = refFramesA.length === refFramesB.length;
+let referenceFramesEqual = referenceFrameCountsMatch && refFramesA.length > 0;
+let firstDifferingReferenceFrame = null;
+if (referenceFrameCountsMatch) {
+  for (let i = 0; i < refFramesA.length; i++) {
+    if (Buffer.compare(refFramesA[i], refFramesB[i]) !== 0) {
+      referenceFramesEqual = false;
+      firstDifferingReferenceFrame = i;
+      break;
+    }
+  }
+} else {
+  referenceFramesEqual = false;
+  firstDifferingReferenceFrame = Math.min(refFramesA.length, refFramesB.length);
+}
+// If they differ, write the first differing pair to disk so a human can look
+// at exactly what diverged, same "numbers are not evidence" principle as
+// everywhere else in this script.
+if (!referenceFramesEqual && firstDifferingReferenceFrame !== null) {
+  if (refFramesA[firstDifferingReferenceFrame]) {
+    writeFileSync(`${outDir}/coldreload_runA_${pad4(firstDifferingReferenceFrame)}.png`, refFramesA[firstDifferingReferenceFrame]);
+  }
+  if (refFramesB[firstDifferingReferenceFrame]) {
+    writeFileSync(`${outDir}/coldreload_runB_${pad4(firstDifferingReferenceFrame)}.png`, refFramesB[firstDifferingReferenceFrame]);
+  }
+}
+report.referenceFrameComparison = {
+  frameCountA: refFramesA.length,
+  frameCountB: refFramesB.length,
+  referenceFrameCountsMatch,
+  referenceFramesEqual,
+  firstDifferingReferenceFrame,
+};
+console.log(
+  `reference frames (runA vs runB) bit-identical   ${referenceFramesEqual}  (${refFramesA.length} vs ${refFramesB.length} frames compared)` +
+    (referenceFramesEqual ? "" : `  -- first differing at index ${firstDifferingReferenceFrame}, written to coldreload_runA_*/coldreload_runB_*.png`),
+);
+
 // --- decode-back, in the page ---
 const mediabunnyInstalled = await installMediabunny(runA.page);
 if (!mediabunnyInstalled) {
@@ -763,6 +820,7 @@ const fail =
   !timestampsMatchExpectedSchedule ||
   strictMismatches.length > 0 ||
   !hashesEqual ||
+  !referenceFramesEqual ||
   !gatingBytesEqual ||
   runA.pageErrors.length > 0 ||
   runB.pageErrors.length > 0;
