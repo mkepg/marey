@@ -15,6 +15,8 @@ import { describe, it, expect } from "vitest";
 import videoEncodeSource from "./videoEncode.ts?raw";
 import videoContractSource from "./videoContract.ts?raw";
 import videoPipelineSource from "./videoPipeline.ts?raw";
+import useExportVideoSource from "../../hooks/useExportVideo.ts?raw";
+import topBarSource from "../../components/TopBar/TopBar.tsx?raw";
 
 /**
  * True if `source` imports a module whose specifier contains `moduleFragment`,
@@ -59,6 +61,120 @@ function importsModule(source: string, moduleFragment: string): boolean {
   const dynamicImport = new RegExp(`import\\s*\\(\\s*${quoted}`);
   const bareImport = new RegExp(`import\\s+${quoted}`);
   return staticImport.test(source) || dynamicImport.test(source) || bareImport.test(source);
+}
+
+/**
+ * `source` with its comments removed, leaving string and template literals
+ * intact.
+ *
+ * Needed because the `__mareyExportVideo` guard below asks "does this file's
+ * *code* reach for the dev-only global?", and a raw substring search cannot
+ * tell code from prose. Both guarded modules earn their keep partly by
+ * *explaining* the prohibition: `videoPipeline.ts:27` and
+ * `useExportVideo.ts:52` each name `window.__mareyExportVideo` in a docstring
+ * in order to say why they do not call it. Measured, not assumed — the first
+ * version of this guard searched the raw source and went RED on both files
+ * for exactly that reason (2 failed / 9 passed; see the FIX 2 section of this
+ * task's report). Deleting the prose to appease the guard would have traded
+ * the best documentation of the constraint for a green tick; stripping
+ * comments keeps both.
+ *
+ * Handles the three ways this repo's sources can hide a `//` or a `/*`:
+ * quoted strings, template literals, and `${...}` substitutions nested inside
+ * template literals -- `TopBar.tsx:169` has a template literal inside a
+ * substitution inside a template literal, so the naive "a backtick runs to the
+ * next backtick" scanner mis-tracks state from that line onward and eats real
+ * code after it. Block comments collapse to a single space rather than to
+ * nothing so that stripping can never *join* two tokens into a match that was
+ * not in the source.
+ *
+ * Known limitation: a regex literal containing `//` or `/*` would be read as
+ * a comment. None of the guarded files contains a regex literal at all, and
+ * each guard below re-asserts a code landmark from *after* the file's last
+ * comment, so a scanner that ran off the rails mid-file fails loudly rather
+ * than silently reporting a clean file.
+ */
+function stripComments(source: string): string {
+  const out: string[] = [];
+  // Nesting stack. `template: true` is "inside a template literal's text";
+  // `template: false` is "inside code" -- either the file's top level or a
+  // `${...}` substitution. `braces` counts `{`/`}` pairs opened inside a
+  // substitution, so the `}` that closes it is told apart from the `}` of an
+  // object literal written inside it.
+  const stack: { template: boolean; braces: number }[] = [{ template: false, braces: 0 }];
+  let i = 0;
+  while (i < source.length) {
+    const ctx = stack[stack.length - 1];
+    const c = source[i];
+    const next = source[i + 1];
+
+    if (ctx.template) {
+      if (c === "\\") {
+        out.push(source.slice(i, i + 2));
+        i += 2;
+      } else if (c === "`") {
+        stack.pop();
+        out.push(c);
+        i += 1;
+      } else if (c === "$" && next === "{") {
+        stack.push({ template: false, braces: 0 });
+        out.push("${");
+        i += 2;
+      } else {
+        out.push(c);
+        i += 1;
+      }
+      continue;
+    }
+
+    if (c === "/" && next === "/") {
+      while (i < source.length && source[i] !== "\n") i += 1;
+      continue; // the newline itself is left in place
+    }
+    if (c === "/" && next === "*") {
+      i += 2;
+      while (i < source.length && !(source[i] === "*" && source[i + 1] === "/")) i += 1;
+      i += 2;
+      out.push(" ");
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      out.push(c);
+      i += 1;
+      while (i < source.length) {
+        const s = source[i];
+        if (s === "\\") {
+          out.push(source.slice(i, i + 2));
+          i += 2;
+          continue;
+        }
+        out.push(s);
+        i += 1;
+        if (s === c || s === "\n") break; // an unterminated literal cannot eat past its line
+      }
+      continue;
+    }
+    if (c === "`") {
+      stack.push({ template: true, braces: 0 });
+      out.push(c);
+      i += 1;
+      continue;
+    }
+    if (stack.length > 1 && c === "{") {
+      ctx.braces += 1;
+    } else if (stack.length > 1 && c === "}") {
+      if (ctx.braces === 0) {
+        stack.pop();
+        out.push(c);
+        i += 1;
+        continue;
+      }
+      ctx.braces -= 1;
+    }
+    out.push(c);
+    i += 1;
+  }
+  return out.join("");
 }
 
 /**
@@ -130,6 +246,31 @@ describe("export boundary", () => {
     ).toBe(false);
   });
 
+  it("strips a line comment but not a `//` inside a string literal", () => {
+    expect(stripComments('const a = 1; // __mareyExportVideo\nconst b = 2;')).toBe(
+      "const a = 1; \nconst b = 2;",
+    );
+    expect(stripComments('const url = "https://example.com/__mareyExportVideo";')).toContain(
+      "__mareyExportVideo",
+    );
+  });
+
+  it("strips a block comment but not a `/*` inside a template literal", () => {
+    expect(stripComments("const a = /* __mareyExportVideo */ 1;")).toBe("const a =   1;");
+    expect(stripComments("const t = `/* __mareyExportVideo */`;")).toContain(
+      "__mareyExportVideo",
+    );
+  });
+
+  it("keeps code that follows a template literal nested inside a substitution", () => {
+    // `TopBar.tsx:169`'s shape. A scanner that treats a backtick as toggling
+    // one flag leaves template state inverted after this line and then
+    // swallows, or fails to swallow, everything after it.
+    const source = 'const c = `${a}${b ? ` ${d}` : ""}`;\nwindow.__mareyExportVideo();';
+    expect(stripComments(source)).toContain("window.__mareyExportVideo();");
+    expect(stripComments(source)).toContain('`${a}${b ? ` ${d}` : ""}`');
+  });
+
   it("reads the file it claims to read", () => {
     // Without this, a typo in a specifier above would be a build-time
     // resolution failure (caught immediately, unlike the brief's
@@ -155,16 +296,70 @@ describe("export boundary", () => {
  * shipped button, and importing it would pull its whole dev-seam shape --
  * base64 encoding, reference-frame re-extraction, `window` global assignment
  * -- into the production bundle regardless of whether it is ever called).
- * `videoPipeline.ts` is the extracted answer. This is a different property
- * from the two "must not import pixi.js" guards above -- `videoPipeline.ts`
- * legitimately imports `pixi.js` and `sceneIR`-adjacent renderer modules,
- * because unlike the encoder it is the orchestration layer that builds the
- * scene tree -- so it is guarded against the one import R3 actually
- * forbids, not against pixi.js.
+ * `videoPipeline.ts` is the extracted answer.
+ *
+ * Review (task-5-review.md, F2) found the first version of this guard only
+ * covered `videoPipeline.ts` -- the file *least* likely to reach for the dev
+ * seam, since it was written from scratch in this task by an author who had
+ * just read the constraint. The two files that actually form the production
+ * entry point -- `useExportVideo.ts` and `TopBar.tsx` -- were unguarded, and
+ * a future edit adding `window.__mareyExportVideo?.(...)` to either would
+ * ship a button broken in production with every test green. Worse:
+ * `importsModule` can never detect `window.__mareyExportVideo` at all,
+ * because a global property read is not an import statement -- so the
+ * `devVideoSeam`-import check alone cannot catch the specific mechanism the
+ * brief forbids ("Do not call `window.__mareyExportVideo`"), regardless of
+ * which file it is pointed at. Each guarded file below therefore gets BOTH
+ * an import-based check (`devVideoSeam`, reusing `importsModule`) and a
+ * plain substring check for the `__mareyExportVideo` global -- they catch
+ * different mistakes: importing the dev-only module (which would also pull
+ * its whole seam shape into production regardless of whether it is ever
+ * called) versus reaching through the global it installs.
+ *
+ * Both checks run against `stripComments(...)` output, not raw source. For
+ * the `__mareyExportVideo` check that is mandatory, not tidiness: two of the
+ * three files document the prohibition in a docstring, so the raw-source
+ * version of this guard failed on them (see `stripComments`). The
+ * `devVideoSeam` import check is stripped for the same reason one step
+ * earlier -- `videoPipeline.ts:33` already writes "read directly from
+ * `devVideoSeam.ts`'s `exportVideo`" in prose, which today escapes
+ * `importsModule` only because the specifier is in backticks rather than
+ * quotes. That is luck, not a property, and a guard that goes RED on a
+ * comment edit trains people to weaken it.
+ *
+ * Each test re-asserts a code landmark taken from *after* its file's last
+ * long comment, so the two things that would make these guards vacuous both
+ * fail loudly: reading the wrong source constant, and a `stripComments` that
+ * ran off the rails and deleted the code it was meant to search.
+ *
+ * `videoPipeline.ts` legitimately imports `pixi.js` and `sceneIR`-adjacent
+ * renderer modules -- unlike the encoder, it is the orchestration layer that
+ * builds the scene tree -- so none of these three files are checked against
+ * "must not import pixi.js"; that is a different property, already covered
+ * for `videoContract.ts`/`videoEncode.ts` above.
  */
-describe("export boundary — R3 shared pipeline", () => {
-  it("videoPipeline.ts does not import devVideoSeam.ts in any form", () => {
-    expect(videoPipelineSource).toContain("export async function runVideoExport");
-    expect(importsModule(videoPipelineSource, "devVideoSeam")).toBe(false);
+describe("export boundary — R3 shared pipeline and its production entry points", () => {
+  it("videoPipeline.ts does not import devVideoSeam.ts, and does not reach __mareyExportVideo", () => {
+    const code = stripComments(videoPipelineSource);
+    expect(code).toContain("export async function runVideoExport");
+    expect(code).toContain("app.destroy(true, { children: true })");
+    expect(importsModule(code, "devVideoSeam")).toBe(false);
+    expect(code).not.toContain("__mareyExportVideo");
+  });
+
+  it("useExportVideo.ts does not import devVideoSeam.ts, and does not reach __mareyExportVideo", () => {
+    const code = stripComments(useExportVideoSource);
+    expect(code).toContain("export function useExportVideo");
+    expect(code).toContain('await import("../compiler/export/videoPipeline")');
+    expect(importsModule(code, "devVideoSeam")).toBe(false);
+    expect(code).not.toContain("__mareyExportVideo");
+  });
+
+  it("TopBar.tsx does not import devVideoSeam.ts, and does not reach __mareyExportVideo", () => {
+    const code = stripComments(topBarSource);
+    expect(code).toContain("export const TopBar");
+    expect(code).toContain('handleExportClick("webm")');
+    expect(importsModule(code, "devVideoSeam")).toBe(false);
+    expect(code).not.toContain("__mareyExportVideo");
   });
 });
