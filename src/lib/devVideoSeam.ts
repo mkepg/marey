@@ -43,9 +43,20 @@ declare global {
      * Absent from a production build for the same reason
      * `window.__mareyExportPng` is (`devExportSeam.ts`): `main.tsx` reaches it
      * through a dynamic import inside `if (import.meta.env.DEV)`, which Vite
-     * constant-folds to `false` when building, so the whole module — and
-     * everything it pulls in, including `mediabunny` — is dropped rather than
-     * merely left unreferenced.
+     * constant-folds to `false` when building, so this whole module — base64
+     * encoding, frame hashing, reference-PNG re-extraction, the `window`
+     * assignment below — is dropped rather than merely left unreferenced.
+     *
+     * That sentence used to end "and everything it pulls in, including
+     * `mediabunny`". Corrected in Phase 5B Task 5: `mediabunny` **does** ship
+     * to production now. The top bar's MP4/WebM buttons reach the same
+     * encoder through `useExportVideo.ts` → `videoPipeline.ts`, so dropping
+     * this seam no longer drops the encoder with it. It is still true that
+     * *this module* is absent, and that is the property the sentence is here
+     * to state. What the seam saves production is its own harness shape, not
+     * `mediabunny`'s weight — that now lives in a click-loaded
+     * `videoPipeline` chunk (`useExportVideo.ts`'s dynamic `import()`), which
+     * is where the deferral actually happens.
      */
     __mareyExportVideo?: (
       source: string,

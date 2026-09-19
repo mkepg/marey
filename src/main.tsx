@@ -5,8 +5,19 @@ import "./styles/global.scss";
 render(<App />, document.getElementById("app")!);
 
 // Dev-only export seam for `tools/visual-check/export-check.mjs`.
-// No product UI ships an export button this phase, so the browser harness
-// needs a way to reach the export path without one. The dynamic import stays
+// No product UI ships a PNG-sequence export control, so the browser harness
+// needs a way to reach that path without one.
+//
+// Updated in Phase 5B Task 5: this used to read "no product UI ships an
+// export button this phase", which stopped being true when the top bar's
+// MP4/WebM buttons shipped (`TopBar.tsx`, `useExportVideo.ts`). Those cover
+// video only, and they do not replace any of these three seams even for
+// video: a download button hands bytes to the browser, while
+// `video-check.mjs` needs them handed back to Node as base64 together with a
+// frame hash and reference PNGs, which no UI produces. Product control and
+// harness seam answer different questions and both stay.
+//
+// The dynamic import stays
 // inside this `if` (rather than importing `installExportSeam` at module top
 // and calling it conditionally) so that in a production build Vite constant-
 // folds `import.meta.env.DEV` to `false` and drops the whole branch —
