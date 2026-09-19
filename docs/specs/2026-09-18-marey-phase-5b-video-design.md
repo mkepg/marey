@@ -296,11 +296,16 @@ identical content (`prefer-hardware` was not faster — the opposite of what a
 genuine hardware path would produce — which is suggestive but not
 conclusive evidence against one being reached).
 
-The development machine used for every measurement in this document **does**
-have hardware video encoders — an NVIDIA RTX 3060 Laptop GPU and an Intel
-Iris Xe Graphics, confirmed via `Get-CimInstance Win32_VideoController` —
-which falsifies this section's original premise ("SwiftShader means there is
-no hardware encoder to prefer against"). The real reason Q5 is unanswered is
+The development machine used for every measurement in this document has two
+GPUs — an NVIDIA RTX 3060 Laptop GPU and an Intel Iris Xe Graphics — measured
+via `Get-CimInstance Win32_VideoController`, which reports installed GPU
+*model names* and nothing about encoder capability. That GPUs of these
+specific models ship hardware video encoders (NVENC, Quick Sync
+respectively) is general knowledge about those product lines, **inferred**
+from the model names, not independently measured on this unit. Either way,
+this contradicts this section's original premise, which was stronger — "no
+hardware encoder to prefer against" at all, not merely "encoder capability
+unconfirmed." The real reason Q5 is unanswered is
 narrower and more durable than "the wrong test machine": every measurement
 in this document, and every measurement `tools/visual-check/
 video-check.mjs` will ever produce, runs headless Chromium launched with
@@ -563,9 +568,12 @@ falsified "exactly six bytes" claim was never load-bearing on the harness's
 own pass/fail behaviour, only on this document's prose.
 
 **Q5 — see new §7.5, immediately below.** The short version: the brief's
-premise that this machine has no hardware encoder is measured false (it has
-two: an NVIDIA RTX 3060 Laptop GPU and an Intel Iris Xe), but Q5 is still
-unanswerable here, for a different and more precise reason — the harness
+premise that this machine has no hardware encoder rests on a machine that,
+measured, has two GPUs (an NVIDIA RTX 3060 Laptop GPU and an Intel Iris Xe)
+whose product lines are widely known to include hardware encoders — an
+inference from the model names, not itself measured, so the premise is very
+likely wrong rather than measured false outright. Q5 is still unanswerable
+here either way, for a different and more precise reason — the harness
 itself runs headless Chromium with software rendering forced
 (`--use-angle=swiftshader` and friends, chosen for reproducibility, the same
 reasoning `video-check.mjs` already documents for those flags elsewhere),
