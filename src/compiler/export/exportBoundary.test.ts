@@ -34,9 +34,26 @@ import videoContractSource from "./videoContract.ts?raw";
  * are real imports of `pixi.js` and both are real violations of "must not
  * import pixi.js in any form". See the Step 5 mutation table in this task's
  * report for the RED runs that found this and confirmed the fix.
+ *
+ * Widened in Task 5 (R21) from "ends with" to "contains". The quoted-specifier
+ * pattern used to be `["'][^"']*${moduleFragment}["']` -- `[^"']*` only
+ * *before* the fragment, so the fragment had to sit immediately against the
+ * closing quote. That misses any specifier with something after the fragment
+ * inside the quotes: an extension (`from "../ir/sceneIR.ts"`,
+ * `from "../ir/sceneIR.js"`, `await import("../ir/sceneIR.ts")` -- all three
+ * compile today, because `allowImportingTsExtensions: true` is set in every
+ * tsconfig in this repo), and, more seriously, a pixi.js export subpath
+ * (`from "pixi.js/app"`, `from "pixi.js/scene"`, ...). pixi.js 8.16.0 declares
+ * 23 export subpaths in its own `package.json`, so `import { Application }
+ * from "pixi.js/app"` is a compiling, genuine violation of "must not import
+ * pixi.js in any form" that the old regex reported clean, because "pixi.js"
+ * there is not immediately followed by the closing quote. `[^"']*` after the
+ * fragment too makes the match "contains" rather than "ends with" --
+ * over-matching is the safe direction for a guard: a loud false alarm beats a
+ * silent pass.
  */
 function importsModule(source: string, moduleFragment: string): boolean {
-  const quoted = `["'][^"']*${moduleFragment}["']`;
+  const quoted = `["'][^"']*${moduleFragment}[^"']*["']`;
   const staticImport = new RegExp(`from\\s+${quoted}`);
   const dynamicImport = new RegExp(`import\\s*\\(\\s*${quoted}`);
   const bareImport = new RegExp(`import\\s+${quoted}`);
@@ -77,6 +94,39 @@ describe("export boundary", () => {
   it("videoEncode.ts does not import sceneIR in any form", () => {
     expect(videoEncodeSource).toContain("export async function encodeVideo");
     expect(importsModule(videoEncodeSource, "sceneIR")).toBe(false);
+  });
+
+  it("matches a pixi.js export subpath, not just the bare specifier", () => {
+    // The serious miss R21 names: pixi.js 8.16.0 declares 23 export
+    // subpaths, so this is a real, compiling violation of "must not import
+    // pixi.js in any form" -- not a hypothetical.
+    expect(
+      importsModule('import { Application } from "pixi.js/app";', "pixi\\.js"),
+    ).toBe(true);
+    expect(
+      importsModule('import { Container } from "pixi.js/scene";', "pixi\\.js"),
+    ).toBe(true);
+  });
+
+  it("matches a static import with a file extension after the fragment", () => {
+    expect(
+      importsModule('import { x } from "../ir/sceneIR.ts";', "sceneIR"),
+    ).toBe(true);
+    expect(
+      importsModule('import { x } from "../ir/sceneIR.js";', "sceneIR"),
+    ).toBe(true);
+  });
+
+  it("matches a dynamic import with a file extension after the fragment", () => {
+    expect(
+      importsModule('await import("../ir/sceneIR.ts");', "sceneIR"),
+    ).toBe(true);
+  });
+
+  it("still returns false when the fragment is entirely absent", () => {
+    expect(
+      importsModule('import { x } from "../renderer/builder.ts";', "sceneIR"),
+    ).toBe(false);
   });
 
   it("reads the file it claims to read", () => {
