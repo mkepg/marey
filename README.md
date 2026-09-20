@@ -1,5 +1,8 @@
 # Marey
 
+[![CI](https://github.com/mkepg/marey/actions/workflows/ci.yml/badge.svg)](https://github.com/mkepg/marey/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A text-first compiler for generative, deterministic 2D motion graphics.
 
 You describe motion as readable source — shapes, animations, a physics
@@ -149,10 +152,18 @@ To type-check a scene file from the command line:
 npm run check -- path/to/scene.marey
 ```
 
+Those three commands are what [CI](.github/workflows/ci.yml) runs on every push,
+plus a fourth gate: every tracked `.marey` file in the repository is compiled
+through the real CLI, so a language change that breaks the scene corpora fails
+the build.
+
 The test suite is headless by design and cannot see a canvas. Anything that needs
 one — does a scene actually render, does the ticker stop, does a scene replay
 identically across a reload — goes through the browser harness described in
 [`tools/visual-check/SKILL.md`](tools/visual-check/SKILL.md).
+That harness is deliberately **not** in CI: it needs a real browser and a human
+reading the captures, and a green check on a determinism test nobody looked at
+would be worse than no check at all.
 
 ## Reading further
 

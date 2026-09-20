@@ -1,0 +1,64 @@
+# Runs this repository's own checks. Deliberately *not* a published action for
+# other people's pipelines — roadmap §9.2 puts that past the finish line, and
+# nothing here is meant to be consumed from outside.
+#
+# Three gates, in increasing order of what they prove:
+#
+#   1. `npm test`  — the headless suite. Fast, and the bulk of the coverage.
+#   2. `npm run build` — `tsc -b && vite build`, so a type error fails CI even
+#      when no test covers the line. The suite alone would not catch it.
+#   3. every first-party `.marey` file still compiles, through the real CLI.
+#
+# The third gate is the one the suite cannot replace: the scene corpora are the
+# closest thing this project has to users, and a language change that breaks
+# them should be loud. The file list comes from `git ls-files`, not from a
+# literal list in this file — a hand-maintained copy would drift from the
+# corpora exactly the way AGENT-LESSONS §5 records hand-synced lists drifting,
+# and a new scene would silently go unchecked.
+#
+# What is *not* here: the browser harness in `tools/visual-check/`.
+# It needs a real Chromium and a running dev server, it is a deliberate manual
+# procedure, and its determinism checks need a human reading the captures. CI
+# reporting green on checks it did not really perform is worse than not running
+# them — see AGENT-LESSONS §2.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A superseded run tells you nothing once a newer commit exists.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: test, build, and compile every scene
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the Node the project is developed against. `npm ci` needs
+          # the lockfile to be authoritative, so it fails rather than resolving
+          # around a mismatch — which is the behaviour we want from CI.
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Test suite
+        run: npm test
+
+      - name: Typecheck and build
+        run: npm run build
+
+      - name: Every first-party scene still compiles
+        run: |
+          npm run build:cli
+          node bin/marey.mjs check $(git ls-files '*.marey')
