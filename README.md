@@ -1,11 +1,6 @@
 # Marey
 
-[![CI](https://github.com/mkepg/marey/actions/workflows/ci.yml/badge.svg)](https://github.com/mkepg/marey/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-
-**[Try it live →](https://marey.netlify.app/)**
-
-A text-first compiler for generative, deterministic 2D motion graphics.
+**A text-first compiler for generative, deterministic 2D motion graphics.**
 
 You describe motion as readable source — shapes, animations, a physics
 simulation, a timeline — and Marey compiles it to portable artifacts that play
@@ -16,6 +11,13 @@ Marey is **not** trying to be a more general animation API than GSAP, a visual
 editor like Rive, a replacement playback format for Lottie, or a game engine.
 PixiJS and Matter.js are implementation machinery, not the product. The niche is
 narrow on purpose: *motion graphics as readable, generative source code.*
+
+[![CI](https://github.com/mkepg/marey/actions/workflows/ci.yml/badge.svg)](https://github.com/mkepg/marey/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+**[Try it live →](https://marey.netlify.app/)**
+
+---
 
 ## A scene
 
@@ -124,21 +126,6 @@ Compilation itself runs in a Web Worker
 responsive; the worker returns the IR as JSON and the main thread hands it to the
 renderer.
 
-## Status
-
-Pre-release and unpublished. Marey has never been distributed, there are no
-external users, and every `.marey` file in existence is first-party and lives in
-this repository — which is why breaking syntax changes are weighed on which
-language is better to live with, not on migration cost.
-
-The suite is upwards of 800 tests — run `npm test` for the current figure rather
-than trusting a number written here, which is the kind of claim that rots.
-Development runs in numbered phases against a written roadmap with an explicit
-finish line; the project is complete when the language, the export pipeline and
-the packaging work are done, and not before.
-
-The CLI currently exposes one command, `check`. `export` is not implemented yet.
-
 ## Quick start
 
 ```bash
@@ -153,6 +140,15 @@ To type-check a scene file from the command line:
 ```bash
 npm run check -- path/to/scene.marey
 ```
+
+## Tests
+
+```bash
+npm test         # vitest, single pass
+```
+
+The suite is upwards of 800 tests — run `npm test` for the current figure rather
+than trusting a number written here, which is the kind of claim that rots.
 
 Those three commands are what [CI](.github/workflows/ci.yml) runs on every push,
 plus a fourth gate: every tracked `.marey` file in the repository is compiled
@@ -176,6 +172,19 @@ would be worse than no check at all.
 | [`docs/architecture/`](docs/architecture/) | Architecture notes by subsystem — parser, renderer, language contract, share links. |
 | [`docs/engineering-lessons.md`](docs/engineering-lessons.md) | A running record of process mistakes made building this, each with its evidence. Mostly about the ways a green test suite can be wrong. |
 | [`docs/research/`](docs/research/) | Primary-source research on where this could go, including the case against the direction it didn't take. |
+
+## Status
+
+Pre-release and unpublished. Marey has never been distributed, there are no
+external users, and every `.marey` file in existence is first-party and lives in
+this repository — which is why breaking syntax changes are weighed on which
+language is better to live with, not on migration cost.
+
+Development runs in numbered phases against a written roadmap with an explicit
+finish line; the project is complete when the language, the export pipeline and
+the packaging work are done, and not before.
+
+The CLI currently exposes one command, `check`. `export` is not implemented yet.
 
 ## License
 
