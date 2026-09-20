@@ -1,7 +1,14 @@
 {
   "name": "marey",
-  "private": true,
   "version": "0.3.1",
+  "description": "A text-first compiler for generative, deterministic 2D motion graphics.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mkepg/marey.git"
+  },
+  "//private": "Stays true until the package surface lands: publishing needs `exports` and `files` first, or npm publish would ship eval/ and the docs tree. See roadmap §9.1.",
+  "private": true,
   "type": "module",
   "bin": {
     "marey": "bin/marey.mjs"

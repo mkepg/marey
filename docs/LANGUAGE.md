@@ -5,11 +5,14 @@ scene graph. This document describes **behaviour**: what each construct does,
 in what units, and what happens at its edges.
 
 It is not a tutorial. Minimal getting-started and export guides ship with the
-capabilities they describe; the full tutorial and gallery site is Phase 8 in
-the current product roadmap.
+capabilities they describe. A full tutorial and gallery site sits past the
+finish line in the engineering roadmap's §13 — catalogued, with nothing owed —
+rather than being a phase; see the [README](../README.md) for the short
+orientation this document deliberately does not give.
 
 Every example below is compiled by the test suite, so nothing here can silently
-stop being true.
+stop being true. So is every example in the README — both documents are listed
+in `src/compiler/languageDocs.test.ts`.
 
 ```marey
 scene {

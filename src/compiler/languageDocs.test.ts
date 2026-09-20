@@ -1,27 +1,35 @@
 /**
- * Every example in docs/LANGUAGE.md must compile.
+ * Every example in the project's prose documents must compile.
  *
- * The document is the only copy of its examples — there is no parallel fixture
+ * Each document is the only copy of its examples — there is no parallel fixture
  * directory to fall out of sync with it. This is the mechanism that stops the
  * reference becoming a fifth hand-synced list (spec 2026-08-27, L2/§5): when
  * final vocabulary changes, every example here stops compiling and the
  * build goes red, rather than the document quietly going stale.
  *
- * Fences tagged ```marey are compiled. Fences tagged ```text are prose
- * fragments and are skipped deliberately. Any other tag — including an empty
- * one — is treated as a mistake, not tolerated: `extractExamples` throws
- * naming the bad tag and its line, so a typo like ```Marey loses coverage
- * loudly instead of silently. A four-or-more-backtick fence also throws:
- * this extractor is a line scanner, not a nested-fence parser, so a block
- * that displays fence syntax literally must not be attempted.
+ * `DOCUMENTS` is the list, and README.md is in it for the same reason
+ * LANGUAGE.md is. The README is the first thing a reader sees, so an example
+ * that has silently stopped compiling is the most expensive possible place for
+ * one — and being outside `docs/` is not a reason to leave it unpinned. Adding
+ * a document here is the whole cost of covering it.
  *
- * Reported compile-error line numbers are absolute (LANGUAGE.md line numbers,
- * not offsets into the extracted snippet), computed from the fence's own
- * line. A lexer/parser/typeChecker throw is caught and surfaced as a
+ * Fences tagged ```marey are compiled. Fences tagged ```text and ```bash are
+ * prose and shell fragments and are skipped deliberately. Any other tag —
+ * including an empty one — is treated as a mistake, not tolerated:
+ * `extractExamples` throws naming the bad tag and its line, so a typo like
+ * ```Marey loses coverage loudly instead of silently. A four-or-more-backtick
+ * fence also throws: this extractor is a line scanner, not a nested-fence
+ * parser, so a block that displays fence syntax literally must not be
+ * attempted.
+ *
+ * Reported compile-error line numbers are absolute (line numbers within the
+ * document, not offsets into the extracted snippet), computed from the fence's
+ * own line, and prefixed with the document's name so a failure says which file
+ * to open. A lexer/parser/typeChecker throw is caught and surfaced as a
  * `THREW: ...` entry rather than escaping as an uncaught exception — see
  * `eval/compile.test.ts` for the precedent this follows.
  *
- * The document is pulled in as a build-time dependency via Vite's `?raw`
+ * Documents are pulled in as build-time dependencies via Vite's `?raw`
  * import (declared by `vite/client`), rather than read from disk with
  * `node:fs`, so this typechecks under `tsconfig.app.json` without pulling in
  * node types. It also resolves relative to this file instead of the process
@@ -29,6 +37,7 @@
  */
 import { describe, it, expect } from "vitest";
 import markdownDoc from "../../docs/LANGUAGE.md?raw";
+import readmeDoc from "../../README.md?raw";
 import { lex } from "./lexer";
 import { parse } from "./parser";
 import { typeCheck } from "./typeChecker";
@@ -45,9 +54,21 @@ interface Example {
   source: string;
 }
 
-const RECOGNISED_TAGS = new Set(["marey", "text"]);
+/**
+ * Tags the extractor accepts. Only `marey` is compiled; the rest are skipped
+ * as prose. A tag absent from this set throws rather than being ignored, which
+ * is the property that makes a typo loud — so widening it is a deliberate act,
+ * not housekeeping.
+ */
+const RECOGNISED_TAGS = new Set(["marey", "text", "bash"]);
 
-export function extractExamples(markdown: string): Example[] {
+/** The prose documents whose ```marey examples must compile. */
+const DOCUMENTS: ReadonlyArray<{ name: string; markdown: string }> = [
+  { name: "docs/LANGUAGE.md", markdown: markdownDoc },
+  { name: "README.md", markdown: readmeDoc },
+];
+
+export function extractExamples(markdown: string, docName = "the document"): Example[] {
   const lines = markdown.split(/\r?\n/);
   const examples: Example[] = [];
   let open: { line: number; tag: string; body: string[] } | null = null;
@@ -58,7 +79,7 @@ export function extractExamples(markdown: string): Example[] {
 
     if (/^`{4,}/.test(trimmed)) {
       throw new Error(
-        `Four-backtick fence at line ${i + 1} is not supported by this extractor. Use three-backtick fences only.`
+        `${docName}: Four-backtick fence at line ${i + 1} is not supported by this extractor. Use three-backtick fences only.`
       );
     }
 
@@ -69,7 +90,7 @@ export function extractExamples(markdown: string): Example[] {
         const tag = fenceMatch[1].trim();
         if (!RECOGNISED_TAGS.has(tag)) {
           throw new Error(
-            `Unrecognised fence tag "${tag}" at line ${i + 1}. Use \`\`\`marey for a compiled example or \`\`\`text for a prose fragment.`
+            `${docName}: Unrecognised fence tag "${tag}" at line ${i + 1}. Use \`\`\`marey for a compiled example or \`\`\`text for a prose fragment.`
           );
         }
         open = { line: i + 1, tag, body: [] };
@@ -88,21 +109,21 @@ export function extractExamples(markdown: string): Example[] {
   }
 
   if (open !== null) {
-    throw new Error(`Unclosed \`\`\`${open.tag} fence opened at line ${open.line}`);
+    throw new Error(`${docName}: Unclosed \`\`\`${open.tag} fence opened at line ${open.line}`);
   }
   return examples;
 }
 
-function compileErrors(source: string, fenceLine: number): string[] {
+function compileErrors(source: string, fenceLine: number, docName: string): string[] {
   const out: string[] = [];
   const absolute = (line: number | undefined): string =>
     line === undefined ? "?" : String(fenceLine + line);
   try {
     const { ast, errors } = parse(lex(source));
-    out.push(...errors.map((e) => `LANGUAGE.md:${absolute(e.line)}: ${e.message}`));
+    out.push(...errors.map((e) => `${docName}:${absolute(e.line)}: ${e.message}`));
     if (ast) {
       const { errors: typeErrors } = typeCheck(ast);
-      out.push(...typeErrors.map((e) => `LANGUAGE.md:${absolute(e.line)}: ${e.message}`));
+      out.push(...typeErrors.map((e) => `${docName}:${absolute(e.line)}: ${e.message}`));
     }
   } catch (err) {
     if (
@@ -112,7 +133,7 @@ function compileErrors(source: string, fenceLine: number): string[] {
       typeof (err as { message?: unknown }).message === "string"
     ) {
       const e = err as { message: string; line?: number };
-      out.push(`THREW: LANGUAGE.md:${absolute(e.line)}: ${e.message}`.slice(0, 200));
+      out.push(`THREW: ${docName}:${absolute(e.line)}: ${e.message}`.slice(0, 200));
     } else {
       out.push(`THREW: ${String(err).slice(0, 200)}`);
     }
@@ -120,18 +141,17 @@ function compileErrors(source: string, fenceLine: number): string[] {
   return out;
 }
 
-describe("docs/LANGUAGE.md examples", () => {
-  const markdown = markdownDoc;
-  const examples = extractExamples(markdown);
+describe.each(DOCUMENTS)("$name examples", ({ name, markdown }) => {
+  const examples = extractExamples(markdown, name);
 
   it("contains at least one example", () => {
     expect(examples.length).toBeGreaterThan(0);
   });
 
   it.each(examples.map((e) => [e.line, e.source] as const))(
-    "the example at LANGUAGE.md line %i compiles",
+    `the example at ${name} line %i compiles`,
     (line, source) => {
-      expect(compileErrors(source, line)).toEqual([]);
+      expect(compileErrors(source, line, name)).toEqual([]);
     }
   );
 });
