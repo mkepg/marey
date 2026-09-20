@@ -3,6 +3,8 @@
 [![CI](https://github.com/mkepg/marey/actions/workflows/ci.yml/badge.svg)](https://github.com/mkepg/marey/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+**[Try it live →](https://marey.netlify.app/)**
+
 A text-first compiler for generative, deterministic 2D motion graphics.
 
 You describe motion as readable source — shapes, animations, a physics
@@ -137,7 +139,7 @@ the packaging work are done, and not before.
 
 The CLI currently exposes one command, `check`. `export` is not implemented yet.
 
-## Running it
+## Quick start
 
 ```bash
 npm install
