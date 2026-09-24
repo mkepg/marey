@@ -12,11 +12,13 @@
  *
  * It calls `window.__mareyExportVideo` (installed dev-only by
  * `src/lib/devVideoSeam.ts`, wired in `main.tsx` behind `import.meta.env.DEV`)
- * rather than driving any UI — same reasoning as `export-check.mjs` and
- * `lottie-check.mjs`: no export button ships this phase, and a narrow named
- * seam beats re-implementing compile -> plan -> build -> sample -> rasterize
- * -> encode in page script, where a harness-only copy could silently diverge
- * from the pipeline the app actually runs.
+ * rather than clicking the top bar's export button. That seam is not a copy
+ * of the export pipeline: it calls the shipped `runVideoExport`
+ * (`src/compiler/export/videoPipeline.ts`, the same function the button
+ * calls) with observers that capture each canvas the encoder is handed, the
+ * sampler's hash, and the resolved encoder config. So this script measures
+ * the product's orchestration; what still differs from a click is only the
+ * entry point (a `window` global versus the button's dynamic `import()`).
  *
  * **The decode-back step runs INSIDE the page, not in Node.** mediabunny ships
  * a self-contained ESM bundle (`node_modules/mediabunny/dist/bundles/
@@ -399,7 +401,9 @@ async function decodeAndCompare(page, { videoBase64, referenceFramesBase64, writ
       }
 
       const referenceImages = [];
-      for (const b64 of referenceFramesBase64) referenceImages.push(await pngToImageData(b64));
+      // A null slot is a sampled frame the encoder was never handed (see
+      // `missingReferenceFrames` below); it matches nothing.
+      for (const b64 of referenceFramesBase64) referenceImages.push(b64 ? await pngToImageData(b64) : null);
 
       const mb = window.__mediabunny;
       if (!mb) return { ok: false, stage: "mediabunny-missing", error: "window.__mediabunny not installed" };
@@ -468,7 +472,7 @@ async function decodeAndCompare(page, { videoBase64, referenceFramesBase64, writ
           if (j < 0 || j >= referenceImages.length) continue;
           const ref = referenceImages[j];
           const dist =
-            ref.width === d.displayWidth && ref.height === d.displayHeight
+            ref && ref.width === d.displayWidth && ref.height === d.displayHeight
               ? distance(d.data, ref.data, d.displayWidth, d.displayHeight)
               : Infinity;
           candidates.push({ j, dist });
@@ -664,15 +668,21 @@ if (container === "mp4") {
 // non-deterministic rendering (the rasterized canvas itself differs) OR a
 // non-deterministic encoder fed IDENTICAL pixels. This comparison answers
 // that question directly, by diffing the LOSSLESS reference PNGs of the
-// exact canvases each run fed to its own encoder -- `devVideoSeam.ts`
-// documents that `canvases` (what `referenceFrames` is built from) is the
-// SAME array `encodeVideo` consumed, so this is not a re-render, it is the
-// encoder's actual input, captured before either encoder ever saw it. This
+// exact canvases each run fed to its own encoder -- `devVideoSeam.ts` reads
+// each one through `runVideoExport`'s `onFrame` observer, immediately before
+// the encoder consumes that same canvas, so this is not a re-render, it is
+// the encoder's actual input, captured before either encoder ever saw it. This
 // is a real, permanent, gating check -- not a one-off diagnostic -- because
 // an unmeasured claim about which side of the boundary failed is exactly the
 // gap a byte-for-byte container difference cannot resolve on its own.
-const refFramesA = (runA.result.referenceFrames ?? []).map((b64) => Buffer.from(b64, "base64"));
-const refFramesB = (runB.result.referenceFrames ?? []).map((b64) => Buffer.from(b64, "base64"));
+// A null slot means the pipeline never handed the encoder a canvas for that
+// sampled frame -- a dropped frame, seen from the encoder's input side.
+// Gating, below.
+const missingReferenceFrames = [runA, runB].map(
+  (run) => (run.result.referenceFrames ?? []).filter((b64) => !b64).length,
+);
+const refFramesA = (runA.result.referenceFrames ?? []).map((b64) => Buffer.from(b64 ?? "", "base64"));
+const refFramesB = (runB.result.referenceFrames ?? []).map((b64) => Buffer.from(b64 ?? "", "base64"));
 const referenceFrameCountsMatch = refFramesA.length === refFramesB.length;
 let referenceFramesEqual = referenceFrameCountsMatch && refFramesA.length > 0;
 let firstDifferingReferenceFrame = null;
@@ -705,7 +715,10 @@ report.referenceFrameComparison = {
   referenceFrameCountsMatch,
   referenceFramesEqual,
   firstDifferingReferenceFrame,
+  missingReferenceFramesA: missingReferenceFrames[0],
+  missingReferenceFramesB: missingReferenceFrames[1],
 };
+console.log(`sampled frames never handed to the encoder   runA=${missingReferenceFrames[0]} runB=${missingReferenceFrames[1]}`);
 console.log(
   `reference frames (runA vs runB) bit-identical   ${referenceFramesEqual}  (${refFramesA.length} vs ${refFramesB.length} frames compared)` +
     (referenceFramesEqual ? "" : `  -- first differing at index ${firstDifferingReferenceFrame}, written to coldreload_runA_*/coldreload_runB_*.png`),
@@ -752,7 +765,7 @@ for (const f of decode.frames) {
   if (f.pngBase64) writeFileSync(`${outDir}/decoded_${pad4(f.index)}.png`, Buffer.from(f.pngBase64, "base64"));
 }
 for (const i of writeIndices) {
-  if (i >= 0 && i < runA.result.referenceFrames.length) {
+  if (i >= 0 && i < runA.result.referenceFrames.length && runA.result.referenceFrames[i]) {
     writeFileSync(`${outDir}/reference_${pad4(i)}.png`, Buffer.from(runA.result.referenceFrames[i], "base64"));
   }
 }
@@ -829,6 +842,8 @@ const fail =
   strictMismatches.length > 0 ||
   !hashesEqual ||
   !referenceFramesEqual ||
+  missingReferenceFrames[0] > 0 ||
+  missingReferenceFrames[1] > 0 ||
   !gatingBytesEqual ||
   runA.pageErrors.length > 0 ||
   runB.pageErrors.length > 0;

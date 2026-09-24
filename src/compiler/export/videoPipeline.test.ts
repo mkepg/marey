@@ -1,9 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { runVideoExport, type RunVideoExportOptions } from "./videoPipeline";
 
 /**
- * `videoPipeline.ts`'s three refusal paths, which all execute before
- * `new Application()` and therefore need no browser.
+ * `videoPipeline.ts`'s four refusal paths (compile, `planExport`,
+ * `planVideo`, and since the Phase 5B fix wave the encoder probe), which all
+ * execute before `new Application()` and therefore need no browser.
  *
  * Added in the Task 5 fix round (task-5-review.md, F3). The module shipped
  * with no test on the argument that "hooks in this repo are verified through
@@ -49,18 +50,18 @@ async function refusalMessage(opts: RunVideoExportOptions): Promise<string> {
 }
 
 /**
- * Past `planVideo` the pipeline reaches `new Application()`, which in this
- * `environment: "node"` suite throws `ReferenceError: document is not
- * defined`. The controls below assert the *absence* of contract prefixes
- * rather than that exact text: "both contracts accepted this request" is the
- * durable property, while the specific DOM symbol pixi trips over first is an
- * implementation detail of pixi and of the test environment.
+ * Past `planVideo` the pipeline probes the browser's encoder
+ * (`assertVideoEncodable`) before building anything. This suite runs in
+ * `environment: "node"`, which has no `VideoEncoder`, so a request both
+ * contracts accept is refused there with `[VIDEO_NO_WEBCODECS]`. The controls
+ * below assert exactly that: it proves both contracts passed, and that the
+ * probe is the next thing that runs.
  */
-function isContractRefusal(message: string): boolean {
+function passedBothContracts(message: string): boolean {
   return (
-    message.startsWith("Source did not compile:") ||
-    message.includes("[EXPORT_") ||
-    message.includes("[VIDEO_")
+    message.startsWith("[VIDEO_NO_WEBCODECS] ") &&
+    !message.includes("[EXPORT_") &&
+    !message.startsWith("Source did not compile:")
   );
 }
 
@@ -113,7 +114,7 @@ describe("runVideoExport · refusal path 2, planExport", () => {
       durationSeconds: 1,
     });
     expect(message).not.toContain("[EXPORT_");
-    expect(isContractRefusal(message)).toBe(false);
+    expect(passedBothContracts(message)).toBe(true);
   });
 
   it("joins two simultaneous planExport diagnostics with ' | '", async () => {
@@ -159,7 +160,50 @@ describe("runVideoExport · refusal path 3, planVideo", () => {
       container: "webm",
       source: "scene { size: (101, 100) duration: 1 }",
     });
+    expect(message).not.toContain("[VIDEO_ODD_DIMENSIONS]");
+    expect(passedBothContracts(message)).toBe(true);
+  });
+});
+
+/**
+ * Ruling R45 / whole-branch review I-4 and I-5: the encoder probe runs before
+ * the scene is built or sampled, so a refusal does not wait for (or get
+ * pre-empted by) a long sample-and-rasterize phase. In this node suite,
+ * anything past the probe reaches `new Application()` and fails on the
+ * missing DOM, so a VIDEO_UNSUPPORTED_CODEC refusal here can only have come
+ * from a probe that ran first.
+ */
+describe("runVideoExport · refusal path 4, the encoder probe runs before sampling", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const SCENE = "scene { size: (100, 100) duration: 1 }";
+
+  it("refuses an unsupported codec before building the scene", async () => {
+    const probed: string[] = [];
+    vi.stubGlobal("VideoEncoder", {
+      isConfigSupported: async (config: { codec: string }) => {
+        probed.push(config.codec);
+        return { supported: false };
+      },
+    });
+    const message = await refusalMessage({ ...BASE, source: SCENE });
+    expect(message.startsWith("[VIDEO_UNSUPPORTED_CODEC] ")).toBe(true);
+    // The plan's own string reached the probe: level 3 for 100x100 at the
+    // default 8 Mbit/s (see videoContract.test.ts).
+    expect(probed).toEqual(["avc1.42001e"]);
+  });
+
+  it("goes on to build the scene once the probe accepts", async () => {
+    // The control: same request, supported. Now the failure is the node
+    // environment's missing DOM, past every refusal this module owns.
+    vi.stubGlobal("VideoEncoder", {
+      isConfigSupported: async () => ({ supported: true }),
+    });
+    const message = await refusalMessage({ ...BASE, source: SCENE });
     expect(message).not.toContain("[VIDEO_");
-    expect(isContractRefusal(message)).toBe(false);
+    expect(message).not.toContain("[EXPORT_");
+    expect(message).not.toContain("Source did not compile");
   });
 });

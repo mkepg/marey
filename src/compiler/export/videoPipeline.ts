@@ -1,13 +1,39 @@
 import { Application, Container } from "pixi.js";
 import { compileSource } from "../compileSource";
 import { planExport } from "./exportContract";
-import { planVideo, type VideoContainer } from "./videoContract";
-import { encodeVideo } from "./videoEncode";
+import { planVideo, type VideoContainer, type VideoPlan } from "./videoContract";
+import { assertVideoEncodable, encodeVideo } from "./videoEncode";
 import { createFrameRasterizer } from "./frameRaster";
 import { buildNode } from "../renderer/builder";
-import { sampleFrames } from "../renderer/frameSampler";
+import { sampleFrames, type FrameSnapshot } from "../renderer/frameSampler";
 import { SceneRuntime } from "../renderer/sceneRuntime";
 import { MatterWorld } from "../renderer/physicsWorld";
+
+/**
+ * Optional observation points, for the dev harness (`devVideoSeam.ts`).
+ *
+ * The shipped export button passes none, and pays nothing for them: no
+ * reference images are kept, no hash is computed, and every canvas is
+ * released once the encoder has copied it.
+ */
+export interface VideoExportObserver {
+  /** Called once, after both contracts and the codec probe accept the request. */
+  readonly onPlanned?: (plan: VideoPlan) => void;
+  /** Called once with the sampler's own output, in the sampler's order. */
+  readonly onSampled?: (frames: ReadonlyArray<FrameSnapshot>) => void;
+  /**
+   * Called with each canvas immediately before the encoder consumes it, and
+   * awaited, so the observer can read its pixels before it is released.
+   * `frame` is the sampled snapshot the canvas was rasterized from, by
+   * identity, so an observer can place the canvas at that snapshot's
+   * position in `onSampled`'s array rather than trusting the order the
+   * canvases arrive in. That is what lets the harness catch this loop
+   * reordering or dropping frames.
+   */
+  readonly onFrame?: (canvas: HTMLCanvasElement, frame: FrameSnapshot) => void | Promise<void>;
+  /** mediabunny's resolved WebCodecs encoder config (see `EncodeVideoHooks`). */
+  readonly onEncoderConfig?: (config: VideoEncoderConfig) => unknown;
+}
 
 export interface RunVideoExportOptions {
   readonly source: string;
@@ -16,46 +42,74 @@ export interface RunVideoExportOptions {
   /** Explicit export bound in seconds. Overrides the scene's own duration. */
   readonly durationSeconds?: number;
   readonly onProgress?: (done: number, total: number) => void;
+  readonly observer?: VideoExportObserver;
 }
 
 /**
- * Compile, plan, build, sample, rasterize, encode — the whole video export
- * path, for a real UI control rather than a harness.
+ * Let the browser run other tasks, including a repaint, if at least this
+ * long has passed since the last yield. A resolved promise is a microtask
+ * and never lets the page repaint; a `MessageChannel` message is a task, and
+ * unlike `setTimeout(0)` it is not clamped to 4 ms once nested.
  *
- * Task 5's brief (`.sdd/2026-09-18-phase-5b-video/task-5-brief.md`)
- * requires `useExportVideo.ts` to consume "the same pipeline
- * `devVideoSeam.ts` uses" without calling `window.__mareyExportVideo` (that
- * seam is `import.meta.env.DEV`-gated and constant-folded out of a
- * production build — `main.tsx` — so a caller reaching through it would work
- * in `npm run dev` and silently do nothing once built) and without importing
- * `devVideoSeam.ts` itself. This module is the extracted answer: the
- * compile -> plan -> build -> sample -> rasterize -> encode call order and
- * the try/finally teardown shape are read directly from `devVideoSeam.ts`'s
- * `exportVideo` (Task 3/4's reference implementation, reasoning preserved
- * there) and reproduced here, not imported — `exportBoundary.test.ts` pins
- * that this file never imports `devVideoSeam.ts` in any form, the same way
- * it already pins that `videoEncode.ts`/`videoContract.ts` never import
- * `pixi.js`.
+ * 100 ms rather than one display frame, measured (fix-wave report, item 3;
+ * headless Chromium with SwiftShader, the full app page): at 16 ms a
+ * 900-frame export took 43.7 s against 21-22 s with no explicit yield,
+ * because every yield also lets the live preview repaint; at 100 ms it took
+ * 22.1 s. The longest main-thread gap was the same, about 0.75 s, in all
+ * three, so the explicit yield is not what ended the freeze: it guarantees a
+ * repaint opportunity at least every 100 ms of rasterize-and-encode work
+ * without relying on mediabunny's own backpressure awaits to provide one.
+ */
+const YIELD_EVERY_MS = 100;
+
+function yieldToEventLoop(): Promise<void> {
+  if (typeof MessageChannel === "undefined") return Promise.resolve();
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => {
+      channel.port1.close();
+      resolve();
+    };
+    channel.port2.postMessage(null);
+  });
+}
+
+/**
+ * Compile, plan, probe, build, sample, then rasterize and encode one frame at
+ * a time: the whole video export path, and the **only** copy of it. The top
+ * bar's export buttons (`useExportVideo.ts`) call this, and so does the dev
+ * harness seam (`devVideoSeam.ts`) through `observer`, so `video-check.mjs`
+ * measures this orchestration rather than a hand-kept copy of it (ruling R45,
+ * whole-branch review I-2: with two copies, reversing or thinning the frames
+ * here left every test and the harness green).
  *
- * Deliberately narrower than `devVideoSeam.ts`'s `exportVideo`: no base64
- * encoding, no reference-PNG re-extraction, no `hashFrames` call. Those
- * exist only for `video-check.mjs`'s frame-by-frame comparison harness: a
- * shipped export button has no use for a simulation-output hash or a second
- * copy of every frame as a PNG, and computing them here would cost real time
- * and memory a person waiting on a download does not benefit from.
+ * Neither caller reaches the other: this module never imports
+ * `devVideoSeam.ts` (`exportBoundary.test.ts` pins that), and the button does
+ * not call the dev-only `window.__mareyExportVideo` global, which is
+ * constant-folded out of a production build (`main.tsx`).
+ *
+ * **Order matters in three places (whole-branch review I-4):**
+ * - The environment and codec probe (`assertVideoEncodable`) runs before the
+ *   scene is built or sampled, so a refusal (insecure context, unsupported
+ *   codec) arrives before the scene has been simulated rather than after.
+ * - Frames are rasterized lazily, inside the encode loop. The earlier
+ *   `frames.map(rasterize)` held every frame's canvas at once (PixiJS's
+ *   `extract.canvas()` allocates a new one per call), about 1.9 MB per
+ *   800x600 frame, and blocked the page until all of them existed.
+ * - The loop yields to the event loop about once per display frame, so the
+ *   progress label repaints. `sampleFrames` itself is synchronous and frozen
+ *   by GC7; its share of the freeze remains (recorded in
+ *   `eval/RESULTS-PHASE-5B.md`).
  *
  * Every failure surfaces as a thrown `Error` whose `.message` is the
  * triggering diagnostic's `message` **verbatim** — `EXPORT_*` from
- * `planExport`, `VIDEO_*` from `planVideo` or `encodeVideo`'s own
- * `VideoExportError` — never rewrapped with an added prefix. `devVideoSeam.ts`
- * prefixes its own rethrow with `[export] ` because that text is for a
- * harness author reading a Node exception; here the same text lands
- * verbatim in a toast a person reads, and `VIDEO_*`/`EXPORT_*` messages are
- * already written for exactly that (`videoContract.ts`, `exportContract.ts`).
- * Adding a prefix here would be a second, driftable copy of wording that
- * already exists once.
+ * `planExport`, `VIDEO_*` from `planVideo` or `assertVideoEncodable` — never
+ * rewrapped with an added prefix, because `useExportVideo.ts` shows it in a
+ * toast as it is, and those messages are written for a person
+ * (`videoContract.ts`, `exportContract.ts`).
  */
 export async function runVideoExport(opts: RunVideoExportOptions): Promise<Uint8Array> {
+  const observer = opts.observer ?? {};
   const outcome = compileSource(opts.source);
   if (!outcome.ok || !outcome.ir) {
     throw new Error(
@@ -64,16 +118,9 @@ export async function runVideoExport(opts: RunVideoExportOptions): Promise<Uint8
   }
   const ir = outcome.ir;
 
-  // `" | "`, not `" "`. `planExport` accumulates: an unbounded scene
-  // requested at an unsupported frame rate returns EXPORT_UNSUPPORTED_FPS
-  // *and* EXPORT_UNBOUNDED_SCENE (`exportContract.ts:87-114`), and each
-  // diagnostic message is a complete sentence ending in a full stop. Joined
-  // with a space, two of them run together into one paragraph in a toast
-  // and read as a single confused message; joined with `" | "` they read as
-  // two refusals, which is what they are. `" | "` also matches what all
-  // three dev seams already use (`devVideoSeam.ts:110/117/122`,
-  // `devExportSeam.ts`, `devLottieSeam.ts`) and what line 62 above already
-  // used for compile errors -- this file was inconsistent with itself.
+  // `" | "`, not `" "`: `planExport` accumulates, and each diagnostic is a
+  // complete sentence, so two joined with a space read as one confused
+  // message in a toast (`exportContract.ts:87-114`).
   const planned = planExport(ir, { fps: opts.fps, durationSeconds: opts.durationSeconds });
   if (!planned.ok) {
     throw new Error(planned.diagnostics.map((d) => d.message).join(" | "));
@@ -84,11 +131,16 @@ export async function runVideoExport(opts: RunVideoExportOptions): Promise<Uint8
     throw new Error(video.diagnostics.map((d) => d.message).join(" | "));
   }
 
-  // Same reasoning as `devVideoSeam.ts`: `app` is assigned before it is known
-  // whether `init()` will succeed, and the `finally` below gates on
-  // `app.renderer` (assigned only once `init()`'s `autoDetectRenderer(...)`
-  // resolves) rather than on `app` alone, so a failed `init()` cannot turn
-  // into a second, masking crash inside `finally`.
+  await assertVideoEncodable(video.plan);
+  observer.onPlanned?.(video.plan);
+
+  // `app` is assigned before it is known whether `init()` will succeed, and
+  // the `finally` below gates on `app.renderer` (assigned only once
+  // `init()`'s `autoDetectRenderer(...)` resolves) rather than on `app`
+  // alone, so a failed `init()` cannot turn into a second, masking crash
+  // inside `finally`. The `try` opens at `new Application()` so a throw from
+  // `init()`, the `buildNode` loop or either constructor cannot leak a live
+  // WebGL context.
   let app: Application | undefined;
   let root: Container | undefined;
   let runtime: SceneRuntime | undefined;
@@ -111,26 +163,42 @@ export async function runVideoExport(opts: RunVideoExportOptions): Promise<Uint8
     const world = new MatterWorld(ir.width, ir.height);
     runtime = new SceneRuntime(world, root);
 
-    // Sample the whole scene first, then encode — `encodeVideo` never sees
+    // Sample the whole scene first, then encode: `encodeVideo` never sees
     // the runtime, so the two phases cannot interleave even by mistake.
     const frames = sampleFrames(runtime, root, planned.plan);
+    observer.onSampled?.(frames);
     const rasterize = createFrameRasterizer(app, root, frames);
-    const canvases = frames.map(rasterize);
 
-    // `createFrameRasterizer` returns PixiJS's `ICanvas`, not assignable to
-    // the DOM `CanvasImageSource` union `encodeVideo` declares (its own
-    // docstring explains why that signature stays narrow — widening it would
-    // put a pixi type inside a module `exportBoundary.test.ts` forbids from
-    // importing one). The cast belongs at this call site, the one place that
-    // holds both types, exactly as it does in `devVideoSeam.ts`. At runtime
-    // this is not a lie: in a real browser with `autoStart: false`,
-    // `app.renderer.extract.canvas()` returns a real `HTMLCanvasElement`,
-    // which satisfies `CanvasImageSource`.
-    return await encodeVideo(
-      video.plan,
-      canvases as unknown as CanvasImageSource[],
-      { onProgress: opts.onProgress },
-    );
+    async function* rasterized(): AsyncGenerator<HTMLCanvasElement> {
+      let lastYield = performance.now();
+      for (const frame of frames) {
+        // `createFrameRasterizer` returns PixiJS's `ICanvas`, which is not
+        // assignable to the DOM types `encodeVideo` declares (its docstring
+        // explains why that signature stays narrow). In a browser with the
+        // default adapter, `extract.canvas()` is a plain
+        // `document.createElement("canvas")` (`BrowserAdapter.mjs`), so this
+        // cast states what the value is; it belongs here, the one place that
+        // holds both types.
+        const canvas = rasterize(frame) as unknown as HTMLCanvasElement;
+        await observer.onFrame?.(canvas, frame);
+        yield canvas;
+        // Resumed only when the encoder asks for the next frame, by which
+        // point it has copied this one into a `VideoSample`. Zero-sizing the
+        // canvas frees its backing store now rather than whenever the
+        // garbage collector gets to it.
+        canvas.width = 0;
+        canvas.height = 0;
+        if (performance.now() - lastYield >= YIELD_EVERY_MS) {
+          await yieldToEventLoop();
+          lastYield = performance.now();
+        }
+      }
+    }
+
+    return await encodeVideo(video.plan, rasterized(), {
+      onProgress: opts.onProgress,
+      onEncoderConfig: observer.onEncoderConfig,
+    });
   } finally {
     runtime?.destroy();
     root?.destroy({ children: true, texture: true });

@@ -43,6 +43,38 @@ export class VideoExportError extends Error {
 }
 
 /**
+ * Refuse, with a diagnostic, if this browser cannot encode `plan`: no
+ * WebCodecs at all (most often an insecure context), or no support for the
+ * plan's codec string at its size, rate and settings.
+ *
+ * The one copy of the environment check. `encodeVideo` calls it first, and
+ * `runVideoExport` calls it before sampling (ruling R45), because sampling
+ * and rasterizing a long scene takes seconds and a refusal should not wait
+ * for them, or be pre-empted by running out of memory during them.
+ */
+export async function assertVideoEncodable(plan: VideoPlan): Promise<void> {
+  if (typeof VideoEncoder === "undefined") {
+    throw new VideoExportError(noWebCodecsDiagnostic());
+  }
+  const config = videoSourceConfig(plan);
+  const support = await VideoEncoder.isConfigSupported({
+    codec: plan.fullCodecString,
+    width: plan.width,
+    height: plan.height,
+    bitrate: plan.bitrate,
+    framerate: plan.fps,
+    hardwareAcceleration: config.hardwareAcceleration,
+    latencyMode: config.latencyMode,
+    bitrateMode: config.bitrateMode,
+  });
+  if (!support.supported) {
+    throw new VideoExportError(
+      unsupportedCodecDiagnostic(plan.fullCodecString, plan.container),
+    );
+  }
+}
+
+/**
  * Encode an already-rasterized frame sequence into muxed container bytes.
  *
  * **This module sees neither the scene graph nor the IR** — it takes a
@@ -62,7 +94,7 @@ export class VideoExportError extends Error {
  * pinned by `videoContract.test.ts`; `videoEncode.test.ts` pins that this
  * module passes them to mediabunny unchanged, with mediabunny mocked.
  *
- * The parameter stays `Iterable<CanvasImageSource>` rather than PixiJS's
+ * The parameter stays a sequence of `CanvasImageSource` rather than PixiJS's
  * `ICanvas` (what `frameRaster.ts`'s rasterizer actually returns): `ICanvas`
  * is a structural interface, not assignable to the DOM `CanvasImageSource`
  * union, and widening this signature to accept it would put a `pixi.js` type
@@ -82,26 +114,11 @@ export class VideoExportError extends Error {
  */
 export async function encodeVideo(
   plan: VideoPlan,
-  canvases: Iterable<CanvasImageSource>,
+  canvases: Iterable<CanvasImageSource> | AsyncIterable<CanvasImageSource>,
   hooks: EncodeVideoHooks = {},
 ): Promise<Uint8Array> {
   const { onProgress } = hooks;
-  if (typeof VideoEncoder === "undefined") {
-    throw new VideoExportError(noWebCodecsDiagnostic());
-  }
-
-  const support = await VideoEncoder.isConfigSupported({
-    codec: plan.fullCodecString,
-    width: plan.width,
-    height: plan.height,
-    bitrate: plan.bitrate,
-    framerate: plan.fps,
-  });
-  if (!support.supported) {
-    throw new VideoExportError(
-      unsupportedCodecDiagnostic(plan.fullCodecString, plan.container),
-    );
-  }
+  await assertVideoEncodable(plan);
 
   const target = new BufferTarget();
   const formatOptions = videoOutputFormatOptions(plan);
@@ -128,7 +145,12 @@ export async function encodeVideo(
   let index = 0;
   const duration = frameDurationSeconds(plan.fps);
   try {
-    for (const canvas of canvases) {
+    // `for await` so the caller can rasterize lazily, one frame per
+    // iteration. `new VideoSample(canvas)` copies the pixels at construction
+    // (with WebCodecs present it wraps `new VideoFrame(canvas)`,
+    // `mediabunny.mjs:20839-20853`), so the source may drop or reuse the
+    // canvas as soon as the next frame is requested.
+    for await (const canvas of canvases) {
       const sample = new VideoSample(canvas, {
         timestamp: frameTimestampSeconds(index, plan.fps),
         duration,
