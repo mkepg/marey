@@ -707,38 +707,87 @@ derivatives — attributed to the encoder side, and by the reviewer's raw
 
 ## Criterion 3 — no frame dropped, duplicated or reordered, relative to the sampler's output
 
-Per R20, the primary fixture is `freeze-midair.marey` (continuous free-fall
-for its whole exported window, never settles), not `compound-logo.marey`
-(its own comment: "the mark comes to rest at 5.5s, so the last 2.5s are
-genuinely settled frames" — `eval/scenes-3b/compound-logo.marey:30-31`).
 The check (design §10.2): for each decoded frame *k*, compute a distance to
-sampler reference frames *k−2..k+2* and require the minimum to be uniquely
-achieved by *k* itself (`strict`); when two or more candidates tie for the
-minimum the match is `tie`, reported but never gated. This positional check
-is used instead of pixel equality because both codecs are lossy — a
-dropped, duplicated or reordered frame makes a decoded frame resemble a
-*neighbour* more than itself, which survives lossy compression; exact pixel
-equality would not, structurally, regardless of correctness.
+sampler reference frames *k−2..k+2* and require the minimum to be achieved by
+*k* itself. A match is `strict` when one candidate achieves the minimum, and
+`tie` when two or more do. Since the fix wave (R46) the harness fails a run
+on either of two shapes: a strict match that is not *k*, and a tie whose
+tied set **excludes** *k* (two other references nearer than *k*). A tie that
+includes *k* is reported and never gates. Before the wave only the first shape
+gated: `kInTiedSet` was computed and read nowhere (finding I-1). This
+positional check is used instead of pixel equality because both codecs are
+lossy — a dropped, duplicated or reordered frame makes a decoded frame
+resemble a *neighbour* more than itself, which survives lossy compression;
+exact pixel equality would not, structurally, regardless of correctness.
 
-### Primary fixture — `freeze-midair.marey`, continuous motion throughout
+### Primary fixture — `linear-motion.marey` (since the fix wave)
 
-Both runs above (Criterion 1/2 sections) already produced this criterion's
-numbers; restated here as criterion 3 evidence specifically:
+`tools/visual-check/scenes/linear-motion.marey`: an 800×600 scene,
+3 s, a 160 px box moving right and a 30 px-radius dot moving down, both at
+constant velocity from frame 0 to the last frame and on screen throughout
+(6.7 px and 5.3 px per frame at 30 fps). Every neighbouring pair of reference
+frames differs visibly, so every decoded frame has one clearly nearest
+reference from the first frame on. It passes `node bin/marey.mjs check`, as
+every tracked `.marey` file must. All runs through the shared pipeline:
+
+| Run | Frames | Strict | Tie | Strict mismatches | Ties excluding k | Min margin among strict | Exit |
+|---|---|---|---|---|---|---|---|
+| WebM, 30 fps (`fw/i4-lin-webm`) | 90 | 90 | 0 | **0** | **0** | 0.4710 | 0 |
+| MP4, 30 fps (`fw/i5-lin-mp4`) | 90 | 90 | 0 | **0** | **0** | 0.4420 | 0 |
+| WebM, 24 fps (`fw/i9-lin-webm-24`) | 72 | 72 | 0 | **0** | **0** | 0.8204 | 0 |
+| MP4, 60 fps (`fw/i2-lin-mp4-60`, 6 GOPs) | 180 | 180 | 0 | **0** | — (run before the gate existed) | 0.1139 | 1 (raw MP4 bytes; gated then, not now) |
+| MP4, 1920×1080 copy (`fw/i2-hd-mp4`) | 90 | 90 | 0 | **0** | — (run before the gate existed) | 0.7372 | 1 (same reason) |
+| MP4, 1080×1920 copy (`fw/i2-portrait-mp4`) | 90 | 90 | 0 | **0** | — (run before the gate existed) | 0.4831 | 1 (same reason) |
+| WebM, 1920×1080 copy (`fw/i2-hd-webm`) | 90 | 90 | 0 | **0** | — (run before the gate existed) | 0.7413 | 0 |
+
+For the four rows run before the new gate, "0 ties" means no tie of any kind,
+so none could have excluded *k*. The minimum strict margins (0.11 to 0.82)
+compare with 0.025–0.09 on `freeze-midair` below. The reviewer's own linear
+fixture gave the same picture independently (72/72 at 24 fps WebM, 180/180
+at 60 fps MP4, 0 ties).
+
+**Net: every decoded frame of the primary fixture, in both containers, at
+three frame rates and three frame sizes, has a unique nearest reference, and
+it is itself.**
+
+### Former primary fixture — `freeze-midair.marey`, and a correction to R20
+
+Task 6's numbers (pre-wave, `t6-*`), restated for the record:
 
 | Run | Strict | Tie | Strict mismatches | Max off-diagonal margin | Min margin among strict matches |
 |---|---|---|---|---|---|
 | WebM (`t6-freeze-webm`) | 12 | 3 | **0** | 0.5187 | 0.0922 |
 | MP4 (`t6-freeze-mp4`) | 13 | 2 | **0** | 0.5201 | 0.0248 |
 
-Zero strict mismatches in both containers: every decoded frame's uniquely-best
-match among its neighbours is itself. 3/15 (WebM) and 2/15 (MP4) frames tied
-even though this scene never settles within the exported 0.5s window — this
-is the same behaviour Task 3's informal smoke test on this fixture noted
-("evidence the `step=4` downsampled distance can tie on genuinely-moving
-content too, not only on a settled scene"), reproduced independently here:
-ties are not exclusively a symptom of a static scene, and this harness
-correctly reports them as ties rather than folding them into either a pass
-or a failure.
+Task 6 summarised this as "every decoded frame's uniquely-best match among
+its neighbours is itself". **That was not what was measured.** A tied frame
+has no uniquely-best match, and one of the WebM ties excluded the frame
+itself. Re-run after the wave (`fw/i4-freeze-webm`, `fw/i4-freeze-mp4`), the
+first frames read:
+
+| Container | Frame | Match | Distances to references |
+|---|---|---|---|
+| WebM | 0 | tie [0, 1] | 0 = 1.00061, 1 = 1.00061, 2 = 1.03212 |
+| WebM | 1 | tie [0, 1] | 0 = 1.00738, 1 = 1.00738, 2 = 1.03524 |
+| WebM | 2 | **tie [0, 1], excludes 2** | 0 = 1.01763, 1 = 1.01763, **2 = 1.02066** |
+| MP4 | 0 | tie [0, 1] | 0 = 1.80912, 1 = 1.80912, 2 = 1.83630 |
+| MP4 | 1 | tie [0, 1] | 0 = 1.80968, 1 = 1.80968, 2 = 1.83501 |
+| MP4 | 2 | strict, 2 | 0 = 1.83677, 1 = 1.83677, **2 = 1.81194** (margin 0.0248) |
+
+Reference frames 0 and 1 are identical on the harness's step-4 grid (equal
+distances from every decoded frame): a fall from rest has barely moved after
+one frame. Decoded WebM frame 2 is nearer to references 0 and 1 than to
+reference 2, by 0.003 against a noise floor of about 1.0. **So R20's claim
+that `freeze-midair` can tell a dropped frame from a still one is false for
+its frames 0–2**: those frames carry no discriminating power, and 20% (WebM)
+/ 13% (MP4) of the former primary fixture was unverified. The tie is most
+likely codec noise at sub-grid motion; it is the shape of evidence a wrong
+frame would also produce, which is why the gate treats it as a failure.
+
+**The new gate fires on this real data.** `fw/i4-freeze-webm` now exits 1
+with `ties-excluding-k=1` (frame 2, tied [0, 1]); removing only the new
+condition from the exit test and re-running the same scene exits 0 with the
+same tie printed. `fw/i4-freeze-mp4` exits 0: its two ties include *k*.
 
 ### Secondary observation — `compound-logo.marey` (WebM), reproducing the known near-tie
 
@@ -766,6 +815,11 @@ scene's author believed it settled. **One third of this run's frames tie,
 plus a near-static tail** — exactly the condition spec §10.2 names as "not
 proof — proof the fixture was wrong" for this criterion, which is the
 reasoning behind R20's fixture choice, confirmed rather than merely cited.
+
+**Unchanged after the fix wave.** Re-run on the shared pipeline
+(`fw/i9-logo-webm`): 160 strict / 80 tie / **1** strict mismatch, the same
+frame 131 → 132 at distance 1.039811..., minimum strict margin 0.000833, and
+0 ties excluding *k*. The run exits 1 on that mismatch, as it did before.
 
 ### The fault-injection table — evidence the check can fail
 
@@ -800,13 +854,32 @@ harness's simulation-hash equality gate (`hashesEqual`) can itself fail,
 which none of the original four could exercise since they corrupted both
 cold runs identically.
 
-**Net for criterion 3: zero strict mismatches on the continuously-moving
-primary fixture, in both containers, measured today. The check itself is
-proven capable of failing by five independently-caught injected faults
-(cited from Task 3, not re-run here), each caught by the specific
-mechanism the design predicts — frame count, nearest-neighbour, the
-timestamp schedule, or the simulation-hash gate — so a clean run on the
-primary fixture is evidence, not a check that cannot fail.**
+Task 3's faults were injected into `devVideoSeam.ts`, which was then a copy
+of the orchestration, so they proved the harness could catch faults in the
+copy, not in the shipped path. The reviewer showed that gap: the same kinds
+of fault in `videoPipeline.ts` left all 862 tests green and were invisible
+to the harness (finding I-2). **After the fix wave, faults injected into the
+shipped `videoPipeline.ts`**, each reverted in the same command and the
+revert confirmed with `git diff --stat` empty:
+
+| # | Injected fault (in `videoPipeline.ts`'s frame loop) | Fixture | Caught by | Exit code |
+|---|---|---|---|---|
+| 6 | Reverse the frame order | `linear-motion`, WebM | Nearest-neighbour: 38 strict mismatches and 34 ties excluding *k*; frame count still 90/90 | 1 |
+| 7 | Drop every 10th frame | `linear-motion`, WebM | Frame count (81 of 90), 9 sampled frames never handed to the encoder, 72 strict mismatches | 1 |
+| 8 | Reverse the frame order | `linear-motion`, MP4 | Nearest-neighbour: 38 strict mismatches, 34 ties excluding *k* (and, since R47, not masked by an MP4 byte gate that failed every run) | 1 |
+
+The unmutated control on the same fixture exited 0 in both containers.
+
+**Net for criterion 3: every decoded frame of the primary fixture
+(`linear-motion.marey`) has a unique nearest reference and it is itself —
+in both containers, at 24, 30 and 60 fps, at 800×600, 1920×1080 and
+1080×1920, measured after the fix wave on the pipeline the export button
+runs. The former primary fixture's frames 0–2 carry no discriminating power,
+and its one tie excluding *k* now fails the run. The check is proven capable
+of failing by Task 3's five faults (injected into the former copy, cited)
+and by three faults injected into the shipped orchestration after the wave,
+each caught by the mechanism the design predicts — so a clean run is
+evidence, not a check that cannot fail.**
 
 ---
 
@@ -860,6 +933,14 @@ None of the six images above is blank or a flat solid colour, and within
 each triple the three frames are visibly distinct from one another — ruling
 out Phase 4's blank-PNG failure mode and a frozen/stuck export on both
 fixtures.
+
+### After the fix wave — `linear-motion.marey`, and the portrait 1080×1920 MP4
+
+| Frame | What is actually visible |
+|---|---|
+| `fw/i4-lin-webm/decoded_0000.png` (0, t=0s) | A light-blue square at the left edge, vertically centred (spanning about x 20–180, y 220–380), and a pink disc at the top centre (about (400, 60)), on the near-black background — the scene's declared start positions. |
+| `fw/i4-lin-webm/decoded_0089.png` (89, t=2.967s, last frame) | The square near the right edge (about x 613–773), same height; the disc near the bottom centre (about (400, 535)). Both match `start + (end − start) × 2.967/3` for the declared linear motion. No smear or ghost visible. |
+| `fw/i2-portrait-mp4/decoded_0045.png` (45, t=1.5s, 1080×1920) | The square and the disc both at the canvas centre (540, 960), the disc drawn over the square, halfway along both paths as expected at the midpoint. Some faint H.264 block noise is visible inside the disc and at the square's top-right; not a second object or a ghost frame. |
 
 ---
 
