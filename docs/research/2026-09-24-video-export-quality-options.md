@@ -485,11 +485,14 @@ alongside it, e.g. from the same place (§3). What it does **not** settle: wheth
 Marey's own TypeScript, which would drive the wasm through ffmpeg.wasm's
 MIT wrapper in a worker, is "a work based on the Program" or "mere
 aggregation". That is a legal-interpretation question these texts cannot
-answer; see Open questions. Repo fact relevant to it: the repository has no
-`LICENSE` file and `package.json` has no `"license"` field (checked by
-listing the repo root and grepping `package.json`), so Marey's own licence
-is currently undeclared. x264's alternative commercial licence (above) is
-the documented route for avoiding GPL terms.
+answer; see Open questions. Repo fact relevant to it: Marey is **MIT**
+licensed. `main` gained a root `LICENSE` and `"license": "MIT"` in
+`package.json` in `540f6ed`. That commit was not on the `phase-5b-video`
+branch this note was written on, which is why an earlier version of this
+paragraph said the licence was undeclared (corrected at the Phase 5B
+merge). So the question is whether an MIT app may drive a GPL wasm module
+it ships. x264's alternative commercial licence (above) is the documented
+route for avoiding GPL terms.
 
 ### 4.2 Permissively licensed wasm H.264 encoders
 
