@@ -168,7 +168,7 @@ export async function runVideoExport(opts: RunVideoExportOptions): Promise<Uint8
     // the runtime, so the two phases cannot interleave even by mistake.
     const frames = sampleFrames(runtime, root, planned.plan);
     observer.onSampled?.(frames);
-    const rasterize = createFrameRasterizer(app, root, frames);
+    const rasterize = createFrameRasterizer(app, root, frames, video.plan.scale);
 
     async function* rasterized(): AsyncGenerator<HTMLCanvasElement> {
       let lastYield = performance.now();

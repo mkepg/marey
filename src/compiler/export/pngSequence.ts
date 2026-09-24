@@ -48,7 +48,9 @@ export async function encodePngSequence(
   frames: ReadonlyArray<FrameSnapshot>,
 ): Promise<Uint8Array[]> {
   if (frames.length === 0) return [];
-  const rasterize = createFrameRasterizer(app, root, frames);
+  // PNG export is not scaled (spec §2.1, O3: "2x" is a video-only decision;
+  // APNG stays at 1x too) -- always the scene's own declared pixel size.
+  const rasterize = createFrameRasterizer(app, root, frames, 1);
   const out: Uint8Array[] = [];
   for (const frame of frames) {
     out.push(await pngBytesOf(rasterize(frame)));

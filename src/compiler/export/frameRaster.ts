@@ -111,10 +111,21 @@ export function assertFrameSetMatchesTree(
  * go through it so they cannot disagree about the result's size or background.
  * Every argument below encodes a decision that would otherwise be duplicated:
  *
- * - `frame: region` at the renderer's own width/height, `resolution: 1` — the
- *   output is the scene's declared pixel dimensions, never the preview's
- *   `devicePixelRatio`, and never a content bounding box that would change
- *   size as objects move.
+ * - `frame: region` at the renderer's own width/height, `resolution: scale` —
+ *   the output is the scene's declared pixel size **times the exporter's
+ *   scale**; never the preview's `devicePixelRatio`, and never a content
+ *   bounding box that would change size as objects move. `scale` is a
+ *   required 4th argument rather than a default, so a caller that forgets it
+ *   is a type error, not a silent 1x (spec §2.2). The PNG sequence and APNG
+ *   exporters pass `1`; the video exporter passes `plan.scale` (`VIDEO_SCALE`,
+ *   currently 2).
+ *
+ *   `region` itself stays in **scene units** (`app.renderer.width/height`,
+ *   never multiplied by `scale` here) even though the output is larger:
+ *   `GenerateTextureSystem` (the system behind `extract.canvas`) multiplies
+ *   the given `frame` by `resolution` itself (research §6), so multiplying it
+ *   again here would double-scale the region and crop or pad the result
+ *   instead of rasterizing it at a higher density.
  * - `renderer.extract.canvas` rather than reading the live canvas: PixiJS does
  *   not set `preserveDrawingBuffer`, so an in-page read returns a blank frame.
  *   A naive exporter writes blank output *and reports success*, because
@@ -142,6 +153,7 @@ export function createFrameRasterizer(
   app: Application,
   root: Container,
   frames: ReadonlyArray<FrameSnapshot>,
+  scale: number,
 ): (frame: FrameSnapshot) => ICanvas {
   assertFrameSetMatchesTree(root, frames);
 
@@ -153,7 +165,7 @@ export function createFrameRasterizer(
     return app.renderer.extract.canvas({
       target: root,
       frame: region,
-      resolution: 1,
+      resolution: scale,
       clearColor,
       antialias: true,
     });

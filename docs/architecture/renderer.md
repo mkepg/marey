@@ -199,7 +199,27 @@ sites: `frameSampler.ts`'s `snapshotFor` (sampling) and
 onto a tree for re-rendering) — the same inverse pair that module's own
 docstring names. `frameRaster.ts` is the shared rasterization seam both the
 PNG and (Phase 5B) video exporter replay frames through, so they cannot
-disagree about the exported size, background or frame identity.
+disagree about the exported background or frame identity, or about the RULE
+that fixes the exported size: **the output is the scene's declared pixel
+size times the exporter's own scale — never the preview's
+`devicePixelRatio`, and never a content bounding box** (spec §2.2,
+Phase 5C). `createFrameRasterizer`'s `scale` is a required 4th argument, not
+a default, so a caller that forgets it is a type error rather than a silent
+1x. The PNG sequence and APNG exporters pass `1`; the video exporter passes
+`VideoPlan.scale` (`VIDEO_SCALE`, currently 2, `videoContract.ts`) — so the
+two exporters' outputs are no longer literally the same size, but both are
+still `createFrameRasterizer`'s one rule applied at a different scale, not
+two independent implementations that could drift apart. The scale multiplies
+the OUTPUT only: the `frame: region` handed to `extract.canvas` stays in
+scene units, because `GenerateTextureSystem` multiplies it by `resolution`
+itself (research §6) — multiplying it again here would double-scale the
+region instead of rasterizing it at a higher density. This is also the trap
+a 2x export has to avoid on the `Text` side: PixiJS rasterizes a `Text`'s own
+texture at the *renderer's* resolution, so an export `Application`
+initialised at `resolution: 1` and extracted at `resolution: 2` would
+upscale already-blurry 1x text while every vector shape came out sharp.
+`videoPipeline.ts` avoids it by initialising the export `Application` itself
+at `resolution: video.plan.scale`, not just extracting at that scale.
 
 ## The Lottie encoder boundary (Phase 5A)
 
