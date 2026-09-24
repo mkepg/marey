@@ -346,6 +346,12 @@ metadata (frame count, dimensions, per-frame timestamps from a real
 container back inside a real browser page rather than trusting the encoder's
 own claim about what it wrote.
 
+The three subsections below are Task 6's pre-wave runs, with commands
+recorded as they were run. `--mask-mp4-times` no longer exists (R47: the
+masked MP4 comparison is always reported and never gates), so a flag passed
+today is ignored. The post-wave runs, including sizes above 720p and rates
+other than 30 fps, follow in "After the fix wave".
+
 ### MP4 — `freeze-midair.marey`, 30fps, 0.5s
 
 `freeze-midair.marey` declares no top-level `duration:` (only a `duration:
@@ -424,9 +430,66 @@ schedule) that the 15-frame MP4 run above already establishes cleanly, and
 criterion 2's MP4 finding (below) does not depend on scene size. Named as a
 gap rather than silently skipped.
 
-**Net: criterion 1 holds for both containers**, measured from three
-independent harness invocations (two scenes, both containers), reading the
-decoded file's own metadata rather than the request.
+### After the fix wave — sizes above 720p, and 24 and 60 fps
+
+Before the wave, MP4 could not export anything larger than 1280×720 in area:
+the codec string pinned H.264 level 3.1, whose maximum frame size is 3,600
+macroblocks (921,600 coded pixels), and Chromium enforces that limit. The
+reviewer measured 1920×1080 refusing with `VIDEO_UNSUPPORTED_CODEC`, a
+message that blamed the browser (finding I-5). Every piece of evidence in
+this document had been 800×600, so nothing here could have found it.
+
+The codec string is now a function of the plan (`h264LevelFor`,
+`vp9LevelFor` in `videoContract.ts`): the lowest level whose limits admit
+the frame size in macroblocks, each dimension (`Sqrt(MaxFS * 8)`), the
+macroblock rate and the bitrate. **H.264 limits come from Rec. ITU-T H.264
+(03/2010), Annex A, Table A-1 and clause A.3.1**, the edition that could be
+retrieved; it ends at level 5.1, so 5.1 (36,864 macroblocks per frame and
+983,040 per second, e.g. 3840×2160 at 30 fps) is the top of the supported
+MP4 range, and a scene beyond it is refused by `planVideo` with
+`VIDEO_EXCEEDS_CODEC_LEVELS`, which names the scene's size and rate. VP9
+limits come from libvpx's `vp9_level_defs` (levels 1 to 6.2). Measured with
+`VideoEncoder.isConfigSupported` in this harness's Chromium: the H.264
+frame-size limit is enforced exactly (`avc1.42001f` accepts 1280×720 and
+refuses 1296×720; `avc1.420020` accepts 1296×720); the macroblock-rate limit
+is not enforced, and VP9 levels are not enforced at all (`vp09.00.10.08`
+accepted 1920×1080). So an honest declaration is Marey's job, not the
+browser's.
+
+Post-wave runs, all through the shared pipeline, all on `linear-motion.marey`
+(or a copy of it at the stated size, outside the repository), 3 s, read from
+the decoded file:
+
+| Run | Size, fps | Codec string (from the recorded encoder config) | Declared in the file | Decoded | Dimensions | Timestamps on schedule | Last timestamp |
+|---|---|---|---|---|---|---|---|
+| `fw/i2-lin-mp4-30` | 800×600, 30 | `avc1.42001f` | `avcC` level 31 | 90/90 | match | yes | 2.9667 |
+| `fw/i2-lin-mp4-60` | 800×600, 60 | `avc1.420020` | `avcC` level 32 | 180/180 | match | yes | 2.9833 |
+| `fw/i9-lin-webm-24` | 800×600, 24 | `vp09.00.31.08` | `CodecPrivate` level 31 | 72/72 | match | yes | 2.958 |
+| `fw/i4-lin-webm` | 800×600, 30 | `vp09.00.31.08` | `CodecPrivate` level 31 | 90/90 | match | yes | 2.967 |
+| `fw/i2-hd-mp4` | 1920×1080, 30 | `avc1.420028` | `avcC` level 40 | 90/90 | match | yes | 2.9667 |
+| `fw/i2-portrait-mp4` | 1080×1920, 30 | `avc1.420028` | `avcC` level 40 | 90/90 | match | yes | 2.9667 |
+| `fw/i2-hd-webm` | 1920×1080, 30 | `vp09.00.40.08` | `CodecPrivate` level 40 | 90/90 | match | yes | 2.967 |
+
+The 60 fps row matches what the reviewer found by parsing a pre-wave 60 fps
+file: the encoder had already raised the level in the stream to 3.2 while
+the string said 3.1. The string and the stream now agree on the level. They
+still disagree on the constraint flags: the string carries `00` and the
+stream's `avcC` carries `0xC0` (Constrained Baseline). That is kept
+deliberately, so that 800×600 at 30 fps still selects `avc1.42001f`, the
+string every pre-wave MP4 number was measured with; it is a disclosed
+residual (M-8), not a fix.
+
+As a control, the same 1920×1080 MP4 run with the string forced back to the
+old pin `avc1.42001f` fails exactly as the reviewer measured:
+`[VIDEO_UNSUPPORTED_CODEC] This browser's video encoder does not support
+'avc1.42001f'`.
+
+**Net: criterion 1 holds for both containers**, measured before the wave
+from three independent harness invocations (two scenes, both containers)
+and after it on the shared pipeline at 800×600, 1920×1080 and 1080×1920,
+at 24, 30 and 60 fps, reading the decoded file's own metadata rather than
+the request. MP4 is bounded above by H.264 level 5.1 and refuses beyond it
+by name.
 
 ---
 
@@ -451,12 +514,31 @@ criterion 2 evidence specifically:
 
 Both scenes, one small/short and one large/long, produce **exactly
 byte-identical WebM files across two independent cold runs**, with no
-masking applied or needed (`--mask-mp4-times` has no effect on WebM; the
-harness's own header comment documents that mediabunny's WebM/Matroska
-muxer path contains no wall-clock or random field this scene shape can
-trigger). This is measured evidence of byte-identity, not merely the
-absence of a counter-example: two full independent invocations, two
-different scenes, one of them at 240 frames.
+masking applied or needed (mediabunny's WebM/Matroska muxer path contains
+no wall-clock or random field this scene shape can trigger, per the
+harness's header comment). This is measured evidence of byte-identity, not
+merely the absence of a counter-example: two full independent invocations,
+two different scenes, one of them at 240 frames.
+
+**Re-measured after the fix wave.** The table above is pre-wave: those files
+declare VP9 level 1.0. Every WebM now carries a different level byte in its
+`CodecPrivate` (R43), and is produced by the shared, lazily-rasterizing
+pipeline (R45), so byte identity was measured again on the new files:
+
+| Scene | Codec string | runA bytes | runB bytes | Raw bytes equal | Hash equal | Reference frames bit-identical |
+|---|---|---|---|---|---|---|
+| `freeze-midair.marey`, `--duration 0.5` (`fw/i4-freeze-webm`) | `vp09.00.31.08` | 4146 | 4146 | **true** | true (`38629fc3`) | true (15/15) |
+| `compound-logo.marey` (`fw/i9-logo-webm`) | `vp09.00.31.08` | 416063 | 416063 | **true** | true (`26cca4e9`) | true (240/240) |
+| `linear-motion.marey` (`fw/i4-lin-webm`) | `vp09.00.31.08` | 123425 | 123425 | **true** | true (`fa8e64c2`) | true (90/90) |
+| `linear-motion.marey`, 24 fps (`fw/i9-lin-webm-24`) | `vp09.00.31.08` | 98440 | 98440 | **true** | true (`36fad321`) | true (72/72) |
+| 1920×1080 copy of `linear-motion` (`fw/i2-hd-webm`) | `vp09.00.40.08` | 260337 | 260337 | **true** | true (`7a3b74ba`) | true (90/90) |
+
+The byte counts of the two scenes measured before and after are unchanged
+(4146 and 416063): the level is one byte inside a fixed-length field. The
+eager (pre-R45) and lazy pipelines were also compared directly on
+`linear-motion` WebM: `fw/i2-lin-webm-30` (eager, after the codec change)
+and `fw/i3-lin-webm` (lazy) are byte-identical (`cmp`). The simulation hashes
+match Task 6's, so the change reached only the container.
 
 ### MP4 — branch two: not byte-identical, reason documented at the encoder boundary
 
@@ -576,14 +658,50 @@ about this project's own software-rendering-forced test harness on one
 machine, not a general claim about what any Chromium build's H.264 encoder
 does. No hardware-encoder path was reached or ruled out here.
 
+**Narrowed further by the whole-branch reviewer, cited as the reviewer's
+measurement (not re-measured in the fix wave).** The reviewer encoded the
+same bitmaps with raw WebCodecs `VideoEncoder` in one page, with no
+mediabunny involved, three encodes per configuration under `constant`,
+`variable` and `realtime` settings, and every output hash differed; the
+`quantizer` bitrate mode was unsupported for H.264 there. On that
+measurement the non-determinism is **below the muxer**. Which layer of the
+browser's H.264 stack produces it is still not claimed (R32).
+
+**After the fix wave: MP4 bytes are reported and never gate (R47).** Before
+the wave the harness gated MP4 on raw bytes whenever `--mask-mp4-times` was
+not passed, and on masked bytes when it was; since both comparisons were
+false in every pre-wave MP4 run, every MP4 run exited 1, and a correct run
+could not be told apart from one with reordered frames (finding I-6). Now a
+correct MP4 run exits 0 (`fw/i5-lin-mp4`, `fw/i4-freeze-mp4`) and a run with
+the frame loop reversed in `videoPipeline.ts` exits 1 on criterion 3.
+
+Post-wave MP4 byte comparisons, for the record:
+
+| Run | runA / runB bytes | Raw equal | Masked equal | Reference frames bit-identical |
+|---|---|---|---|---|
+| `freeze-midair`, 0.5 s (`fw/i4-freeze-mp4`) | 7293 / 7295 | false | false | true (15/15) |
+| `linear-motion`, 800×600, 30 fps (`fw/i5-lin-mp4`) | 84365 / 84460 | false | false | true (90/90) |
+| `linear-motion`, 800×600, 60 fps (`fw/i2-lin-mp4-60`) | 168369 / 167583 | false | false | true (180/180) |
+| 1920×1080 copy (`fw/i2-hd-mp4`) | 179372 / 179372 | false | **true** | true (90/90) |
+| 1080×1920 copy (`fw/i2-portrait-mp4`) | 95753 / 95753 | false | **true** | true (90/90) |
+
+The two large-frame runs came out identical once the six wall-clock fields
+were masked; every 800×600 run did not. Two runs are not enough to say MP4
+is deterministic at those sizes, and nothing here explains the difference,
+so it is recorded as an observation. It does not change the criterion-2
+branch MP4 is in: across this phase MP4 bytes are not reproducible in
+general, which is why they do not gate.
+
 **Net for criterion 2: WebM satisfies the first branch (byte-identical,
-measured twice on two different scenes). MP4 satisfies the second branch —
+measured twice on two different scenes before the wave and on five runs
+after it). MP4 satisfies the second branch —
 not byte-identical, with the reason documented at the encoder boundary: the
 renderer is exonerated by direct, repeated measurement (bit-identical
 reference frames in all three runs), the six spec-named timestamp fields
 account for a negligible fraction of the actual divergence, and the
 remainder is inside the compressed bitstream and its mechanical metadata
-derivatives — attributed to the encoder side and no further.**
+derivatives — attributed to the encoder side, and by the reviewer's raw
+`VideoEncoder` measurement to below the muxer, and no further.**
 
 ---
 
