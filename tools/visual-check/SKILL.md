@@ -454,7 +454,7 @@ its self-contained ESM bundle
 (`node_modules/mediabunny/dist/bundles/mediabunny.mjs`) is injected into the
 page inline, with no network access. Unlike every other package named on this
 page, `mediabunny` is **not** a devDependency: Phase 5B's Task 5 made it a
-production dependency (`package.json`, `dependencies`, `^1.58.0`), because the
+production dependency (`package.json`, `dependencies`, pinned exactly at `1.58.0` like `matter-js`, ruling R50), because the
 shipped export button imports it too, so it ships inside the built app bundle
 a real visitor downloads. It is licensed **MPL-2.0**; source is at
 <https://github.com/Vanilagy/mediabunny>.
