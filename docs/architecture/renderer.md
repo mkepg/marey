@@ -257,6 +257,66 @@ measured this is inert, because neither propagates. In a renderer that *did*
 propagate, every nested alpha would double-apply. That is filed, not fixed —
 and the fixture above is the one that would catch it.
 
+## The video encoder boundary (Phase 5B)
+
+Video export carries forward Phase 5A's two-modules-one-rule-each shape rather
+than inventing a new one:
+
+- **`export/videoContract.ts` must not import `pixi.js`** in any form. It is
+  pure request validation, codec/config resolution and timestamp arithmetic.
+- **`export/videoEncode.ts` must not import `pixi.js` or `sceneIR`** in any
+  form. It receives a `VideoPlan` and a sequence of `CanvasImageSource`s and has
+  no way to reach the scene graph or the IR.
+
+**Unlike Phase 5A's version of this rule, it is no longer something you have to
+remember to grep.** `export/exportBoundary.test.ts` asserts it directly against
+the two files' own source text, through a helper (`importsModule`) that matches
+a quoted specifier against all three ESM import shapes — a static
+`from "X"`, a dynamic `import("X")`, and a bare `import "X"` — and matches if
+the module fragment appears *anywhere* inside the quotes, not only flush against
+the closing one. That second property is load-bearing, not defensive
+over-engineering: pixi.js 8.16 declares 23 export subpaths
+(`pixi.js/app`, `pixi.js/scene`, …), so `import { Application } from
+"pixi.js/app"` is a real, compiling violation of "must not import pixi.js in
+any form" that an ends-with match reports clean, and a `from "../ir/sceneIR.ts"`
+specifier is equally real here because every `tsconfig*.json` in this repo sets
+`allowImportingTsExtensions: true`. Each of the file's tests also pins that it
+read the source constant it claims to, by a landmark string unique to that
+file — proven necessary, not assumed: an earlier version of this guard passed
+4/4 when every test was pointed at the same (unrelated, pixi-clean) source
+constant, because the assertions themselves never distinguished which file
+produced a clean answer.
+
+A second, related pair of tests in the same file guards a boundary this phase
+added on top of Phase 5A's shape: `videoPipeline.ts`, `useExportVideo.ts` and
+`TopBar.tsx` — the production path a real export click takes — may not import
+`src/lib/devVideoSeam.ts` in any form, and their code may not reach
+`window.__mareyExportVideo` (the dev-only global that seam installs) either.
+Both checks run over comment-stripped source rather than the raw file, because
+two of the three files name `__mareyExportVideo` in a docstring specifically to
+explain why they do not call it — checked against raw source, the guard read
+that documentation as the violation it exists to prevent.
+
+`frameRaster.ts` is the single rasterization seam the PNG-sequence and video
+exporters both replay frames through — measured, not assumed:
+`pngSequence.ts`, `videoPipeline.ts` and `src/lib/devVideoSeam.ts` all import
+`createFrameRasterizer` from it, not from one another. One seam means the two
+export paths cannot silently diverge on how a sampled frame gets rasterized
+back onto the scene tree — the same size, background and frame-identity
+guarantee the paragraph above already states for it.
+
+**The container determinism asymmetry.** Repeated exports of the same scene
+are byte-identical for WebM, measured across independent cold page loads on
+more than one scene. MP4 is not byte-identical, and the reason is documented
+at the encoder boundary rather than waved at: the lossless reference frames
+each cold run feeds to its own encoder are bit-identical, so the renderer is
+exonerated, and the divergence is inside the compressed bitstream itself,
+attributed to the encoder side and no further — this project's code does not
+control, and did not pinpoint, which layer of Chromium's H.264 stack produces
+it. See `eval/RESULTS-PHASE-5B.md` (criterion 2) for the measured breakdown;
+it is cited here rather than restated, so there is one copy of the numbers to
+keep true.
+
 ## Non-obvious gotchas
 
 - **`physics` inside a group is only legal under a *static* group.** D17: the
