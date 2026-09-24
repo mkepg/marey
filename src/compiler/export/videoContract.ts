@@ -50,11 +50,11 @@ export const DEFAULT_BITRATE = 8_000_000;
  * `node_modules/mediabunny/dist/modules/src/media-source.js`,
  * `const keyFrameInterval = this.encodingConfig.keyFrameInterval ?? 2;`, and
  * confirmed empirically via `EncodedPacketSink` key-frame indices, Task 4
- * §11 Q3). `videoEncode.ts` is the single site that converts this constant
- * to mediabunny's unit, dividing by `plan.fps` at its `VideoSampleSource`
- * call site — see the comment there for the measurement that caught the
- * mismatch (`EncodedPacketSink` returned key-frame indices `[0, 17, 30, 47]`
- * before that conversion existed, instead of every 30 frames).
+ * §11 Q3). `videoSourceConfig` (below) is the single site that converts this
+ * constant to mediabunny's unit, dividing by `plan.fps` — see its docstring
+ * for the measurement that caught the mismatch (`EncodedPacketSink` returned
+ * key-frame indices `[0, 17, 30, 47]` before that conversion existed, instead
+ * of every 30 frames).
  *
  * Explicit here (rather than left unset) because an implicit muxer default
  * is a library-version dependency: a mediabunny upgrade that changed it
@@ -88,6 +88,78 @@ export interface VideoPlan {
 export type VideoPlanResult =
   | { readonly ok: true; readonly plan: VideoPlan }
   | { readonly ok: false; readonly diagnostics: ReadonlyArray<VideoDiagnostic> };
+
+/**
+ * The configuration object `videoEncode.ts` hands to mediabunny's
+ * `VideoSampleSource`, in mediabunny's own field names and units.
+ *
+ * Structurally a subset of mediabunny's `VideoEncodingConfig`, declared here
+ * rather than imported so this module keeps no dependency on the muxer.
+ */
+export interface VideoSourceConfig {
+  readonly codec: VideoPlan["mediabunnyCodec"];
+  readonly bitrate: number;
+  readonly fullCodecString: string;
+  readonly hardwareAcceleration: VideoEncoderOptions["hardwareAcceleration"];
+  readonly latencyMode: VideoEncoderOptions["latencyMode"];
+  readonly bitrateMode: VideoEncoderOptions["bitrateMode"];
+  /** **Seconds** between keyframes: mediabunny's unit, not `VideoPlan`'s. */
+  readonly keyFrameInterval: number;
+}
+
+/**
+ * Build the `VideoSampleSource` config from a plan.
+ *
+ * A pure function here, not an object literal inside `videoEncode.ts`, so a
+ * headless test can pin what actually reaches the encoder (whole-branch
+ * review I-3, ruling R44). Before this existed, `videoContract.test.ts` pinned
+ * the values in `VideoPlan` and nothing pinned that they were passed on:
+ * deleting `latencyMode` from the call site, or reverting the frames-to-seconds
+ * conversion below, left the whole suite green.
+ *
+ * `keyFrameInterval` is the one field that is converted rather than copied.
+ * `VideoPlan` holds it in **frames** (`KEY_FRAME_INTERVAL`); mediabunny's field
+ * of the same name is in **seconds**. Task 2 measured this both by reading the
+ * shipped implementation (`VideoSource.add()` computes
+ * `Math.floor(sampleToEncode.timestamp / keyFrameInterval)`, and that
+ * timestamp is in seconds) and empirically (60 frames at 30 fps with
+ * `keyFrameInterval: 1` produced a keyframe at exactly frame 30, the
+ * one-second boundary). Passed straight through, 30 frames would become a
+ * keyframe every 30 *seconds*.
+ */
+export function videoSourceConfig(plan: VideoPlan): VideoSourceConfig {
+  return {
+    codec: plan.mediabunnyCodec,
+    bitrate: plan.bitrate,
+    fullCodecString: plan.fullCodecString,
+    hardwareAcceleration: plan.encoderOptions.hardwareAcceleration,
+    latencyMode: plan.encoderOptions.latencyMode,
+    bitrateMode: plan.encoderOptions.bitrateMode,
+    keyFrameInterval: plan.encoderOptions.keyFrameInterval / plan.fps,
+  };
+}
+
+/**
+ * Container options for the muxer, keyed by container.
+ *
+ * MP4 uses `fastStart: "in-memory"`, which writes the `moov` box before
+ * `mdat` so a player can start before the whole file has arrived. In
+ * mediabunny 1.58.0 that is also what an unset field resolves to for a
+ * `BufferTarget` (`mediabunny.mjs:31178`,
+ * `this.formatOptions.fastStart ?? (target instanceof BufferTarget ? "in-memory" : false)`),
+ * so today it is explicit for the same reason `KEY_FRAME_INTERVAL` is: an
+ * implicit library default is a library-version dependency. `false` is not
+ * equivalent; it moves `moov` after `mdat`. WebM takes no options.
+ */
+export type VideoOutputFormatOptions =
+  | { readonly container: "mp4"; readonly fastStart: "in-memory" }
+  | { readonly container: "webm" };
+
+export function videoOutputFormatOptions(plan: VideoPlan): VideoOutputFormatOptions {
+  return plan.container === "mp4"
+    ? { container: "mp4", fastStart: "in-memory" }
+    : { container: "webm" };
+}
 
 /**
  * Presentation time of one output frame, in **seconds**.

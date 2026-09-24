@@ -11,6 +11,8 @@ import {
   unsupportedCodecDiagnostic,
   MP4_CODEC_STRING,
   WEBM_CODEC_STRING,
+  videoSourceConfig,
+  videoOutputFormatOptions,
 } from "./videoContract";
 import type { IRSceneNode } from "../sceneIR";
 import type { SamplerPlan } from "./exportContract";
@@ -153,6 +155,75 @@ describe("planVideo · pinned encoder configuration", () => {
     const r = planVideo(EVEN, planFor(EVEN), { container: "mp4", bitrate: 12_345_678 });
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.plan.bitrate).toBe(12_345_678);
+  });
+});
+
+/**
+ * What actually reaches mediabunny (whole-branch review I-3, ruling R44).
+ * The `planVideo` tests above pin `VideoPlan`'s values; these pin the object
+ * built from them, including the one field that is converted rather than
+ * copied. `toStrictEqual` rather than `toEqual`: `toEqual` ignores a key whose
+ * value is `undefined`, so a config that set `latencyMode: undefined` would
+ * pass it.
+ */
+describe("videoSourceConfig", () => {
+  function planOf(ir: IRSceneNode, fps: number, container: "mp4" | "webm") {
+    const r = planVideo(ir, planFor(ir, fps), { container });
+    if (!r.ok) throw new Error(`fixture video plan failed: ${codes(r).join(", ")}`);
+    return r.plan;
+  }
+
+  it("builds the full mp4 config at 30 fps, keyframe interval in seconds", () => {
+    expect(videoSourceConfig(planOf(EVEN, 30, "mp4"))).toStrictEqual({
+      codec: "avc",
+      bitrate: 8_000_000,
+      fullCodecString: "avc1.42001f",
+      hardwareAcceleration: "prefer-software",
+      latencyMode: "quality",
+      bitrateMode: "constant",
+      // 30 frames at 30 fps is one second. Passing the frame count through
+      // unconverted (Task 2's measured bug) would make this 30.
+      keyFrameInterval: 1,
+    });
+  });
+
+  it("divides by the plan's own fps, not a fixed 30", () => {
+    // A conversion hardcoded to `/ 30`, or one that used EXPORT_FPS, would
+    // pass the 30 fps test above and fail these.
+    expect(videoSourceConfig(planOf(EVEN, 24, "mp4")).keyFrameInterval).toBe(30 / 24);
+    expect(videoSourceConfig(planOf(EVEN, 60, "webm")).keyFrameInterval).toBe(0.5);
+  });
+
+  it("builds the webm config with mediabunny's vp9 codec name", () => {
+    const config = videoSourceConfig(planOf(EVEN, 30, "webm"));
+    expect(config.codec).toBe("vp9");
+    expect(config.fullCodecString).toBe(planOf(EVEN, 30, "webm").fullCodecString);
+    expect(config.hardwareAcceleration).toBe("prefer-software");
+    expect(config.latencyMode).toBe("quality");
+    expect(config.bitrateMode).toBe("constant");
+  });
+
+  it("carries a request's bitrate override through to the encoder", () => {
+    const r = planVideo(EVEN, planFor(EVEN), { container: "mp4", bitrate: 12_345_678 });
+    if (!r.ok) throw new Error("fixture video plan failed");
+    expect(videoSourceConfig(r.plan).bitrate).toBe(12_345_678);
+  });
+});
+
+describe("videoOutputFormatOptions", () => {
+  it("asks for an mp4 with moov written before mdat", () => {
+    const r = planVideo(EVEN, planFor(EVEN), { container: "mp4" });
+    if (!r.ok) throw new Error("fixture video plan failed");
+    expect(videoOutputFormatOptions(r.plan)).toStrictEqual({
+      container: "mp4",
+      fastStart: "in-memory",
+    });
+  });
+
+  it("gives webm no container options", () => {
+    const r = planVideo(EVEN, planFor(EVEN), { container: "webm" });
+    if (!r.ok) throw new Error("fixture video plan failed");
+    expect(videoOutputFormatOptions(r.plan)).toStrictEqual({ container: "webm" });
   });
 });
 

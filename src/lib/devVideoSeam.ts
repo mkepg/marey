@@ -24,6 +24,29 @@ export interface ExportVideoResult {
   readonly byteLength: number;
   /** One base64 PNG per sampled frame, for the frame-by-frame comparison. */
   readonly referenceFrames: string[];
+  /**
+   * Every WebCodecs `VideoEncoderConfig` mediabunny reported through
+   * `onEncoderConfig`, copied at the moment of the callback (spec §5's
+   * "resolved config is recorded in the evidence"). mediabunny builds one
+   * candidate per rate-control mode and calls the hook for each before
+   * `isConfigSupported` selects one; with a numeric bitrate there is one.
+   */
+  readonly encoderConfigs: unknown[];
+}
+
+/**
+ * A JSON-safe copy of a `VideoEncoderConfig`, so it survives
+ * `page.evaluate`'s serialisation into `report.json`. After the callback
+ * mediabunny 1.58.0 reassigns `alpha = "discard"` on the same object
+ * (`mediabunny.mjs:35433-35447`); `buildVideoEncoderConfigs` already set it to
+ * `"discard"` for this exporter (no `alpha: "keep"`), so the copy equals the
+ * object then passed to `isConfigSupported` and `configure`. The config holds
+ * only strings, numbers and, for H.264, one nested plain object
+ * (`avc: { format: "avc" }`, `mediabunny.mjs:5255`), so a
+ * JSON round trip loses nothing.
+ */
+function plainEncoderConfig(config: VideoEncoderConfig): unknown {
+  return JSON.parse(JSON.stringify(config));
 }
 
 export interface ExportVideoOptions {
@@ -176,7 +199,10 @@ async function exportVideo(
     // environment this seam runs in (a real browser, `autoStart: false`),
     // `app.renderer.extract.canvas()` returns a real `HTMLCanvasElement` or
     // `OffscreenCanvas`, both of which satisfy `CanvasImageSource`.
-    const bytes = await encodeVideo(video.plan, canvases as unknown as CanvasImageSource[]);
+    const encoderConfigs: unknown[] = [];
+    const bytes = await encodeVideo(video.plan, canvases as unknown as CanvasImageSource[], {
+      onEncoderConfig: (config) => encoderConfigs.push(plainEncoderConfig(config)),
+    });
 
     // `createFrameRasterizer` -> `app.renderer.extract.canvas()` -> PixiJS's
     // `DOMAdapter.get().createCanvas()`, which the browser adapter
@@ -210,6 +236,7 @@ async function exportVideo(
       height: ir.height,
       byteLength: bytes.length,
       referenceFrames,
+      encoderConfigs,
     };
   } catch (e) {
     if (e instanceof VideoExportError) throw new Error(`[export] ${e.diagnostic.message}`);

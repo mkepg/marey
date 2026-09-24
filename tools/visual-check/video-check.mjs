@@ -582,6 +582,7 @@ report.runA = {
   width: runA.result.width ?? null,
   height: runA.result.height ?? null,
   byteLength: runA.result.byteLength ?? null,
+  encoderConfigs: runA.result.encoderConfigs ?? null,
   consoleErrors: runA.consoleErrors,
   pageErrors: runA.pageErrors,
 };
@@ -595,6 +596,7 @@ report.runB = {
   width: runB.result.width ?? null,
   height: runB.result.height ?? null,
   byteLength: runB.result.byteLength ?? null,
+  encoderConfigs: runB.result.encoderConfigs ?? null,
   consoleErrors: runB.consoleErrors,
   pageErrors: runB.pageErrors,
 };
@@ -604,6 +606,12 @@ console.log(`container                ${container}`);
 console.log(`requested fps / duration ${fps} / ${durationSeconds ?? "(scene's own)"}`);
 console.log(`runA ok                  ${runA.result.ok}${runA.result.ok ? "" : `  (${runA.result.error})`}`);
 console.log(`runB ok                  ${runB.result.ok}${runB.result.ok ? "" : `  (${runB.result.error})`}`);
+// Spec §5: the resolved encoder config, as mediabunny reported it through
+// `onEncoderConfig` (`devVideoSeam.ts`), is part of the evidence. Printed and
+// written to report.json; never gating -- it is a record, not a check.
+for (const cfg of runA.result.encoderConfigs ?? []) {
+  console.log(`encoder config (runA)    ${JSON.stringify(cfg)}`);
+}
 
 if (!runA.result.ok || !runB.result.ok) {
   console.error("one or both cold runs failed to export; see report.json");

@@ -129,7 +129,7 @@ export async function runVideoExport(opts: RunVideoExportOptions): Promise<Uint8
     return await encodeVideo(
       video.plan,
       canvases as unknown as CanvasImageSource[],
-      opts.onProgress,
+      { onProgress: opts.onProgress },
     );
   } finally {
     runtime?.destroy();

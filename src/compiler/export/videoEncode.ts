@@ -11,9 +11,23 @@ import {
   frameDurationSeconds,
   noWebCodecsDiagnostic,
   unsupportedCodecDiagnostic,
+  videoOutputFormatOptions,
+  videoSourceConfig,
   type VideoDiagnostic,
   type VideoPlan,
 } from "./videoContract";
+
+/** Optional callbacks. The shipped export button passes only `onProgress`. */
+export interface EncodeVideoHooks {
+  readonly onProgress?: (done: number, total: number) => void;
+  /**
+   * mediabunny's `onEncoderConfig`: the WebCodecs `VideoEncoderConfig` it
+   * builds from `videoSourceConfig(plan)`, called once per candidate before
+   * `isConfigSupported` selects one. Used by the dev harness to record the
+   * resolved config in its evidence.
+   */
+  readonly onEncoderConfig?: (config: VideoEncoderConfig) => unknown;
+}
 
 /**
  * A refusal carrying its diagnostic, so a UI can show the message and a
@@ -42,12 +56,11 @@ export class VideoExportError extends Error {
  * simulation even by accident, and it reads no clock: every timestamp is
  * derived from the frame's index (`videoContract.ts`).
  *
- * Every encoder field is read from `plan.encoderOptions` rather than being
- * invented here, because each was measured to change the emitted bitstream
- * and each is pinned by a test in `videoContract.test.ts` — with one
- * exception: `keyFrameInterval` is *derived* from `plan.encoderOptions`, not
- * passed through as-is, for a unit mismatch measured against mediabunny
- * itself (see the comment at its call site below).
+ * No encoder field is invented here. The `VideoSampleSource` config is
+ * `videoSourceConfig(plan)` and the container options are
+ * `videoOutputFormatOptions(plan)`, both pure functions in `videoContract.ts`
+ * pinned by `videoContract.test.ts`; `videoEncode.test.ts` pins that this
+ * module passes them to mediabunny unchanged, with mediabunny mocked.
  *
  * The parameter stays `Iterable<CanvasImageSource>` rather than PixiJS's
  * `ICanvas` (what `frameRaster.ts`'s rasterizer actually returns): `ICanvas`
@@ -70,8 +83,9 @@ export class VideoExportError extends Error {
 export async function encodeVideo(
   plan: VideoPlan,
   canvases: Iterable<CanvasImageSource>,
-  onProgress?: (done: number, total: number) => void,
+  hooks: EncodeVideoHooks = {},
 ): Promise<Uint8Array> {
+  const { onProgress } = hooks;
   if (typeof VideoEncoder === "undefined") {
     throw new VideoExportError(noWebCodecsDiagnostic());
   }
@@ -90,34 +104,22 @@ export async function encodeVideo(
   }
 
   const target = new BufferTarget();
+  const formatOptions = videoOutputFormatOptions(plan);
   const format =
-    plan.container === "mp4"
-      ? new Mp4OutputFormat({ fastStart: "in-memory" })
+    formatOptions.container === "mp4"
+      ? new Mp4OutputFormat({ fastStart: formatOptions.fastStart })
       : new WebMOutputFormat();
   const output = new Output({ format, target });
 
+  // The whole config comes from `videoSourceConfig`, including the
+  // frames-to-seconds `keyFrameInterval` conversion (see its docstring).
+  // Nothing is added here except the optional observer, which only the dev
+  // harness passes: it records the resolved WebCodecs config the encoder was
+  // actually opened with (spec §5). mediabunny calls it once per candidate
+  // config, before `isConfigSupported` picks one.
   const source = new VideoSampleSource({
-    codec: plan.mediabunnyCodec,
-    bitrate: plan.bitrate,
-    fullCodecString: plan.fullCodecString,
-    hardwareAcceleration: plan.encoderOptions.hardwareAcceleration,
-    latencyMode: plan.encoderOptions.latencyMode,
-    bitrateMode: plan.encoderOptions.bitrateMode,
-    // `videoContract.ts` documents `keyFrameInterval` as "frames between
-    // keyframes" and pins it to 30. mediabunny's own field of the same name
-    // is NOT in frames -- Task 2's Step 1 probe measured it directly, both
-    // by reading the shipped implementation (`VideoSource.add()` computes
-    // `Math.floor(sampleToEncode.timestamp / keyFrameInterval)`, and
-    // `sampleToEncode.timestamp` is seconds) and empirically (encoding 60
-    // frames at 30fps with `keyFrameInterval: 1` forced a keyframe at
-    // exactly frame index 30 -- the one-SECOND boundary -- not at every
-    // frame). Passed straight through, `plan.encoderOptions.keyFrameInterval`
-    // (a frame count) would tell mediabunny to key-frame roughly every 30
-    // SECONDS instead of every 30 frames. Dividing by `plan.fps` here is the
-    // one-line fix, kept in this module rather than in `videoContract.ts`:
-    // that file is Task 1's, complete and reviewed, and this discrepancy is
-    // reported (see the Step 1 report above) rather than edited there.
-    keyFrameInterval: plan.encoderOptions.keyFrameInterval / plan.fps,
+    ...videoSourceConfig(plan),
+    ...(hooks.onEncoderConfig ? { onEncoderConfig: hooks.onEncoderConfig } : {}),
   });
 
   output.addVideoTrack(source, { frameRate: plan.fps });
