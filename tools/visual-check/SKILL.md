@@ -500,6 +500,52 @@ line that produced it (`commandLine`), alongside per-container `width`/
 `height` (coded) and `sceneWidth`/`sceneHeight`, so a number in this report
 is always paired with the invocation that produced it.
 
+## Forcing a device-limit refusal
+
+`videoContract.ts`'s `deviceLimitDiagnostic` refuses a coded size larger than
+the device's `MAX_TEXTURE_SIZE`/`MAX_RENDERBUFFER_SIZE` (spec §2.3). It is
+unit-tested directly as a pure function, but `videoPipeline.ts`'s one-line
+integration of it — reading the export `Application`'s own GL limits and
+throwing if it refuses — is exercised by nothing headless, and no real
+device this project runs on has limits small enough for any shipped scene to
+trigger it naturally (Phase 5C Task 1 fix round 1, mutation (c): deleting
+that one `if` line left `npx vitest run` green at 946/946).
+
+`device-limit-check.mjs` closes that gap without touching production code:
+Playwright's `page.addInitScript` patches
+`WebGL2RenderingContext.prototype.getParameter` to force
+`MAX_TEXTURE_SIZE`/`MAX_RENDERBUFFER_SIZE` to a small value *before any of
+the app's own scripts run*, then calls `window.__mareyExportVideo` (purely
+as a convenient entry point into the shipped `runVideoExport`, same
+reasoning as every other dev-seam-based script here) and checks that it
+throws `VIDEO_EXCEEDS_DEVICE_LIMITS`. The patch lives entirely in the
+harness's init script — no dev-only global, no production hook, and nothing
+in `src/` changes; the shipped pipeline's own `gl.getParameter` calls are
+what get exercised, against a browser API this script has temporarily lied
+to. Every other WebGL parameter name passes through to the real
+implementation, so PixiJS's own context setup is unaffected.
+
+```bash
+node tools/visual-check/device-limit-check.mjs \
+  --scene tools/visual-check/scenes/linear-motion.marey \
+  --limit 100
+```
+
+| Flag | Meaning |
+|---|---|
+| `--scene <path>` | A `.marey` file. Required — no `default` fallback. Its coded size (2x the scene's own declared size) must exceed `--limit` in at least one dimension, or there is nothing for the refusal to fire on |
+| `--container <name>` | `mp4` or `webm` (default `mp4`) — the refusal fires before either container's own codec-level check |
+| `--fps <n>` | Export frame rate (default 30) |
+| `--duration <s>` | Export bound in seconds, overriding the scene's own `duration:` |
+| `--limit <n>` | The forced `MAX_TEXTURE_SIZE`/`MAX_RENDERBUFFER_SIZE`, in pixels (default 100) |
+| `--url <origin>` | Dev server origin (default `http://localhost:5199`). Same `--strictPort` trap as `check.mjs` |
+| `--headed` | Show the browser window |
+
+Exit code is non-zero unless the export throws exactly
+`VIDEO_EXCEEDS_DEVICE_LIMITS` — a scene whose coded size fits under `--limit`
+(the control case) or any other refusal both count as failures, so a
+weakened or deleted device-limit check cannot pass silently.
+
 ## Environment
 
 Needs `playwright` (a devDependency) and its Chromium download:
