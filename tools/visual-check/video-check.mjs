@@ -115,8 +115,10 @@
  *
  * Exit code is non-zero if: either cold run failed; decode failed; the
  * decoded frame count does not match the planned frame count; decoded
- * dimensions do not match the scene's; the coded size the export reported is
- * not exactly 2x the scene's own declared size (Phase 5C, spec §2.1 -- every
+ * dimensions do not match the CODED size the export reported (`width`/
+ * `height`, scene size x VIDEO_SCALE since Phase 5C -- see `sceneWidth`/
+ * `sceneHeight` for the scene's own, unscaled size); that coded size is not
+ * exactly 2x the scene's own declared size (Phase 5C, spec §2.1 -- every
  * MP4/WebM export is encoded at VIDEO_SCALE times the scene size, never a
  * silent 1x); decoded timestamps are not strictly increasing; decoded
  * timestamps do not match the claimed fps's schedule
@@ -836,7 +838,7 @@ report.checks = {
 };
 
 console.log(`\ndecoded frame count      ${decode.decodedFrameCount} (planned ${runA.result.frameCount}, match: ${frameCountMatches})`);
-console.log(`decoded dimensions       ${decode.frames[0]?.displayWidth}x${decode.frames[0]?.displayHeight} (scene ${runA.result.width}x${runA.result.height}, match: ${dimensionsMatch})`);
+console.log(`decoded dimensions       ${decode.frames[0]?.displayWidth}x${decode.frames[0]?.displayHeight} (coded ${runA.result.width}x${runA.result.height}, match: ${dimensionsMatch})`);
 console.log(`scene size / coded size  ${runA.result.sceneWidth}x${runA.result.sceneHeight} / ${runA.result.width}x${runA.result.height}  (coded = 2x scene: ${codedSizeIsDouble})`);
 console.log(`timestamps strictly increasing   ${timestampsStrictlyIncreasing}`);
 console.log(`timestamps match claimed fps schedule (±half frame)   ${timestampsMatchExpectedSchedule}`);
