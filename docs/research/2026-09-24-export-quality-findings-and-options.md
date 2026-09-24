@@ -6,8 +6,8 @@ here is approved. It is not a design and not a roadmap change. A chosen option
 still needs its own short design, approved before any code changes.
 
 **Why this file exists.** The Phase 5B smoke test (2026-09-24) produced two bug
-reports. The first, a blank preview after exporting, is fixed (`549e3d7`, with
-`7933ea5` repairing the boundary test that commit left red). The second, "the MP4
+reports. The first, a blank preview after exporting, is fixed (`7d73283`, with
+`6309f1d` repairing the boundary test that commit left red). The second, "the MP4
 and WebM export is very low quality and very pixelated … the mp4 has pixels that
 are blanks in some frames, I need another solution", was investigated but **not
 fixed**. This file keeps the evidence, the options and the open items from that
@@ -15,7 +15,7 @@ session so they are not lost.
 
 The primary-source research behind several claims is in the companion note
 [`2026-09-24-video-export-quality-options.md`](2026-09-24-video-export-quality-options.md)
-(commit `b0aeda0`). Where this file says "research note §N", that is the source.
+(commit `ff4733f`). Where this file says "research note §N", that is the source.
 
 ---
 

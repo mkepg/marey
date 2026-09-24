@@ -1804,7 +1804,7 @@ not something to chase, only its content. Current `HEAD` before this task's
 own commits was 33 files / 862 tests: **+4 test files, +44 tests** for the
 whole phase.
 
-**Branch shape, as of `0a512ab`**, the commit immediately before this
+**Branch shape, as of `3eadd18`**, the commit immediately before this
 execution-notes commit (a commit cannot contain its own diffstat, so this is a
 snapshot rather than a live count): **40 commits** from the merge base with
 `main` (`c560530`), **25 files, +6,212 / −133**.
@@ -2230,7 +2230,7 @@ find it still true.
 Added 2026-09-24 after the rest of these notes were written. The independent
 whole-branch review AGENT-LESSONS §8 requires
 (`.sdd/2026-09-18-phase-5b-video/whole-branch-review.md`, range
-`c560530..0d8f641`) found **0 Critical, 7 Important and 9 Minor** findings.
+`c560530..71abda5`) found **0 Critical, 7 Important and 9 Minor** findings.
 I-7 (the default scene cannot be exported from the button, and its toast
 suggests a bound the UI cannot set) was already known (R27/R39) and goes to
 the user, as does M-5 (the MPL-2.0 notice does not ship in the build). The
@@ -2245,14 +2245,14 @@ tested envelope nobody had left:
 
 | Finding | What was wrong | Fix | Commit |
 |---|---|---|---|
-| I-3, M-2 | The encoder config "pinned by a test" was pinned in `VideoPlan` only; deleting `latencyMode` from the call site, or reverting the frames-to-seconds keyframe conversion (a real bug fixed in Task 2), left 862/862 green. The spec's `onEncoderConfig` record was dropped silently | `videoSourceConfig` / `videoOutputFormatOptions` in `videoContract.ts`; `videoEncode.test.ts` mocks mediabunny and pins what reaches it; the resolved config is recorded in `report.json` | `c7c491c` |
-| I-5, M-8 | The pinned `avc1.42001f` (level 3.1) refused every MP4 above 921,600 coded pixels with a message blaming the browser; every piece of evidence was 800×600. The pinned VP9 string declared level 1.0, measured in every WebM the phase produced | Codec level chosen per plan from H.264 Table A-1 (03/2010 edition, levels 1–5.1) and libvpx's VP9 table; new `VIDEO_EXCEEDS_CODEC_LEVELS` refusal. 800×600 at 30 fps still selects `avc1.42001f`. 1920×1080 and 1080×1920 MP4 now decode 90/90 strict. Constraint byte `00` vs the stream's `0xC0` kept deliberately (disclosed residual) | `96c6880` |
-| I-2, I-4 | The harness drove `devVideoSeam.ts`, a hand-copy of the orchestration, so reversing or thinning frames in the shipped `videoPipeline.ts` left the suite and the harness green. The shipped path rasterized every frame up front, held them all in memory, and froze the page for up to 15 s before the first progress tick | `runVideoExport` is the only orchestration; the seam observes it. Lazy rasterization, codec probe before sampling, yield every 100 ms. Longest freeze ~15 s → ~0.75 s (900 frames); 7,200 frames at 800×600 completes | `f299286` |
-| I-1, M-7 | The harness computed `kInTiedSet` and read it nowhere, so a tie between two *other* references exited 0 — and the primary fixture's own WebM run had one (frame 2). `freeze-midair` frames 0–2 have no discriminating power, so R20's claim was false for them | Tie excluding *k* now fails the run; `linear-motion.marey` is the primary criterion-3 fixture | `584d208` |
-| I-6 | MP4 raw bytes gated the exit code, so every MP4 run exited 1, a correct one and a frame-reversed one alike; the header and SKILL.md stated the rule backwards | MP4 bytes reported, never gating; WebM keeps gating; docs corrected | `cf89027` |
-| M-1 | Guard docs claimed the encoder could not reach the IR or pixi.js through any import; the guard checks direct imports only | Docs corrected; no transitive guard built (R48) | `7662361` |
-| M-3 | The lazy `videoPipeline` chunk (why mediabunny stays out of the entry chunk) was guarded by nothing | `exportBoundary.test.ts` fails on any static import of it from the hook | `41dc2ad` |
-| M-4 | mediabunny caret-ranged while `matter-js` is pinned exactly | Pinned `1.58.0`, lockfile regenerated offline | `f27522c` |
+| I-3, M-2 | The encoder config "pinned by a test" was pinned in `VideoPlan` only; deleting `latencyMode` from the call site, or reverting the frames-to-seconds keyframe conversion (a real bug fixed in Task 2), left 862/862 green. The spec's `onEncoderConfig` record was dropped silently | `videoSourceConfig` / `videoOutputFormatOptions` in `videoContract.ts`; `videoEncode.test.ts` mocks mediabunny and pins what reaches it; the resolved config is recorded in `report.json` | `ff05e19` |
+| I-5, M-8 | The pinned `avc1.42001f` (level 3.1) refused every MP4 above 921,600 coded pixels with a message blaming the browser; every piece of evidence was 800×600. The pinned VP9 string declared level 1.0, measured in every WebM the phase produced | Codec level chosen per plan from H.264 Table A-1 (03/2010 edition, levels 1–5.1) and libvpx's VP9 table; new `VIDEO_EXCEEDS_CODEC_LEVELS` refusal. 800×600 at 30 fps still selects `avc1.42001f`. 1920×1080 and 1080×1920 MP4 now decode 90/90 strict. Constraint byte `00` vs the stream's `0xC0` kept deliberately (disclosed residual) | `3c85930` |
+| I-2, I-4 | The harness drove `devVideoSeam.ts`, a hand-copy of the orchestration, so reversing or thinning frames in the shipped `videoPipeline.ts` left the suite and the harness green. The shipped path rasterized every frame up front, held them all in memory, and froze the page for up to 15 s before the first progress tick | `runVideoExport` is the only orchestration; the seam observes it. Lazy rasterization, codec probe before sampling, yield every 100 ms. Longest freeze ~15 s → ~0.75 s (900 frames); 7,200 frames at 800×600 completes | `b9e6861` |
+| I-1, M-7 | The harness computed `kInTiedSet` and read it nowhere, so a tie between two *other* references exited 0 — and the primary fixture's own WebM run had one (frame 2). `freeze-midair` frames 0–2 have no discriminating power, so R20's claim was false for them | Tie excluding *k* now fails the run; `linear-motion.marey` is the primary criterion-3 fixture | `737ed72` |
+| I-6 | MP4 raw bytes gated the exit code, so every MP4 run exited 1, a correct one and a frame-reversed one alike; the header and SKILL.md stated the rule backwards | MP4 bytes reported, never gating; WebM keeps gating; docs corrected | `922e44a` |
+| M-1 | Guard docs claimed the encoder could not reach the IR or pixi.js through any import; the guard checks direct imports only | Docs corrected; no transitive guard built (R48) | `3161af5` |
+| M-3 | The lazy `videoPipeline` chunk (why mediabunny stays out of the entry chunk) was guarded by nothing | `exportBoundary.test.ts` fails on any static import of it from the hook | `fd03fa2` |
+| M-4 | mediabunny caret-ranged while `matter-js` is pinned exactly | Pinned `1.58.0`, lockfile regenerated offline | `ac1f22a` |
 | M-6, M-9 | The memory bullet dropped its resolution; criterion 2's MP4 reason was a location | Evidence document updated; the reviewer's raw-`VideoEncoder` measurement cited as the reviewer's (below the muxer) | this section's commit and the `eval/RESULTS-PHASE-5B.md` commits before it |
 
 **GC11 proofs, on the behaviours a user would be hurt by.** Each mutation was

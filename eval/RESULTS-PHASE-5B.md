@@ -5,7 +5,7 @@ review; `.sdd/2026-09-18-phase-5b-video/whole-branch-review.md`,
 rulings R43–R51 in `progress.md`).** The wave changed things this document
 measures, so every section below says which numbers were taken **before** the
 wave (Task 6, `92cc9bc`) and which **after** it (on the fix-wave commits
-`c7c491c`..`f27522c`). The changes that matter here:
+`ff05e19`..`ac1f22a`). The changes that matter here:
 
 - **The harness now measures the shipped orchestration** (R45). `video-check.mjs`
   still calls the dev-only `window.__mareyExportVideo`, but that seam now calls
@@ -266,7 +266,7 @@ that adding the line changed nothing about the simulation.
 
 **Step 3 — decode and compare.** Reused `video-check.mjs`'s
 `decodeAndCompare(page, { videoBase64, referenceFramesBase64, writeIndices
-})` (line 357 at this task's BASE, `78b084f`) — copied verbatim, byte-
+})` (line 357 at this task's BASE, `671ec5c`) — copied verbatim, byte-
 identical logic once comments are set aside, checked directly rather than
 assumed — and `installMediabunny` (line 339) — copied with one necessary
 change, inlining the `mediabunnyPath` constant as a local, since the
@@ -1144,23 +1144,23 @@ temporary diagnostic pair) is gitignored (`.gitignore:31`) and is not part
 of this task's commits.
 
 Commits this task produced, in order:
-- `93547df` — `docs(5b): exit-criteria evidence, criterion 1 (WIP)`
-- `7c29c9b` — `docs(5b): exit-criteria evidence, criterion 2 (WIP)`
-- `45d6cac` — `docs(5b): exit-criteria evidence, criterion 3 (WIP)`
-- `2418053` — `docs(5b): exit-criteria evidence, Step 4 image descriptions (WIP)`
-- `b5450c2` — `docs(5b): exit-criteria evidence` (limitations + environment sections)
-- `b98d5fa` — `docs(5b): fix the commit-list placeholder in the evidence document`
-- `96ff606` — `docs(5b): fix round 1 -- disclose the measured path, fix offset claims`
+- `fb1a468` — `docs(5b): exit-criteria evidence, criterion 1 (WIP)`
+- `98c008a` — `docs(5b): exit-criteria evidence, criterion 2 (WIP)`
+- `f4a53ff` — `docs(5b): exit-criteria evidence, criterion 3 (WIP)`
+- `3cbd271` — `docs(5b): exit-criteria evidence, Step 4 image descriptions (WIP)`
+- `38d4606` — `docs(5b): exit-criteria evidence` (limitations + environment sections)
+- `25336f7` — `docs(5b): fix the commit-list placeholder in the evidence document`
+- `63630e3` — `docs(5b): fix round 1 -- disclose the measured path, fix offset claims`
   (review round 1: adds the "which code path was measured" disclosure before
   the criteria, corrects the timestamp-offset/spec-table comparison error,
   hedges the `stsd`/`stsz` offsets, and splits the `ftyp`/`moov` region
   table row to match the measurement)
-- **Fix wave (after the whole-branch review):** `c7c491c` (encoder config,
-  R44), `96c6880` (codec level per plan, R43), `f299286` (one orchestration,
-  lazy rasterization, early probe, R45), `584d208` (tie gate and
-  `linear-motion.marey`, R46), `cf89027` (MP4 bytes reported not gated,
-  R47), `7662361` (guard docs, R48), `41dc2ad` (lazy-chunk guard, R49),
-  `f27522c` (mediabunny pinned, R50), then this document's own fix-wave
+- **Fix wave (after the whole-branch review):** `ff05e19` (encoder config,
+  R44), `3c85930` (codec level per plan, R43), `b9e6861` (one orchestration,
+  lazy rasterization, early probe, R45), `737ed72` (tie gate and
+  `linear-motion.marey`, R46), `922e44a` (MP4 bytes reported not gated,
+  R47), `3161af5` (guard docs, R48), `fd03fa2` (lazy-chunk guard, R49),
+  `ac1f22a` (mediabunny pinned, R50), then this document's own fix-wave
   commits. Post-wave harness runs used `npx vite --port 5199 --strictPort`,
   port checked free before starting and after killing, and wrote to the
   gitignored `.visual-check/video/fw/`. Post-wave suite: 34 files / 910
