@@ -139,7 +139,17 @@ export type LottieShapeItem =
   | { readonly ty: "el"; readonly nm: string; readonly p: LottieVectorProperty; readonly s: LottieVectorProperty }
   | { readonly ty: "rc"; readonly nm: string; readonly p: LottieVectorProperty; readonly s: LottieVectorProperty; readonly r: LottieScalarProperty }
   | { readonly ty: "sh"; readonly nm: string; readonly ks: { readonly a: 0; readonly k: LottieBezier } }
-  | { readonly ty: "fl"; readonly nm: string; readonly c: LottieColorProperty; readonly o: LottieScalarProperty; readonly r: 1 };
+  | { readonly ty: "fl"; readonly nm: string; readonly c: LottieColorProperty; readonly o: LottieScalarProperty; readonly r: 1 }
+  | {
+      readonly ty: "st";
+      readonly nm: string;
+      readonly c: LottieColorProperty;
+      readonly o: LottieScalarProperty;
+      readonly w: LottieScalarProperty;
+      readonly lc: 1;
+      readonly lj: 1;
+      readonly ml: number;
+    };
 
 interface LottieLayerBase {
   readonly ddd: 0;
@@ -381,12 +391,43 @@ function shapeItemsFor(shape: LottieShapeSpec, color: LayerSpec["color"], name: 
       items.push({ ty: "sh", nm: name, ks: { a: 0, k: { i: zeros, o: zeros, v, c: true } } });
       break;
     }
+    case "line": {
+      // An open path (c: false) with straight edges — pixi's `.poly(points,
+      // false)`. Bezier tangents are all [0, 0], same reasoning as polygon.
+      const v = shape.points.map((p) => [p.x, p.y]);
+      const zeros = v.map(() => [0, 0]);
+      items.push({ ty: "sh", nm: name, ks: { a: 0, k: { i: zeros, o: zeros, v, c: false } } });
+      break;
+    }
     case "group":
       // Unreachable: the caller emits a null layer for a group and never asks
       // for its shape items.
       throw new Error(`[export] shapeItemsFor was called for group '${name}', which draws nothing.`);
   }
-  if (color !== null) {
+  if (shape.kind === "line") {
+    // A line gets a STROKE, never a fill — an open path has no interior to
+    // fill. AFTER the path, for the same backward-`searchShapes` reason the
+    // fill below is (see that branch's comment for the citation): a stroke
+    // placed before its path paints nothing.
+    //
+    // pixi.js 8.16.0 `GraphicsContext.defaultStrokeStyle`: alignment 0.5
+    // (centred, which is the only alignment a Lottie stroke has — Lottie's
+    // `st` has no alignment concept at all), cap "butt" (lc 1), join "miter"
+    // (lj 1, the default), miterLimit 10 (ml). Whether pixi's miterLimit and
+    // Lottie's `ml` mean the same ratio was measured, not assumed — see
+    // design §3.4 and this task's report/evidence for the three lottie-web
+    // measurements (miter, non-uniform scale, caps).
+    items.push({
+      ty: "st",
+      nm: `${name} stroke`,
+      c: { a: 0, k: [...color!] },
+      o: staticScalar(100),
+      w: staticScalar(shape.thickness),
+      lc: 1,
+      lj: 1,
+      ml: 10,
+    });
+  } else if (color !== null) {
     // AFTER the geometry, not before. lottie-web's `searchShapes` walks the
     // item list backwards, collecting styles and applying them to items at
     // LOWER indices — so a fill placed first paints nothing at all and the
