@@ -155,3 +155,133 @@ independent harness invocations (two scenes, both containers), reading the
 decoded file's own metadata rather than the request.
 
 ---
+
+## Criterion 2 — repeated exports are byte-identical, or the reason is documented at the encoder boundary
+
+Per R32 (above), this section follows the spec's own two branches rather
+than the brief's literal "mask six ranges and show the rest matches" —
+that claim does not hold for real MP4 output, as both Task 3 and this run
+confirm below.
+
+### WebM — branch one: byte-identical, measured (not assumed)
+
+`video-check.mjs` always performs two independent cold page loads
+(`runA`/`runB`) and exports the same scene from each. For WebM this is the
+`gatingBytesEqual` check every run above already exercised; restated here as
+criterion 2 evidence specifically:
+
+| Scene | runA bytes | runB bytes | Raw bytes equal | Hash (sim. state) equal | Reference frames (encoder input) bit-identical | Exit |
+|---|---|---|---|---|---|---|
+| `freeze-midair.marey` (15 frames) | 4146 | 4146 | **true** | true (`38629fc3` both) | true (15/15) | 0 |
+| `compound-logo.marey` (240 frames) | 416063 | 416063 | **true** | true (`26cca4e9` both) | true (240/240) | (fails only on criterion 3's near-tie below, not on byte identity) |
+
+Both scenes, one small/short and one large/long, produce **exactly
+byte-identical WebM files across two independent cold runs**, with no
+masking applied or needed (`--mask-mp4-times` has no effect on WebM; the
+harness's own header comment documents that mediabunny's WebM/Matroska
+muxer path contains no wall-clock or random field this scene shape can
+trigger). This is measured evidence of byte-identity, not merely the
+absence of a counter-example: two full independent invocations, two
+different scenes, one of them at 240 frames.
+
+### MP4 — branch two: not byte-identical, reason documented at the encoder boundary
+
+Ran the MP4 export three separate times today (three independent
+`runA`/`runB` cold-run pairs, all against `freeze-midair.marey`, all with
+`--mask-mp4-times`):
+
+```bash
+node tools/visual-check/video-check.mjs \
+  --scene tools/visual-check/scenes/freeze-midair.marey \
+  --container mp4 --fps 30 --duration 0.5 --mask-mp4-times \
+  --out .visual-check/video/t6-freeze-mp4
+```
+
+| Invocation | runA bytes | runB bytes | Raw bytes equal | Masked bytes equal | Reference frames bit-identical | Exit |
+|---|---|---|---|---|---|---|
+| 1 (`t6-freeze-mp4`) | 7297 | 7314 | false | **false** | true (15/15) | 1 |
+| 2 (`t6-freeze-mp4-exitcheck`) | 7294 | 7312 | false | **false** | true (15/15) | 1 |
+| 3 (`t6-mp4-diag`) | 7298 | 7297 | false | **false** | true (15/15) | 1 |
+
+**Re-derived today, not copied from Task 3's report.** Task 3 (`task-3-report.md`)
+recorded a 7297/7294-byte pair on the same fixture; today's three pairs are
+7297/7314, 7294/7312, and 7298/7297 — none identical to Task 3's own numbers,
+and no two of today's three pairs match each other either. The byte counts
+of an MP4 export of this scene are not even reproducible run-to-run on this
+machine, let alone identical between the two cold runs of a single
+invocation — that instability is itself part of the evidence for
+encoder-side non-determinism, not a contradiction of it.
+
+**The renderer is exonerated in every one of the three pairs above**: the
+lossless reference-frame PNGs — the exact rasterized canvases each cold run
+fed to its own encoder, per `devVideoSeam.ts`'s own contract — are
+bit-identical, 15 for 15, in all three pairs. So whatever is producing the
+differing container bytes is downstream of rasterization in every
+measurement taken today, consistent with Task 3's own finding on this same
+fixture.
+
+**Where the divergence actually is, measured byte-by-byte on pair 3
+(`t6-mp4-diag`, runA 7298 bytes / runB 7297 bytes).** The ISOBMFF box tree
+of this export is `ftyp`(0–28) → `moov`(28–766, containing `mvhd`, `trak` →
+`tkhd`, `mdia` → `mdhd`/`hdlr`/`minf` → `vmhd`/`dinf`/`stbl` →
+`stsd`/`stts`/`stsc`/`stsz`/`stco`/`stss`) → `mdat`(766–end). Comparing the
+7297 overlapping bytes:
+
+| Region | Differing bytes | Share of region |
+|---|---|---|
+| `ftyp` + `moov` (bytes 0–765) | 12 | 12/766 ≈ 1.6% |
+| `mdat` (bytes 766–7296) | 4405 | 4405/6531 ≈ 67.45% |
+| **Total overlapping** | **4417** | **4417/7297 ≈ 60.53%** |
+
+Of the 12 differing bytes inside `moov`: **6 are exactly the harness's own
+computed timestamp-field ranges** — `mvhd`/`tkhd`/`mdhd` `creation_time` and
+`modification_time`, located by `findMp4TimestampRanges` walking this
+specific file's box tree at offsets 48/52, 164/168, 264/268 (not the spec
+§7.2 table's static offsets of 51/55, 167/171, 267/271 — this file's box
+sizes differ slightly from whatever produced that table, which is exactly
+why the harness parses the box tree instead of trusting fixed offsets).
+Masking these six — the only masking `--mask-mp4-times` performs — is
+necessary but nowhere near sufficient: it accounts for 6 of 4417 differing
+bytes, 0.14% of the total divergence.
+
+**The other 6 `moov` bytes are new evidence beyond what Task 3's report
+measured**, which described the divergence as confined to `mdat` alone.
+Located precisely: offsets 589 and 593 fall inside `stsd` (419–594, the
+sample description box carrying the H.264 codec configuration record), and
+offsets 677, 717, 721 and 725 fall inside `stsz` (654–726, the per-sample
+compressed-byte-size table). Both are mechanical consequences of the same
+encoder-side divergence rather than a separate cause: `stsz` records each
+sample's compressed byte count, so if the H.264 bitstream itself differs in
+size between the two runs (which it does — the two files are different
+total lengths), the per-sample sizes in `stsz` necessarily differ too, and
+`stsd` carries codec parameter data the encoder writes once per invocation.
+Nothing in this breakdown points at the container/muxing layer
+(`videoEncode.ts`, `videoContract.ts`) — every differing byte is either a
+wall-clock timestamp, a mechanical derivative of the bitstream's own size,
+or inside the bitstream itself.
+
+**Hard limit on this attribution, stated explicitly.** What was measured:
+identical rasterized input (bit-identical reference frames) into the
+encoder, non-identical compressed output, across three independent
+invocations, all consistent with the divergence originating on the encoder
+side. What was **not** measured, and is not claimed here: which Chromium
+component, which codec setting, or which layer of the stack causes it.
+mediabunny's encoder is configured with `hardwareAcceleration:
+"prefer-software"`, but per spec §7.5's dated correction this project's own
+harness forces software rendering (`--use-angle=swiftshader`,
+`--enable-unsafe-swiftshader`, `--use-gl=angle`) for every measurement it
+ever takes, including this one — so this document's determinism claims are
+about this project's own software-rendering-forced test harness on one
+machine, not a general claim about what any Chromium build's H.264 encoder
+does. No hardware-encoder path was reached or ruled out here.
+
+**Net for criterion 2: WebM satisfies the first branch (byte-identical,
+measured twice on two different scenes). MP4 satisfies the second branch —
+not byte-identical, with the reason documented at the encoder boundary: the
+renderer is exonerated by direct, repeated measurement (bit-identical
+reference frames in all three runs), the six spec-named timestamp fields
+account for a negligible fraction of the actual divergence, and the
+remainder is inside the compressed bitstream and its mechanical metadata
+derivatives — attributed to the encoder side and no further.**
+
+---
