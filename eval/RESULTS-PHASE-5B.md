@@ -390,3 +390,56 @@ timestamp schedule, or the simulation-hash gate — so a clean run on the
 primary fixture is evidence, not a check that cannot fail.**
 
 ---
+
+## Looking at the output — decoded PNGs, read and described
+
+Per design §10.4: numbers are not a substitute for looking. The harness
+writes decoded frames to disk; the images below were opened with the Read
+tool, not inferred from the numeric checks above. Phase 4 shipped blank
+PNGs that hashed consistently; Phase 5A shipped a frame a draft described as
+"rotated off-axis" when the image showed it near-upright. Every row below
+describes what the pixels actually show.
+
+### `compound-logo.marey` (WebM), the richer scene — `decoded_0000.png`, a mid-motion frame, and the last frame
+
+| Frame (index, t) | What is actually visible |
+|---|---|
+| `decoded_0000.png` (0, t=0s) | A three-bar mark — a vertical blue (`#38bdf8`) bar and two amber (`#fbbf24`) horizontal bars branching off its right side, forming an "F" shape — near the top-left of an 800×600 dark navy canvas. The mark is tilted a modest amount counter-clockwise from vertical, consistent with the scene's declared `rotation: -14` start. |
+| `decoded_0060.png` (60, t=2.0s, genuinely mid-motion) | The same mark, now roughly centred in the canvas — lower and more to the right than frame 0 — at a visibly different tilt than either frame 0 or the settled pose below. Clearly a distinct pose from both neighbours, i.e. real interpolated/simulated motion between them, not a frozen or repeated frame. |
+| `decoded_0120.png` (120, t=4.0s) | The mark now rests near the bottom-right of the canvas in a "table" orientation — a horizontal blue bar on top with two amber legs hanging straight down — visually indistinguishable from the last frame below. |
+| `decoded_0239.png` (239, t=7.967s, last frame) | The same "table" pose in the same bottom-right position as `decoded_0120.png`. No visible difference between this frame and frame 120, despite being 119 frames (≈4 seconds) apart. |
+
+**Frame 120 (t=4.0s) already looks settled, well before the scene's own
+comment's claimed 5.5s.** This is a direct visual confirmation of the
+criterion-3 secondary observation above: the frame-131 (t=4.37s) near-tie
+sits inside a stretch where the mark has visibly stopped moving a full
+second and a half before the point the scene's author believed it came to
+rest. Nothing here contradicts criterion 1 or 3's numeric results — the
+mark genuinely animates in, falls, tumbles and settles, and no frame in this
+row is blank or a solid background colour — but it does confirm this scene
+was the wrong fixture for criterion 3's dropped/duplicated/reordered check
+specifically, which is why R20 routes that check to `freeze-midair.marey`
+instead.
+
+### `freeze-midair.marey` (WebM), the continuous-motion fixture — same three positions
+
+| Frame (index, t) | What is actually visible |
+|---|---|
+| `decoded_0000.png` (0, t=0s) | A single light-blue (`#38bdf8`) square, roughly centred horizontally, sitting near the top of an 800×600 near-black canvas — matching the scene's declared `position: (400,100)`, `size: (52,52)`. |
+| `decoded_0007.png` (7, t=0.233s, mid-fall) | The same square, now visibly lower on the canvas than frame 0 (still same horizontal position, falling straight down under gravity, no bounce or lateral drift). A faint, very low-contrast grey smear is visible directly above the square in this frame — a compression artefact from VP9 encoding a hard-edged, fast-moving block against a flat background, not a second object or a ghost frame. |
+| `decoded_0014.png` (14, t=0.467s, last frame) | The same square, further down again than frame 7, continuing the same straight downward trajectory. The same faint smear artefact is visible above it, slightly more pronounced. |
+
+The square's vertical position is visibly different in all three frames and
+descends monotonically frame to frame — consistent with continuous free
+fall and with this fixture's zero strict mismatches above. The faint
+above-square artefact in frames 7 and 14 is named rather than smoothed over:
+it is consistent with lossy-codec block noise trailing a fast, high-contrast
+moving edge, not with a dropped or duplicated frame (nearest-neighbour would
+have flagged either).
+
+None of the six images above is blank or a flat solid colour, and within
+each triple the three frames are visibly distinct from one another — ruling
+out Phase 4's blank-PNG failure mode and a frozen/stuck export on both
+fixtures.
+
+---
