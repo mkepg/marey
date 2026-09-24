@@ -17,6 +17,8 @@ import videoContractSource from "./videoContract.ts?raw";
 import videoPipelineSource from "./videoPipeline.ts?raw";
 import useExportVideoSource from "../../hooks/useExportVideo.ts?raw";
 import topBarSource from "../../components/TopBar/TopBar.tsx?raw";
+import lottieEncodeSource from "./lottieEncode.ts?raw";
+import lottieGeometrySource from "./lottieGeometry.ts?raw";
 
 /**
  * True if `source` imports a module whose specifier contains `moduleFragment`,
@@ -231,6 +233,27 @@ describe("export boundary", () => {
     expect(importsModule(videoEncodeSource, "sceneIR")).toBe(false);
   });
 
+  /**
+   * Global Constraint 6 / design §7's table, Task 2's `line` piece: these two
+   * rows were never written down as tests even though `lottieEncode.ts` and
+   * `lottieGeometry.ts` have carried the constraint since Phase 5A. Each
+   * import check is paired with an identity check for the same reason the
+   * video-module tests above are, so a swapped source constant cannot pass
+   * silently just because both files happen to be clean today.
+   */
+  it("lottieEncode.ts does not import pixi.js, sceneIR or harfbuzzjs in any form", () => {
+    expect(lottieEncodeSource).toContain("export function encodeLottie");
+    expect(importsModule(lottieEncodeSource, "pixi\\.js")).toBe(false);
+    expect(importsModule(lottieEncodeSource, "sceneIR")).toBe(false);
+    expect(importsModule(lottieEncodeSource, "harfbuzzjs")).toBe(false);
+  });
+
+  it("lottieGeometry.ts does not import pixi.js or harfbuzzjs in any form", () => {
+    expect(lottieGeometrySource).toContain("export function planLottie");
+    expect(importsModule(lottieGeometrySource, "pixi\\.js")).toBe(false);
+    expect(importsModule(lottieGeometrySource, "harfbuzzjs")).toBe(false);
+  });
+
   it("matches a pixi.js export subpath, not just the bare specifier", () => {
     // The serious miss R21 names: pixi.js 8.16.0 declares 23 export
     // subpaths, so this is a real, compiling violation of "must not import
@@ -312,6 +335,8 @@ describe("export boundary", () => {
     // They catch different mutations.
     expect(videoEncodeSource).toContain("export async function encodeVideo");
     expect(videoContractSource).toContain("export function planVideo");
+    expect(lottieEncodeSource).toContain("export function encodeLottie");
+    expect(lottieGeometrySource).toContain("export function planLottie");
   });
 });
 
