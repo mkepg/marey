@@ -443,3 +443,89 @@ out Phase 4's blank-PNG failure mode and a frozen/stuck export on both
 fixtures.
 
 ---
+
+## Known limitations carried forward, not re-measured by this task
+
+Facts established in earlier Phase 5B tasks that this document's three exit
+criteria do not cover, stated with the hedge each earlier task attached
+rather than upgraded or rounded off:
+
+- **A memory ceiling exists somewhere between 4,800 and 6,000 frames, on
+  this 16GB machine, and it is a bracket, not a pinned value.** Task 4
+  (`task-4-report.md`, Q4) measured 4,800 frames succeeding and 6,000
+  failing through the real export seam. `MAX_EXPORT_FRAMES` (`7_200`,
+  `src/compiler/export/exportContract.ts:64`) does not protect this bound —
+  a scene requesting frames above the working bracket but below 7,200 can
+  still fail. **Out-of-memory is a credible but unconfirmed explanation**:
+  Playwright's `page.on("crash")` never fired during Task 4's failing run,
+  so no actual crash event was observed, only the failure itself. Ruling
+  R23 (`progress.md`) deliberately left `MAX_EXPORT_FRAMES` unchanged — the
+  constant lives in the Phase 4 boundary Global Constraint 7 freezes, and a
+  ceiling derived from one machine's RAM would be a magic number wrong on
+  every other machine. Not re-measured by this task.
+- **Q5 (whether `hardwareAcceleration: "prefer-software"` genuinely excludes
+  a real hardware encoder) is narrowed, not answered.** Spec §7.5's dated
+  correction, preserved here rather than restated more strongly: this
+  development machine has two GPUs (an NVIDIA RTX 3060 Laptop GPU and an
+  Intel Iris Xe Graphics), **measured** via `Get-CimInstance
+  Win32_VideoController`, which reports installed GPU model names — nothing
+  about encoder capability. That those specific models ship hardware video
+  encoders (NVENC, Quick Sync) is general knowledge about those product
+  lines, **inferred** from the model names, not independently measured on
+  this unit. Separately, and more durably: every measurement in this
+  document (and every measurement `video-check.mjs` will ever produce) runs
+  headless Chromium launched with explicit software-rendering flags
+  (`--use-angle=swiftshader`, `--enable-unsafe-swiftshader`,
+  `--use-gl=angle`). This document's determinism claims are therefore about
+  this project's own software-rendering-forced test harness on one machine
+  — not a claim about what `prefer-software` does in an ordinary user's
+  browser session, where a real hardware encoder may be reachable and where
+  non-reproducibility (if `prefer-software` turns out to be an unenforced
+  hint on some Chromium build) would not be caught by this harness,
+  structurally, no matter how many times it is run.
+- **A first visitor's first export click fails.** Ruling R27 (`progress.md`):
+  the app's shipped default scene declares no `duration:`, so a first-time
+  visitor clicking the export button before editing anything gets the
+  verbatim `EXPORT_UNBOUNDED_SCENE` diagnostic rather than a file. Confirmed
+  against the production build in Task 5. This was ruled not a correctness
+  defect (an honest, human-readable diagnostic rather than a crash or
+  silent failure) and not fixed in this phase — changing the shipped
+  default scene is a product decision outside an unattended execution's
+  authority. Named here as known first-run behaviour, not re-tested by this
+  task (this task uses the dev seam, `window.__mareyExportVideo`, which
+  takes an explicit scene source and does not go through the default-scene
+  UI path at all).
+
+---
+
+## Environment
+
+Dev server: `npx vite --port 5199 --strictPort`, started before any harness
+command above, killed at the end of this task. Port checked free both
+before starting and after killing, boundary-matched (a bare `:5199` also
+matches `:51999`):
+
+```bash
+netstat -ano | grep "LISTENING" | grep -E ":5199[^0-9]"
+```
+
+Baseline reconfirmed on this tree at the start of this task and again at
+the end: `npx vitest run` → **33 files / 862 tests**, exit 0. `npx tsc -b
+--noEmit` → exit 0. This task made no changes to `src/` or
+`tools/visual-check/video-check.mjs` in its final committed state
+— one temporary diagnostic line was added to `video-check.mjs` to write
+both cold runs' MP4 bytes to disk for the byte-level divergence analysis in
+criterion 2, and removed immediately after use, confirmed by `git diff
+--stat -- tools/visual-check/video-check.mjs` returning empty
+before this document's commits landed.
+
+`.visual-check/` (all harness output from this task's runs, including the
+temporary diagnostic pair) is gitignored (`.gitignore:31`) and is not part
+of this task's commits.
+
+Commits this task produced, in order:
+- `93547df` — `docs(5b): exit-criteria evidence, criterion 1 (WIP)`
+- `7c29c9b` — `docs(5b): exit-criteria evidence, criterion 2 (WIP)`
+- `45d6cac` — `docs(5b): exit-criteria evidence, criterion 3 (WIP)`
+- `2418053` — `docs(5b): exit-criteria evidence, Step 4 image descriptions (WIP)`
+- (this commit) — `docs(5b): exit-criteria evidence` (final)
