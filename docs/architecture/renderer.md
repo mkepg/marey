@@ -265,11 +265,18 @@ than inventing a new one:
 - **`export/videoContract.ts` must not import `pixi.js`** in any form. It is
   pure request validation, codec/config resolution and timestamp arithmetic.
 - **`export/videoEncode.ts` must not import `pixi.js` or `sceneIR`** in any
-  form. It receives a `VideoPlan` and a sequence of `CanvasImageSource`s and has
-  no way to reach the scene graph or the IR.
+  form. It receives a `VideoPlan` and a sequence of `CanvasImageSource`s, not
+  the scene graph or the IR.
 
-**Unlike Phase 5A's version of this rule, it is no longer something you have to
-remember to grep.** `export/exportBoundary.test.ts` asserts it directly against
+**Unlike Phase 5A's version of this rule, the direct imports are checked by a
+test rather than by remembering to grep, and only the direct imports.** A
+transitive path is not checked: `videoEncode.ts` could import
+`../compileSource` or `../renderer/builder`, both of which reach the IR and
+`pixi.js`, and the suite would stay green (whole-branch review M-1, measured).
+Keeping the encoder away from the scene graph through *other* modules is still
+a review-time rule. A transitive import-graph guard was considered and not
+built in Phase 5B (ruling R48). `export/exportBoundary.test.ts` asserts the
+direct rule against
 the two files' own source text, through a helper (`importsModule`) that matches
 a quoted specifier against all three ESM import shapes — a static
 `from "X"`, a dynamic `import("X")`, and a bare `import "X"` — and matches if

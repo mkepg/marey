@@ -78,11 +78,15 @@ export async function assertVideoEncodable(plan: VideoPlan): Promise<void> {
  * Encode an already-rasterized frame sequence into muxed container bytes.
  *
  * **This module sees neither the scene graph nor the IR** — it takes a
- * `VideoPlan` of inert numbers and a sequence of canvases, and has no import
- * that could reach either (`exportBoundary.test.ts` enforces that). That is
- * the video half of the same structural claim Phase 5A made for Lottie:
- * "encoders see only sampled output" as an import-level fact rather than a
- * convention.
+ * `VideoPlan` of inert numbers and a sequence of canvases, and imports
+ * neither `pixi.js` nor `sceneIR` directly. `exportBoundary.test.ts` checks
+ * those **direct** imports only: an import of another module that itself
+ * reaches the IR or pixi.js (`../compileSource`, `../renderer/builder`) would
+ * pass it, so keep this module's import list to `mediabunny` and
+ * `./videoContract` by review, not by trusting the test to catch the rest
+ * (whole-branch review M-1, ruling R48). That is the video half of the claim
+ * Phase 5A made for Lottie, "encoders see only sampled output", enforced at
+ * the direct-import level.
  *
  * It receives no runtime, no world and no driver, so it cannot advance the
  * simulation even by accident, and it reads no clock: every timestamp is
