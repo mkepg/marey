@@ -208,8 +208,31 @@ explicitly rather than quietly deviating.
   **Read the plan's execution notes before Phase 5B.** Current-phase status is
   stated once, in `docs/architecture/README.md` — update that line and this
   bullet together.
-- **Phase 5B — video.** WebM and MP4 via WebCodecs and a muxer, never
-  `MediaRecorder`.
+- **Phase 5B — video is done and merged** (merge commit onto `main`,
+  2026-09-24). WebM and MP4 via WebCodecs and the mediabunny muxer (pinned
+  at 1.58.0), never `MediaRecorder`. Exit evidence is `eval/RESULTS-PHASE-5B.md`.
+  - **What went beyond the plan.** The branch also carries four smaller
+    changes: the smiling-face default scene, a generated third-party
+    licences file linked from the top bar, the fix for "export breaks the
+    next Run" (`destroyExportApp`), and its research docs.
+  - **Review coverage.** Those four landed after the independent
+    whole-branch review and its fix-wave re-review, and had no independent
+    review of their own.
+  - **Owner's smoke test.** It found the video visually poor, which none of
+    the three exit criteria measures; that is what Phase 5C is for.
+  **Read the plan's execution notes before Phase 5C.**
+- **Phase 5C — Lottie completion and video quality.** Added by the project
+  owner on 2026-09-24. Three pieces:
+  - Lottie export of `line`, deferred by Phase 5A §10;
+  - Lottie export of `text`, cut by R17 for 5A;
+  - a Lottie export button, since the 5A encoder is reachable only through
+    the dev seam.
+  Plus fixes for the video-export quality the 5B smoke test reported:
+  pixelation, and specks in the MP4. The measurements, causes and options
+  (with their costs) are in
+  `docs/research/2026-09-24-export-quality-findings-and-options.md`, with
+  the primary-source note `2026-09-24-video-export-quality-options.md`.
+  Which options to take is decided in this phase's design, not here.
 - **Phase 6 — packaging and legibility.** Public package, `LICENSE`, a root
   README, `marey check`/`marey export`, and a written account of the
   determinism work. Replaces the old Phase 5B (Distribution); acquisition work

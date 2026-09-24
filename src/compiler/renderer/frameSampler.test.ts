@@ -5,7 +5,7 @@ import { sampleFrames, snapshotFor } from "./frameSampler";
 import { SceneRuntime } from "./sceneRuntime";
 import { MatterWorld } from "./physicsWorld";
 import { hashFrames } from "../export/frameHash";
-import { applySnapshot } from "../export/pngSequence";
+import { applySnapshot } from "../export/frameRaster";
 import { planExport } from "../export/exportContract";
 import { compileSource } from "../compileSource";
 import { lex } from "../lexer";

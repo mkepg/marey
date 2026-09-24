@@ -31,6 +31,7 @@ export interface AppState {
   isTooLargeToShare: boolean;
   autoRun: boolean;
   isCompiling: boolean;
+  isExporting: boolean;
   fileId: number;
   setCode: (code: string) => void;
   toggleTheme: () => void;
@@ -43,6 +44,7 @@ export interface AppState {
   loadExample: () => void;
   setAutoRun: (val: boolean) => void;
   setIsCompiling: (val: boolean) => void;
+  setIsExporting: (val: boolean) => void;
 }
 
 const THEME_STORAGE_KEY = "marey_theme";
@@ -77,6 +79,7 @@ export const useAppStore = create<AppState>((set) => ({
   isTooLargeToShare: computeIsTooLarge(initialCode),
   autoRun: true,
   isCompiling: false,
+  isExporting: false,
   fileId: 0,
   setCode: (code) =>
     set({ code, isTooLargeToShare: computeIsTooLarge(code) }),
@@ -126,4 +129,5 @@ export const useAppStore = create<AppState>((set) => ({
   },
   setAutoRun:     (val) => set({ autoRun: val }),
   setIsCompiling: (val) => set({ isCompiling: val }),
+  setIsExporting: (val) => set({ isExporting: val }),
 }));

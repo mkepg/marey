@@ -180,7 +180,8 @@ there is no `anchor` property. Note the precision: at that default, the pivot
 is the geometric centre only for `circle`, `rectangle` and `text`. For
 `polygon` and `line` it is the bbox midpoint, **not** the centroid — the same
 distinction D15 exists to correct in the physics layer, and 7.5px apart for
-the default scene's own triangle. A `group`'s pivot is its local origin (the
+the motion test card's own triangle (`tools/visual-check/scenes/test-card.marey`,
+the default scene until Phase 5B). A `group`'s pivot is its local origin (the
 `applyAnchorAndPivot` call at `builder.ts:351-361`, the fixed `{ x: 0, y: 0 }`
 origin argument at line `359`) and is never derived from where its children
 sit — that is deliberate (D16), and since Phase 2 its collision body is
@@ -194,9 +195,11 @@ identity, since the scene graph was only ever walked, not addressed, so the
 field did not exist until `frameSampler.ts`'s `snapshotFor` needed something
 to key snapshots by. It is written once, in `buildNode`, and read at two
 sites: `frameSampler.ts`'s `snapshotFor` (sampling) and
-`../export/pngSequence.ts`'s `applySnapshot` (writing a sampled frame back
+`../export/frameRaster.ts`'s `applySnapshot` (writing a sampled frame back
 onto a tree for re-rendering) — the same inverse pair that module's own
-docstring names.
+docstring names. `frameRaster.ts` is the shared rasterization seam both the
+PNG and (Phase 5B) video exporter replay frames through, so they cannot
+disagree about the exported size, background or frame identity.
 
 ## The Lottie encoder boundary (Phase 5A)
 
@@ -254,6 +257,112 @@ layer *and* the fully composed product onto each descendant. In both renderers
 measured this is inert, because neither propagates. In a renderer that *did*
 propagate, every nested alpha would double-apply. That is filed, not fixed —
 and the fixture above is the one that would catch it.
+
+## The video encoder boundary (Phase 5B)
+
+Video export carries forward Phase 5A's two-modules-one-rule-each shape rather
+than inventing a new one:
+
+- **`export/videoContract.ts` must not import `pixi.js`** in any form. It is
+  pure request validation, codec/config resolution and timestamp arithmetic.
+- **`export/videoEncode.ts` must not import `pixi.js` or `sceneIR`** in any
+  form. It receives a `VideoPlan` and a sequence of `CanvasImageSource`s, not
+  the scene graph or the IR.
+
+**Unlike Phase 5A's version of this rule, the direct imports are checked by a
+test rather than by remembering to grep, and only the direct imports.** A
+transitive path is not checked: `videoEncode.ts` could import
+`../compileSource` or `../renderer/builder`, both of which reach the IR and
+`pixi.js`, and the suite would stay green (whole-branch review M-1, measured).
+Keeping the encoder away from the scene graph through *other* modules is still
+a review-time rule. A transitive import-graph guard was considered and not
+built in Phase 5B (ruling R48). `export/exportBoundary.test.ts` asserts the
+direct rule against
+the two files' own source text, through a helper (`importsModule`) that matches
+a quoted specifier against all three ESM import shapes — a static
+`from "X"`, a dynamic `import("X")`, and a bare `import "X"` — and matches if
+the module fragment appears *anywhere* inside the quotes, not only flush against
+the closing one. That second property is load-bearing, not defensive
+over-engineering: pixi.js 8.16 declares 23 export subpaths
+(`pixi.js/app`, `pixi.js/scene`, …), so `import { Application } from
+"pixi.js/app"` is a real, compiling violation of "must not import pixi.js in
+any form" that an ends-with match reports clean, and a `from "../ir/sceneIR.ts"`
+specifier is equally real here because every `tsconfig*.json` in this repo sets
+`allowImportingTsExtensions: true`. Each of the file's tests also pins that it
+read the source constant it claims to, by a landmark string unique to that
+file — proven necessary, not assumed: an earlier version of this guard passed
+4/4 when every test was pointed at the same (unrelated, pixi-clean) source
+constant, because the assertions themselves never distinguished which file
+produced a clean answer.
+
+A second, related pair of tests in the same file guards a boundary this phase
+added on top of Phase 5A's shape: `videoPipeline.ts`, `useExportVideo.ts` and
+`TopBar.tsx` — the production path a real export click takes — may not import
+`src/lib/devVideoSeam.ts` in any form, and their code may not reach
+`window.__mareyExportVideo` (the dev-only global that seam installs) either.
+Both checks run over comment-stripped source rather than the raw file, because
+two of the three files name `__mareyExportVideo` in a docstring specifically to
+explain why they do not call it — checked against raw source, the guard read
+that documentation as the violation it exists to prevent.
+
+`frameRaster.ts` is the single rasterization seam the PNG-sequence and video
+exporters both replay frames through — measured, not assumed:
+`pngSequence.ts` and `videoPipeline.ts` import `createFrameRasterizer` from
+it, not from one another. One seam means the two
+export paths cannot silently diverge on how a sampled frame gets rasterized
+back onto the scene tree — the same size, background and frame-identity
+guarantee the paragraph above already states for it.
+
+**One video orchestration, observed by the harness (Phase 5B fix wave,
+R45).** `videoPipeline.ts`'s `runVideoExport` is the only copy of compile →
+plan → probe → build → sample → rasterize → encode. The export button calls it
+through `useExportVideo.ts`'s dynamic `import()`; the dev seam
+`src/lib/devVideoSeam.ts` calls the same function with an optional observer
+(`onPlanned`, `onSampled`, `onFrame`, `onEncoderConfig`) to collect the
+reference PNGs, snapshot hash and encoder config `video-check.mjs` needs. Do
+not grow a second orchestration in the seam again: when it was a hand-copy,
+reversing or dropping frames in the shipped loop left every test and the
+harness green (whole-branch review I-2). Three properties of that loop are
+deliberate:
+- `assertVideoEncodable` (the one environment/codec probe, also called by
+  `encodeVideo`) runs before the scene is built or sampled, so a refusal
+  arrives before any simulation work.
+- Frames are rasterized lazily, one per encoder request, and each canvas is
+  zero-sized once the encoder has copied it (`new VideoSample(canvas)` copies
+  at construction). `extract.canvas()` allocates a new canvas per call, so an
+  eager `frames.map(rasterize)` held every frame at once.
+- The loop yields to the event loop every 100 ms of work, measured as the
+  cheapest interval that keeps the page repainting; see
+  `eval/RESULTS-PHASE-5B.md`, "Known limitations".
+
+**The codec string is a function of the plan (R43).** `h264LevelFor` and
+`vp9LevelFor` in `videoContract.ts` pick the lowest level whose limits admit
+the frame size, each dimension, the rate and the bitrate. The H.264 table is
+Rec. ITU-T H.264 (03/2010) Table A-1, which ends at level 5.1, so 5.1 is the
+top of the MP4 range and `planVideo` refuses beyond it with
+`VIDEO_EXCEEDS_CODEC_LEVELS`; the VP9 table is libvpx's `vp9_level_defs`,
+levels 1 to 6.2. Chromium enforces the H.264 frame-size limit, not the rate
+limit, and no VP9 level at all, so a wrong declaration is not caught by the
+browser: a single pinned string previously refused every MP4 above 720p and
+declared VP9 level 1.0 on every WebM. The encoder config mediabunny receives
+is built by `videoSourceConfig` (including the frames-to-seconds keyframe
+conversion) and pinned by `videoContract.test.ts` and, with mediabunny
+mocked, `videoEncode.test.ts`.
+
+**The container determinism asymmetry.** Repeated exports of the same scene
+are byte-identical for WebM, measured across independent cold page loads on
+more than one scene. MP4 is not byte-identical, and the reason is documented
+at the encoder boundary rather than waved at: the lossless reference frames
+each cold run feeds to its own encoder are bit-identical, so the renderer is
+exonerated, and the divergence is inside the compressed bitstream itself,
+attributed to the encoder side and no further — this project's code does not
+control, and did not pinpoint, which layer of Chromium's H.264 stack produces
+it. The whole-branch reviewer reproduced it with raw WebCodecs
+`VideoEncoder` and no mediabunny, which places it below the muxer. So
+`video-check.mjs` reports MP4 byte identity and never gates on it (R47); WebM
+bytes gate. See `eval/RESULTS-PHASE-5B.md` (criterion 2) for the measured breakdown;
+it is cited here rather than restated, so there is one copy of the numbers to
+keep true.
 
 ## Non-obvious gotchas
 

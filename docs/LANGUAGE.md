@@ -642,8 +642,9 @@ bouncy object makes every collision it takes part in bouncy, and a low
 
 **`airDrag` is inverted: `0.0` is a vacuum and `1.0` is maximum resistance.**
 It ranges from `0.0` to `1.0` inclusive, defaulting to `0.0`. Useful values
-are small — the shipped default scene uses `0.006`, and the Monaco `physics`
-snippet suggests the same `0.006` as its placeholder.
+are small — `0.006` to `0.02` covers most scenes, and the Monaco `physics`
+snippet suggests `0.006` as its placeholder. The shipped default scene's
+confetti uses `0.02`, so it drifts down more like paper than stone.
 
 `collideBounds` governs collision with the scene's four edges only, and
 defaults to `true`. It has no bearing on collision between objects — that is
@@ -1074,7 +1075,8 @@ else, including inside the scene body.
 parameter bound to the corresponding argument, positionally, by name. An
 argument may be **any** value kind the parser produces, including a keyword
 — an easing curve can be passed as a template argument, as in
-`use Racer(easeInOut) rowInOut { ... }` in the default scene. The number of
+`use Racer(easeInOut) rowInOut { ... }` for a `template Racer(curve)` that
+writes `easing: curve`. The number of
 arguments must match the number of declared parameters exactly.
 
 The instance name must be unique among its siblings and follows the same

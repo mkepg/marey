@@ -131,7 +131,18 @@ for a **complete, provable engineering artifact with a declarable finish
 line**, and acquisition work moved past that line. Read its §1 before
 proposing anything the old roadmap justified by adoption.
 
-Current phase: **5B — next**. **5A — baked Lottie is done and merged.** It
+Current phase: **5C — Lottie completion and video quality, next** (added by
+the project owner on 2026-09-24). It covers:
+- Lottie `line` and `text`;
+- a Lottie export button;
+- fixes for the video quality the 5B smoke test reported.
+Start from `docs/research/2026-09-24-export-quality-findings-and-options.md`,
+and from the Phase 5B plan's execution notes.
+**5B — video is done and merged** (WebM and MP4 via WebCodecs and mediabunny;
+evidence in `eval/RESULTS-PHASE-5B.md`). Its last four changes came after the
+independent review: the default scene, the licences file, the export-teardown
+fix, and docs. `roadmap-and-process.md`'s 5B bullet says so.
+**5A — baked Lottie is done and merged.** It
 emits a bounded Lottie subset (static circle/rectangle/polygon/group geometry;
 baked position, rotation, scale and alpha; fixed duration and frame rate;
 `text` refused outright per R17) that plays with no Marey or Matter.js code at
