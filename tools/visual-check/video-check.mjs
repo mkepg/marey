@@ -44,11 +44,15 @@
  * two or more candidates in the window achieve the same minimum -- which
  * happens whenever the scene has settled and consecutive reference frames are
  * pixel-identical, making `argmin` genuinely arbitrary. This script fails
- * (non-zero exit) only when a frame's match is STRICT and the unique argmin is
- * not `k` itself -- a tie is reported and counted, never silently folded into
- * a pass, and never itself a failure, per the brief's explicit instruction
- * that "a run whose frames are mostly tied has not proved criterion 3 -- it
- * has proved the fixture was wrong."
+ * (non-zero exit) when a frame's match is STRICT and the unique argmin is not
+ * `k` itself, and when a frame's match is a TIE that does NOT include `k`
+ * (spec §10.2 requires `argmin === k`; a tie between two other references,
+ * with `k` measurably further away, is evidence of a wrong frame, and the
+ * Phase 5B whole-branch review found one in the `freeze-midair` WebM run,
+ * finding I-1, ruling R46). A tie that includes `k` is reported and counted,
+ * never a failure: when consecutive references are identical, `k` is as good
+ * a match as any, and "a run whose frames are mostly tied has not proved
+ * criterion 3 -- it has proved the fixture was wrong"
  *
  * **MP4's six known byte ranges.** mediabunny's MP4 muxer stamps
  * `creationTime = Math.floor(Date.now() / 1000) + <MP4 epoch offset>`
@@ -114,12 +118,14 @@
  * dimensions do not match the scene's; decoded timestamps are not strictly
  * increasing; decoded timestamps do not match the claimed fps's schedule
  * within half a frame; any frame's nearest-neighbour match is STRICT and
- * wrong; the two cold runs' snapshot hashes disagree; the two cold runs'
- * lossless reference-frame PNGs (the exact rasterized pixels each run fed to
- * its own encoder) disagree; or (webm only, always gating; mp4, gating only
- * under --mask-mp4-times) the two cold runs' container bytes disagree. Never
- * on how the PNGs look, or on how many frames tied -- both are reported,
- * neither gates.
+ * wrong, or is a TIE that excludes the frame itself; a sampled frame was
+ * never handed to the encoder; the two cold runs' snapshot hashes disagree;
+ * the two cold runs' lossless reference-frame PNGs (the exact rasterized
+ * pixels each run fed to its own encoder) disagree; or (webm only, always
+ * gating; mp4, gating only under --mask-mp4-times) the two cold runs'
+ * container bytes disagree. Never on how the PNGs look, or on how many frames
+ * tied with a set that includes themselves -- both are reported, neither
+ * gates.
  */
 import { chromium } from "playwright";
 import LZString from "lz-string";
@@ -790,6 +796,9 @@ const nn = decode.nearestNeighbour;
 const strictCount = nn.filter((f) => f.strict).length;
 const tieCount = nn.filter((f) => f.tie).length;
 const strictMismatches = nn.filter((f) => f.strict && f.argmin !== f.k);
+// A tie whose tied set does not contain k: the nearest references are two
+// OTHER frames, and k is measurably further away than both. Gating.
+const tiesExcludingK = nn.filter((f) => f.tie && !f.kInTiedSet);
 const maxOffDiagonalMargin = nn.length > 0 ? Math.max(...nn.map((f) => f.margin)) : null;
 const minMarginAmongStrict =
   strictCount > 0 ? Math.min(...nn.filter((f) => f.strict).map((f) => f.margin)) : null;
@@ -803,6 +812,8 @@ report.checks = {
   tieCount,
   strictMismatchCount: strictMismatches.length,
   strictMismatches: strictMismatches.map((f) => ({ k: f.k, argmin: f.argmin, minDist: f.minDist })),
+  tieExcludingKCount: tiesExcludingK.length,
+  tiesExcludingK: tiesExcludingK.map((f) => ({ k: f.k, tiedWith: f.tiedWith, minDist: f.minDist })),
   maxOffDiagonalMargin,
   minMarginAmongStrict,
 };
@@ -811,9 +822,14 @@ console.log(`\ndecoded frame count      ${decode.decodedFrameCount} (planned ${r
 console.log(`decoded dimensions       ${decode.frames[0]?.displayWidth}x${decode.frames[0]?.displayHeight} (scene ${runA.result.width}x${runA.result.height}, match: ${dimensionsMatch})`);
 console.log(`timestamps strictly increasing   ${timestampsStrictlyIncreasing}`);
 console.log(`timestamps match claimed fps schedule (±half frame)   ${timestampsMatchExpectedSchedule}`);
-console.log(`nearest-neighbour: strict=${strictCount} tie=${tieCount} strict-mismatches=${strictMismatches.length}`);
+console.log(
+  `nearest-neighbour: strict=${strictCount} tie=${tieCount} strict-mismatches=${strictMismatches.length} ties-excluding-k=${tiesExcludingK.length}`,
+);
 if (strictMismatches.length > 0) {
   for (const m of strictMismatches) console.log(`  ! frame ${m.k}: nearest reference is ${m.argmin}, not ${m.k} (dist ${m.minDist})`);
+}
+for (const t of tiesExcludingK) {
+  console.log(`  ! frame ${t.k}: nearest references tie between [${t.tiedWith.join(", ")}], which excludes ${t.k} (dist ${t.minDist})`);
 }
 console.log(`max off-diagonal margin  ${maxOffDiagonalMargin}`);
 console.log(`min margin among strict matches   ${minMarginAmongStrict}`);
@@ -840,6 +856,7 @@ const fail =
   !timestampsStrictlyIncreasing ||
   !timestampsMatchExpectedSchedule ||
   strictMismatches.length > 0 ||
+  tiesExcludingK.length > 0 ||
   !hashesEqual ||
   !referenceFramesEqual ||
   missingReferenceFrames[0] > 0 ||

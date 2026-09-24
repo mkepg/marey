@@ -1,0 +1,25 @@
+// Primary criterion-3 fixture for video-check.mjs (Phase 5B fix wave, R46).
+//
+// Both objects move at constant velocity from frame 0 to the last frame and
+// stay fully on screen, so every pair of neighbouring frames differs by the
+// same visible amount: at 30 fps the box moves 6.7 px and the dot 5.3 px per
+// frame. A decoded frame therefore has one clearly nearest reference, from
+// the first frame on. `freeze-midair.marey` cannot say that about its first
+// three frames: a fall from rest barely moves on the harness's step-4 grid.
+scene {
+  size: (800, 600)
+  background: #080811
+  duration: 3
+  rectangle mover {
+    position: (100, 300)
+    size: (160, 160)
+    color: #38bdf8
+    animate { property: position, to: (700, 300), duration: 3, easing: linear }
+  }
+  circle dot {
+    position: (400, 60)
+    radius: 30
+    color: #f472b6
+    animate { property: position, to: (400, 540), duration: 3, easing: linear }
+  }
+}
