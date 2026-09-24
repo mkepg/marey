@@ -636,7 +636,13 @@ Commits this task produced, in order:
 - `45d6cac` — `docs(5b): exit-criteria evidence, criterion 3 (WIP)`
 - `2418053` — `docs(5b): exit-criteria evidence, Step 4 image descriptions (WIP)`
 - `b5450c2` — `docs(5b): exit-criteria evidence` (limitations + environment sections)
-- one further commit, fixing this list's last entry to a real SHA rather than
-  a guess — per AGENT-LESSONS §1, a commit cannot cite its own hash, so that
-  final entry is deliberately left off rather than filled with a placeholder
-  (`git log --oneline` on this branch shows the true, complete list)
+- `b98d5fa` — `docs(5b): fix the commit-list placeholder in the evidence document`
+- `96ff606` — `docs(5b): fix round 1 -- disclose the measured path, fix offset claims`
+  (review round 1: adds the "which code path was measured" disclosure before
+  the criteria, corrects the timestamp-offset/spec-table comparison error,
+  hedges the `stsd`/`stsz` offsets, and splits the `ftyp`/`moov` region
+  table row to match the measurement)
+- this list cannot cite the commit that contains it — see the entry above
+  for how that constraint is handled generally; `git log --oneline` on this
+  branch shows the true, complete list including whatever lands after this
+  line
