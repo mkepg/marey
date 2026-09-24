@@ -1763,3 +1763,440 @@ clean.
    `sceneIR.ts:132` declares `export type IRObjectId = string`. The cast would
    have compiled and taught the next reader that a brand exists where none does.
    Found by opening the type rather than trusting the analogy.
+
+## Execution notes
+
+Written 2026-09-24 at the close of Task 7, from `git log`, the nine task
+reports (Tasks 0–6, 6b, and this one), the eight task reviews and their
+re-reviews, and the SDD ledger
+(`.sdd/2026-09-18-phase-5b-video/progress.md`) — **not** from any
+single task's self-report, per AGENT-LESSONS §1. Every number below was
+re-derived first-hand on this tree while writing this, including the ruling
+and defect counts, which were re-counted by grep rather than trusted from the
+addendum that carried them into this task's dispatch.
+
+**Written by the Task 7 implementer, dispatched normally** — unlike Phase 5A's
+execution notes, which the controller wrote because the dispatched implementer
+was lost to a rate-limit kill. No deviation to name on authorship this time.
+
+### Final evidence
+
+| Check | Command | Result |
+|---|---|---|
+| Unit suite | `npx vitest run` | **33 files / 862 tests / exit 0** |
+| Typecheck | `npx tsc -b --noEmit` | exit 0 |
+| Production build | `npm run build` | exit 0; only the pre-existing >500 kB chunk-size advisory |
+| Dev seam dropped from production build | `npm run build`, then grep `dist/` for `__mareyExportVideo`, `devVideoSeam` | **zero matches** |
+| mediabunny reaches the production bundle | grep `dist/` for `mediabunny`, `Matroska` | present, confined to `dist/assets/videoPipeline-*.js`, **279,404 bytes** — byte-identical to Task 5's own fix-round measurement of the same chunk, re-derived independently here rather than copied |
+| Tree | `git diff --stat`; `git status --porcelain` (content-based per AGENT-LESSONS §6, not trusted alone) | clean throughout this task's own work |
+| Ports 5199 / 4173 | `netstat -ano` filtered for a boundary-matched `:5199`/`:4173` LISTENING socket | neither bound, checked before and after this task's own build |
+
+This task started no dev server and drove no browser, per its own Global
+Constraints — the production build above is a one-shot `vite build`, not a
+listener, and was safe to run under that restriction.
+
+**Baseline check.** The plan's Global Constraint 1 records **29 files / 818
+tests** re-derived on a clean tree at the branch's start commit. That commit
+no longer resolves (see "The process record" below — R33), so it cannot be
+re-checked out to confirm directly; it is carried forward as ledger-recorded
+rather than re-verified, consistent with R33's own ruling that a stale SHA is
+not something to chase, only its content. Current `HEAD` before this task's
+own commits was 33 files / 862 tests: **+4 test files, +44 tests** for the
+whole phase.
+
+**Branch shape, as of `0a512ab`**, the commit immediately before this
+execution-notes commit (a commit cannot contain its own diffstat, so this is a
+snapshot rather than a live count): **40 commits** from the merge base with
+`main` (`c560530`), **25 files, +6,212 / −133**.
+
+### Defects found in this plan (17)
+
+Re-counted by grepping the ledger for every `Plan defect #N` / `Plan Defect
+#N` occurrence rather than trusted from the addendum that quoted it: `#4`
+through `#17` inclusive, no gaps, no duplicates — 14 defects, plus the 3 this
+plan's own self-review recorded before dispatch (§"Defects found in this plan
+before dispatch" above), for **17 total**. This is **not** the brief's
+original "3 found before dispatch" — that count was the plan's opening
+position, not its final one, and the addendum's own instruction was to record
+the number that actually happened.
+
+**Found before dispatch (3):** the spec's `CanvasSource` mismatch, an early
+Task 0 draft leaving `applySnapshot` in `pngSequence.ts`, and Task 0's
+pointless `IRObjectId` brand cast — all three listed in full in this plan's
+self-review above.
+
+**Found during execution or review (14, #4–#17):**
+
+4. **Task 0's "MEASURED" label on its `applySnapshot` code block was false.**
+   The file had genuinely never changed since the label was written, but the
+   block paraphrased it and silently dropped four pieces of documented
+   reasoning (why a snapshot carries transforms not geometry; why writes go
+   through `__updateLayout()`; the `visible`/`cullEscapedBodies` hazard
+   paragraph; the no-`__mareyId` paragraph), plus a fifth in the guard comment
+   caught only in self-review. Consequence carried into every later dispatch:
+   "MEASURED" means "the author read the file," not "this is the file."
+5. **Task 1's pinned-codec test was true by construction.** It compared
+   `planVideo`'s output against the same constant re-imported from the module
+   under test, so the assertion held regardless of the constant's value —
+   proved by mutation 1 coming back GREEN 15/15. Fixed with literal pins
+   (`toBe("avc1.42001f")`, `toBe("vp09.00.10.08")`).
+6. **Two of Task 1's required exports had zero test coverage.**
+   `noWebCodecsDiagnostic` and `unsupportedCodecDiagnostic` were both in the
+   brief's required interface; deleting both bodies left the suite GREEN
+   15/15. Fixed with two describe blocks; re-deletion then reddened 15/3.
+7. **Two pinned values were guarded only by a sign check.** The brief's own
+   `toBeGreaterThan(0)` assertions on `DEFAULT_BITRATE` and
+   `KEY_FRAME_INTERVAL` let either be mutated to `1` with the whole suite
+   green. Ruled for the finding against the plan (R8) and fixed with exact
+   literal equality.
+8. **`KEY_FRAME_INTERVAL` is documented and used in the wrong unit.**
+   `videoContract.ts` calls it "frames between keyframes"; mediabunny's field
+   is in **seconds**. The brief's own code would have requested a keyframe
+   every 30 seconds instead of every 30 frames. Not argued — measured by
+   reading back actual emitted packet types after encoding 60 frames at 30fps
+   with `keyFrameInterval: 1`: keys landed at `[0, 17, 30, 47]`, and index 30
+   is exactly the 1.0-second boundary the SECONDS hypothesis predicts, not the
+   every-frame pattern FRAMES would force. Resolved at the point of use in
+   `videoEncode.ts` (divide by `plan.fps`); the residual docstring trap was
+   corrected in Task 4, not carried to this task as R15 originally planned
+   (R15 revised — Task 4 was already authorized to touch that file).
+9. **The brief's own boundary test used `node:fs`/`node:path`, which cannot
+   compile here.** `tsconfig.app.json` carries only `"types": ["vite/client"]`
+   — no Node types — so the brief's block fails `tsc` with three `TS2307`
+   errors. Not guessed at: hit, then resolved against an existing precedent in
+   this repo, `languageDocs.test.ts`, which documents the identical constraint
+   and the identical `?raw`-import fix.
+10. **`videoEncode.ts` leaked resources on the throw path.** If
+    `source.add(sample)` threw mid-loop, `sample.close()` never ran and
+    `output.cancel()` — mediabunny's documented release mechanism — was never
+    called on any error path after `output.start()`. Inherited verbatim from
+    the brief's Step 2 block, which had no `try`/`finally` either. Fixed with
+    an outer `try`/`catch` (deliberately not `finally`, so `cancel()` cannot
+    run after a successful loop where `finalize()` must run instead) and
+    `await output.cancel().catch(() => {})` so a cleanup-time failure can
+    never replace the original error.
+11. **The boundary regexes anchored on the `from` keyword missed two of three
+    import forms.** Neither `import("pixi.js")` nor a bare `import
+    "pixi.js"` contains the literal token `from`, so both bypassed a guard
+    whose own docstring claimed "any form" coverage. None of the plan's four
+    mutations exercised this, because all four used `import type {...} from
+    "..."`. Widened to cover all three forms.
+12. **The MP4 root-cause attribution in Task 3's report was inferred by
+    analogy, not measured on the failing pair.** The report ruled out
+    rendering non-determinism because the WebM path (fed by the identical
+    `canvases` pipeline) was byte-identical *on a different invocation* — an
+    inference across separate runs, not a comparison within the one that
+    actually failed. Fixed (R17) by adding a direct runA-vs-runB
+    reference-frame comparison to the harness and re-running the failing MP4
+    pair: bit-identical, 15/15, which is what let the evidence document's
+    encoder-side attribution be a measurement rather than an analogy.
+13. **One gate family had never been observed to fail.** All four of Task 3's
+    original injected faults corrupted both cold runs identically, so none
+    could make `hashesEqual` report false — an unfired gate is
+    indistinguishable from a broken one. Fixed (R18) with a fifth fault that
+    perturbs only one run's returned hash; it isolated `hashesEqual` cleanly,
+    every other check staying clean in that run.
+14. **Task 6's brief instructed masking a claim Task 3 had already falsified.**
+    Step 2 said to mask spec §7.2's "six byte ranges" in MP4 output and show
+    the unmasked diff contains only those ranges. Task 3 had already measured
+    real MP4 output differing in *length* with ~61–63% of overlapping bytes
+    differing inside `mdat` — there is no set of six ranges whose masking
+    produces equality. Following the brief literally would have forced a
+    fabricated passing comparison. Ruling R32 replaced it with the spec's own
+    second exit-criterion branch: document the encoder-side reason instead.
+15. **This task's own brief repeated defect #14's exact error, aimed at
+    permanent documentation instead of a one-off evidence document.** Step 1
+    instructed covering "the container determinism asymmetry (WebM
+    byte-identical, MP4 six bytes of mandated wall clock)" — the identical
+    falsified claim, this time for `renderer.md`, which future agents read as
+    authority. Caught by the pre-Task-7 scan before this task was dispatched;
+    ruling R34 replaced it with the framing this task's own `renderer.md`
+    section above actually carries, and forbade a byte count entirely.
+16. **This task's own Files list omitted three of the four edits rulings had
+    deferred into it.** Only R19's `SKILL.md` edit was named in the brief;
+    R7 (`frameSampler.ts`'s stale citations), R28 (mediabunny's MPL-2.0
+    notice) and R31 (the `stripComments` docstring's understated limitation)
+    were all routed here by earlier rulings the brief predates. Ruling R35
+    carried all four into this task's addendum explicitly, which is why this
+    task's diff is wider than the brief's own Files list — the addendum's
+    §E says so and this document is the confirmation that the wideness was
+    real and not scope creep.
+17. **This task's own brief contradicted itself about who updates the
+    phase-status locations.** Step 2 assigned that edit to this task; the same
+    brief's own closing section assigned the identical edit to the merge.
+    Settled by Phase 5A's own precedent (`20501f2`, written *after* 5A's
+    whole-branch review, its text summarizing that review's outcome): status
+    text that reports a review's result cannot be written before the review
+    runs. Ruling R38 removed the phase-status edit from this task entirely —
+    this document, and the rest of this task's diff, touch neither
+    `docs/architecture/README.md` nor the phase bullet in
+    `roadmap-and-process.md`.
+
+Unlike Phase 5A's execution notes, this phase's ledger did not keep a separate
+"defects found in source" bucket next to "defects found in this plan" — nearly
+every defect above originated in a code or test block the plan's own brief
+specified verbatim (the same "a plan's verbatim code is a claim about a file
+the plan did not write" lesson Phase 5A's own notes name), so the ledger's
+controller tracked all of them under one running count. Presented here as the
+ledger recorded them, not re-bucketed to match the previous phase's shape.
+
+### Mutation results, each beside its suite size
+
+| Task | Mutation | Suite at the time | Result |
+|---|---|---|---|
+| 0 | Step 8: four `applySnapshot`/tree-agreement mutations | 822 | Three reddened as predicted; mutation 4 (first/last frame swap) was a **vacuous GREEN** — every fixture in `frameRaster.test.ts` uses a single-element frame array, so `frames[0]` and `frames[frames.length-1]` are the same element. Implementer reported this rather than banking the GREEN |
+| 1 | Codec-string pin (defect #5) | 15 (file) | GREEN 15/15 before the literal pin; **RED 14/1** after |
+| 1 | Two required-export bodies deleted (defect #6) | 15 (file) | GREEN 15/15 before coverage added; **RED 15/3** after |
+| 1 | Accumulated-drift arithmetic (mutation 7) | 840 | Brief predicted RED; **measured GREEN** — drift at 7,199 frames is `-1.1056e-11` against a `toBeCloseTo(…, 9)` tolerance of `~5e-10`, about 45× looser. Tightened to exact equality, which then reddened: `expected 239.9666666666556 to be 239.96666666666667` |
+| 1 | `DEFAULT_BITRATE`→`1` / `KEY_FRAME_INTERVAL`→`1` / hardcoded `width:800,height:600` (fix round, defect #7) | 841 | All three reddened: `expected 1 to be 8000000`; `expected 1 to be 30`; `expected 800 to be 640`. Restored byte-identical |
+| 2 | Pixi-clean file swap (all four `exportBoundary.test.ts` tests pointed at one constant) | 845 | **GREEN 4/4.** Implementer answered the phase's carried question, "could this have produced the other answer," with **"Yes"** — the file could not tell which module it had actually inspected. Filed as an adjacent-property gap, then fixed (R13) with per-test identity strings; the same swap then reddened |
+| 2 | `KEY_FRAME_INTERVAL` unit (defect #8) | n/a (real encode) | 60 frames at 30fps, `keyFrameInterval: 1` → key packets at `[0, 17, 30, 47]`, distinguishing SECONDS from FRAMES by which boundary 30 sits on |
+| 2 | Import-form regex (defect #11, fix round) | 845 | `import("pixi.js")` and bare `import "pixi.js"` added to `videoEncode.ts` in a probe: old regex missed both; widened regex catches both |
+| 3 | Five injected faults (drop every 10th frame; reverse order; duplicate frame 5→6; encode 60fps claiming 30; corrupt one run's hash only) | 845 (harness is `.mjs`, outside the suite) | **All five caught, exit 1 every time**, each by the specific mechanism predicted: frame count + nearest-neighbour; nearest-neighbour alone (frame count stayed correct — the case spec §10.2 flags as the one a count-only harness would miss); nearest-neighbour isolated to exactly the corrupted frame; the timestamp-schedule check alone; `hashesEqual` alone, isolated from every other check |
+| 3 | Reference-frame bit-identity on the actually-failing MP4 pair (defect #12 fix) | 845 | **15/15 bit-identical**, both cold runs — the renderer exonerated by direct measurement of the failing pair, not by analogy across separate ones |
+| 4 | Odd-dimension encode, both codecs (Q2) | n/a (real encode) | MP4/H.264: `isConfigSupported` false, encode throws the predicted even-dimensions error. WebM/VP9: `isConfigSupported` true, round-trips at exactly 801×601 with true corner-pixel content intact |
+| 4 | `keyFrameInterval` omitted vs. `1` (Q3) | n/a (real encode) | Omitted: two independent 90-frame runs byte-identical, keys `[0, 60]` — every 2s at 30fps, the documented default. `keyFrameInterval: 1`: different bytes, different length, keys `[0, 30, 60]` — proof the option is live |
+| 4 | Frame-count ramp (Q4) | n/a (real export seam) | 1,200/2,400/3,600/4,800 frames all completed (38s/101s/103s/223s); **6,000 failed after 166s** — faster than 4,800's successful 223s, consistent with a mid-job failure. `MAX_EXPORT_FRAMES` (7,200) never reached |
+| 5 | R21's widened regex vs. a real `pixi.js/app` import (Task 5 review, added a 4th mutation nobody had run) | 850 | **The OLD ends-with regex passed this real violation** — proven load-bearing, not argued: the widening caught something the previous guard genuinely let through |
+| 5 | `stripComments` sabotaged to `return ""` (fix round) | 862 (final) | All three R3 guards **and the stripper's own unit tests** went RED — 6 failed / 8 passed, the exact signature the implementer claimed. A stripper that ate code cannot report a clean file |
+| 6b | Reference-frame swap (frames 5↔9) against the actually-clicked MP4 (Step 4) | n/a (harness) | **2 isolated strict mismatches** — frame 5's nearest reference became 4 (distance 1.1296), frame 9's became 8 (distance 1.2601) — proving the decode-and-compare check can fail on the real clicked artifact, not only on the dev-seam path |
+
+### Deliberate gaps and deferrals, each with what makes it harmless today
+
+1. **`MAX_EXPORT_FRAMES` (7,200) does not protect this machine.** Q4 measured
+   4,800 frames succeeding and 6,000 failing on this 16GB machine, with no
+   named diagnostic — a generic browser-crash-shaped error. Ruling R23 left
+   the constant unchanged. *Harmless today:* the constant lives inside the
+   Phase 4 boundary Global Constraint 7 freezes; a ceiling derived from one
+   machine's RAM would be a magic number wrong on every other machine; and at
+   30fps the measured-good ceiling is ~160s of animation, well beyond any
+   scene in `eval/`. Recorded as a measured bracket, not rounded into a rule.
+2. **No scene lacking a top-level `duration:` can be exported from the UI at
+   all**, not only the shipped default scene (R27, widened by R39 in Task 6b).
+   `useExportVideo.ts` never threads `durationSeconds` to `runVideoExport`, so
+   a real click always falls through to the scene's own `duration:` field.
+   *Harmless today:* the failure is an honest, verbatim, human-readable
+   diagnostic (`EXPORT_UNBOUNDED_SCENE`), not a crash or a silence; the two
+   available remedies (a UI affordance, or a change to what scenes must
+   declare) are product decisions outside an unattended execution's
+   authority, and are recorded here for a human partner rather than chosen.
+3. **Q5 (whether `prefer-software` genuinely excludes a real hardware
+   encoder) is narrowed, not answered.** Every measurement this phase (and
+   this harness) will ever produce runs headless Chromium with explicit
+   software-rendering flags. *Harmless today:* the determinism claims this
+   phase makes are stated as scoped to that forced-software harness on one
+   machine, not as a general claim about an ordinary user's browser session —
+   the limitation is disclosed rather than silently exceeded.
+4. **`frameRaster.test.ts` test 3's regex is looser than its name.**
+   `/Only in the tree: \[[^\]]*b[^\]]*\]/` matches any bracket content
+   containing the letter "b," not the specific id. *Harmless today:* it
+   over-matches in the safe direction — mutation 2 (Task 0 Step 8) confirms it
+   still catches the defect it was written for.
+5. **`assertFrameSetMatchesTree`'s docstring claims more than any test
+   checks.** It states `frames[0]`'s id set represents the whole sequence's;
+   no test distinguishes that from any other index. *Harmless today:* this is
+   a property of `sampleFrames`'s own contract, adjacent to what this task's
+   scope covers, not a claim this phase's code depends on being false.
+6. **Three Task 3 minors, still open.** `--mask-mp4-times` silently no-ops on
+   WebM rather than warning (documented behaviour, cosmetic). The runA/runB
+   reference-frame comparison (defect #12's fix) holds both runs' full PNG
+   sets in Node memory simultaneously, adding to the scaling pressure Q4
+   measures. Fault 5 (Task 3's hash-only fault) is recorded as prose rather
+   than a fifth row in the Step 6 table — substance complete, formatting
+   inconsistent. None share a defect class with anything Important, so none
+   were folded into a fix round.
+7. **One citation off-by-one, still open.** A comment in `videoEncode.ts`
+   cites `mediabunny.mjs:35866` for where mediabunny closes internally-created
+   clones; the actual line is 35867. Originated in a controller fix dispatch
+   that copied a review finding's text without re-deriving it — the semantic
+   claim is correct, the line number is not.
+8. **R22's deferral was discharged for one scene only.** Task 6b (R36) proved
+   the shipped export button decodes correctly for `freeze-midair.marey`
+   through a real click, closing the gap R22 opened. Every other scene this
+   phase's evidence document covers, and the default-scene UI path itself,
+   remain covered only through the dev seam. *Harmless today:* the residual
+   risk is small — the fix round that preceded 6b verified line-by-line that
+   the dev-seam and production paths call the same primitives with a
+   byte-for-byte identical `app.init` options object — but it is a real,
+   named gap in evidence, not a closed question.
+9. **One imprecise citation, parked (R40).** `task-6b-report.md` cites an
+   AGENT-LESSONS section thematically rather than exactly. *Harmless today:*
+   the file is gitignored working material, not a deliverable.
+
+### The process record
+
+This is the section the next phase's plan should read first.
+
+**Seven interruptions, all by rate-limit kills** (Phase 5A had seven too, five
+rate-limit and two stream-stall; this phase's were all the same cause).
+Ordered by what each one cost:
+
+- Task 1 attempt 1, Task 2 attempts 1 and 2, and Task 3 attempt 1 **lost
+  nothing** — the first three killed before writing anything durable, and
+  Task 3's committed exactly at a Step-3 commit boundary and was resumed
+  rather than restarted, so the seam's context was not rebuilt.
+- Task 4 attempt 1 **cost a stray Vite server on port 5199** — the agent died
+  between starting Vite and doing any work, leaving exactly the stale-server
+  condition the environment brief warns produces confident false passes.
+  Killed, port re-verified free, and a standing check was added for every
+  later browser-touching dispatch: boundary-matched `netstat` on 5199 before
+  dispatching, not only after.
+- Task 5 fix round 1 (**Kill #6**) landed one fix committed and left a second,
+  50-line, mostly-complete diff uncommitted. Read in full before deciding to
+  keep it (R29) rather than discard and re-spend the tokens.
+- **Task 6 (Kill #7) is the one with the real story.** The session resumed
+  five days later to find the checkout on `main`, not `phase-5b-video`, and
+  **every commit SHA recorded in this ledger above that point no longer
+  resolved** (`git cat-file -t` on the last-known-good SHA: "Not a valid
+  object name"; the reflog held nothing usable). The work itself was intact —
+  all 26 Phase 5B commits recorded to that point were present, in order, with
+  matching messages, and `tsc`/`vitest` reproduced the exact figures the
+  ledger had recorded (33 files / 862 tests, exit 0) — but their *identity*
+  had been rewritten by something outside the repository's own history.
+  Ruling R33: old SHAs are treated as stale identifiers for verified-present
+  content, never re-derived or "corrected" in place, and no SHA recorded
+  above that point in the ledger may be pasted into a later dispatch — `BASE`
+  is re-derived from `git rev-parse` at dispatch time instead.
+
+**Commit-as-you-go is what made six of the seven kills cost nothing or close
+to it**, the same finding Phase 5A's own process record made about three
+kills out of seven — this phase adds a second axis to it: committing
+protected *content* even when the *identifiers* pointing at it later became
+unusable.
+
+**Two forced model-tier deviations, opposite directions, both named.** Task 5's
+task review was dispatched on **opus** deliberately — the highest-risk diff in
+the phase (first production-bundle change, a dependency-graph change
+affecting every visitor, a structural-guard widening that could be wrong in a
+way that still passes) — and it earned the cost: it corrected the
+controller's own stated reasoning about a local lazy-loading precedent that
+did not exist, resized a self-reported "~4.4MB / 1.15MB" bundle cost down to
+the real **+283,561 bytes (+6.6%) / ~+74 kB gzipped** by building both ends
+itself, and ran a fourth R21 mutation nobody had — proving the widened import
+guard load-bearing by finding a real violation the old guard passed clean.
+Task 5's **fix round** then continued on opus for the opposite reason —
+**availability, not capability** — because the sonnet pool was exhausted
+mid-kill and the alternative was a stalled execution for hours; named
+explicitly as a deviation from SDD's "rounds 1–3 resume the original
+implementer" rule, since availability forced a handoff instead. Opus was
+also deliberately **withheld** from Task 6 and 6b's reviews — both smaller,
+narrower diffs — reserved instead for the independent whole-branch review
+AGENT-LESSONS §8 requires, which this task's own "What is still owed" section
+still names as outstanding. And Task 1's fix-round re-review ran on
+**haiku**, a downward adjustment for a genuinely small (4.4 KB) diff — the
+same tiering-by-risk AGENT-LESSONS §7b asks for, applied in both directions
+in the same phase.
+
+**Every task except Task 0 needed exactly one fix round; none needed two.**
+Nine review-eligible units (Tasks 0–6 plus 6b) produced eight task reviews (14
+review/re-review dispatches counting re-reviews), zero Critical findings at
+any point, and **9 Important findings total** — Task 0: 0; Task 1: 1;
+Task 2: 2; Task 3: 2; Task 4: 0 (1 Minor, fixed anyway — see below); Task 5:
+2; Task 6: 2; Task 6b: 0. Every fix round's re-review returned clean on its
+first pass, which is the AGENT-LESSONS §7b failure this phase avoided:
+Phase 3B's Task 7 spent 282,971 tokens on unbatched rounds against a `+37/-5`
+diff, and nothing in this phase repeated that shape.
+
+**A minor finding fixed anyway, and why.** Task 4's one review finding was
+Minor — the spec's Q5 passage presented an inference (GPU model names imply
+hardware encoders) as a measurement. Ruling R24 fixed it rather than
+deferring, on the grounds that it is the exact error class this phase exists
+to catch, landing in the document Tasks 6 and 7 would cite as settled. The
+controller then re-verified the fix's own justification independently before
+dispatching the re-review — `git diff` showed the round was purely additive
+with respect to everything that predated the task (zero deletion lines
+against the task's own base) — and the re-reviewer, given only the question
+and not the controller's arithmetic, reached the identical cumulative-diff
+numbers independently and went further, grepping the whole repository for
+the overclaiming phrasings to confirm no other document had already cited the
+text being corrected.
+
+**A withheld-finding test that passed.** Before dispatching Task 6's review,
+the controller traced `devVideoSeam.ts` and `videoPipeline.ts` itself and
+recorded, in the ledger, that every measurement in the phase's evidence
+document to that point ran through the dev seam, not the path a real click
+takes — then withheld that conclusion from the review dispatch, asking only
+"trace which path the harness exercises, trace which path a click takes,
+compare them, report what you find." The reviewer reached the identical
+conclusion independently, before finding the controller's own note, and added
+a detail the controller had not written down (that the only guard connecting
+the two paths is an import-boundary test, not a behavioural-equivalence one).
+A review that reproduces a finding its dispatch deliberately withheld is
+doing its job rather than agreeing with its brief.
+
+**A fix round corrected an error neither the controller nor the first
+reviewer had caught — including inside the controller's own fix
+instruction.** Task 6's evidence document justified box-tree-walking (instead
+of hardcoded MP4 offsets) with a claim that its computed field offsets did not
+match spec §7.2's static table. That claim was false, and the controller's own
+fix-round dispatch repeated it as established fact. Because the dispatch also
+said "re-derive rather than accept my description," the resumed implementer
+re-diffed the still-on-disk diagnostic files and found the true reason (a
+32-bit second-count field where only the low-order byte differs between two
+runs seconds apart) — which still matched the spec table's numbers exactly,
+just not for the reason anyone had written down. The general conclusion (walk
+the box tree, never hardcode offsets) survived; the specific evidence offered
+for it did not, until this round.
+
+**A deferral nobody discharged is a process lesson, not just an event.**
+Ruling R22 scoped Task 5's real-browser click test to download plumbing only
+— "not evidence of frame fidelity" — explicitly because "the UI's own
+fidelity is covered one task later in Task 6, at no loss." Task 6 then
+measured all three exit criteria through the dev seam, the same path Task 5's
+own scoping had set aside. Nobody had reported a gap; the controller found it
+only by independently tracing the two files against each other while writing
+Task 6's own limitations section, after the fact. The promise that justified
+narrowing Task 5's scope was never checked against what Task 6 actually did
+until it was almost too late to matter. Ruling R36 closed the gap with a new
+Task 6b rather than parking it, specifically because parking it would have
+retroactively turned R22 from a scheduling decision into a wrong one. The
+lesson carried forward: **a deferral that trades scope for a later task's
+promised coverage needs the receiving task checked against that promise
+before the phase is declared done, not assumed kept because it was named.**
+
+**Rulings that changed under measurement, not merely accumulated.** 40
+rulings total (R1–R40, recounted by grep, not trusted from the addendum that
+cited "38 at the time of writing" — two more landed in Task 6b after that).
+The count matters less than which ones moved:
+
+- **R15 → revised.** First routed the `KEY_FRAME_INTERVAL` docstring fix to
+  this task as a comment-only edit; revised to send it to Task 4 instead once
+  Task 4 was already authorized to touch that file for an unrelated reason.
+- **R16 → settled by measurement, worse than first found.** First deferred
+  the `importsModule` trailing-path gap as plausibly unreachable; Task 4
+  measured `allowImportingTsExtensions: true` set in every `tsconfig*.json`
+  in the repo, making the gap live, and found a second, more serious miss (a
+  pixi.js export subpath) the original finding had not named.
+- **R25 → accepted, then independently reproduced.** The controller ruled an
+  in-place spec edit acceptable based on a zero-deletion `git diff`
+  measurement; the re-reviewer, given only the question, reached the
+  identical measurement and then went further, confirming by repo-wide grep
+  that nothing else had cited the text being corrected.
+- **R32 → replaces a plan step the plan's own later measurement had
+  falsified** (defect #14 above).
+- **R34 → keeps the identical falsified claim out of a second, more
+  permanent document** (defect #15 above) — the same false claim R32 had
+  already corrected once, caught a second time before it could land in
+  `renderer.md`.
+- **R36 → reopens coverage R22 had traded away on a promise Task 6 did not
+  keep** (the deferral-not-discharged lesson above).
+- **R38 → settled by cross-phase precedent** rather than by the plan's own
+  contradictory text (defect #17 above).
+
+**One thing this phase did not have that Phase 5A's did.** No task review
+returned "Needs fixes" on spec compliance itself — every "Needs fixes" verdict
+this phase (Tasks 1, 2) was about task *quality*, with spec compliance marked
+either compliant or not separately assessed as failing. All Important findings
+were defects in what the plan asked for or in unmeasured claims, not in
+whether the implementation matched the spec's own requirements.
+
+### Inherited, still open
+
+**`eval/RESULTS-GATE-B.md`'s recorded snapshot hash still does not
+reproduce**, unaffected by anything in this phase. Phase 5A's own execution
+notes record the cause (a later Phase 4 commit added a field to
+`ObjectSnapshot`, and `frameHash.ts` digests the whole JSON) and the decision
+to document rather than retcon Phase 4's record. Nothing in Phase 5B touched
+Gate B's record, its cause, or the decision to leave it as documented-but-open;
+it is named here only so a reader of this phase's notes is not surprised to
+find it still true.
