@@ -340,6 +340,19 @@ See `eval/RESULTS-PHASE-5B.md`'s "Which code path was actually measured"
 section, and its Task 6b section (a file decoded from an actual click), for
 how that gap was measured and, for one scene, closed.
 
+**A limitation of the shipped button this script's own `--duration` flag can
+mask if you are not watching for it.** `--duration` overrides a scene's own
+`duration:` field, so this script can export any scene, bounded or not. The
+shipped button has no such override — `useExportVideo.ts` never passes
+`durationSeconds` to `runVideoExport` — so a real click always falls through
+to the scene's own top-level `duration:` field, and **no scene lacking one can
+be exported from the UI at all**, not only the shipped default scene. A
+first-party fixture in this very directory, `scenes/freeze-midair.marey`,
+declares no top-level `duration:` (only one inside its own `physics` block, a
+different field), so it cannot be exported by clicking, only by this script's
+`--duration` override. Recorded, not fixed, as a product decision outside an
+unattended execution's authority (ruling R39, widening R27).
+
 ```bash
 node tools/visual-check/video-check.mjs \
   --scene tools/visual-check/scenes/freeze-midair.marey \
