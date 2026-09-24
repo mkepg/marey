@@ -43,7 +43,7 @@ node tools/visual-check/check.mjs \
 
 | Flag | Meaning |
 |---|---|
-| `--scene <path>` | A `.marey` file, or `default` for the app's built-in test card |
+| `--scene <path>` | A `.marey` file, or `default` for the app's built-in default scene (the smiling face). For renderer checks use `scenes/test-card.marey`, the motion test card that was the default until Phase 5B |
 | `--at a,b,c` | Milliseconds after load to capture, comma-separated |
 | `--settle <ms>` | How long to wait before the at-rest capture (default 9000) |
 | `--url <origin>` | Dev server origin (default `http://localhost:5199`) |
@@ -89,8 +89,8 @@ transient state. `scenes/freeze.marey` does exactly this, which is how the
 
 A scene with `loop: true` animations never comes to rest at all, so
 `deterministic` and `frozen at rest` are meaningless for it — including for
-`--scene default`. Use it to confirm the card renders and the handoff arcs, not
-for determinism.
+`--scene default` and `scenes/test-card.marey`. Use them to confirm the scene
+renders and the handoff arcs, not for determinism.
 
 ## Scenes
 
@@ -115,6 +115,7 @@ for determinism.
 | `wave-row.marey` | Roadmap exit criterion 3, in the form where a still frame shows it: fifteen beads, one constant `duration`, `delay` spanning one full cycle, so exactly one wavelength fits the row and travels along it. Loops. |
 | `timeline-sweep.marey` | The control from the same set — a generated diagram plus one moving playhead, the one of the three that needed no Phase 3C workaround, so it is unchanged in substance. Loops. |
 | `origin-physics.marey` | `origin` through the physics seam, both halves. LEFT: a bottom-origin pillar falls and must land **standing on** the ledge — its body is placed at its bbox centre, not at its origin point. RIGHT: a bottom-origin bar grows upward under a scale animation and must carry the rider ball up on its top edge — Matter scales a body about its own centre, so the centre has to be moved to match. Settles, so `frozen at rest` and `deterministic` both apply. |
+| `test-card.marey` | The motion test card: the app's default scene until Phase 5B, moved here unchanged when the smiling face replaced it. Six zones exercise every timeline path (easing race, handoff, sequence with a parallel step, loops, stagger, shared-world physics), and its header comment says what correct looks like. `testCard.test.ts` fails if a zone is deleted. Loops, so `frozen at rest` and `deterministic` do not apply. |
 | `linear-motion.marey` | `video-check.mjs`'s primary criterion-3 fixture (Phase 5B fix wave). A box and a dot move at constant velocity from frame 0 and stay on screen, so at 24–60 fps every decoded frame has one clearly nearest reference frame (not at 120 fps; see "Exporting video"). A dropped, duplicated or reordered frame is a nearest-neighbour failure from the very first frame. |
 
 Add a scene rather than editing one when checking something new — these are
@@ -165,7 +166,7 @@ node tools/visual-check/export-check.mjs \
 
 | Flag | Meaning |
 |---|---|
-| `--scene <path>` | A `.marey` file. Required — there is no `default` fallback, because the app's built-in scene declares no `duration` and would need `--duration` anyway. |
+| `--scene <path>` | A `.marey` file. Required — there is no `default` fallback. To export the app's default scene, save `DEFAULT_CODE` from `src/store/defaultScene.ts` to a `.marey` file first. |
 | `--fps <n>` | Export frame rate (default 30). Must divide 120 (`TICK_HZ`) exactly — 24, 30, 60 are supported; `planExport` rejects anything else. |
 | `--duration <s>` | Export bound in seconds, overriding the scene's own `duration:`. Omit to use the scene's declared duration. |
 | `--out <dir>` | Where frames and `report.json` go. |
@@ -353,8 +354,9 @@ mask if you are not watching for it.** `--duration` overrides a scene's own
 shipped button has no such override — `useExportVideo.ts` never passes
 `durationSeconds` to `runVideoExport` — so a real click always falls through
 to the scene's own top-level `duration:` field, and **no scene lacking one can
-be exported from the UI at all**, not only the shipped default scene. A
-first-party fixture in this very directory, `scenes/freeze-midair.marey`,
+be exported from the UI at all**. The shipped default scene declares
+`duration: 6` so a first click exports, and `defaultScene.test.ts` fails if
+that stops being true. A first-party fixture in this very directory, `scenes/freeze-midair.marey`,
 declares no top-level `duration:` (only one inside its own `physics` block, a
 different field), so it cannot be exported by clicking, only by this script's
 `--duration` override. Recorded, not fixed, as a product decision outside an

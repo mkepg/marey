@@ -333,9 +333,10 @@ file, when its reference input is wrong. What remains uncovered: every
 other scene in this document (criteria 1–3 above cover several; this
 section covers one), any scene reached through the UI's default
 unmodified-fixture path (the button still cannot export
-`freeze-midair.marey` as committed, or the shipped default scene, without a
+`freeze-midair.marey` as committed, or any other scene, without a
 scene-level `duration:` — R27's finding, now shown to generalize to any
-scene whose only duration lives inside a physics block), cross-browser
+scene whose only duration lives inside a physics block; the shipped
+default scene itself has declared one since the smiling-face replacement), cross-browser
 behaviour, and the memory ceiling and hardware-encoder questions the
 "Known limitations" section below already names as open. This result does
 not retroactively extend criteria 1–3's per-scene numbers above to the
@@ -1048,18 +1049,21 @@ fix wave's scoped re-review.
   non-reproducibility (if `prefer-software` turns out to be an unenforced
   hint on some Chromium build) would not be caught by this harness,
   structurally, no matter how many times it is run.
-- **A first visitor's first export click fails.** Ruling R27 (`progress.md`):
-  the app's shipped default scene declares no `duration:`, so a first-time
-  visitor clicking the export button before editing anything gets the
-  verbatim `EXPORT_UNBOUNDED_SCENE` diagnostic rather than a file. Confirmed
-  against the production build in Task 5. This was ruled not a correctness
-  defect (an honest, human-readable diagnostic rather than a crash or
-  silent failure) and not fixed in this phase — changing the shipped
-  default scene is a product decision outside an unattended execution's
-  authority. Named here as known first-run behaviour, not re-tested by this
-  task (this task uses the dev seam, `window.__mareyExportVideo`, which
-  takes an explicit scene source and does not go through the default-scene
-  UI path at all).
+- **The export button needs a scene-level `duration:`.** Rulings R27 and
+  R39 (`progress.md`): the button passes no export bound, so a scene without
+  a top-level `duration:` gets the verbatim `EXPORT_UNBOUNDED_SCENE`
+  diagnostic instead of a file, and that message's advice to "pass an
+  explicit export bound" is something the UI gives no way to do. **The
+  first-run case R27 found is fixed**: the shipped default scene declared no
+  `duration:`, so a first-time visitor's first export click failed (confirmed
+  against the production build in Task 5). The smiling-face default that
+  replaced it declares `duration: 6`; `defaultScene.test.ts` fails if it
+  stops being exportable, and its export was decoded back through
+  `video-check.mjs` at 30 fps, 180/180 frames strict with no ties in both
+  containers and WebM byte-identical across cold runs. The general case, a
+  length control beside the export buttons and a reworded message (which
+  lives in the GC7-frozen `exportContract.ts`), is deferred to the next UI
+  phase by the project owner's decision.
 - **The criterion-3 check has a window, not an absolute threshold.** Each
   decoded frame *k* is compared only with reference frames *k−2..k+2*, and
   passes if *k* is uniquely nearest among those five. Nothing checks how

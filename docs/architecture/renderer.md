@@ -180,7 +180,8 @@ there is no `anchor` property. Note the precision: at that default, the pivot
 is the geometric centre only for `circle`, `rectangle` and `text`. For
 `polygon` and `line` it is the bbox midpoint, **not** the centroid — the same
 distinction D15 exists to correct in the physics layer, and 7.5px apart for
-the default scene's own triangle. A `group`'s pivot is its local origin (the
+the motion test card's own triangle (`tools/visual-check/scenes/test-card.marey`,
+the default scene until Phase 5B). A `group`'s pivot is its local origin (the
 `applyAnchorAndPivot` call at `builder.ts:351-361`, the fixed `{ x: 0, y: 0 }`
 origin argument at line `359`) and is never derived from where its children
 sit — that is deliberate (D16), and since Phase 2 its collision body is

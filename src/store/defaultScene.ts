@@ -1,67 +1,52 @@
 /**
  * The scene loaded when there is no saved or shared document.
  *
- * It doubles as a visual regression test for the renderer: each zone
- * exercises a different path through the timeline, and the header comment
- * tells the reader what correct behaviour looks like. `defaultScene.test.ts`
- * asserts that it compiles, so a broken default can never ship.
+ * It is the first thing a visitor sees, so it shows off what Marey is for —
+ * choreographed animation handing off into a shared physics world — in one
+ * friendly picture, and it declares a `duration` so the export buttons work
+ * on it as loaded. `defaultScene.test.ts` checks that it compiles, fits in a
+ * share link, and can be exported.
+ *
+ * The motion test card that used to live here, which exercises every
+ * timeline path for eyeballing renderer changes, is now
+ * `tools/visual-check/scenes/test-card.marey`.
  *
  * Kept in its own module so it can be imported without pulling in the store,
  * which touches `window.localStorage` at module load.
  */
-export const DEFAULT_CODE = `// ══ MAREY · MOTION TEST CARD ═══════════════════════════════
+export const DEFAULT_CODE = `// ══ HELLO FROM MAREY ═══════════════════════════════════════
 //
-// What you should see:
+// What you should see, in about six seconds:
 //
-//   1. EASING     four dots leave together and arrive together,
-//                 fanning apart in between. If they drift out of
-//                 sync over time, the clock is wrong.
-//   2. HANDOFF    the amber ball slides up-right, then keeps its
-//                 momentum into a falling arc — it must not stop
-//                 dead and drop straight down.
-//   3. SEQUENCE   the rose square spins, then grows while sliding,
-//                 then falls. One step at a time, in that order.
-//   4. LOOP       the rings breathe forever, at different rates.
-//   5. STAGGER    the bar wave ripples; each bar is slightly slower
-//                 than its neighbour.
-//   6. PHYSICS    the ball and the square share one world and collide
-//                 with the scene edges. As choreographed they land far
-//                 apart, and the square lands flat — a flat landing has
-//                 no torque, so it should NOT tumble. Both are correct.
+//   1. A big yellow face pops in, overshoots a little and settles.
+//   2. Its smile grows into a grin, its cheeks blush, and it blinks.
+//   3. Confetti bursts out from behind it. Each piece hands its
+//      momentum to physics, so it arcs, tumbles and lands on the
+//      floor instead of stopping dead and dropping.
+//   4. "hello!" pops in, and the face bobs and wiggles for joy.
 //
-// Note: only objects with a physics block are solid. The labels, rings
-// and bars have none, so falling objects pass straight through them.
+// The scene declares 'duration: 6', which is how long an MP4 or
+// WebM export from the top bar will be.
 
-let ink    = #e2e8f0
-let dim    = #64748b
-let sky    = #38bdf8
-let violet = #a78bfa
-let rose   = #fb7185
-let amber  = #fbbf24
+let sun    = #facc15
+let rim    = #f59e0b
+let ink    = #3b2410
+let blush  = #fb7185
+let party  = [#f472b6, #38bdf8, #a78bfa, #34d399, #fb923c]
 
-let travel = 250   // shared distance for the easing race
-let beat   = 2.0   // shared duration for the easing race
+let cx = 400
+let cy = 310
 
-// One row of the easing race. The curve itself is a template
-// argument, so all four rows share a single definition.
-template Racer(curve) {
-  rectangle mark {
-    position: (-20, 0)
-    size: (3, 14)
-    color: dim
-    alpha: 0.6
-  }
-  circle dot {
-    position: (0, 0)
-    radius: 7
-    color: sky
-    animate {
-      property: position
-      to: (travel, 0)
-      duration: beat
-      easing: curve
-      loop: true
-      yoyo: true
+// One eye: a dark pupil with a highlight, blinking twice.
+template Eye() {
+  group lid {
+    circle pupil     { position: (0, 0),  radius: 19, color: ink }
+    circle highlight { position: (6, -7), radius: 6,  color: #ffffff }
+    sequence {
+      animate { property: scale, to: (1, 0.1), duration: 0.07, delay: 1.7, easing: easeIn }
+      animate { property: scale, to: (1, 1),   duration: 0.1,  easing: easeOut }
+      animate { property: scale, to: (1, 0.1), duration: 0.07, delay: 2.1, easing: easeIn }
+      animate { property: scale, to: (1, 1),   duration: 0.1,  easing: easeOut }
     }
   }
 }
@@ -69,189 +54,135 @@ template Racer(curve) {
 scene {
   size: (800, 600)
   background: #0a0e1a
-  fit: contain
+  duration: 6
 
-  // ── Title ───────────────────────────────────────────────────
-  text title {
-    position: (400, 40)
-    content: "MAREY"
-    fontSize: 26
-    color: ink
-    layer: 2
-  }
-
-  text subtitle {
-    position: (400, 64)
-    content: "motion test card"
-    fontSize: 11
-    color: dim
-    layer: 2
-  }
-
-  // ── 1 · EASING ──────────────────────────────────────────────
-  // Same distance, same duration, four curves. They must depart
-  // and arrive in lockstep no matter the display refresh rate.
-  use Racer(linear)    rowLinear { position: (120, 116) }
-  use Racer(easeIn)    rowIn     { position: (120, 138) }
-  use Racer(easeOut)   rowOut    { position: (120, 160) }
-  use Racer(easeInOut) rowInOut  { position: (120, 182) }
-
-  text lblLinear { position: (58, 116), content: "linear",    fontSize: 10, color: dim }
-  text lblIn     { position: (58, 138), content: "easeIn",    fontSize: 10, color: dim }
-  text lblOut    { position: (58, 160), content: "easeOut",   fontSize: 10, color: dim }
-  text lblInOut  { position: (58, 182), content: "easeInOut", fontSize: 10, color: dim }
-
-  // ── 2 · HANDOFF ─────────────────────────────────────────────
-  // The animation's exit velocity is carried into the simulation,
-  // so the ball arcs. Without handoff it would halt, then drop.
-  text lblHandoff {
-    position: (74, 236)
-    content: "handoff"
-    fontSize: 10
-    color: dim
-  }
-
-  circle launcher {
-    position: (130, 258)
-    radius: 11
-    color: amber
-    animate {
-      property: position
-      to: (350, 220)
-      duration: 1.1
-      easing: easeOut
-      handoff: true
-    }
-    physics {
-      gravity: (0, 900)
-      airDrag: 0.006
-      bounce: 0.55
-      collideBounds: true
-      duration: indefinitely
-    }
-  }
-
-  // ── 3 · SEQUENCE + PARALLEL ─────────────────────────────────
-  // Three steps, strictly in order. The middle step runs two
-  // animations at once and only advances when both finish.
-  text lblSeq {
-    position: (74, 310)
-    content: "sequence"
-    fontSize: 10
-    color: dim
-  }
-
-  rectangle stepper {
-    position: (130, 332)
-    size: (34, 34)
-    color: rose
-    sequence {
+  // ── Sparkles twinkling around the face ───────────────────
+  generate k in 0 to 5 {
+    let angle = k * 60 - 30
+    polygon sparkle {
+      position: (cx + 250 * cos(angle), cy + 172 * sin(angle))
+      points: [(0, -14), (4, -4), (14, 0), (4, 4), (0, 14), (-4, 4), (-14, 0), (-4, -4)]
+      color: #fde68a
+      alpha: 0.15
       animate {
-        property: rotation
-        to: 180
-        duration: 0.9
-        easing: easeInOut
-      }
-      parallel {
-        animate { property: position, to: (350, 332), duration: 1.2, easing: easeInOut }
-        animate { property: scale,    to: (1.6, 1.6), duration: 1.2, easing: easeOut }
-      }
-      physics {
-        gravity: (0, 700)
-        bounce: 0.45
-        collideBounds: true
-        duration: 4
-      }
-    }
-  }
-
-  // ── 4 · LOOP ────────────────────────────────────────────────
-  // Two rings breathing on different periods, drawn behind
-  // everything else via a negative layer.
-  circle auraOuter {
-    position: (610, 250)
-    radius: 96
-    color: violet
-    alpha: 0.10
-    layer: -1
-    animate {
-      property: scale
-      to: (1.18, 1.18)
-      duration: 3.4
-      easing: easeInOut
-      loop: true
-      yoyo: true
-    }
-  }
-
-  circle auraInner {
-    position: (610, 250)
-    radius: 52
-    color: sky
-    alpha: 0.16
-    layer: -1
-    animate {
-      property: scale
-      to: (0.78, 0.78)
-      duration: 2.2
-      easing: easeInOut
-      loop: true
-      yoyo: true
-    }
-  }
-
-  // A group rotates as one unit; its children keep their offsets.
-  group badge {
-    position: (610, 250)
-    animate {
-      property: rotation
-      to: 360
-      duration: 9.0
-      easing: linear
-      loop: true
-    }
-    polygon blade {
-      position: (0, 0)
-      points: [(0, -30), (26, 15), (-26, 15)]
-      color: amber
-      alpha: 0.85
-    }
-    line spoke {
-      position: (0, 0)
-      points: [(-44, 0), (44, 0)]
-      thickness: 2
-      color: rose
-      alpha: 0.55
-    }
-  }
-
-  // ── 5 · STAGGER ─────────────────────────────────────────────
-  // Ten bars, each a little slower than the last, so the row
-  // ripples instead of pulsing in unison.
-  generate k in 0 to 9 {
-    rectangle tick {
-      position: (76 + k * 32, 470)
-      size: (7, 30)
-      color: sky
-      alpha: 0.30
-      animate {
-        property: scale
-        to: (1, 2.6)
-        duration: 0.9 + k / 12
-        easing: easeInOut
+        property: alpha
+        to: 1.0
+        duration: 0.7
+        delay: 0.9 + k * 0.2
         loop: true
         yoyo: true
       }
     }
   }
 
-  // ── Ground rule ─────────────────────────────────────────────
-  line ground {
-    position: (400, 596)
-    points: [(-400, 0), (400, 0)]
-    thickness: 1
-    color: dim
-    alpha: 0.35
+  // ── Confetti: a burst that hands off into physics ────────
+  generate i in 0 to 23 {
+    let angle = -165 + i * 150 / 23
+    let reach = 190 + (i % 3) * 35
+    rectangle bit {
+      position: (cx + 8 * cos(angle), cy + 8 * sin(angle))
+      size: (14, 8)
+      rotation: i * 37
+      color: party[i % 5]
+      layer: -1
+      alpha: 0
+      // Hidden until the burst, so the pile waiting behind the face
+      // never shows before the face has popped in over it.
+      animate { property: alpha, to: 1, duration: 0.1, delay: 1.9 }
+      animate {
+        property: position
+        to: (cx + reach * cos(angle), cy + reach * sin(angle))
+        duration: 0.55
+        delay: 2.0
+        easing: easeOut
+        handoff: true
+      }
+      physics {
+        gravity: (0, 520)
+        airDrag: 0.02
+        bounce: 0.3
+        collideBounds: true
+        duration: indefinitely
+      }
+    }
+  }
+
+  // ── The face ──────────────────────────────────────────────
+  // Two groups on purpose. An object's 'sequence' starts only once
+  // its own 'animate' blocks have finished, and a looping one never
+  // does, so the endless bob and wiggle live on the outer group and
+  // the one-off pop lives on the inner one.
+  group joy {
+    position: (cx, cy)
+    rotation: -4
+    animate { property: rotation, to: 4, duration: 0.45, delay: 2.6, loop: true, yoyo: true }
+    animate { property: position, to: (cx, cy - 12), duration: 0.3, delay: 2.6, easing: easeOut, loop: true, yoyo: true }
+
+    group face {
+      position: (0, 0)
+      scale: (0, 0)
+
+      circle edge { position: (0, 0), radius: 158, color: rim }
+      circle head { position: (0, 0), radius: 150, color: sun }
+
+      circle cheekL {
+        position: (-92, 34), radius: 26, color: blush, alpha: 0
+        animate { property: alpha, to: 0.55, duration: 0.6, delay: 1.2 }
+      }
+      circle cheekR {
+        position: (92, 34), radius: 26, color: blush, alpha: 0
+        animate { property: alpha, to: 0.55, duration: 0.6, delay: 1.2 }
+      }
+
+      use Eye() eyeL { position: (-52, -38) }
+      use Eye() eyeR { position: (52, -38) }
+
+      // The smile is an arc: points on a circle of radius 78,
+      // from 25 to 155 degrees (y points down, so that is the
+      // bottom of the circle).
+      line smile {
+        position: (0, 48)
+        points: [
+          (78 * cos(25),  78 * sin(25)),  (78 * cos(35),  78 * sin(35)),
+          (78 * cos(45),  78 * sin(45)),  (78 * cos(56),  78 * sin(56)),
+          (78 * cos(67),  78 * sin(67)),  (78 * cos(78),  78 * sin(78)),
+          (78 * cos(90),  78 * sin(90)),
+          (78 * cos(102), 78 * sin(102)), (78 * cos(113), 78 * sin(113)),
+          (78 * cos(124), 78 * sin(124)), (78 * cos(135), 78 * sin(135)),
+          (78 * cos(145), 78 * sin(145)), (78 * cos(155), 78 * sin(155))
+        ]
+        thickness: 12
+        color: ink
+        scale: (0.35, 0.5)
+        animate { property: scale, to: (1, 1), duration: 0.7, delay: 0.6, easing: easeOut }
+      }
+
+      // Pop in: overshoot, dip, settle.
+      sequence {
+        animate { property: scale, to: (1.12, 1.12), duration: 0.45, easing: easeOut }
+        animate { property: scale, to: (0.96, 0.96), duration: 0.15 }
+        animate { property: scale, to: (1, 1),       duration: 0.15 }
+      }
+    }
+  }
+
+  // Same split: the outer group sways forever, the text pops once.
+  group wave {
+    position: (cx, 78)
+    rotation: -3
+    animate { property: rotation, to: 3, duration: 0.6, delay: 2.8, loop: true, yoyo: true }
+
+    text hello {
+      position: (0, 0)
+      content: "hello!"
+      fontSize: 60
+      color: #ffffff
+      scale: (0, 0)
+      sequence {
+        animate { property: scale, to: (1.15, 1.15), duration: 0.3, delay: 2.3, easing: easeOut }
+        animate { property: scale, to: (1, 1),       duration: 0.2 }
+      }
+    }
   }
 }
 `;
