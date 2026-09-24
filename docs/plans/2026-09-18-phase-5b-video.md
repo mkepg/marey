@@ -2088,7 +2088,7 @@ same tiering-by-risk AGENT-LESSONS §7b asks for, applied in both directions
 in the same phase.
 
 **Every task except Task 0 needed exactly one fix round; none needed two.**
-Nine review-eligible units (Tasks 0–6 plus 6b) produced eight task reviews (14
+Eight review-eligible units (Tasks 0–6 plus 6b) produced eight task reviews (14
 review/re-review dispatches counting re-reviews), zero Critical findings at
 any point, and **9 Important findings total** — Task 0: 0; Task 1: 1;
 Task 2: 2; Task 3: 2; Task 4: 0 (1 Minor, fixed anyway — see below); Task 5:
@@ -2183,12 +2183,31 @@ The count matters less than which ones moved:
 - **R38 → settled by cross-phase precedent** rather than by the plan's own
   contradictory text (defect #17 above).
 
-**One thing this phase did not have that Phase 5A's did.** No task review
-returned "Needs fixes" on spec compliance itself — every "Needs fixes" verdict
-this phase (Tasks 1, 2) was about task *quality*, with spec compliance marked
-either compliant or not separately assessed as failing. All Important findings
-were defects in what the plan asked for or in unmeasured claims, not in
-whether the implementation matched the spec's own requirements.
+**Spec-compliance verdicts, re-checked against the ledger rather than assumed
+clean.** An earlier draft of this paragraph claimed no task review failed
+spec compliance itself this phase. That is false, and the ledger it was
+supposedly written from says so directly: `progress.md:109` records
+"Task 1: review returned ❌ spec compliance, task quality **Needs fixes**,"
+and `progress.md:167` records "Task 2: review returned ❌, task quality
+**Needs fixes**." Caught by review of this document, not by re-reading it
+here first.
+
+Of the eight reviewed units, **six passed spec compliance on the first
+review** (Tasks 0, 3, 4, 5, 6, 6b) and **two failed it outright**: Task 1 —
+its one Important finding was defect #7 above, the pinned `DEFAULT_BITRATE`/
+`KEY_FRAME_INTERVAL` values guarded only by a sign check — and Task 2 — its
+two Important findings were defects #10 and #11 above, the throw-path
+resource leak and the import-form regex gap. Both were resolved in exactly
+one fix round each, and each re-review reported every finding addressed with
+zero left open; the ledger does not record either re-review restating a
+formal "spec compliance PASS" verdict, only that nothing was left
+outstanding, so that stronger claim is not made here either. Two of eight
+task reviews failed spec compliance on their first pass, and review caught
+both before either reached a second round — a less clean record than the
+paragraph this replaces claimed, and a more useful one for a future reader:
+the two failures were exactly the kind of "the plan's own code was wrong"
+defect this phase's mutation discipline exists to catch, and both were
+caught before merge rather than after.
 
 ### Inherited, still open
 
