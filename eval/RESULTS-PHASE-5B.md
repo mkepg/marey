@@ -285,3 +285,108 @@ remainder is inside the compressed bitstream and its mechanical metadata
 derivatives — attributed to the encoder side and no further.**
 
 ---
+
+## Criterion 3 — no frame dropped, duplicated or reordered, relative to the sampler's output
+
+Per R20, the primary fixture is `freeze-midair.marey` (continuous free-fall
+for its whole exported window, never settles), not `compound-logo.marey`
+(its own comment: "the mark comes to rest at 5.5s, so the last 2.5s are
+genuinely settled frames" — `eval/scenes-3b/compound-logo.marey:30-31`).
+The check (design §10.2): for each decoded frame *k*, compute a distance to
+sampler reference frames *k−2..k+2* and require the minimum to be uniquely
+achieved by *k* itself (`strict`); when two or more candidates tie for the
+minimum the match is `tie`, reported but never gated. This positional check
+is used instead of pixel equality because both codecs are lossy — a
+dropped, duplicated or reordered frame makes a decoded frame resemble a
+*neighbour* more than itself, which survives lossy compression; exact pixel
+equality would not, structurally, regardless of correctness.
+
+### Primary fixture — `freeze-midair.marey`, continuous motion throughout
+
+Both runs above (Criterion 1/2 sections) already produced this criterion's
+numbers; restated here as criterion 3 evidence specifically:
+
+| Run | Strict | Tie | Strict mismatches | Max off-diagonal margin | Min margin among strict matches |
+|---|---|---|---|---|---|
+| WebM (`t6-freeze-webm`) | 12 | 3 | **0** | 0.5187 | 0.0922 |
+| MP4 (`t6-freeze-mp4`) | 13 | 2 | **0** | 0.5201 | 0.0248 |
+
+Zero strict mismatches in both containers: every decoded frame's uniquely-best
+match among its neighbours is itself. 3/15 (WebM) and 2/15 (MP4) frames tied
+even though this scene never settles within the exported 0.5s window — this
+is the same behaviour Task 3's informal smoke test on this fixture noted
+("evidence the `step=4` downsampled distance can tie on genuinely-moving
+content too, not only on a settled scene"), reproduced independently here:
+ties are not exclusively a symptom of a static scene, and this harness
+correctly reports them as ties rather than folding them into either a pass
+or a failure.
+
+### Secondary observation — `compound-logo.marey` (WebM), reproducing the known near-tie
+
+```bash
+node tools/visual-check/video-check.mjs \
+  --scene eval/scenes-3b/compound-logo.marey \
+  --container webm --fps 30 \
+  --out .visual-check/video/t6-logo-webm
+```
+
+| Strict | Tie | Strict mismatches | Max off-diagonal margin | Min margin among strict matches |
+|---|---|---|---|---|
+| 160 | 80 | **1** (frame 131 → nearest is 132, dist 1.0398) | 1.5872 | 0.000833 |
+
+This reproduces Task 3's finding on the same scene (`task-3-report.md`,
+Step 5) to within floating-point rounding: same frame (131), same wrong
+neighbour (132), same distance (`1.039811...`), same tiny margin
+(`0.000833...`). Investigated the same way: pulling the surrounding window
+confirms a symmetric V-shaped margin converging on 131/132 rather than a
+jump, and this scene's decoded frame 120 (t=4.0s, read directly below) is
+already visually indistinguishable from its last frame (t=7.967s) —
+**before** the scene's own comment's claimed 5.5s settle time, meaning the
+mark is at or extremely near its final rest position well ahead of when the
+scene's author believed it settled. **One third of this run's frames tie,
+plus a near-static tail** — exactly the condition spec §10.2 names as "not
+proof — proof the fixture was wrong" for this criterion, which is the
+reasoning behind R20's fixture choice, confirmed rather than merely cited.
+
+### The fault-injection table — evidence the check can fail
+
+A clean run only proves this criterion if the check is capable of catching
+a real defect. Task 3 injected **five** faults into `devVideoSeam.ts`
+(temporary edits, each reverted immediately after its run, confirmed by
+`git diff --stat -- src/lib/devVideoSeam.ts` returning empty after every
+single revert) — four in its own Step 6, plus a fifth added during its
+post-review fix round (task-3-report.md, "Fix 2 (Important 2)") after a
+reviewer noted none of the first four could make the harness's *hash*
+equality gate fail, since all four corrupted both cold runs identically.
+Reproduced here from `task-3-report.md` (cited, not re-run today — re-running
+five temporary source edits was judged unnecessary to satisfy this step,
+which asks to *record* the table; the source citations below let this be
+independently re-verified against that report):
+
+| # | Injected fault | Caught by | Exit code |
+|---|---|---|---|
+| 1 | Drop every 10th frame before encoding | **Both**: frame count (14 decoded vs 15 planned) *and* nearest-neighbour (5 strict mismatches, frames 9–13) | 1 |
+| 2 | Reverse the frame order before encoding | **Nearest-neighbour only** — frame count stayed correct (15/15, a count-only check would false-pass); 10/15 frames flagged strict-and-wrong at distances 1.02–2.72 | 1 |
+| 3 | Duplicate frame 5 in place of frame 6 | **Nearest-neighbour, isolated to exactly the corrupted frame** — frame count unaffected by duplication; exactly one strict mismatch (frame 6 → nearest is 5), zero false positives on neighbouring frames 5 and 7 | 1 |
+| 4 | Encode at 60fps while claiming 30 (metadata still says 30) | **Timestamp-schedule check only** — frame count and nearest-neighbour both stayed clean (same frames, same order, only playback speed metadata wrong); decoded timestamps ran twice the claimed rate, exceeding the ±half-frame tolerance | 1 |
+| 5 | Corrupt only `runB`'s returned simulation-state hash (one run, not both) | **`hashesEqual` only**, isolated from every other check — raw bytes, reference frames, frame count, dimensions, timestamps and nearest-neighbour all stayed clean; only the hash string differed, by construction | 1 |
+
+All five faults were caught, each by the specific check the fault targets,
+and none passed cleanly. Fault 2 (reverse) is the one the design's own §10.2
+flags as the important case — it leaves frame count intact, so a
+count-only harness would report a false pass — and it was caught
+exclusively by nearest-neighbour. Fault 5 is what makes this table cover
+*five* faults rather than four: it is the only one that demonstrates the
+harness's simulation-hash equality gate (`hashesEqual`) can itself fail,
+which none of the original four could exercise since they corrupted both
+cold runs identically.
+
+**Net for criterion 3: zero strict mismatches on the continuously-moving
+primary fixture, in both containers, measured today. The check itself is
+proven capable of failing by five independently-caught injected faults
+(cited from Task 3, not re-run here), each caught by the specific
+mechanism the design predicts — frame count, nearest-neighbour, the
+timestamp schedule, or the simulation-hash gate — so a clean run on the
+primary fixture is evidence, not a check that cannot fail.**
+
+---
