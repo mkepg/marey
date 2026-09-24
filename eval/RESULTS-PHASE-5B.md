@@ -144,6 +144,165 @@ neither substitutes for the other.
 
 ---
 
+## Task 6b — decoding a file produced by a real export click
+
+This section discharges the gap the previous section names: it decodes a
+file that came from an actual click on `TopBar.tsx`'s MP4/WebM buttons in a
+production build, and compares the decoded frames against reference frames,
+the same way criterion 3 does above. It does not repeat criteria 1–3 for
+every scene this document already covers — this is one scene, driven once
+through the shipped path, not a second pass over the whole exit-criteria
+suite.
+
+**A precondition the shipped button imposes that the dev-seam harness does
+not: the scene loaded into the editor needed one line added.**
+`freeze-midair.marey` declares no top-level `duration:` (only a `duration:
+0.5` inside its own `physics` block, an unrelated field). The dev-seam
+harness can still export it, because `video-check.mjs`'s `--duration` flag
+is threaded straight into `durationSeconds`, which `planExport`
+(`exportContract.ts:94-114`) checks *before* falling back to the scene's own
+`ir.duration` — that is how Task 6 exported this exact fixture. The shipped
+hook has no such parameter: `useExportVideo.ts:90-96` calls
+`runVideoExport({ source: code, container, fps: EXPORT_FPS, onProgress })`
+— no `durationSeconds` field anywhere in that call, ever, because the UI
+has no duration control. So for a real click, `planExport`'s `explicit`
+branch is always `undefined`, and every export always falls through to
+`ir.duration`. Loading the on-disk fixture unmodified and clicking export
+reproduces R27's `EXPORT_UNBOUNDED_SCENE` trap on a *different* scene than
+the one R27 names — confirmed by reading the two call sites side by side,
+not assumed. The scene loaded into the editor for this section therefore
+has one line added relative to the committed fixture: a top-level
+`duration: 0.5`, matching the physics block's own bound so the exported
+window is still continuous free-fall throughout. This does not change what
+the physics simulation does: `ir.duration` is read nowhere under
+`src/compiler/renderer/` (grepped directly), only by `exportContract.ts`, so
+it is a pure export-bound annotation. The on-disk fixture file itself is
+untouched — the edit exists only in the string handed to the `#code=` hash
+injection, in a gitignored throwaway script
+(`.visual-check/click-check.mjs`, not committed, per the brief).
+
+**Step 1 — the click, in a production build.** `npm run build` (chunk
+`videoPipeline-7TlaWxjS.js`, matching Task 5's own hash), then
+`vite preview --port 5199 --strictPort`. Loaded the modified scene via the
+same `#code=<lz-string>` hash-injection technique `check.mjs` and Task 5
+use, confirmed `window.__mareyExportVideo === undefined` on the page (this
+is the production bundle, not a dev server with the seam installed — the
+same check Task 5 made), then clicked the real `button[title="Export MP4
+video"]` and `button[title="Export WebM video"]` elements and captured each
+with Playwright's `download` event:
+
+| Container | Filename | Bytes | First 8 bytes (hex) |
+|---|---|---|---|
+| MP4 | `scene.mp4` | 7297 | `00 00 00 1c 66 74 79 70` (`ftyp` at offset 4) |
+| WebM | `scene.webm` | 4146 | `1a 45 df a3 10 00 00 1f` (EBML magic) |
+
+Zero console errors during the run.
+
+**Step 2 — reference frames from a separate dev-mode run.** The production
+build constant-folds the dev seam out (`main.tsx`'s
+`if (import.meta.env.DEV)`), so reference frames cannot come from the
+production page — this is a documented dependency, not an assumption:
+reference-frame determinism across independent cold runs is already
+measured elsewhere in this document (byte-identical across all three MP4
+pairs and both WebM scenes, criterion 2 above), which is what makes a
+reference set captured through a *different* code path than the one being
+tested a sound comparison rather than a circular one. Ran
+`npx vite --port 5199 --strictPort` and called
+`window.__mareyExportVideo(modifiedSource, { container: "mp4", fps: 30,
+withReferenceFrames: true })` directly — **deliberately omitting
+`durationSeconds`**, mirroring exactly how `useExportVideo.ts` calls
+`runVideoExport` (fps only, no duration field), so this call resolves its
+bound from the scene's own `duration: 0.5` field the same way the click
+above did. One call, not two: `sampleFrames` is invoked with `planned.plan`,
+not `video.plan` (read directly in both `devVideoSeam.ts` and
+`videoPipeline.ts`), so which container was requested cannot affect which
+frames come back — the resulting 15 reference frames are valid for
+comparison against both the clicked MP4 and the clicked WebM file.
+
+Result: `frameCount=15, width=800, height=600, fps=30`, 15 reference PNGs,
+hash `38629fc3`. That hash is identical to the one this document's
+criterion 2 WebM table already recorded for this same fixture ("Hash (sim.
+state) equal (`38629fc3` both)") — a same-scene, dev-seam-to-dev-seam
+comparison across the *original* unmodified fixture (Task 6, explicit
+`--duration 0.5` override) and the *modified* one used here (top-level
+`duration: 0.5`, no override), which is evidence, not just an assertion,
+that adding the line changed nothing about the simulation.
+
+**Step 3 — decode and compare.** Reused `video-check.mjs`'s
+`decodeAndCompare(page, { videoBase64, referenceFramesBase64, writeIndices
+})` (line 357 at this task's BASE, `78b084f`) and `installMediabunny` (line
+339) — copied verbatim into the throwaway script rather than imported,
+because the function is not `export`-qualified and the file it lives in has
+side-effecting top-level code that runs a whole CLI invocation on load, so
+an ES-module import was not mechanically available without editing the file
+the brief says not to edit. Both containers were run — decoding a second
+15-frame container after the first was cheap, so there was no reason to
+name a gap here the way criterion 1 named one for MP4-on-`compound-logo`.
+
+| Field | MP4 (clicked) | WebM (clicked) |
+|---|---|---|
+| Decoded frame count | 15 (planned 15, match: yes) | 15 (planned 15, match: yes) |
+| Decoded dimensions | 800×600 (match: yes) | 800×600 (match: yes) |
+| Timestamp monotonicity | strictly increasing | strictly increasing |
+| Timestamps match claimed 30fps schedule (±half frame) | yes | yes |
+| Nearest-neighbour: strict / tie / strict mismatches | 13 / 2 / **0** | 12 / 3 / **0** |
+| Max off-diagonal margin | 0.52007 | 0.51867 |
+| Min margin among strict matches | 0.02482 | 0.09224 |
+
+Zero strict mismatches in either container, on a file that came from an
+actual button click rather than the dev seam. These numbers are, digit for
+digit, the same strict/tie/margin figures this document's criterion 3
+section already recorded for this fixture through the dev seam (13/2/0,
+0.5201, 0.0248 for MP4; 12/3/0, 0.5187, 0.0922 for WebM) — one scene, one
+comparison, not a general claim that the shipped path always matches the
+seam, but a direct, measured agreement on the one case this section tested.
+Opened `mp4_decoded_0000.png` and `mp4_decoded_0014.png` (first and last
+decoded frame) with the Read tool rather than trusting the numbers alone:
+frame 0 shows the light-blue square near the top of the canvas, matching
+the scene's declared `position: (400, 100)`; frame 14 shows the same square
+visibly lower, consistent with continuous downward motion and with zero
+strict mismatches — neither frame is blank or a flat solid colour.
+
+**Step 4 — proof the check could have failed.** Fed `decodeAndCompare` the
+clicked MP4 file against a deliberately corrupted reference set: an
+in-memory copy of the Step 2 reference-frame array with indices 5 and 9
+swapped (four apart, so their nearest-neighbour windows, k−2..k+2, do not
+overlap — the same shape as Task 3's fault #3, "duplicate frame 5 in place
+of frame 6," reproduced here as a swap instead of a duplication). Result:
+`strict=13, tie=2, strict-mismatches=2` — frame 5's nearest reference is now
+4 (distance 1.1296), frame 9's nearest reference is now 8 (distance
+1.2601), both previously-strict-and-correct matches turned
+strict-and-wrong by the injection, and every other frame unaffected. The
+check reported the corruption rather than passing it. No tracked file was
+touched by this step — the swap is an array operation inside the gitignored
+throwaway script, not an edit to `video-check.mjs` or any fixture — so
+there is no revert to perform; confirmed instead that the repository was
+never dirtied by any part of this section: `git diff --stat` and
+`git status --porcelain` both returned empty after every step above,
+including this one.
+
+**Net.** What is now covered that was not: for `freeze-midair.marey`, 30fps,
+0.5s, one file downloaded from a real click on each of the MP4 and WebM
+buttons in a production build decodes to the expected frame count,
+dimensions, and timestamp schedule, and shows zero dropped, duplicated or
+reordered frames against the sampler's own reference output — and the
+check that found that is proven capable of failing, on this same clicked
+file, when its reference input is wrong. What remains uncovered: every
+other scene in this document (criteria 1–3 above cover several; this
+section covers one), any scene reached through the UI's default
+unmodified-fixture path (the button still cannot export
+`freeze-midair.marey` as committed, or the shipped default scene, without a
+scene-level `duration:` — R27's finding, now shown to generalize to any
+scene whose only duration lives inside a physics block), cross-browser
+behaviour, and the memory ceiling and hardware-encoder questions the
+"Known limitations" section below already names as open. This result does
+not retroactively extend criteria 1–3's per-scene numbers above to the
+shipped path — it establishes, independently, that for one scene, one
+production build, one machine, the shipped path's output decodes to the
+same frame-level result the dev-seam path already established.
+
+---
+
 ## Criterion 1 — exports to WebM and MP4 at the requested frame rate and duration
 
 Per design §10.1, every number below is read from the **decoded file's own**
