@@ -1,5 +1,6 @@
 import { Application, Container } from "pixi.js";
 import { compileSource } from "../compileSource";
+import { destroyExportApp } from "./exportApp";
 import { planExport } from "./exportContract";
 import { planVideo, type VideoContainer, type VideoPlan } from "./videoContract";
 import { assertVideoEncodable, encodeVideo } from "./videoEncode";
@@ -202,6 +203,6 @@ export async function runVideoExport(opts: RunVideoExportOptions): Promise<Uint8
   } finally {
     runtime?.destroy();
     root?.destroy({ children: true, texture: true });
-    if (app?.renderer) app.destroy(true, { children: true });
+    if (app?.renderer) destroyExportApp(app);
   }
 }

@@ -1,5 +1,6 @@
 import { Application, Container } from "pixi.js";
 import { compileSource } from "../compiler/compileSource";
+import { destroyExportApp } from "../compiler/export/exportApp";
 import { planExport } from "../compiler/export/exportContract";
 import { planLottie } from "../compiler/export/lottieGeometry";
 import { encodeLottie, type LottieDoc } from "../compiler/export/lottieEncode";
@@ -159,7 +160,7 @@ async function exportLottie(
   } finally {
     runtime?.destroy();
     root?.destroy({ children: true, texture: true });
-    if (app?.renderer) app.destroy(true, { children: true });
+    if (app?.renderer) destroyExportApp(app);
   }
 }
 

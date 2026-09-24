@@ -1,5 +1,6 @@
 import { Application, Container } from "pixi.js";
 import { compileSource } from "../compiler/compileSource";
+import { destroyExportApp } from "../compiler/export/exportApp";
 import { planExport } from "../compiler/export/exportContract";
 import { encodePngSequence } from "../compiler/export/pngSequence";
 import { hashFrames } from "../compiler/export/frameHash";
@@ -133,7 +134,7 @@ async function exportPng(source: string, opts: ExportPngOptions): Promise<Export
   } finally {
     runtime?.destroy();
     root?.destroy({ children: true, texture: true });
-    if (app?.renderer) app.destroy(true, { children: true });
+    if (app?.renderer) destroyExportApp(app);
   }
 }
 
