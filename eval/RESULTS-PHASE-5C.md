@@ -191,6 +191,63 @@ Every throwaway script above lives under `.visual-check/probe5c/`
 (gitignored) and is not committed — they answer this task's own question and
 are recorded here rather than left as unverified claims.
 
+### 2026-09-25 fix round 2 (T1-R2): localising the flag's effect with a 2×2
+
+**The re-review's correction, accepted.** Fix round 1's mechanism was
+imprecise: `renderer.extract.canvas` (which builds the reference frames)
+bottoms out in PixiJS's `GlTextureSystem.generateCanvas()`
+(`node_modules/pixi.js/lib/rendering/renderers/gl/texture/GlTextureSystem.js:368-380`),
+which uses `gl.readPixels` + `putImageData`, not `drawImage`. The
+`drawImage`+`getImageData` hops fix round 1 pointed at exist only in the
+SCORING step (and in the findings probe's own `lossless()`), not in
+reference-frame construction. "The flag controls drawImage/getImageData on
+GPU vs software" was one undifferentiated claim covering two different
+code paths; ruling T1-R2 required localising which one actually moves the
+number.
+
+**Raw numbers, recorded before interpretation, per the coordinator's
+instruction.** Script: `.visual-check/probe5c/localise-2x2.mjs` (not
+committed). Launches two Chromium instances against the default scene —
+`gpu` (`--use-angle=swiftshader --enable-unsafe-swiftshader --use-gl=angle`,
+no `--disable-accelerated-2d-canvas`) and `sw` (same, plus the flag) — each
+calls `window.__mareyExportVideo` (the real dev seam, same call
+`quality-check.mjs` makes) once per container, saving the encoded bytes and
+`referenceFrames`. Then each of the two encoded files is decoded and scored
+(against its OWN references) on BOTH browsers, giving 4 cells per
+container; for WebM, the two files' decoded frames are also compared
+directly against each other.
+
+```
+node .visual-check/probe5c/localise-2x2.mjs
+```
+
+```
+=== mp4 ===
+encoded file bytes identical (gpu vs sw)   raw=false masked=false  (gpu=3292556B sw=3301197B)
+reference frames identical (gpu vs sw)     true
+cell encode=GPU score=GPU   psnr=42.03 specksPerFrame=64.5
+cell encode=GPU score=SW    psnr=41.46 specksPerFrame=624.7
+cell encode=SW  score=GPU   psnr=42.02 specksPerFrame=64.6
+cell encode=SW  score=SW    psnr=41.45 specksPerFrame=624.7
+
+=== webm ===
+encoded file bytes identical (gpu vs sw)   raw=true  (gpu=4386180B sw=4386180B)
+reference frames identical (gpu vs sw)     true
+cell encode=GPU score=GPU   psnr=42.16 specksPerFrame=61.7
+cell encode=GPU score=SW    psnr=41.55 specksPerFrame=618.4
+cell encode=SW  score=GPU   psnr=42.16 specksPerFrame=61.7
+cell encode=SW  score=SW    psnr=41.55 specksPerFrame=618.4
+webm decoded gpu-file vs sw-file (decoded on the gpu page)   {"frameCountsMatch":true,"frames":180,"maxDelta":0,"mismatchPixels":0,"totalPixels":345600000,"share":0}
+```
+
+Full cell data (frame counts, total specks) in
+`.visual-check/probe5c/localise-2x2/report.json`, not committed. SHA-256 of
+each encoded file: mp4 gpu `8c25ead74aa53178e2aba7d4b4057925d78e6278fca51d806bb576bd3738ad06`,
+mp4 sw `cbde3ee149c2bf5077fa792f861158f084bae4da38276de1c4948686cdf24b96`;
+webm gpu and webm sw both `3bd4c7f93c18f83c9322bda8fc9a955c07b728f528aea6421f168aaf6cc8c7a9`.
+
+<!-- T1-R2-INTERPRETATION-PLACEHOLDER -->
+
 ### Text sharpness (spec §2.2)
 
 Fixture: `.visual-check/probe5c/text-stem.marey` (400x200 scene, single
