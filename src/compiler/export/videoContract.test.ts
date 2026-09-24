@@ -9,8 +9,10 @@ import {
   frameDurationSeconds,
   noWebCodecsDiagnostic,
   unsupportedCodecDiagnostic,
-  MP4_CODEC_STRING,
-  WEBM_CODEC_STRING,
+  h264LevelFor,
+  vp9LevelFor,
+  H264_LEVELS,
+  VP9_LEVELS,
   videoSourceConfig,
   videoOutputFormatOptions,
 } from "./videoContract";
@@ -77,27 +79,25 @@ describe("frameTimestampSeconds", () => {
 });
 
 describe("planVideo · container and codec", () => {
-  it("resolves mp4 to pinned H.264 baseline", () => {
+  it("resolves 800x600 mp4 at 30 fps to H.264 baseline level 3.1", () => {
     const r = planVideo(EVEN, planFor(EVEN), { container: "mp4" });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.plan.container).toBe("mp4");
-    expect(r.plan.fullCodecString).toBe(MP4_CODEC_STRING);
-    // Pinned against the literal, not just against the re-imported constant:
-    // comparing only to `MP4_CODEC_STRING` can never fail, since planVideo
-    // and the assertion would drift together (AGENT-LESSONS §2c). This is
-    // the assertion mutation 1 in the task report actually needs.
+    // Literal: the string the phase's MP4 evidence was measured with. If
+    // this changes, that evidence has to be re-measured.
     expect(r.plan.fullCodecString).toBe("avc1.42001f");
     expect(r.plan.mediabunnyCodec).toBe("avc");
   });
 
-  it("resolves webm to pinned VP9", () => {
+  it("resolves 800x600 webm at 30 fps to VP9 profile 0 level 3.1", () => {
     const r = planVideo(EVEN, planFor(EVEN), { container: "webm" });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.plan.container).toBe("webm");
-    expect(r.plan.fullCodecString).toBe(WEBM_CODEC_STRING);
-    expect(r.plan.fullCodecString).toBe("vp09.00.10.08");
+    // Not the old pin `vp09.00.10.08` (level 1), which declared a level 13x
+    // too small for this frame size.
+    expect(r.plan.fullCodecString).toBe("vp09.00.31.08");
     expect(r.plan.mediabunnyCodec).toBe("vp9");
   });
 
@@ -155,6 +155,122 @@ describe("planVideo · pinned encoder configuration", () => {
     const r = planVideo(EVEN, planFor(EVEN), { container: "mp4", bitrate: 12_345_678 });
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.plan.bitrate).toBe(12_345_678);
+  });
+});
+
+/**
+ * The codec level is chosen per plan (whole-branch review I-5, ruling R43).
+ * Every expected value below was worked by hand from the standards' tables
+ * (H.264 Table A-1; libvpx `vp9_level_defs`), not read back from the code.
+ */
+describe("h264LevelFor", () => {
+  const BR = 8_000_000;
+  it.each([
+    // [width, height, fps, bitrate, level, why]
+    [800, 600, 30, BR, "3.1", "1,900 MBs > level 3 MaxFS 1,620"],
+    [800, 600, 60, BR, "3.2", "114,000 MB/s > 3.1 MaxMBPS 108,000, as the encoder wrote at 60 fps"],
+    [1280, 720, 30, BR, "3.1", "exactly 3,600 MBs, the 3.1 MaxFS"],
+    [1296, 720, 30, BR, "3.2", "3,645 MBs, one column over the 3.1 MaxFS"],
+    [1920, 1080, 30, BR, "4", "8,160 MBs, 1080 rounds up to 68 rows"],
+    [1080, 1920, 30, BR, "4", "portrait, 120 MB rows within Sqrt(8192*8) = 256"],
+    [1000, 1000, 30, BR, "3.2", "3,969 MBs"],
+    [1920, 1080, 60, BR, "4.2", "489,600 MB/s > 4.1 MaxMBPS 245,760"],
+    [4096, 16, 30, BR, "4", "256 MBs wide needs Sqrt(MaxFS*8) >= 256, so MaxFS 8,192"],
+    [100, 100, 30, 50_000, "1", "49 MBs, 1,470 MB/s, 50 kbit/s"],
+    [100, 100, 30, BR, "3", "same frame, but 8 Mbit/s needs MaxBR >= 8,000"],
+    [3840, 2160, 30, BR, "5.1", "32,400 MBs, 972,000 MB/s"],
+  ])("%ix%i at %i fps, %i bit/s -> level %s (%s)", (w, h, fps, bitrate, level) => {
+    expect(h264LevelFor(w, h, fps, bitrate)?.name).toBe(level);
+  });
+
+  it.each([
+    [4096, 2304, 30, "36,864 MBs fits the 5.1 MaxFS, but 1,105,920 MB/s exceeds its 983,040"],
+    [7680, 4320, 30, "129,600 MBs"],
+  ])("%ix%i at %i fps fits no supported level (%s)", (w, h, fps) => {
+    expect(h264LevelFor(w, h, fps, 8_000_000)).toBeNull();
+  });
+
+  it("covers Table A-1 from level 1 to 5.1 with limits never decreasing", () => {
+    expect(H264_LEVELS.map((l) => l.name)).toEqual([
+      "1", "1.1", "1.2", "1.3", "2", "2.1", "2.2", "3", "3.1", "3.2", "4", "4.1", "4.2", "5", "5.1",
+    ]);
+    for (let i = 1; i < H264_LEVELS.length; i++) {
+      expect(H264_LEVELS[i].maxFrameMbs).toBeGreaterThanOrEqual(H264_LEVELS[i - 1].maxFrameMbs);
+      expect(H264_LEVELS[i].maxMbPerSecond).toBeGreaterThanOrEqual(H264_LEVELS[i - 1].maxMbPerSecond);
+    }
+  });
+});
+
+describe("vp9LevelFor", () => {
+  const BR = 8_000_000;
+  it.each([
+    [800, 600, 30, BR, "3.1", "fits level 3 size and rate, but 8 Mbit/s > its 7,200 kbit/s"],
+    [800, 600, 30, 5_000_000, "3", "the same frame at 5 Mbit/s"],
+    [1920, 1080, 30, BR, "4", "2,073,600 samples > the 3.1 limit 983,040"],
+    [1080, 1920, 30, BR, "4", "portrait, 1920 within the level 4 breadth 4,160"],
+    [3000, 16, 30, BR, "4", "3000 wide > the 3.1 breadth 2,752"],
+    [7680, 4320, 30, BR, "6", "33,177,600 samples > the 5.2 limit 8,912,896"],
+  ])("%ix%i at %i fps, %i bit/s -> level %s (%s)", (w, h, fps, bitrate, level) => {
+    expect(vp9LevelFor(w, h, fps, bitrate)?.name).toBe(level);
+  });
+
+  it("returns null beyond the level 6.2 breadth", () => {
+    expect(vp9LevelFor(17_000, 16, 30, 8_000_000)).toBeNull();
+  });
+
+  it("covers every VP9 level from 1 to 6.2", () => {
+    expect(VP9_LEVELS.map((l) => l.code)).toEqual([
+      "10", "11", "20", "21", "30", "31", "40", "41", "50", "51", "52", "60", "61", "62",
+    ]);
+  });
+});
+
+describe("planVideo · codec string per plan", () => {
+  it.each([
+    ["(800, 600)", 60, "mp4", "avc1.420020"],
+    ["(1920, 1080)", 30, "mp4", "avc1.420028"],
+    ["(1080, 1920)", 30, "mp4", "avc1.420028"],
+    ["(1000, 1000)", 30, "mp4", "avc1.420020"],
+    ["(1920, 1080)", 60, "mp4", "avc1.42002a"],
+    ["(1920, 1080)", 30, "webm", "vp09.00.40.08"],
+  ] as const)("size %s at %i fps as %s -> %s", (size, fps, container, codec) => {
+    const ir = irFor(`scene { size: ${size} duration: 1 }`);
+    const r = planVideo(ir, planFor(ir, fps), { container });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.plan.fullCodecString).toBe(codec);
+  });
+
+  it("refuses an mp4 no H.264 level admits, naming the real reason, and accepts it as webm", () => {
+    const ir = irFor(`scene { size: (7680, 4320) duration: 1 }`);
+    const r = planVideo(ir, planFor(ir), { container: "mp4" });
+    expect(codes(r)).toEqual(["VIDEO_EXCEEDS_CODEC_LEVELS"]);
+    if (!r.ok) {
+      const message = r.diagnostics[0].message;
+      expect(message).toContain("7680x4320 scene at 30fps");
+      expect(message).toContain("too large or too fast for MP4 export");
+      expect(message).toContain("H.264 level 5.1");
+      // Not the browser-blaming wording of VIDEO_UNSUPPORTED_CODEC.
+      expect(message).not.toContain("does not support");
+    }
+    expect(planVideo(ir, planFor(ir), { container: "webm" }).ok).toBe(true);
+  });
+
+  it("reports an oversize mp4 and odd dimensions together", () => {
+    const ir = irFor(`scene { size: (7681, 4321) duration: 1 }`);
+    expect(codes(planVideo(ir, planFor(ir), { container: "mp4" }))).toEqual([
+      "VIDEO_ODD_DIMENSIONS",
+      "VIDEO_EXCEEDS_CODEC_LEVELS",
+    ]);
+  });
+
+  it("refuses a webm beyond the top VP9 level", () => {
+    const ir = irFor(`scene { size: (17000, 16) duration: 1 }`);
+    const r = planVideo(ir, planFor(ir), { container: "webm" });
+    expect(codes(r)).toEqual(["VIDEO_EXCEEDS_CODEC_LEVELS"]);
+    if (!r.ok) {
+      expect(r.diagnostics[0].message).toContain("VP9 level 6.2");
+      expect(r.diagnostics[0].message).not.toContain("export WebM");
+    }
   });
 });
 
