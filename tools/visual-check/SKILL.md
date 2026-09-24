@@ -115,6 +115,7 @@ for determinism.
 | `wave-row.marey` | Roadmap exit criterion 3, in the form where a still frame shows it: fifteen beads, one constant `duration`, `delay` spanning one full cycle, so exactly one wavelength fits the row and travels along it. Loops. |
 | `timeline-sweep.marey` | The control from the same set — a generated diagram plus one moving playhead, the one of the three that needed no Phase 3C workaround, so it is unchanged in substance. Loops. |
 | `origin-physics.marey` | `origin` through the physics seam, both halves. LEFT: a bottom-origin pillar falls and must land **standing on** the ledge — its body is placed at its bbox centre, not at its origin point. RIGHT: a bottom-origin bar grows upward under a scale animation and must carry the rider ball up on its top edge — Matter scales a body about its own centre, so the centre has to be moved to match. Settles, so `frozen at rest` and `deterministic` both apply. |
+| `linear-motion.marey` | `video-check.mjs`'s primary criterion-3 fixture (Phase 5B fix wave). A box and a dot move at constant velocity from frame 0 and stay on screen, so every decoded frame has one clearly nearest reference frame. A dropped, duplicated or reordered frame is a nearest-neighbour failure from the very first frame. |
 
 Add a scene rather than editing one when checking something new — these are
 regression checks, and their expected images are their value.
@@ -328,17 +329,23 @@ decode, which would only prove mediabunny's own demuxer agrees with itself.
 
 Like `export-check.mjs` and `lottie-check.mjs`, it calls
 `window.__mareyExportVideo` (installed dev-only by `src/lib/devVideoSeam.ts`,
-wired in `main.tsx` behind `import.meta.env.DEV`) rather than driving the
-shipped export button, so a harness-only copy of compile → plan → build →
-sample → rasterize → encode cannot silently diverge from the pipeline the app
-actually runs. One consequence worth knowing before trusting a run of this
-script as evidence about the shipped button: every measurement it produces is
-taken on that dev-seam path, not on `useExportVideo.ts` → `videoPipeline.ts`,
-the separate orchestration a real click runs — the two call the same
-underlying primitives, but nothing in this script exercises the second one.
-See `eval/RESULTS-PHASE-5B.md`'s "Which code path was actually measured"
-section, and its Task 6b section (a file decoded from an actual click), for
-how that gap was measured and, for one scene, closed.
+wired in `main.tsx` behind `import.meta.env.DEV`) rather than clicking the
+shipped export button. Since the Phase 5B fix wave that seam is **not** a copy
+of the export pipeline: it calls the shipped `runVideoExport`
+(`src/compiler/export/videoPipeline.ts`), the same function a click reaches
+through `useExportVideo.ts`, with observers that capture each canvas the
+encoder is handed, the sampler's hash and the resolved encoder config. So a
+run of this script measures the product's orchestration. What still differs
+from a click is the entry point (a `window` global versus the button's
+dynamic `import()` of the lazy `videoPipeline` chunk) and the `--duration`
+override below. See `eval/RESULTS-PHASE-5B.md`, "Which code path was
+actually measured".
+
+Each `reference_%04d.png` is the canvas the encoder was handed for that
+sampled frame, placed by the frame's position in the sampler's own output,
+not by the order the pipeline delivered it. That is what makes a pipeline that
+reorders or drops frames fail this script instead of comparing a wrong file
+against equally wrong references.
 
 **A limitation of the shipped button this script's own `--duration` flag can
 mask if you are not watching for it.** `--duration` overrides a scene's own
@@ -355,9 +362,9 @@ unattended execution's authority (ruling R39, widening R27).
 
 ```bash
 node tools/visual-check/video-check.mjs \
-  --scene tools/visual-check/scenes/freeze-midair.marey \
-  --container mp4 --fps 30 --duration 0.5 --mask-mp4-times \
-  --out .visual-check/video/freeze-mp4
+  --scene tools/visual-check/scenes/linear-motion.marey \
+  --container mp4 --fps 30 \
+  --out .visual-check/video/linear-mp4
 ```
 
 | Flag | Meaning |
@@ -367,7 +374,6 @@ node tools/visual-check/video-check.mjs \
 | `--fps <n>` | Export frame rate (default 30) |
 | `--duration <s>` | Export bound in seconds, overriding the scene's own `duration:` |
 | `--frames <list>` | Comma-separated decoded frame indices to write as PNG. Every decoded frame is still analysed numerically regardless of this flag — it only controls what gets written to disk for a human to look at. Default: an evenly-spaced spread of five indices |
-| `--mask-mp4-times` | For MP4, additionally compare the two cold runs' bytes with mediabunny's own wall-clock timestamp fields zeroed, and gate the exit code on that masked comparison instead of the raw one. No effect on WebM — mediabunny's Matroska muxer path writes no wall-clock or random field a scene shape here can trigger |
 | `--mediabunny-path <p>` | Override the mediabunny ESM bundle path |
 | `--out <dir>` | Where `scene.<ext>`, `decoded_%04d.png`, `reference_%04d.png` and `report.json` go |
 | `--url <origin>` | Dev server origin (default `http://localhost:5199`). Same `--strictPort` trap as `check.mjs` |
@@ -378,16 +384,22 @@ frame *k*, the script computes a distance to reference frames *k−2..k+2* and
 requires the minimum to be uniquely achieved by *k* itself (`strict`). When two
 or more candidates tie for the minimum — which happens whenever the scene has
 settled and consecutive reference frames are pixel-identical — the match is
-`tie`: reported and counted, never folded into a pass or a failure. This is a
+`tie`. A tie that **includes** *k* is reported and counted, never a failure. A
+tie that **excludes** *k* (two other references are nearer than *k*) fails the
+run: the whole-branch review found one in a `freeze-midair` WebM run that
+exited 0 before this rule (ruling R46). This is a
 positional check rather than pixel equality, because both codecs are lossy: a
 dropped, duplicated or reordered frame makes a decoded frame resemble a
 *neighbour* more than itself, which survives lossy compression, while exact
 pixel equality would not, regardless of correctness. **A run whose frames are
 mostly tied has not proved the check — it has proved the fixture was wrong.**
 `eval/scenes-3b/compound-logo.marey` settles well before its own 8s clip ends
-and is the wrong fixture for this reason; `eval/RESULTS-PHASE-5B.md` uses
-`freeze-midair.marey` (continuous free-fall, never settles within the exported
-window) as the primary fixture for this check instead.
+and is the wrong fixture for this reason. The primary fixture is
+`scenes/linear-motion.marey`: two objects at constant velocity from frame 0,
+on screen throughout, so every frame has one clearly nearest reference.
+`freeze-midair.marey` (free fall from rest) was the primary fixture before the
+fix wave; its first three frames barely move on the step-4 grid, so they have
+no discriminating power.
 
 Every invocation performs two independent cold page loads of the same scene
 and compares them against each other — raw container bytes, the reference-frame
@@ -395,14 +407,24 @@ PNGs each run fed to its own encoder, and the sampler's own simulation-state
 hash — which is how `eval/RESULTS-PHASE-5B.md`'s criterion 2 measured WebM
 byte-identical and MP4 not, with the MP4 divergence traced to the encoder side
 rather than the renderer (the two runs' reference frames are bit-identical).
+For MP4 the script reports the raw comparison and one with mediabunny's six
+wall-clock timestamp fields masked, and **neither gates the exit code**
+(ruling R47): MP4 bytes differ between correct runs even masked, so a byte
+gate would fail every MP4 run and hide a real failure behind the same exit 1.
 
 Exit code is non-zero if: either cold run failed; decode failed; the decoded
 frame count, dimensions or timestamp schedule disagree with what was
-requested; any frame's nearest-neighbour match is STRICT and wrong; the two
-cold runs' snapshot hashes or reference-frame PNGs disagree; or (WebM always,
-MP4 only under `--mask-mp4-times`) the two cold runs' raw container bytes
-disagree. Never on how the PNGs look, or on how many frames tied — both are
-reported, neither gates.
+requested; any frame's nearest-neighbour match is STRICT and wrong, or is a
+tie that excludes the frame itself; a sampled frame was never handed to the
+encoder; the two cold runs' snapshot hashes or reference-frame PNGs disagree;
+or, **for WebM only**, the two cold runs' raw container bytes disagree. Never
+on MP4 container bytes (reported, raw and masked), on how the PNGs look, or on
+how many frames tied with a set that includes themselves. `--mask-mp4-times`
+no longer exists; the masked MP4 comparison is always reported.
+
+`report.json` also records `runA/runB.encoderConfigs`: the WebCodecs
+`VideoEncoderConfig` mediabunny resolved, via its `onEncoderConfig` callback
+(spec §5). It is a record, not a check.
 
 **Look at the PNGs.** Same rule as every other harness on this page: read
 `decoded_0000.png`, a mid-export frame, and the last frame with the Read tool.

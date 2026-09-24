@@ -52,7 +52,7 @@
  * finding I-1, ruling R46). A tie that includes `k` is reported and counted,
  * never a failure: when consecutive references are identical, `k` is as good
  * a match as any, and "a run whose frames are mostly tied has not proved
- * criterion 3 -- it has proved the fixture was wrong"
+ * criterion 3 -- it has proved the fixture was wrong".
  *
  * **MP4's six known byte ranges.** mediabunny's MP4 muxer stamps
  * `creationTime = Math.floor(Date.now() / 1000) + <MP4 epoch offset>`
@@ -67,10 +67,17 @@
  * `mdia` -> `mdhd`) that locates those exact byte offsets by PARSING the
  * container rather than assuming a fixed layout, because box sizes are not
  * static across encodes (a `needsU64` widening depends on the actual duration
- * value). `--mask-mp4-times` zeroes those ranges in an in-memory copy before
- * the byte-identity comparison; without the flag, this script still computes
- * and reports the raw (unmasked) comparison, so an MP4's raw non-identity is
- * measured and visible rather than silently swallowed either way.
+ * value). For every MP4 this script reports both the raw comparison and a
+ * masked one with those ranges zeroed in an in-memory copy.
+ *
+ * **MP4 byte identity is reported, never gating (ruling R47).** Phase 5B
+ * measured MP4 bytes non-deterministic across cold runs even with the six
+ * ranges masked: the reviewer reproduced it with raw WebCodecs and no
+ * mediabunny, so the cause is below the muxer. A gate that fails every
+ * correct run carries no information, and it hid real failures: before this
+ * rule, a correct MP4 run and one with reordered frames both exited 1. WebM
+ * bytes are measured identical across cold runs, so for WebM the raw
+ * comparison gates.
  *
  * Usage:
  *   node tools/visual-check/video-check.mjs \
@@ -101,14 +108,6 @@
  *                          indices (0%, 25%, 50%, 75%, 100% of the planned
  *                          frame count), which always includes frame 0 and
  *                          the last frame.
- *   --mask-mp4-times       for an MP4 export, also compare the two cold runs'
- *                          bytes with the six timestamp ranges above zeroed,
- *                          and gate the exit code on THAT comparison instead
- *                          of the raw one. No effect for webm (see header
- *                          comment: mediabunny's WebM/Matroska muxer path was
- *                          read and contains no wall-clock or random field
- *                          this scene shape can trigger, so raw byte-identity
- *                          is the actual claim there).
  *   --mediabunny-path <p>  override the mediabunny ESM bundle path (default
  *                          node_modules/mediabunny/dist/bundles/mediabunny.mjs)
  *   --headed               show the browser window
@@ -121,11 +120,10 @@
  * wrong, or is a TIE that excludes the frame itself; a sampled frame was
  * never handed to the encoder; the two cold runs' snapshot hashes disagree;
  * the two cold runs' lossless reference-frame PNGs (the exact rasterized
- * pixels each run fed to its own encoder) disagree; or (webm only, always
- * gating; mp4, gating only under --mask-mp4-times) the two cold runs'
- * container bytes disagree. Never on how the PNGs look, or on how many frames
- * tied with a set that includes themselves -- both are reported, neither
- * gates.
+ * pixels each run fed to its own encoder) disagree; or, for WebM only, the
+ * two cold runs' container bytes disagree. Never on MP4 container bytes (raw
+ * or masked; both reported), on how the PNGs look, or on how many frames tied
+ * with a set that includes themselves -- all reported, none gates.
  */
 import { chromium } from "playwright";
 import LZString from "lz-string";
@@ -162,7 +160,6 @@ const durationArg = arg("duration", null);
 const durationSeconds = durationArg === null ? undefined : Number(durationArg);
 const framesArg = arg("frames", null);
 const explicitWriteIndices = framesArg === null ? null : framesArg.split(",").map((s) => Number(s.trim()));
-const maskMp4Times = has("mask-mp4-times");
 const mediabunnyPath = resolve(
   arg("mediabunny-path", "node_modules/mediabunny/dist/bundles/mediabunny.mjs"),
 );
@@ -637,7 +634,8 @@ const hashesEqual = runA.result.hash === runB.result.hash;
 const rawBytesEqual = bufA.length === bufB.length && Buffer.compare(bufA, bufB) === 0;
 
 let byteComparison = { rawBytesEqual, maskedBytesEqual: null, maskedRangeCountA: null, maskedRangeCountB: null };
-let gatingBytesEqual = rawBytesEqual;
+// WebM: raw bytes gate. MP4: reported only (R47; see the header comment).
+const gatingBytesEqual = container === "webm" ? rawBytesEqual : true;
 if (container === "mp4") {
   const rangesA = findMp4TimestampRanges(bufA);
   const rangesB = findMp4TimestampRanges(bufB);
@@ -649,7 +647,6 @@ if (container === "mp4") {
     maskedRangeCountA: rangesA.length,
     maskedRangeCountB: rangesB.length,
   };
-  if (maskMp4Times) gatingBytesEqual = maskedBytesEqual;
 }
 report.byteComparison = byteComparison;
 report.hashesEqual = hashesEqual;
@@ -662,7 +659,7 @@ if (container === "mp4") {
     `mp4 timestamp ranges found  runA=${byteComparison.maskedRangeCountA} runB=${byteComparison.maskedRangeCountB} (expected 6 for one video track -- mvhd + tkhd + mdhd, creation_time + modification_time each)`,
   );
   console.log(
-    `masked bytes equal       ${byteComparison.maskedBytesEqual}${maskMp4Times ? "  (gates exit code)" : "  (--mask-mp4-times not passed; raw comparison gates instead)"}`,
+    `masked bytes equal       ${byteComparison.maskedBytesEqual}  (mp4: raw and masked are reported, neither gates the exit code)`,
   );
 }
 
