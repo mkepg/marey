@@ -61,6 +61,43 @@ Findings §1.2's 2x table (raw WebCodecs probe, no mediabunny): H.264
 8M constant 4,328 kbit/s / 42.03 dB / ~65 specks-per-frame; VP9 profile 0 8M
 5,837 kbit/s / 42.17 dB / 61.5 specks-per-frame.
 
+### 2026-09-25 fix round 1: reproducing findings §1.2's probe on today's tree (T1-R1)
+
+Raw numbers, recorded before interpretation, per ruling T1-R1. The
+committed probe (`docs/research/2026-09-24-export-quality-probes/matrix.ts`
++ `matrix-run.mjs`) as-is, no modification, copied into `.visual-check/probe/`
+per findings §6 (confirmed byte-identical to the committed copies and to the
+current `DEFAULT_CODE` before running:
+`diff .visual-check/probe/matrix.ts docs/research/2026-09-24-export-quality-probes/matrix.ts`,
+`diff .visual-check/probe/matrix-run.mjs docs/research/2026-09-24-export-quality-probes/matrix-run.mjs`,
+`diff .visual-check/probe/configs2x.json docs/research/2026-09-24-export-quality-probes/configs2x.json`
+— all three exit 0 — and the extracted current `DEFAULT_CODE` diffed against
+`.visual-check/probe/default.marey`, also exit 0):
+
+```
+npx vite --port 5199 --strictPort   # separate terminal
+SCALE=2 CONFIGS=.visual-check/probe/configs2x.json node .visual-check/probe/matrix-run.mjs
+```
+
+```
+{"name":"avc-sw-8M","W":1600,"H":1200,"supported":true,"frames":180,"kbps":4317,"psnr":42.03,"specksPerFrame":66}
+{"name":"avc-sw-20M","W":1600,"H":1200,"supported":true,"frames":180,"kbps":4325,"psnr":42.03,"specksPerFrame":64.3}
+{"name":"avc-sw-1M","W":1600,"H":1200,"supported":true,"frames":180,"kbps":951,"psnr":39.04,"specksPerFrame":418.8}
+{"name":"vp9-8M","W":1600,"H":1200,"supported":true,"frames":180,"kbps":5837,"psnr":42.17,"specksPerFrame":61.5}
+{"name":"vp9-444-8M","W":1600,"H":1200,"supported":true,"frames":180,"kbps":3849,"psnr":45.17,"specksPerFrame":1}
+```
+
+This reproduces findings §1.2's 2x table almost exactly (avc-sw-8M: 42.03 dB
+here vs 42.03 dB in findings; 66 specks/frame here vs ~65 in findings;
+vp9-8M: 42.17 dB / 61.5 specks/frame, identical to findings). **Outcome A**:
+the raw probe gives ≈42 dB on today's tree and today's default scene. The
+shipped path (`quality-check.mjs` via `runVideoExport`/mediabunny, same
+scene, same nominal encoder settings) measured 41.45/41.55 dB and
+~620 specks/frame in the same session (recorded above). So the shipped path
+is measurably losing quality relative to the raw-WebCodecs path at nominally
+identical settings, and that is a defect, not a re-based criterion. Diagnosis
+follows below.
+
 **Concern, not fixed (filed for the controller).** PSNR is close (mp4: 42.03
 vs 41.45, Δ0.58 dB; webm: 42.17 vs 41.55, Δ0.62 dB) but just outside the
 spec's ±0.5 dB band, and the measured specks-per-frame is roughly 10x
