@@ -11,10 +11,14 @@ import {
   unsupportedCodecDiagnostic,
   h264LevelFor,
   vp9LevelFor,
+  h264CodecString,
   H264_LEVELS,
   VP9_LEVELS,
   videoSourceConfig,
   videoOutputFormatOptions,
+  VIDEO_SCALE,
+  DEFAULT_BITRATE,
+  deviceLimitDiagnostic,
 } from "./videoContract";
 import type { IRSceneNode } from "../sceneIR";
 import type { SamplerPlan } from "./exportContract";
@@ -42,6 +46,23 @@ function planFor(ir: IRSceneNode, fps = 30): SamplerPlan {
 
 function codes(r: ReturnType<typeof planVideo>): string[] {
   return r.ok ? [] : r.diagnostics.map((d) => d.code);
+}
+
+// Fixture builders for the 2x-video tests below. `sceneOf`/`samplerPlan`
+// stand for the task brief's names; they are built from the helpers this
+// file already has (`irFor`, `planExport`) rather than duplicating them,
+// per the brief's "do not add new ones if equivalents exist" instruction.
+// The two are independent: `samplerPlan`'s ir argument only matters for
+// `planExport`'s EXPORT_UNBOUNDED_SCENE check, which an explicit
+// `durationSeconds` bypasses, so any ir will do.
+function sceneOf(width: number, height: number): IRSceneNode {
+  return irFor(`scene { size: (${width}, ${height}) duration: 5 }`);
+}
+
+function samplerPlan(fps: number, frameCount: number): SamplerPlan {
+  const r = planExport(EVEN, { fps, durationSeconds: frameCount / fps });
+  if (!r.ok) throw new Error(`fixture plan failed: ${r.diagnostics.map((d) => d.code).join(", ")}`);
+  return r.plan;
 }
 
 describe("frameTimestampSeconds", () => {
@@ -79,44 +100,58 @@ describe("frameTimestampSeconds", () => {
 });
 
 describe("planVideo · container and codec", () => {
-  it("resolves 800x600 mp4 at 30 fps to H.264 baseline level 3.1", () => {
+  // Phase 5C: `width`/`height` are now the CODED size (scene size x
+  // VIDEO_SCALE), so an 800x600 scene's coded size is 1600x1200, which needs
+  // a higher H.264 level than the scene size alone did (was level 3.1,
+  // "avc1.42001f"; the phase's MP4 evidence pinned that literal at 1x). Now
+  // level 4: 100x75 macroblocks = 7,500 MBs, over level 3.1's 3,600-MB cap
+  // but within level 4's 8,192.
+  it("resolves 800x600 (scene) / 1600x1200 (coded) mp4 at 30 fps to H.264 level 4", () => {
     const r = planVideo(EVEN, planFor(EVEN), { container: "mp4" });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.plan.container).toBe("mp4");
-    // Literal: the string the phase's MP4 evidence was measured with. If
-    // this changes, that evidence has to be re-measured.
-    expect(r.plan.fullCodecString).toBe("avc1.42001f");
+    expect(r.plan.fullCodecString).toBe("avc1.420028");
     expect(r.plan.mediabunnyCodec).toBe("avc");
   });
 
-  it("resolves 800x600 webm at 30 fps to VP9 profile 0 level 3.1", () => {
+  // Same reasoning as above: 1600x1200 has 1,920,000 luma samples, over VP9
+  // level 3.1's 983,040-sample cap (was level 3.1, "vp09.00.31.08" at 1x) but
+  // within level 4's 2,228,224.
+  it("resolves 800x600 (scene) / 1600x1200 (coded) webm at 30 fps to VP9 level 4", () => {
     const r = planVideo(EVEN, planFor(EVEN), { container: "webm" });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.plan.container).toBe("webm");
-    // Not the old pin `vp09.00.10.08` (level 1), which declared a level 13x
-    // too small for this frame size.
-    expect(r.plan.fullCodecString).toBe("vp09.00.31.08");
+    expect(r.plan.fullCodecString).toBe("vp09.00.40.08");
     expect(r.plan.mediabunnyCodec).toBe("vp9");
   });
 
-  it("carries the scene's dimensions and the plan's frame rate and count", () => {
+  // `width`/`height` are the coded (2x) size; `sceneWidth`/`sceneHeight` are
+  // the scene's own declared size (Phase 5C). Was: `width`/`height` pinned
+  // to 800/600 directly, before the coded/scene split existed.
+  it("carries the coded size, the scene's own size, and the plan's frame rate and count", () => {
     const r = planVideo(EVEN, planFor(EVEN, 24), { container: "mp4" });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.plan.width).toBe(800);
-    expect(r.plan.height).toBe(600);
+    expect(r.plan.width).toBe(1600);
+    expect(r.plan.height).toBe(1200);
+    expect(r.plan.sceneWidth).toBe(800);
+    expect(r.plan.sceneHeight).toBe(600);
     expect(r.plan.fps).toBe(24);
     expect(r.plan.frameCount).toBe(120);
   });
 
-  it("passes through a different scene's dimensions, not a hardcoded 800x600", () => {
+  // Was: `width`/`height` pinned to 640/480 (the scene's own size) directly.
+  // Now the coded size, 1280/960, with the scene's own size kept separately.
+  it("passes through a different scene's dimensions, doubled, not a hardcoded 800x600", () => {
     const r = planVideo(OTHER_EVEN, planFor(OTHER_EVEN), { container: "mp4" });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.plan.width).toBe(640);
-    expect(r.plan.height).toBe(480);
+    expect(r.plan.width).toBe(1280);
+    expect(r.plan.height).toBe(960);
+    expect(r.plan.sceneWidth).toBe(640);
+    expect(r.plan.sceneHeight).toBe(480);
   });
 });
 
@@ -226,27 +261,69 @@ describe("vp9LevelFor", () => {
 });
 
 describe("planVideo · codec string per plan", () => {
+  // Phase 5C: each `size` below is the SCENE's own declared size; the codec
+  // is chosen from its doubled (coded) size. Every expected value here was
+  // re-derived by running the coded size through `h264LevelFor`/
+  // `vp9LevelFor` directly, not by re-deriving the standards tables by hand
+  // a second time -- those tables are already pinned by the `h264LevelFor`/
+  // `vp9LevelFor` describe blocks above.
   it.each([
-    ["(800, 600)", 60, "mp4", "avc1.420020"],
-    ["(1920, 1080)", 30, "mp4", "avc1.420028"],
-    ["(1080, 1920)", 30, "mp4", "avc1.420028"],
-    ["(1000, 1000)", 30, "mp4", "avc1.420020"],
-    ["(1920, 1080)", 60, "mp4", "avc1.42002a"],
-    ["(1920, 1080)", 30, "webm", "vp09.00.40.08"],
-  ] as const)("size %s at %i fps as %s -> %s", (size, fps, container, codec) => {
+    // was 60fps -> "avc1.420020" (level 3) at the scene's own 1x size;
+    // 1600x1200 coded needs level 4.2 (7,500 MBs * 60fps = 450,000 MB/s,
+    // over level 4's 245,760 cap, within level 4.2's 522,240).
+    ["(800, 600)", 60, "mp4", "avc1.42002a"],
+    // was "avc1.420028" (level 4) at 1x; 3840x2160 coded needs level 5.1
+    // (32,400 MBs, over level 5's 22,080 cap, within level 5.1's 36,864).
+    ["(1920, 1080)", 30, "mp4", "avc1.420033"],
+    ["(1080, 1920)", 30, "mp4", "avc1.420033"],
+    // was "avc1.420020" (level 3) at 1x; 2000x2000 coded (15,625 MBs) needs
+    // level 5 (over level 4.2's 8,704-MB cap, within level 5's 22,080).
+    ["(1000, 1000)", 30, "mp4", "avc1.420032"],
+    // was "vp09.00.40.08" (level 4) at 1x; 3840x2160 coded (8,294,400
+    // samples) needs level 5 (over level 4.1's 2,228,224-sample cap, within
+    // level 5's 8,912,896).
+    ["(1920, 1080)", 30, "webm", "vp09.00.50.08"],
+  ] as const)("scene size %s at %i fps as %s -> coded codec %s", (size, fps, container, codec) => {
     const ir = irFor(`scene { size: ${size} duration: 1 }`);
     const r = planVideo(ir, planFor(ir, fps), { container });
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.plan.fullCodecString).toBe(codec);
   });
 
-  it("refuses an mp4 no H.264 level admits, naming the real reason, and accepts it as webm", () => {
-    const ir = irFor(`scene { size: (7680, 4320) duration: 1 }`);
+  // Was part of the it.each table above ("(1920, 1080)", 60, "mp4",
+  // "avc1.42002a"): at 1x, a 1920x1080 scene at 60fps fit H.264 level 4.2.
+  // At 2x its CODED size is 3840x2160, whose macroblock rate (32,400 MBs *
+  // 60fps = 1,944,000 MB/s) exceeds even the top level 5.1's 983,040 cap, so
+  // the scene that used to fit now has no admitting level at all -- moved
+  // out of the table into its own refusal test rather than silently dropped.
+  it("refuses a scene whose 1x size fit every H.264 level once doubled", () => {
+    const ir = irFor(`scene { size: (1920, 1080) duration: 1 }`);
+    const r = planVideo(ir, planFor(ir, 60), { container: "mp4" });
+    expect(codes(r)).toEqual(["VIDEO_EXCEEDS_CODEC_LEVELS"]);
+    if (!r.ok) {
+      const message = r.diagnostics[0].message;
+      expect(message).toContain("1920x1080 scene");
+      expect(message).toContain("3840x2160 video");
+    }
+  });
+
+  // Phase 5C: was scene (7680, 4320), whose CODED size (15360x8640) now
+  // exceeds every VP9 level too (132,710,400 samples vs level 6.2's
+  // 35,651,584 cap), so it could no longer demonstrate "webm still accepts
+  // it" -- that would be testing a webm refusal, not an acceptance. Replaced
+  // with (2000, 1500), whose coded size (4000x3000, 12,000,000 samples)
+  // still exceeds every H.264 level (47,000 MBs vs level 5.1's 36,864 cap)
+  // while fitting VP9 level 6 (35,651,584-sample cap), preserving the
+  // asymmetry this test exists to pin.
+  it("refuses an mp4 no H.264 level admits, naming both sizes and the 2x factor, and accepts it as webm", () => {
+    const ir = irFor(`scene { size: (2000, 1500) duration: 1 }`);
     const r = planVideo(ir, planFor(ir), { container: "mp4" });
     expect(codes(r)).toEqual(["VIDEO_EXCEEDS_CODEC_LEVELS"]);
     if (!r.ok) {
       const message = r.diagnostics[0].message;
-      expect(message).toContain("7680x4320 scene at 30fps");
+      expect(message).toContain("exports at 2x the scene's size");
+      expect(message).toContain("2000x1500 scene");
+      expect(message).toContain("4000x3000 video");
       expect(message).toContain("too large or too fast for MP4 export");
       expect(message).toContain("H.264 level 5.1");
       // Not the browser-blaming wording of VIDEO_UNSUPPORTED_CODEC.
@@ -255,10 +332,18 @@ describe("planVideo · codec string per plan", () => {
     expect(planVideo(ir, planFor(ir), { container: "webm" }).ok).toBe(true);
   });
 
-  it("reports an oversize mp4 and odd dimensions together", () => {
+  // Phase 5C: was "reports an oversize mp4 and odd dimensions together",
+  // pinning both VIDEO_ODD_DIMENSIONS and VIDEO_EXCEEDS_CODEC_LEVELS firing
+  // at once. VIDEO_ODD_DIMENSIONS is now evaluated on the CODED size
+  // (`videoContract.ts`'s comment on the check), and doubling an odd scene
+  // dimension (7681, 4321) always lands on an even coded one (15362, 8642),
+  // so the odd-dimensions diagnostic can no longer co-occur with the
+  // codec-levels one at the current `VIDEO_SCALE`. Only the reachable
+  // diagnostic is pinned here; `videoContract.test.ts`'s "2x video (Phase
+  // 5C)" describe block separately pins that an odd scene now plans `ok`.
+  it("reports only the codec-levels refusal for an oversize, odd scene, since 2x makes it even", () => {
     const ir = irFor(`scene { size: (7681, 4321) duration: 1 }`);
     expect(codes(planVideo(ir, planFor(ir), { container: "mp4" }))).toEqual([
-      "VIDEO_ODD_DIMENSIONS",
       "VIDEO_EXCEEDS_CODEC_LEVELS",
     ]);
   });
@@ -290,10 +375,14 @@ describe("videoSourceConfig", () => {
   }
 
   it("builds the full mp4 config at 30 fps, keyframe interval in seconds", () => {
+    // Phase 5C: was "avc1.42001f" (H.264 level 3.1 at the scene's 1x size,
+    // 800x600). `fullCodecString` is chosen from the coded (2x) size,
+    // 1600x1200, which needs level 4 -- see "planVideo · container and
+    // codec" above for the macroblock arithmetic.
     expect(videoSourceConfig(planOf(EVEN, 30, "mp4"))).toStrictEqual({
       codec: "avc",
       bitrate: 8_000_000,
-      fullCodecString: "avc1.42001f",
+      fullCodecString: "avc1.420028",
       hardwareAcceleration: "prefer-software",
       latencyMode: "quality",
       bitrateMode: "constant",
@@ -344,12 +433,23 @@ describe("videoOutputFormatOptions", () => {
 });
 
 describe("planVideo · diagnostics", () => {
-  it("refuses odd dimensions, naming both the width and the height", () => {
+  // Phase 5C: was "refuses odd dimensions, naming both the width and the
+  // height", pinning that an 801x601 scene refuses mp4 export outright.
+  // VIDEO_ODD_DIMENSIONS is now evaluated on the CODED size, and doubling
+  // any integer scene dimension always lands on an even one (801*2=1602,
+  // 601*2=1202), so this exact scene can no longer trigger the refusal at
+  // the current `VIDEO_SCALE` -- moved to "2x video (Phase 5C)" above
+  // ("keeps the odd-dimension check on the coded size..."), which pins the
+  // new truth (`ok` is `true`) with the same fixture shape. The refusal
+  // itself is not deleted (see `videoContract.ts`'s comment on the check);
+  // it is provably unreachable while `VIDEO_SCALE` is even, not untested by
+  // oversight.
+  it("no longer refuses an odd scene at 2x, since doubling makes the coded size even", () => {
     const out = planVideo(ODD, planFor(ODD), { container: "mp4" });
-    expect(codes(out)).toContain("VIDEO_ODD_DIMENSIONS");
-    if (!out.ok) {
-      expect(out.diagnostics[0].message).toContain("801");
-      expect(out.diagnostics[0].message).toContain("601");
+    expect(codes(out)).not.toContain("VIDEO_ODD_DIMENSIONS");
+    expect(out.ok).toBe(true);
+    if (out.ok) {
+      expect([out.plan.width, out.plan.height]).toEqual([1602, 1202]);
     }
   });
 
@@ -387,5 +487,53 @@ describe("unsupportedCodecDiagnostic", () => {
   it("uppercases the container name for webm too", () => {
     const d = unsupportedCodecDiagnostic("vp09.00.10.08", "webm");
     expect(d.message).toContain("WEBM");
+  });
+});
+
+describe("2x video (Phase 5C)", () => {
+  it("pins the scale at exactly 2", () => {
+    expect(VIDEO_SCALE).toBe(2);
+  });
+
+  it("plans the coded size at twice the scene size and keeps the scene size", () => {
+    const r = planVideo(sceneOf(800, 600), samplerPlan(30, 180), { container: "mp4" });
+    if (!r.ok) throw new Error(JSON.stringify(r.diagnostics));
+    expect([r.plan.width, r.plan.height]).toEqual([1600, 1200]);
+    expect([r.plan.sceneWidth, r.plan.sceneHeight]).toEqual([800, 600]);
+    expect(r.plan.scale).toBe(2);
+  });
+
+  it("chooses the codec level from the coded size, not the scene size", () => {
+    // 800x600 at 1x selected avc1.42001f (level 3.1). 1600x1200 = 7,500 MBs > 3.1's 3,600.
+    const r = planVideo(sceneOf(800, 600), samplerPlan(30, 180), { container: "mp4" });
+    if (!r.ok) throw new Error("unexpected refusal");
+    expect(r.plan.fullCodecString).not.toBe("avc1.42001f");
+    expect(r.plan.fullCodecString).toBe(h264CodecString(h264LevelFor(1600, 1200, 30, DEFAULT_BITRATE)!));
+  });
+
+  it("names both sizes and the 2x factor when no codec level fits", () => {
+    const r = planVideo(sceneOf(2400, 1600), samplerPlan(30, 30), { container: "mp4" });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    const msg = r.diagnostics[0].message;
+    expect(msg).toContain("exports at 2x the scene's size");
+    expect(msg).toContain("2400x1600 scene");
+    expect(msg).toContain("4800x3200 video");
+  });
+
+  it("refuses a coded size above the device texture or renderbuffer limit", () => {
+    const r = planVideo(sceneOf(1200, 800), samplerPlan(30, 30), { container: "webm" });
+    if (!r.ok) throw new Error("unexpected refusal");
+    expect(deviceLimitDiagnostic(r.plan, 2048, 4096)?.code).toBe("VIDEO_EXCEEDS_DEVICE_LIMITS");
+    expect(deviceLimitDiagnostic(r.plan, 4096, 2048)?.code).toBe("VIDEO_EXCEEDS_DEVICE_LIMITS");
+    expect(deviceLimitDiagnostic(r.plan, 2400, 2400)).toBeNull(); // 2400 = coded width: allowed
+    expect(deviceLimitDiagnostic(r.plan, 2399, 4096)?.message).toContain(
+      "this device can render at most 2399x2399 pixels",
+    );
+  });
+
+  it("keeps the odd-dimension check on the coded size, where 2x makes it unreachable", () => {
+    const r = planVideo(sceneOf(801, 601), samplerPlan(30, 30), { container: "mp4" });
+    expect(r.ok).toBe(true); // 1602x1202: even
   });
 });

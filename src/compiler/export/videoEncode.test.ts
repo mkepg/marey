@@ -130,10 +130,14 @@ describe("encodeVideo · what reaches mediabunny", () => {
     expect(rec.sourceConfigs).toHaveLength(1);
     // Literals written here, not `videoSourceConfig(plan)`: comparing against
     // the function under test would pass whatever it returned.
+    // Phase 5C: was "avc1.42001f" (H.264 level 3.1) when `planFor` resolved
+    // the codec from the scene's own 800x600 size. `fullCodecString` is now
+    // chosen from the CODED (2x) size, 1600x1200, which needs level 4 (see
+    // `videoContract.test.ts`, "planVideo · container and codec").
     expect(rec.sourceConfigs[0]).toStrictEqual({
       codec: "avc",
       bitrate: 8_000_000,
-      fullCodecString: "avc1.42001f",
+      fullCodecString: "avc1.420028",
       hardwareAcceleration: "prefer-software",
       latencyMode: "quality",
       bitrateMode: "constant",

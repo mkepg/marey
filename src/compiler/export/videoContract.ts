@@ -13,7 +13,8 @@ export type VideoDiagnosticCode =
   | "VIDEO_NO_WEBCODECS"
   | "VIDEO_UNSUPPORTED_CODEC"
   | "VIDEO_ODD_DIMENSIONS"
-  | "VIDEO_EXCEEDS_CODEC_LEVELS";
+  | "VIDEO_EXCEEDS_CODEC_LEVELS"
+  | "VIDEO_EXCEEDS_DEVICE_LIMITS";
 
 export interface VideoDiagnostic {
   readonly code: VideoDiagnosticCode;
@@ -29,6 +30,14 @@ export interface VideoRequest {
 }
 
 export const DEFAULT_BITRATE = 8_000_000;
+
+/**
+ * Every MP4/WebM export is encoded at this multiple of the scene's declared
+ * size (spec §2.1, owner decision O3). 2x lands 4:2:0 chroma at the scene's
+ * own resolution, which is what lifted PSNR from ~40 to ~42 dB in findings
+ * §1.2. A scene too large for it is refused, never silently exported at 1x.
+ */
+export const VIDEO_SCALE = 2;
 
 /**
  * One row of ITU-T H.264 Table A-1 ("Level limits"), the columns the level
@@ -233,8 +242,14 @@ export interface VideoPlan {
   readonly fullCodecString: string;
   /** mediabunny's own short codec name, distinct from the WebCodecs string. */
   readonly mediabunnyCodec: "avc" | "vp9";
+  /** The **coded** size: `VIDEO_SCALE` times the scene's own size (spec §2.1). */
   readonly width: number;
   readonly height: number;
+  /** `VIDEO_SCALE`, carried on the plan so a caller need not re-import the constant. */
+  readonly scale: number;
+  /** The scene's own declared size, kept alongside the coded `width`/`height`. */
+  readonly sceneWidth: number;
+  readonly sceneHeight: number;
   readonly fps: number;
   readonly frameCount: number;
   readonly bitrate: number;
@@ -358,11 +373,15 @@ export function unsupportedCodecDiagnostic(
 }
 
 /**
- * No level in the supported range admits this scene. The scene's own
- * numbers are in the message so the reader can see which one to change.
+ * No level in the supported range admits this scene's coded size. Both the
+ * scene's own numbers and the coded (2x) numbers are in the message: naming
+ * only the coded size would read as a bug report against a scene the author
+ * never asked to export that large (spec §2.3).
  */
 export function exceedsCodecLevelsDiagnostic(
   container: VideoContainer,
+  sceneWidth: number,
+  sceneHeight: number,
   width: number,
   height: number,
   fps: number,
@@ -376,7 +395,30 @@ export function exceedsCodecLevelsDiagnostic(
     : "Make the scene's 'size' smaller or export at a lower frame rate.";
   return {
     code: "VIDEO_EXCEEDS_CODEC_LEVELS",
-    message: `[VIDEO_EXCEEDS_CODEC_LEVELS] A ${width}x${height} scene at ${fps}fps and ${bitrate / 1_000_000} Mbit/s is too large or too fast for ${container.toUpperCase()} export, whose highest supported codec level is ${top}. ${advice}`,
+    message: `[VIDEO_EXCEEDS_CODEC_LEVELS] Video exports at ${VIDEO_SCALE}x the scene's size, so a ${sceneWidth}x${sceneHeight} scene becomes a ${width}x${height} video; at ${fps}fps and ${bitrate / 1_000_000} Mbit/s that is too large or too fast for ${container.toUpperCase()} export, whose highest supported codec level is ${top}. ${advice}`,
+  };
+}
+
+/**
+ * Refuse a coded size the device's GL context cannot actually render.
+ *
+ * PixiJS checks no texture-size limit of its own (research §6): a scene
+ * whose coded size exceeds `MAX_TEXTURE_SIZE` or `MAX_RENDERBUFFER_SIZE`
+ * would otherwise fail deep inside WebGL, with no name a person could act
+ * on. This is a pure function so it stays headlessly testable; the pipeline
+ * supplies the two limits from the export `Application`'s own GL context
+ * (`videoPipeline.ts`), after `init` and before building or sampling.
+ */
+export function deviceLimitDiagnostic(
+  plan: VideoPlan,
+  maxTextureSize: number,
+  maxRenderbufferSize: number,
+): VideoDiagnostic | null {
+  const limit = Math.min(maxTextureSize, maxRenderbufferSize);
+  if (plan.width <= limit && plan.height <= limit) return null;
+  return {
+    code: "VIDEO_EXCEEDS_DEVICE_LIMITS",
+    message: `[VIDEO_EXCEEDS_DEVICE_LIMITS] Video exports at ${plan.scale}x the scene's size, so this ${plan.sceneWidth}x${plan.sceneHeight} scene needs a ${plan.width}x${plan.height} frame, but this device can render at most ${limit}x${limit} pixels. Make the scene's 'size' smaller.`,
   };
 }
 
@@ -395,15 +437,28 @@ export function planVideo(
 ): VideoPlanResult {
   const diagnostics: VideoDiagnostic[] = [];
 
+  // The coded size: what the encoder, the codec-level check and the
+  // odd-dimension check all reason about from here on. The scene's own
+  // size (`ir.width`/`ir.height`) is kept separately on the plan so a
+  // refusal or a downstream caller can still name it (spec §2.1).
+  const width = ir.width * VIDEO_SCALE;
+  const height = ir.height * VIDEO_SCALE;
+
   // H.264 4:2:0 stores chroma at half resolution in both axes, so an odd
   // dimension has no representation. Refused by name rather than silently
   // cropped or padded: a scene exported one pixel smaller than it was
   // authored is exactly the kind of quiet degradation Phase 5A's refusal
-  // surface exists to prevent.
-  if (request.container === "mp4" && (ir.width % 2 !== 0 || ir.height % 2 !== 0)) {
+  // surface exists to prevent. Evaluated on the CODED size, which is what
+  // the encoder actually receives -- at the current `VIDEO_SCALE` (2) this
+  // can never fire, because doubling any integer is always even. Kept
+  // anyway: it is the correct check for whatever the coded size is under
+  // any scale, and it becomes live again the moment `VIDEO_SCALE` changes
+  // (AGENT-LESSONS §2f -- a known-unreachable branch is recorded, not
+  // deleted).
+  if (request.container === "mp4" && (width % 2 !== 0 || height % 2 !== 0)) {
     diagnostics.push({
       code: "VIDEO_ODD_DIMENSIONS",
-      message: `[VIDEO_ODD_DIMENSIONS] MP4 export uses H.264 4:2:0, which requires even pixel dimensions, but this scene is ${ir.width}x${ir.height}. Change the scene's 'size' to even numbers, or export WebM instead.`,
+      message: `[VIDEO_ODD_DIMENSIONS] MP4 export uses H.264 4:2:0, which requires even pixel dimensions, but this scene is ${width}x${height}. Change the scene's 'size' to even numbers, or export WebM instead.`,
     });
   }
 
@@ -412,19 +467,24 @@ export function planVideo(
   // rate and bitrate, so the same plan always yields the same string (what
   // byte identity needs) and the declaration is true of the content. When no
   // level fits, the refusal says so here, in the plan, instead of reaching
-  // the browser as VIDEO_UNSUPPORTED_CODEC, which blames the browser.
+  // the browser as VIDEO_UNSUPPORTED_CODEC, which blames the browser. Chosen
+  // from the CODED size (spec §2.1): the encoder never sees the scene's own
+  // size, so a level that only admits the scene size while missing the
+  // coded size would immediately fail in the browser instead of here.
   const isMp4 = request.container === "mp4";
   const bitrate = request.bitrate ?? DEFAULT_BITRATE;
   let fullCodecString: string | null;
   if (isMp4) {
-    const level = h264LevelFor(ir.width, ir.height, plan.fps, bitrate);
+    const level = h264LevelFor(width, height, plan.fps, bitrate);
     fullCodecString = level ? h264CodecString(level) : null;
   } else {
-    const level = vp9LevelFor(ir.width, ir.height, plan.fps, bitrate);
+    const level = vp9LevelFor(width, height, plan.fps, bitrate);
     fullCodecString = level ? vp9CodecString(level) : null;
   }
   if (fullCodecString === null) {
-    diagnostics.push(exceedsCodecLevelsDiagnostic(request.container, ir.width, ir.height, plan.fps, bitrate));
+    diagnostics.push(
+      exceedsCodecLevelsDiagnostic(request.container, ir.width, ir.height, width, height, plan.fps, bitrate),
+    );
   }
 
   if (diagnostics.length > 0 || fullCodecString === null) {
@@ -437,8 +497,11 @@ export function planVideo(
       container: request.container,
       fullCodecString,
       mediabunnyCodec: isMp4 ? ("avc" as const) : ("vp9" as const),
-      width: ir.width,
-      height: ir.height,
+      width,
+      height,
+      scale: VIDEO_SCALE,
+      sceneWidth: ir.width,
+      sceneHeight: ir.height,
       fps: plan.fps,
       frameCount: plan.frameCount,
       bitrate,

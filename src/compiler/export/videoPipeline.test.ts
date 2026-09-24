@@ -136,19 +136,25 @@ describe("runVideoExport · refusal path 2, planExport", () => {
 });
 
 describe("runVideoExport · refusal path 3, planVideo", () => {
-  it("refuses odd pixel dimensions for mp4, after planExport has passed", async () => {
+  // Phase 5C: was "refuses odd pixel dimensions for mp4, after planExport
+  // has passed", pinning an end-to-end VIDEO_ODD_DIMENSIONS refusal for a
+  // (101, 100) scene. `VIDEO_ODD_DIMENSIONS` is now evaluated on the CODED
+  // (2x) size (`videoContract.ts`), and doubling any integer scene
+  // dimension always lands on an even one, so there is no longer a real
+  // scene an end-to-end test can use to reach that diagnostic through this
+  // pipeline -- proven, not assumed: this exact fixture (101x100 -> coded
+  // 202x200) now passes both contracts instead of refusing. Per
+  // AGENT-LESSONS §2f, that unreachability is recorded here rather than
+  // faked with a test that cannot pass honestly.
+  it("no longer refuses an odd-dimensioned scene for mp4, since 2x makes the coded size even", async () => {
     const message = await refusalMessage({
       ...BASE,
       source: "scene { size: (101, 100) duration: 1 }",
     });
-    expect(message.startsWith("[VIDEO_ODD_DIMENSIONS] ")).toBe(true);
-    // Derived from this test's fixture, not from anything the module owns:
-    // a canned diagnostic that never looked at the scene could not produce
-    // these numbers.
-    expect(message).toContain("101x100");
-    // Proof the failure came from `planVideo` and not from `planExport`
-    // refusing earlier for some unrelated reason.
-    expect(message).not.toContain("[EXPORT_");
+    expect(message).not.toContain("[VIDEO_ODD_DIMENSIONS]");
+    // Both contracts passed; this environment's missing VideoEncoder is what
+    // actually stops it next.
+    expect(passedBothContracts(message)).toBe(true);
   });
 
   it("accepts the same odd-dimensioned scene for webm", async () => {
@@ -162,6 +168,22 @@ describe("runVideoExport · refusal path 3, planVideo", () => {
     });
     expect(message).not.toContain("[VIDEO_ODD_DIMENSIONS]");
     expect(passedBothContracts(message)).toBe(true);
+  });
+
+  // The end-to-end replacement for the odd-dimensions case above: this is
+  // the `planVideo` refusal that IS still reachable through a real scene at
+  // 2x, and it is the one the rewritten `VIDEO_EXCEEDS_CODEC_LEVELS` message
+  // (spec §2.3) needs an end-to-end check of, not just the unit-level one in
+  // `videoContract.test.ts`.
+  it("refuses a scene whose coded size exceeds every H.264 level, naming both sizes", async () => {
+    const message = await refusalMessage({
+      ...BASE,
+      source: "scene { size: (2000, 1500) duration: 1 }",
+    });
+    expect(message.startsWith("[VIDEO_EXCEEDS_CODEC_LEVELS] ")).toBe(true);
+    expect(message).toContain("2000x1500 scene");
+    expect(message).toContain("4000x3000 video");
+    expect(message).not.toContain("[EXPORT_");
   });
 });
 
