@@ -1076,6 +1076,18 @@ fix wave's scoped re-review.
   five candidates, a single far-displaced frame could come out nearest to
   *k* by chance and pass. No such fixture was run. This predates the fix
   wave and was filed by its scoped re-review, not fixed.
+- **Visual quality is not an exit criterion, and the owner's smoke test
+  found it poor (2026-09-24).** None of the three criteria measures how the
+  video looks, and the owner reported it as low quality and pixelated, with
+  stray specks in the MP4. The measured causes:
+  - 1× output against a preview drawn at `devicePixelRatio`;
+  - 4:2:0 chroma, a ceiling of about 40 dB for any standard file;
+  - Chromium's OpenH264, which will not spend past a fixed quality floor
+    whatever bitrate is requested.
+  Nothing is fixed yet. The evidence and options, and the finding that the
+  Phase 5A Lottie encoder has no UI button, are in
+  `docs/research/2026-09-24-export-quality-findings-and-options.md`, awaiting
+  the owner's decision.
 
 ---
 

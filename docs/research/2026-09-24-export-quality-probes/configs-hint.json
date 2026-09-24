@@ -1,0 +1,5 @@
+[
+  { "name": "avc-hint-text", "encoder": { "codec": "avc1.42001f", "bitrate": 8000000, "bitrateMode": "constant", "framerate": 30, "latencyMode": "quality", "hardwareAcceleration": "prefer-software", "contentHint": "text", "avc": { "format": "annexb" } } },
+  { "name": "avc-hint-detail", "encoder": { "codec": "avc1.42001f", "bitrate": 8000000, "bitrateMode": "constant", "framerate": 30, "latencyMode": "quality", "hardwareAcceleration": "prefer-software", "contentHint": "detail", "avc": { "format": "annexb" } } },
+  { "name": "vp9-hint-text", "encoder": { "codec": "vp09.00.30.08", "bitrate": 8000000, "bitrateMode": "constant", "framerate": 30, "latencyMode": "quality", "hardwareAcceleration": "prefer-software", "contentHint": "text" } }
+]
