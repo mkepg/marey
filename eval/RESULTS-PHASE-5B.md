@@ -64,6 +64,86 @@ reconfirmed again at the end unchanged.
 
 ---
 
+## Which code path was actually measured, and which one a user's click takes
+
+Every number in the three sections below was produced through the dev-only
+harness seam: `window.__mareyExportVideo` → `src/lib/devVideoSeam.ts`'s
+`exportVideo`, called by `video-check.mjs`. **That is not the path a real
+export click takes.** Read directly, not summarized secondhand: a click on
+`TopBar.tsx`'s MP4/WebM buttons calls `handleExportClick`
+(`TopBar.tsx:137-138`, `void exportVideo(container)`), which is
+`useExportVideo.ts`'s hook, which dynamically `import()`s
+`src/compiler/export/videoPipeline.ts` and calls its `runVideoExport`.
+`devVideoSeam.ts` and `videoPipeline.ts` are two separate files; neither
+imports the other.
+
+**What the two paths share.** `devVideoSeam.ts`'s `exportVideo` and
+`videoPipeline.ts`'s `runVideoExport` call the identical sequence of
+lower-level primitives — the same functions, from the same modules, not
+two separate implementations of them: `compileSource` → `planExport` →
+`planVideo` → `new Application()` with a byte-for-byte identical
+`app.init({...})` options object (`width`, `height`, `background`,
+`backgroundAlpha: 1`, `antialias: true`, `resolution: 1`,
+`autoDensity: false`, `autoStart: false` — compared line by line between
+the two files) → `buildNode` per child → `MatterWorld` + `SceneRuntime` →
+`sampleFrames` → `createFrameRasterizer` → `.map(rasterize)` →
+`encodeVideo`, with the identical `canvases as unknown as
+CanvasImageSource[]` cast at the identical point. `videoPipeline.ts`'s own
+docstring states the relationship plainly: its call sequence "and the
+try/finally teardown shape are read directly from `devVideoSeam.ts`'s
+`exportVideo`... and reproduced here, not imported." The sampling,
+rasterization and encoding engine this document's numbers exercise is the
+same code the shipped button calls, not a harness-only stand-in for it.
+
+**Where they diverge.** `runVideoExport` is narrower on purpose: it skips
+`hashFrames`, per-frame reference-PNG re-extraction, and base64 encoding —
+all exist only for the harness's frame comparison and would cost a real
+user time and memory for nothing — and returns the raw `Uint8Array`
+container bytes directly. It also threads an `onProgress` callback into
+`encodeVideo` (`videoEncode.ts:70-73`; confirmed by reading the signature:
+a pure per-frame side channel, invoked as `onProgress?.(index,
+plan.frameCount)`, that does not alter the encoder configuration) which
+`devVideoSeam.ts`'s call omits, and it throws diagnostic messages verbatim
+where `devVideoSeam.ts` prefixes its own rethrow with `[export] ` (a
+harness-log convention, never seen by a user). None of these differences
+touch the compile/plan/sample/rasterize/encode call itself.
+
+**What guards the two from drifting apart, and what does not — checked
+against `exportBoundary.test.ts` directly, not assumed.** That file asserts
+two things about this relationship: that `videoPipeline.ts`,
+`useExportVideo.ts` and `TopBar.tsx` never import `devVideoSeam.ts` in any
+form, and separately that none of the three ever reaches
+`window.__mareyExportVideo` (a substring check over comment-stripped
+source, since a global property read leaves no import statement for the
+first check to see). **This is an import-boundary and reachability guard,
+not a behavioural-equivalence guard.** Nothing in the test suite compares
+the two orchestration functions' call sequences, options objects, or output
+bytes against each other, and nothing would fail if they were edited to
+diverge — a different `app.init` option, a different call order — so long
+as neither file starts importing the other. Today the two are kept in sync
+by being hand-written from one another (each docstring says so explicitly)
+and by both calling the same underlying primitive functions, not by any
+mechanical check that would catch a future edit to one and not the other.
+
+**What this does and does not mean for the evidence below.** The part that
+actually determines the emitted bytes — sampling, rasterization, encoding —
+is the exact code the export button calls, so the measurements in this
+document are evidence about the real encoder path, not a separate one. What
+is *not* covered here is the thin orchestration layer around it and the UI
+above it. Those were exercised differently, and earlier: Task 5
+(`task-5-report.md`) drove a real production build and a real click,
+confirming correct `scene.mp4`/`scene.webm` downloads (right magic bytes)
+and a correctly-verbatim failure toast — but, by ruling R22
+(`progress.md`: "scoped to the download plumbing only... not evidence of
+frame fidelity"), it never read a pixel or decoded a file. So: the button
+is verified to reach the encoder and produce a plausible file (Task 5), and
+the encoder itself is verified frame-accurate (this document) — but no
+single measurement in this phase decodes a file produced by an actual
+button click. The two verifications are complementary, not redundant, and
+neither substitutes for the other.
+
+---
+
 ## Criterion 1 — exports to WebM and MP4 at the requested frame rate and duration
 
 Per design §10.1, every number below is read from the **decoded file's own**
@@ -221,32 +301,59 @@ measurement taken today, consistent with Task 3's own finding on this same
 fixture.
 
 **Where the divergence actually is, measured byte-by-byte on pair 3
-(`t6-mp4-diag`, runA 7298 bytes / runB 7297 bytes).** The ISOBMFF box tree
-of this export is `ftyp`(0–28) → `moov`(28–766, containing `mvhd`, `trak` →
-`tkhd`, `mdia` → `mdhd`/`hdlr`/`minf` → `vmhd`/`dinf`/`stbl` →
-`stsd`/`stts`/`stsc`/`stsz`/`stco`/`stss`) → `mdat`(766–end). Comparing the
-7297 overlapping bytes:
+(`t6-mp4-diag`, runA 7298 bytes / runB 7297 bytes; the diagnostic files were
+still on disk for this fix round, so this re-derives the classification
+below directly from the same two files rather than re-running the harness).**
+The ISOBMFF box tree of this export is `ftyp`(0–28), then `moov`(28–766,
+containing `mvhd`, `trak` → `tkhd`, `mdia` → `mdhd`/`hdlr`/`minf` →
+`vmhd`/`dinf`/`stbl` → `stsd`/`stts`/`stsc`/`stsz`/`stco`/`stss`), then
+`mdat`(766–end). Comparing the 7297 overlapping bytes region by region,
+rather than lumping `ftyp` and `moov` together as an earlier draft of this
+section did:
 
 | Region | Differing bytes | Share of region |
 |---|---|---|
-| `ftyp` + `moov` (bytes 0–765) | 12 | 12/766 ≈ 1.6% |
+| `ftyp` (bytes 0–27) | 0 | 0/28 = 0% |
+| `moov` (bytes 28–765) | 12 | 12/738 ≈ 1.6% |
 | `mdat` (bytes 766–7296) | 4405 | 4405/6531 ≈ 67.45% |
 | **Total overlapping** | **4417** | **4417/7297 ≈ 60.53%** |
 
-Of the 12 differing bytes inside `moov`: **6 are exactly the harness's own
-computed timestamp-field ranges** — `mvhd`/`tkhd`/`mdhd` `creation_time` and
-`modification_time`, located by `findMp4TimestampRanges` walking this
-specific file's box tree at offsets 48/52, 164/168, 264/268 (not the spec
-§7.2 table's static offsets of 51/55, 167/171, 267/271 — this file's box
-sizes differ slightly from whatever produced that table, which is exactly
-why the harness parses the box tree instead of trusting fixed offsets).
-Masking these six — the only masking `--mask-mp4-times` performs — is
-necessary but nowhere near sufficient: it accounts for 6 of 4417 differing
-bytes, 0.14% of the total divergence.
+**Zero of the 12 `moov` differences fall inside `ftyp`** — checked directly
+by listing every differing offset and testing it against `ftyp`'s own
+0–27 range, not inferred from the region boundaries. All 12 sit inside
+`moov`.
+
+Of those 12: **6 are exactly the harness's own computed timestamp fields**
+— `mvhd`/`tkhd`/`mdhd` `creation_time` and `modification_time`. Two related
+but distinct things are true about their offsets, and conflating them was
+an error in an earlier draft of this section, caught while re-deriving this
+passage for this fix round: `findMp4TimestampRanges` (the function
+`--mask-mp4-times` uses to know what to zero) locates each field's **start**
+by walking this file's box tree — 48, 52 (`mvhd`), 164, 168 (`tkhd`), 264,
+268 (`mdhd`), each a 4-byte, version-0 field. But `creation_time` and
+`modification_time` are 32-bit second counts, and the two cold runs in this
+pair are only a few seconds apart, so in practice only each field's
+low-order **byte** actually differs — a direct byte-level diff of runA
+against runB finds single differing bytes at exactly **51, 55, 167, 171,
+267, 271**: the last byte of each 4-byte field. Those six numbers are
+numerically identical to spec §7.2's static table for this file — not
+because the table's fixed offsets are safe to assume in general (they are
+not; that is exactly why the harness parses the box tree rather than
+hardcoding them — a scene with a different box layout, or two runs whose
+wall-clock gap crosses a higher-order byte boundary, would not have this
+coincidence), but because this file's `mvhd`/`tkhd`/`mdhd` happen to sit at
+the same offsets the table's original file used, and the observed diff is
+narrower (one byte) than the masked field (four bytes) that contains it.
+Masking the full four-byte fields — the only masking `--mask-mp4-times`
+performs — is necessary but nowhere near sufficient regardless: it accounts
+for 6 of 4417 differing bytes, 0.14% of the total divergence.
 
 **The other 6 `moov` bytes are new evidence beyond what Task 3's report
 measured**, which described the divergence as confined to `mdat` alone.
-Located precisely: offsets 589 and 593 fall inside `stsd` (419–594, the
+Located precisely, from this one measured pair (`t6-mp4-diag`) — **these
+offsets are as file-specific as the timestamp-field offsets discussed
+above, not asserted to be stable across scenes, encodes, or even a repeat
+of this same export**: offsets 589 and 593 fall inside `stsd` (419–594, the
 sample description box carrying the H.264 codec configuration record), and
 offsets 677, 717, 721 and 725 fall inside `stsz` (654–726, the per-sample
 compressed-byte-size table). Both are mechanical consequences of the same
