@@ -115,7 +115,7 @@ for determinism.
 | `wave-row.marey` | Roadmap exit criterion 3, in the form where a still frame shows it: fifteen beads, one constant `duration`, `delay` spanning one full cycle, so exactly one wavelength fits the row and travels along it. Loops. |
 | `timeline-sweep.marey` | The control from the same set — a generated diagram plus one moving playhead, the one of the three that needed no Phase 3C workaround, so it is unchanged in substance. Loops. |
 | `origin-physics.marey` | `origin` through the physics seam, both halves. LEFT: a bottom-origin pillar falls and must land **standing on** the ledge — its body is placed at its bbox centre, not at its origin point. RIGHT: a bottom-origin bar grows upward under a scale animation and must carry the rider ball up on its top edge — Matter scales a body about its own centre, so the centre has to be moved to match. Settles, so `frozen at rest` and `deterministic` both apply. |
-| `linear-motion.marey` | `video-check.mjs`'s primary criterion-3 fixture (Phase 5B fix wave). A box and a dot move at constant velocity from frame 0 and stay on screen, so every decoded frame has one clearly nearest reference frame. A dropped, duplicated or reordered frame is a nearest-neighbour failure from the very first frame. |
+| `linear-motion.marey` | `video-check.mjs`'s primary criterion-3 fixture (Phase 5B fix wave). A box and a dot move at constant velocity from frame 0 and stay on screen, so at 24–60 fps every decoded frame has one clearly nearest reference frame (not at 120 fps; see "Exporting video"). A dropped, duplicated or reordered frame is a nearest-neighbour failure from the very first frame. |
 
 Add a scene rather than editing one when checking something new — these are
 regression checks, and their expected images are their value.
@@ -396,7 +396,10 @@ mostly tied has not proved the check — it has proved the fixture was wrong.**
 `eval/scenes-3b/compound-logo.marey` settles well before its own 8s clip ends
 and is the wrong fixture for this reason. The primary fixture is
 `scenes/linear-motion.marey`: two objects at constant velocity from frame 0,
-on screen throughout, so every frame has one clearly nearest reference.
+on screen throughout, so at 24–60 fps every frame has one clearly nearest
+reference. At 120 fps the per-frame motion (~1.7 px) is below what the
+step-4 distance resolves, and MP4 reports false mismatches, so use it at
+60 fps or below.
 `freeze-midair.marey` (free fall from rest) was the primary fixture before the
 fix wave; its first three frames barely move on the step-4 grid, so they have
 no discriminating power.

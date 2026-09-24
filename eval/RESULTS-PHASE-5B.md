@@ -171,9 +171,16 @@ as that record: the clicked files decoded as stated. It is no longer the only
 evidence about the shipped path, because every `video-check.mjs` run since
 the wave goes through `runVideoExport` (previous section). What it still
 covers that the harness does not is the part above `runVideoExport`: the
-hook, the lazy chunk in a production build, and the download. It was not
-re-run after the wave, and its files predate the codec-string change, so its
-WebM declared VP9 level 1.0.
+hook, the lazy chunk in a production build, and the download. The files this
+section describes predate the codec-string change, so that WebM declared VP9
+level 1.0. **It has since been re-run after the wave** by the fix wave's
+scoped re-review (`fix-wave-rereview.md`): a fresh `npm run build`,
+`vite preview --port 4173 --strictPort`, and real clicks on both buttons with
+`linear-motion.marey` loaded unmodified. Both clicked files decode 90/90,
+90 strict / 0 tie / 0 ties excluding k, timestamps on schedule; swapping
+reference frames 5 and 9 produced exactly two mismatches, so the check could
+fail; and the clicked WebM is byte-identical (`cmp`) to the WebM the harness
+produces through the dev seam for the same scene.
 
 This section discharges the gap the previous section names: it decodes a
 file that came from an actual click on `TopBar.tsx`'s MP4/WebM buttons in a
@@ -472,8 +479,14 @@ the decoded file:
 
 The 60 fps row matches what the reviewer found by parsing a pre-wave 60 fps
 file: the encoder had already raised the level in the stream to 3.2 while
-the string said 3.1. The string and the stream now agree on the level. They
-still disagree on the constraint flags: the string carries `00` and the
+the string said 3.1. At the 30 and 60 fps configurations measured, the
+string and the stream now agree on the level. **That agreement is observed,
+not guaranteed:** for H.264 the encoder writes its own level into the
+stream. At 800×600 and 120 fps — reachable only through the harness, since
+the button exports at 30 fps — the string declares 4.0, which the table
+requires for that macroblock rate, while the stream says 3.2, which is too
+low for it (measured by the scoped re-review). They also still disagree on
+the constraint flags: the string carries `00` and the
 stream's `avcC` carries `0xC0` (Constrained Baseline). That is kept
 deliberately, so that 800×600 at 30 fps still selects `avc1.42001f`, the
 string every pre-wave MP4 number was measured with; it is a disclosed
@@ -725,9 +738,15 @@ exact pixel equality would not, structurally, regardless of correctness.
 `tools/visual-check/scenes/linear-motion.marey`: an 800×600 scene,
 3 s, a 160 px box moving right and a 30 px-radius dot moving down, both at
 constant velocity from frame 0 to the last frame and on screen throughout
-(6.7 px and 5.3 px per frame at 30 fps). Every neighbouring pair of reference
-frames differs visibly, so every decoded frame has one clearly nearest
-reference from the first frame on. It passes `node bin/marey.mjs check`, as
+(6.7 px and 5.3 px per frame at 30 fps). At the rates below, every
+neighbouring pair of reference frames differs visibly, so every decoded frame
+has one clearly nearest reference from the first frame on. **That holds for
+the rates measured here, not for every rate:** at 120 fps the per-frame
+motion falls to about 1.7 px and 1.3 px, below what the harness's step-4
+downsampled distance can resolve, and an MP4 run gives 22 false mismatches,
+each frame matching its predecessor by about 0.01 against a noise floor of
+about 1.0 (measured by the scoped re-review). That is a resolution limit of
+the check, not a wrong frame. The button exports at 30 fps. It passes `node bin/marey.mjs check`, as
 every tracked `.marey` file must. All runs through the shared pipeline:
 
 | Run | Frames | Strict | Tie | Strict mismatches | Ties excluding k | Min margin among strict | Exit |
@@ -948,8 +967,9 @@ fixtures.
 
 Facts this document's three exit criteria do not cover, stated with the
 hedge each measurement attached rather than upgraded or rounded off. The
-first four bullets were measured or changed by the fix wave; the last two
-are carried forward from Task 6 unchanged.
+first four bullets were measured or changed by the fix wave; the two after
+them are carried forward from Task 6 unchanged; the last was filed by the
+fix wave's scoped re-review.
 
 - **Memory: the old ceiling was the eager path's, and the lazy path reaches
   `MAX_EXPORT_FRAMES` (re-measured in the fix wave, R45/R51).** Task 4
@@ -1005,7 +1025,9 @@ are carried forward from Task 6 unchanged.
   emitted `avcC` carries `0xC0` (Constrained Baseline), which the encoder
   decides. Kept so that 800×600 at 30 fps selects `avc1.42001f`, the string
   the pre-wave MP4 evidence was measured with. The level in the string and
-  in the stream now agree (criterion 1).
+  in the stream agree at the 30 and 60 fps configurations measured, but not
+  at 800×600 and 120 fps, where the stream under-declares (3.2 against the
+  string's 4.0): the H.264 encoder writes its own level (criterion 1).
 - **Q5 (whether `hardwareAcceleration: "prefer-software"` genuinely excludes
   a real hardware encoder) is narrowed, not answered.** Spec §7.5's dated
   correction, preserved here rather than restated more strongly: this
@@ -1038,6 +1060,18 @@ are carried forward from Task 6 unchanged.
   task (this task uses the dev seam, `window.__mareyExportVideo`, which
   takes an explicit scene source and does not go through the default-scene
   UI path at all).
+- **The criterion-3 check has a window, not an absolute threshold.** Each
+  decoded frame *k* is compared only with reference frames *k−2..k+2*, and
+  passes if *k* is uniquely nearest among those five. Nothing checks how
+  near. Far displacements *were* injected and caught: reversing the loop
+  and dropping every 10th frame both move most frames well outside their
+  window. They were caught because the fixtures move monotonically, so
+  distance grows with index difference and a far-displaced frame lands
+  nearest to an end of the window rather than to *k*. On content that is not
+  monotone in time, such as periodic motion or a frame equally unlike all
+  five candidates, a single far-displaced frame could come out nearest to
+  *k* by chance and pass. No such fixture was run. This predates the fix
+  wave and was filed by its scoped re-review, not fixed.
 
 ---
 
