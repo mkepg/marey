@@ -1,7 +1,33 @@
 # Phase 5B evidence — the three exit criteria
 
-**Date:** 2026-09-24, Phase 5B Task 6. Branch `phase-5b-video`, BASE/HEAD
-`92cc9bc`. Every command below was run against this exact tree today — see
+**Updated by the fix wave (2026-09-24, after the independent whole-branch
+review; `.sdd/2026-09-18-phase-5b-video/whole-branch-review.md`,
+rulings R43–R51 in `progress.md`).** The wave changed things this document
+measures, so every section below says which numbers were taken **before** the
+wave (Task 6, `92cc9bc`) and which **after** it (on the fix-wave commits
+`c7c491c`..`f27522c`). The changes that matter here:
+
+- **The harness now measures the shipped orchestration** (R45). `video-check.mjs`
+  still calls the dev-only `window.__mareyExportVideo`, but that seam now calls
+  `runVideoExport` (`videoPipeline.ts`), the function the export button calls,
+  instead of carrying its own copy. See the next section.
+- **Every WebM changed by one byte** (R43). The VP9 codec string was pinned to
+  `vp09.00.10.08` (level 1.0), and every WebM this phase produced declared level
+  1.0 in its `CodecPrivate` for 800×600 content, 13× level 1's maximum picture
+  size (measured on all 12 WebMs then on disk). The string is now chosen per plan:
+  800×600 at 30 fps is `vp09.00.31.08`, so the level byte in `CodecPrivate`
+  changed from `0x0a` to `0x1f` and nothing else about the file's length.
+  Pre-wave WebM byte counts below are marked as such; the post-wave re-runs are
+  listed beside them.
+- **MP4's codec level is chosen per plan too** (R43), from ITU-T H.264 Table A-1.
+  800×600 at 30 fps still selects `avc1.42001f`, so every pre-wave MP4 number was
+  measured with the string the post-wave code selects for that plan.
+- **Criterion 3's primary fixture is now `linear-motion.marey`**, and the harness
+  fails a tie that excludes the frame itself (R46). MP4 container bytes are
+  reported and no longer gate the exit code (R47).
+
+**Original date:** 2026-09-24, Phase 5B Task 6. Branch `phase-5b-video`, BASE/HEAD
+`92cc9bc`. Every Task 6 command below was run against that exact tree — see
 `docs/engineering-lessons.md` §1 ("the report is a claim; the diff is
 the evidence") and roadmap-and-process.md's evidence discipline. Numbers
 that also appear in `task-3-report.md` were re-derived independently here,
@@ -33,7 +59,15 @@ stops there — it does not claim to have identified which Chromium
 component, codec setting, or layer of the stack causes it, because that was
 not measured.
 
-**Fixture choice (R20).** Criterion 3 uses
+**Fixture choice (R20, superseded for criterion 3 by R46).** Since the fix
+wave, criterion 3's primary fixture is
+`tools/visual-check/scenes/linear-motion.marey`: two objects at
+constant velocity from frame 0, on screen throughout. The paragraph below is
+Task 6's reasoning, kept as the record; its claim that `freeze-midair` can
+tell a missing frame from a still one turned out **false for its first three
+frames** (see criterion 3).
+
+Task 6: criterion 3 used
 `tools/visual-check/scenes/freeze-midair.marey`, not
 `eval/scenes-3b/compound-logo.marey`. `compound-logo.marey`'s own comment
 (line 31, quoted in the criterion 3 section below) records that its mark
@@ -60,91 +94,86 @@ nearest-neighbour tie caveat, and exactly what gates its exit code.
 Baseline reconfirmed on this tree before any harness run: `npx vitest run`
 → **33 files / 862 tests**, exit 0. `npx tsc -b --noEmit` → exit 0. This
 task makes no source changes (evidence document only), so the baseline is
-reconfirmed again at the end unchanged.
+reconfirmed again at the end unchanged. (After the fix wave: 34 files / 910
+tests; see "Environment".)
 
 ---
 
 ## Which code path was actually measured, and which one a user's click takes
 
-Every number in the three sections below was produced through the dev-only
-harness seam: `window.__mareyExportVideo` → `src/lib/devVideoSeam.ts`'s
-`exportVideo`, called by `video-check.mjs`. **That is not the path a real
-export click takes.** Read directly, not summarized secondhand: a click on
-`TopBar.tsx`'s MP4/WebM buttons calls `handleExportClick`
-(`TopBar.tsx:137-138`, `void exportVideo(container)`), which is
-`useExportVideo.ts`'s hook, which dynamically `import()`s
-`src/compiler/export/videoPipeline.ts` and calls its `runVideoExport`.
-`devVideoSeam.ts` and `videoPipeline.ts` are two separate files; neither
-imports the other.
+**Since the fix wave (R45), the harness measures the shipped orchestration.**
+A click on `TopBar.tsx`'s MP4/WebM buttons calls `useExportVideo.ts`'s hook,
+which dynamically `import()`s `src/compiler/export/videoPipeline.ts` and calls
+`runVideoExport`. `video-check.mjs` calls `window.__mareyExportVideo`, and that
+dev seam (`src/lib/devVideoSeam.ts`) now calls **the same `runVideoExport`**,
+passing an observer. It no longer contains an orchestration of its own.
 
-**What the two paths share.** `devVideoSeam.ts`'s `exportVideo` and
-`videoPipeline.ts`'s `runVideoExport` call the identical sequence of
-lower-level primitives — the same functions, from the same modules, not
-two separate implementations of them: `compileSource` → `planExport` →
-`planVideo` → `new Application()` with a byte-for-byte identical
-`app.init({...})` options object (`width`, `height`, `background`,
-`backgroundAlpha: 1`, `antialias: true`, `resolution: 1`,
-`autoDensity: false`, `autoStart: false` — compared line by line between
-the two files) → `buildNode` per child → `MatterWorld` + `SceneRuntime` →
-`sampleFrames` → `createFrameRasterizer` → `.map(rasterize)` →
-`encodeVideo`, with the identical `canvases as unknown as
-CanvasImageSource[]` cast at the identical point. `videoPipeline.ts`'s own
-docstring states the relationship plainly: its call sequence "and the
-try/finally teardown shape are read directly from `devVideoSeam.ts`'s
-`exportVideo`... and reproduced here, not imported." The sampling,
-rasterization and encoding engine this document's numbers exercise is the
-same code the shipped button calls, not a harness-only stand-in for it.
+**What is shared now:** everything from compile to encoded bytes. Compile,
+`planExport`, `planVideo` (including the per-plan codec string), the encoder
+probe that runs before the scene is built, `app.init`, building the tree,
+`sampleFrames`, the lazy rasterize-and-encode loop, and `encodeVideo` are one
+copy of code, executed by both callers.
 
-**Where they diverge.** `runVideoExport` is narrower on purpose: it skips
-`hashFrames`, per-frame reference-PNG re-extraction, and base64 encoding —
-all exist only for the harness's frame comparison and would cost a real
-user time and memory for nothing — and returns the raw `Uint8Array`
-container bytes directly. It also threads an `onProgress` callback into
-`encodeVideo` (`videoEncode.ts:70-73`; confirmed by reading the signature:
-a pure per-frame side channel, invoked as `onProgress?.(index,
-plan.frameCount)`, that does not alter the encoder configuration) which
-`devVideoSeam.ts`'s call omits, and it throws diagnostic messages verbatim
-where `devVideoSeam.ts` prefixes its own rethrow with `[export] ` (a
-harness-log convention, never seen by a user). None of these differences
-touch the compile/plan/sample/rasterize/encode call itself.
+**What the observer adds, only on the harness path:** `onSampled` hands the
+seam the sampler's output (for `hashFrames`); `onFrame` hands it each canvas
+immediately before the encoder consumes it (for the lossless reference PNGs);
+`onEncoderConfig` records mediabunny's resolved encoder config. The seam files
+each reference PNG under the index of its snapshot in the sampler's own
+array, not under the order the pipeline delivered it, so a pipeline that
+reorders or drops frames produces a file that stops matching its references.
+The button passes no observer: no reference images, no hash, and each canvas
+is released once the encoder has copied it.
 
-**What guards the two from drifting apart, and what does not — checked
-against `exportBoundary.test.ts` directly, not assumed.** That file asserts
-two things about this relationship: that `videoPipeline.ts`,
-`useExportVideo.ts` and `TopBar.tsx` never import `devVideoSeam.ts` in any
-form, and separately that none of the three ever reaches
-`window.__mareyExportVideo` (a substring check over comment-stripped
-source, since a global property read leaves no import statement for the
-first check to see). **This is an import-boundary and reachability guard,
-not a behavioural-equivalence guard.** Nothing in the test suite compares
-the two orchestration functions' call sequences, options objects, or output
-bytes against each other, and nothing would fail if they were edited to
-diverge — a different `app.init` option, a different call order — so long
-as neither file starts importing the other. Today the two are kept in sync
-by being hand-written from one another (each docstring says so explicitly)
-and by both calling the same underlying primitive functions, not by any
-mechanical check that would catch a future edit to one and not the other.
+**What still differs between a harness run and a click:**
+- The entry point: a `window` global installed only in a dev build, versus
+  the hook's dynamic `import()` of the lazy `videoPipeline` chunk in a
+  production build. The chunk boundary itself is now guarded
+  (`exportBoundary.test.ts`, R49); the hook and `TopBar.tsx` are not
+  exercised by the harness.
+- The hook's own behaviour: its progress state, the download (Blob, object
+  URL, synthetic click), and the toast.
+- The duration bound: the harness can pass `--duration`; the button never
+  passes `durationSeconds` (R27/R39, unchanged; see "Known limitations").
+- Error text: the seam prefixes its rethrow with `[export] `; the button
+  shows the diagnostic verbatim.
 
-**What this does and does not mean for the evidence below.** The part that
-actually determines the emitted bytes — sampling, rasterization, encoding —
-is the exact code the export button calls, so the measurements in this
-document are evidence about the real encoder path, not a separate one. What
-is *not* covered here is the thin orchestration layer around it and the UI
-above it. Those were exercised differently, and earlier: Task 5
-(`task-5-report.md`) drove a real production build and a real click,
-confirming correct `scene.mp4`/`scene.webm` downloads (right magic bytes)
-and a correctly-verbatim failure toast — but, by ruling R22
-(`progress.md`: "scoped to the download plumbing only... not evidence of
-frame fidelity"), it never read a pixel or decoded a file. So: the button
-is verified to reach the encoder and produce a plausible file (Task 5), and
-the encoder itself is verified frame-accurate (this document) — but no
-single measurement in this phase decodes a file produced by an actual
-button click. The two verifications are complementary, not redundant, and
-neither substitutes for the other.
+**This is now guarded, and the guard was shown to fire.** Reversing the frame
+loop in `videoPipeline.ts`, or dropping every 10th frame there, made
+`video-check.mjs` exit 1 on `linear-motion.marey` (reverse: 38 strict
+mismatches and 34 ties excluding the frame itself; drop: 81/90 decoded and 9
+sampled frames never handed to the encoder); the unmutated control exited 0.
+Before the wave, the reviewer measured both mutations leaving all 862 tests
+green, and the harness could not see them because it ran a copy.
+
+**Before the fix wave (Task 6's text, kept as the record of what was true
+then).** Every number Task 6 produced went through `devVideoSeam.ts`'s own
+`exportVideo`, a hand-written copy of `runVideoExport`'s call sequence
+(`compileSource` → `planExport` → `planVideo` → `app.init` with the same
+options → `buildNode` → `MatterWorld` + `SceneRuntime` → `sampleFrames` →
+`createFrameRasterizer` → `.map(rasterize)` → `encodeVideo`). The two called
+the same primitives, and nothing checked that their orchestration stayed the
+same; `exportBoundary.test.ts` only checked that neither imported the other
+and that the button's files never reached the dev global. Task 5 exercised
+the button with a real click in a production build (download plumbing only,
+R22), and Task 6b (next section) decoded one file from a real click. The
+numbers Task 6 recorded are still evidence about the encoder engine, which
+was shared then too; what the wave changed is that the orchestration around
+it is no longer a second copy.
 
 ---
 
 ## Task 6b — decoding a file produced by a real export click
+
+**Context after the fix wave.** This section is a record of what was measured
+before the wave, when the harness ran a copy of the orchestration and this
+one click was the only decode of a file from the shipped path. It stays true
+as that record: the clicked files decoded as stated. It is no longer the only
+evidence about the shipped path, because every `video-check.mjs` run since
+the wave goes through `runVideoExport` (previous section). What it still
+covers that the harness does not is the part above `runVideoExport`: the
+hook, the lazy chunk in a production build, and the download. It was not
+re-run after the wave, and its files predate the codec-string change, so its
+WebM declared VP9 level 1.0.
 
 This section discharges the gap the previous section names: it decodes a
 file that came from an actual click on `TopBar.tsx`'s MP4/WebM buttons in a
