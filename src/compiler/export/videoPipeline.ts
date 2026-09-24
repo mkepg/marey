@@ -2,7 +2,7 @@ import { Application, Container } from "pixi.js";
 import { compileSource } from "../compileSource";
 import { destroyExportApp } from "./exportApp";
 import { planExport } from "./exportContract";
-import { planVideo, type VideoContainer, type VideoPlan } from "./videoContract";
+import { deviceLimitDiagnostic, planVideo, type VideoContainer, type VideoPlan } from "./videoContract";
 import { assertVideoEncodable, encodeVideo } from "./videoEncode";
 import { createFrameRasterizer } from "./frameRaster";
 import { buildNode } from "../renderer/builder";
@@ -153,10 +153,33 @@ export async function runVideoExport(opts: RunVideoExportOptions): Promise<Uint8
       background: ir.background,
       backgroundAlpha: 1,
       antialias: true,
-      resolution: 1,
+      // The Text-texture trap (spec §2.2): PixiJS rasterizes a `Text`'s own
+      // texture at the RENDERER's resolution, not the `extract.canvas` call
+      // site's. Initialising at `resolution: 1` and extracting at
+      // `video.plan.scale` would upscale already-blurry 1x text while every
+      // vector shape came out sharp at the higher scale. Initialising here
+      // at the same scale the frames are later extracted at
+      // (`createFrameRasterizer`, `frameRaster.ts`) keeps text native to the
+      // coded size.
+      resolution: video.plan.scale,
       autoDensity: false,
       autoStart: false,
     });
+
+    // Refuse a coded size the device's own GL context cannot render, before
+    // building or sampling the scene (spec §2.3). PixiJS checks no
+    // texture-size limit of its own (research §6), so without this a scene
+    // whose coded size exceeds the device's limits would fail deep inside
+    // WebGL with no name a person could act on. `deviceLimitDiagnostic` is
+    // the pure comparison (`videoContract.ts`, headlessly tested); this is
+    // the one line that reads the device's actual limits.
+    const gl = (app.renderer as unknown as { gl: WebGL2RenderingContext }).gl;
+    const limitRefusal = deviceLimitDiagnostic(
+      video.plan,
+      gl.getParameter(gl.MAX_TEXTURE_SIZE),
+      gl.getParameter(gl.MAX_RENDERBUFFER_SIZE),
+    );
+    if (limitRefusal) throw new Error(limitRefusal.message);
 
     root = new Container();
     for (const node of ir.children) root.addChild(buildNode(node));

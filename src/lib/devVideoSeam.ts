@@ -12,8 +12,12 @@ export interface ExportVideoResult {
   readonly container: VideoContainer;
   readonly fps: number;
   readonly frameCount: number;
+  /** The CODED size: the scene's own size times `VIDEO_SCALE` (Phase 5C). */
   readonly width: number;
   readonly height: number;
+  /** The scene's own declared size, kept alongside the coded `width`/`height`. */
+  readonly sceneWidth: number;
+  readonly sceneHeight: number;
   readonly byteLength: number;
   /**
    * One base64 PNG per sampled frame, for the frame-by-frame comparison: the
@@ -166,6 +170,8 @@ async function exportVideo(
     frameCount: plan.frameCount,
     width: plan.width,
     height: plan.height,
+    sceneWidth: plan.sceneWidth,
+    sceneHeight: plan.sceneHeight,
     byteLength: bytes.length,
     referenceFrames,
     encoderConfigs,
