@@ -303,6 +303,100 @@ Add a scene rather than editing one when checking something new — same rule
 as the PixiJS-preview `scenes/` fixtures above: these are regression checks,
 and their expected pixel values are their value.
 
+## Exporting video
+
+`video-check.mjs` exports a scene to WebM or MP4, decodes the container back
+with a real decoder, and proves the decoded frame sequence matches the
+sampler's own reference output — no frame dropped, duplicated, reordered, or
+silently re-encoded at a rate nobody asked for. It exists for the same
+headless-blind-spot reason `check.mjs`, `export-check.mjs` and
+`lottie-check.mjs` do, sharpened for the failure mode video adds over a PNG
+sequence or a Lottie document: **a video can play back looking mostly right
+while silently dropping, duplicating or reordering frames, and nothing that
+trusts "the file plays" can see that.** "The file plays" is not evidence —
+only decoding it back and comparing against the sampler's own frames is.
+
+**The decode happens inside the page, not in Node, and that is the point, not
+an implementation detail.** mediabunny's self-contained ESM bundle
+(`node_modules/mediabunny/dist/bundles/mediabunny.mjs` — zero `import`
+statements, every symbol the script needs exported under its own bare name)
+is injected into the page as an inline `<script type="module">`, the same
+technique `lottie-check.mjs` already uses for dotlottie-web's bundle. That
+means decoding goes through the same `VideoDecoder` a real viewer's browser
+would use — the actual claim criterion 3 needs — rather than a Node-side
+decode, which would only prove mediabunny's own demuxer agrees with itself.
+
+Like `export-check.mjs` and `lottie-check.mjs`, it calls
+`window.__mareyExportVideo` (installed dev-only by `src/lib/devVideoSeam.ts`,
+wired in `main.tsx` behind `import.meta.env.DEV`) rather than driving the
+shipped export button, so a harness-only copy of compile → plan → build →
+sample → rasterize → encode cannot silently diverge from the pipeline the app
+actually runs. One consequence worth knowing before trusting a run of this
+script as evidence about the shipped button: every measurement it produces is
+taken on that dev-seam path, not on `useExportVideo.ts` → `videoPipeline.ts`,
+the separate orchestration a real click runs — the two call the same
+underlying primitives, but nothing in this script exercises the second one.
+See `eval/RESULTS-PHASE-5B.md`'s "Which code path was actually measured"
+section, and its Task 6b section (a file decoded from an actual click), for
+how that gap was measured and, for one scene, closed.
+
+```bash
+node tools/visual-check/video-check.mjs \
+  --scene tools/visual-check/scenes/freeze-midair.marey \
+  --container mp4 --fps 30 --duration 0.5 --mask-mp4-times \
+  --out .visual-check/video/freeze-mp4
+```
+
+| Flag | Meaning |
+|---|---|
+| `--scene <path>` | A `.marey` file. Required — no `default` fallback |
+| `--container <name>` | `mp4` or `webm`. Required |
+| `--fps <n>` | Export frame rate (default 30) |
+| `--duration <s>` | Export bound in seconds, overriding the scene's own `duration:` |
+| `--frames <list>` | Comma-separated decoded frame indices to write as PNG. Every decoded frame is still analysed numerically regardless of this flag — it only controls what gets written to disk for a human to look at. Default: an evenly-spaced spread of five indices |
+| `--mask-mp4-times` | For MP4, additionally compare the two cold runs' bytes with mediabunny's own wall-clock timestamp fields zeroed, and gate the exit code on that masked comparison instead of the raw one. No effect on WebM — mediabunny's Matroska muxer path writes no wall-clock or random field a scene shape here can trigger |
+| `--mediabunny-path <p>` | Override the mediabunny ESM bundle path |
+| `--out <dir>` | Where `scene.<ext>`, `decoded_%04d.png`, `reference_%04d.png` and `report.json` go |
+| `--url <origin>` | Dev server origin (default `http://localhost:5199`). Same `--strictPort` trap as `check.mjs` |
+| `--headed` | Show the browser window |
+
+**The nearest-neighbour identity check, and its tie caveat.** For each decoded
+frame *k*, the script computes a distance to reference frames *k−2..k+2* and
+requires the minimum to be uniquely achieved by *k* itself (`strict`). When two
+or more candidates tie for the minimum — which happens whenever the scene has
+settled and consecutive reference frames are pixel-identical — the match is
+`tie`: reported and counted, never folded into a pass or a failure. This is a
+positional check rather than pixel equality, because both codecs are lossy: a
+dropped, duplicated or reordered frame makes a decoded frame resemble a
+*neighbour* more than itself, which survives lossy compression, while exact
+pixel equality would not, regardless of correctness. **A run whose frames are
+mostly tied has not proved the check — it has proved the fixture was wrong.**
+`eval/scenes-3b/compound-logo.marey` settles well before its own 8s clip ends
+and is the wrong fixture for this reason; `eval/RESULTS-PHASE-5B.md` uses
+`freeze-midair.marey` (continuous free-fall, never settles within the exported
+window) as the primary fixture for this check instead.
+
+Every invocation performs two independent cold page loads of the same scene
+and compares them against each other — raw container bytes, the reference-frame
+PNGs each run fed to its own encoder, and the sampler's own simulation-state
+hash — which is how `eval/RESULTS-PHASE-5B.md`'s criterion 2 measured WebM
+byte-identical and MP4 not, with the MP4 divergence traced to the encoder side
+rather than the renderer (the two runs' reference frames are bit-identical).
+
+Exit code is non-zero if: either cold run failed; decode failed; the decoded
+frame count, dimensions or timestamp schedule disagree with what was
+requested; any frame's nearest-neighbour match is STRICT and wrong; the two
+cold runs' snapshot hashes or reference-frame PNGs disagree; or (WebM always,
+MP4 only under `--mask-mp4-times`) the two cold runs' raw container bytes
+disagree. Never on how the PNGs look, or on how many frames tied — both are
+reported, neither gates.
+
+**Look at the PNGs.** Same rule as every other harness on this page: read
+`decoded_0000.png`, a mid-export frame, and the last frame with the Read tool.
+See `eval/RESULTS-PHASE-5B.md` for a worked example specific to this script,
+including one frame where a faint lossy-codec compression artefact trailing a
+fast-moving edge was read and correctly not flagged as a defect.
+
 ## Environment
 
 Needs `playwright` (a devDependency) and its Chromium download:
@@ -319,6 +413,16 @@ from a jsdelivr/unpkg CDN; `lottie-check.mjs` routes that request to the
 local copy in `node_modules` instead (`page.route`), so `--renderer
 dotlottie-web` does not depend on outbound network access either, even
 though Playwright's Chromium here happens to have it.
+
+`video-check.mjs` additionally needs `mediabunny`, loaded the same way —
+its self-contained ESM bundle
+(`node_modules/mediabunny/dist/bundles/mediabunny.mjs`) is injected into the
+page inline, with no network access. Unlike every other package named on this
+page, `mediabunny` is **not** a devDependency: Phase 5B's Task 5 made it a
+production dependency (`package.json`, `dependencies`, `^1.58.0`), because the
+shipped export button imports it too, so it ships inside the built app bundle
+a real visitor downloads. It is licensed **MPL-2.0**; source is at
+<https://github.com/Vanilagy/mediabunny>.
 
 Headless Chromium has no GPU, so the launch args force SwiftShader. Without them
 PixiJS cannot get a WebGL context and every capture is blank. WebGPU is
