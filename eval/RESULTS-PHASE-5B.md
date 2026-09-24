@@ -944,25 +944,68 @@ fixtures.
 
 ---
 
-## Known limitations carried forward, not re-measured by this task
+## Known limitations
 
-Facts established in earlier Phase 5B tasks that this document's three exit
-criteria do not cover, stated with the hedge each earlier task attached
-rather than upgraded or rounded off:
+Facts this document's three exit criteria do not cover, stated with the
+hedge each measurement attached rather than upgraded or rounded off. The
+first four bullets were measured or changed by the fix wave; the last two
+are carried forward from Task 6 unchanged.
 
-- **A memory ceiling exists somewhere between 4,800 and 6,000 frames, on
-  this 16GB machine, and it is a bracket, not a pinned value.** Task 4
+- **Memory: the old ceiling was the eager path's, and the lazy path reaches
+  `MAX_EXPORT_FRAMES` (re-measured in the fix wave, R45/R51).** Task 4
   (`task-4-report.md`, Q4) measured 4,800 frames succeeding and 6,000
-  failing through the real export seam. `MAX_EXPORT_FRAMES` (`7_200`,
-  `src/compiler/export/exportContract.ts:64`) does not protect this bound —
-  a scene requesting frames above the working bracket but below 7,200 can
-  still fail. **Out-of-memory is a credible but unconfirmed explanation**:
-  Playwright's `page.on("crash")` never fired during Task 4's failing run,
-  so no actual crash event was observed, only the failure itself. Ruling
-  R23 (`progress.md`) deliberately left `MAX_EXPORT_FRAMES` unchanged — the
-  constant lives in the Phase 4 boundary Global Constraint 7 freezes, and a
-  ceiling derived from one machine's RAM would be a magic number wrong on
-  every other machine. Not re-measured by this task.
+  failing **at 800×600**, when every frame's canvas was held in memory at
+  once (`frames.map(rasterize)`, about 1.9 MB each). The fix wave
+  rasterizes one frame at a time inside the encode loop and releases each
+  canvas once the encoder has copied it. Measured after that change, through
+  the shipped `runVideoExport` imported into the page from the dev server,
+  headless Chromium with SwiftShader, on this 16 GB machine, MP4, 30 fps:
+  - **7,200 frames at 800×600** (240 s, `MAX_EXPORT_FRAMES`): completed in
+    160.4 s; 1,322,852 bytes; `usedJSHeapSize` 91.7 MB afterwards.
+  - **1,800 frames at 1920×1080** (60 s): completed in 78.8 s; 3,140,920
+    bytes; `usedJSHeapSize` 123 MB afterwards.
+
+  Both files were checked by parsing the container (an ISOBMFF walk written
+  for this, independent of mediabunny): `stsz` sample count 7,200 and 1,800,
+  `stts` one entry of that many samples, `mdhd` timescale 30 with duration
+  7,200 and 1,800, and `stss` 240 and 60 sync samples (one every 30
+  frames). They were **not** decode-compared frame by frame. These are two
+  runs on one machine in a headless, software-rendered browser; they show
+  the eager bracket no longer applies, not that no memory limit exists on
+  other machines, at larger sizes, or in a real browser tab.
+  `MAX_EXPORT_FRAMES` is unchanged (GC7, R23).
+- **The first ~0.75 s of an export still blocks the page, measured.** With
+  the reviewer's method (a `requestAnimationFrame` probe recording the
+  longest main-thread gap, plus time to the first progress tick; headless
+  Chromium with SwiftShader, WebM, 30 fps), before and after the fix wave:
+
+  | Scene | Frames | ms to first progress tick | ms total | Longest gap, ms |
+  |---|---|---|---|---|
+  | `compound-logo` before | 240 | 7,651 | 9,592 | 4,386 |
+  | `compound-logo` after | 240 | 1,073 | 6,737 | 727 |
+  | 30 s linear box before | 900 | 17,183 | 22,018 | 14,063 |
+  | 30 s linear box after | 900 | 1,085 | 22,087 | 749 |
+
+  Observer timestamps put the end of compile, plans and the codec probe at
+  about 43 ms and the end of sampling (including Pixi's `app.init`) at
+  260–290 ms, so the remaining gap is between sampling and the first encoded
+  frame, not in `sampleFrames` (frozen by GC7). The loop yields to the event
+  loop every 100 ms of work; yielding every 16 ms doubled the 900-frame
+  total (43.7 s) with no smaller gap, because each yield also repaints the
+  app's live preview.
+- **MP4 export tops out at H.264 level 5.1.** The level table is Rec. ITU-T
+  H.264 (03/2010), the edition that could be retrieved, which ends at 5.1
+  (36,864 macroblocks per frame, 983,040 per second). Levels 5.2 and 6.x,
+  from later editions, are not in the table, so a scene beyond 5.1 (for
+  example 4096×2304 at 30 fps, or anything near 8K) is refused with
+  `VIDEO_EXCEEDS_CODEC_LEVELS` even where the browser might encode it. WebM
+  goes to VP9 level 6.2.
+- **The MP4 codec string's constraint byte is a request, not a description
+  (M-8, disclosed residual).** The string carries constraint flags `00`; the
+  emitted `avcC` carries `0xC0` (Constrained Baseline), which the encoder
+  decides. Kept so that 800×600 at 30 fps selects `avc1.42001f`, the string
+  the pre-wave MP4 evidence was measured with. The level in the string and
+  in the stream now agree (criterion 1).
 - **Q5 (whether `hardwareAcceleration: "prefer-software"` genuinely excludes
   a real hardware encoder) is narrowed, not answered.** Spec §7.5's dated
   correction, preserved here rather than restated more strongly: this
@@ -995,6 +1038,33 @@ rather than upgraded or rounded off:
   task (this task uses the dev seam, `window.__mareyExportVideo`, which
   takes an explicit scene source and does not go through the default-scene
   UI path at all).
+
+---
+
+## The resolved encoder configuration (spec §5, recorded since the fix wave)
+
+Spec §5 requires the resolved encoder configuration to be recorded in the
+evidence through mediabunny's `onEncoderConfig` callback (finding M-2: it had
+been dropped silently). `video-check.mjs` now writes it to `report.json` as
+`runA.encoderConfigs` / `runB.encoderConfigs`. mediabunny calls the hook once
+per candidate configuration before `isConfigSupported` selects one; with a
+numeric bitrate there is one candidate, and every post-wave run recorded
+exactly one. As recorded (`fw/i2-lin-mp4-30`, 800×600 MP4 at 30 fps):
+
+```json
+{"codec":"avc1.42001f","width":800,"height":600,"displayWidth":800,"displayHeight":600,
+ "bitrate":8000000,"bitrateMode":"constant","alpha":"discard","framerate":30,
+ "latencyMode":"quality","hardwareAcceleration":"prefer-software","avc":{"format":"avc"}}
+```
+
+The WebM runs record the same fields without `avc`, with `codec`
+`vp09.00.31.08` (800×600) or `vp09.00.40.08` (1920×1080); the other rows
+of criterion 1's post-wave table record the codec strings listed there. What
+reaches mediabunny is also pinned headlessly now: `videoSourceConfig` and
+`videoOutputFormatOptions` (`videoContract.ts`) build the source config,
+including the keyframe interval converted from frames to mediabunny's
+seconds, and `videoEncode.test.ts` checks, with mediabunny mocked, that
+`encodeVideo` passes them on unchanged (finding I-3).
 
 ---
 
@@ -1035,6 +1105,16 @@ Commits this task produced, in order:
   the criteria, corrects the timestamp-offset/spec-table comparison error,
   hedges the `stsd`/`stsz` offsets, and splits the `ftyp`/`moov` region
   table row to match the measurement)
+- **Fix wave (after the whole-branch review):** `c7c491c` (encoder config,
+  R44), `96c6880` (codec level per plan, R43), `f299286` (one orchestration,
+  lazy rasterization, early probe, R45), `584d208` (tie gate and
+  `linear-motion.marey`, R46), `cf89027` (MP4 bytes reported not gated,
+  R47), `7662361` (guard docs, R48), `41dc2ad` (lazy-chunk guard, R49),
+  `f27522c` (mediabunny pinned, R50), then this document's own fix-wave
+  commits. Post-wave harness runs used `npx vite --port 5199 --strictPort`,
+  port checked free before starting and after killing, and wrote to the
+  gitignored `.visual-check/video/fw/`. Post-wave suite: 34 files / 910
+  tests.
 - this list cannot cite the commit that contains it — see the entry above
   for how that constraint is handled generally; `git log --oneline` on this
   branch shows the true, complete list including whatever lands after this
