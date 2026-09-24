@@ -57,10 +57,21 @@ import topBarSource from "../../components/TopBar/TopBar.tsx?raw";
  */
 function importsModule(source: string, moduleFragment: string): boolean {
   const quoted = `["'][^"']*${moduleFragment}[^"']*["']`;
-  const staticImport = new RegExp(`from\\s+${quoted}`);
   const dynamicImport = new RegExp(`import\\s*\\(\\s*${quoted}`);
+  return staticallyImportsModule(source, moduleFragment) || dynamicImport.test(source);
+}
+
+/**
+ * True if `source` imports a module whose specifier contains `moduleFragment`
+ * in a form the bundler resolves at load time: `import ... from "X"`,
+ * `import type ... from "X"`, `export ... from "X"`, or a bare `import "X"`.
+ * A dynamic `import("X")` is the one form this does not match.
+ */
+function staticallyImportsModule(source: string, moduleFragment: string): boolean {
+  const quoted = `["'][^"']*${moduleFragment}[^"']*["']`;
+  const fromClause = new RegExp(`from\\s+${quoted}`);
   const bareImport = new RegExp(`import\\s+${quoted}`);
-  return staticImport.test(source) || dynamicImport.test(source) || bareImport.test(source);
+  return fromClause.test(source) || bareImport.test(source);
 }
 
 /**
@@ -247,6 +258,16 @@ describe("export boundary", () => {
     ).toBe(true);
   });
 
+  it("tells a static import of a module from a dynamic one", () => {
+    const fragment = "videoPipeline";
+    expect(staticallyImportsModule('import { runVideoExport } from "./videoPipeline";', fragment)).toBe(true);
+    expect(staticallyImportsModule('import type { RunVideoExportOptions } from "./videoPipeline";', fragment)).toBe(true);
+    expect(staticallyImportsModule('export { runVideoExport } from "./videoPipeline";', fragment)).toBe(true);
+    expect(staticallyImportsModule('import "./videoPipeline";', fragment)).toBe(true);
+    expect(staticallyImportsModule('const m = await import("./videoPipeline");', fragment)).toBe(false);
+    expect(importsModule('const m = await import("./videoPipeline");', fragment)).toBe(true);
+  });
+
   it("still returns false when the fragment is entirely absent", () => {
     expect(
       importsModule('import { x } from "../renderer/builder.ts";', "sceneIR"),
@@ -360,6 +381,17 @@ describe("export boundary — R3 shared pipeline and its production entry points
     expect(code).toContain('await import("../compiler/export/videoPipeline")');
     expect(importsModule(code, "devVideoSeam")).toBe(false);
     expect(code).not.toContain("__mareyExportVideo");
+  });
+
+  it("useExportVideo.ts loads videoPipeline only through a dynamic import()", () => {
+    // Whole-branch review M-3, ruling R49. The dynamic import is why
+    // mediabunny and the rest of the export path live in a click-loaded
+    // chunk instead of the entry chunk every visitor downloads (+283,561
+    // bytes measured in Task 5). A static import added beside the dynamic
+    // one compiles, works, and silently undoes that.
+    const code = stripComments(useExportVideoSource);
+    expect(code).toContain('await import("../compiler/export/videoPipeline")');
+    expect(staticallyImportsModule(code, "videoPipeline")).toBe(false);
   });
 
   it("TopBar.tsx does not import devVideoSeam.ts, and does not reach __mareyExportVideo", () => {
