@@ -475,6 +475,26 @@ killed afterwards. `lottie-check.mjs` keeps `--disable-accelerated-2d-canvas`.
    within ±0.5 dB of findings §1.2's 2× rows, with specks per frame stated.
    Every `video-check.mjs` gate passes at 2×. Text edges are measured sharp
    at 2×.
+
+   **2026-09-25 amendment (ruling T1-R1, `eval/RESULTS-PHASE-5C.md`,
+   "fix round 1").** Findings §1.2's 2× numbers (42.03/42.17 dB) do not
+   reproduce under this project's own required measurement conditions.
+   Diagnosed to a single, precise cause: the committed findings probes
+   (`docs/research/2026-09-24-export-quality-probes/matrix.ts`/
+   `matrix-run.mjs`) launch Chromium without
+   `--disable-accelerated-2d-canvas`, the flag `video-check.mjs`/
+   `lottie-check.mjs`/`quality-check.mjs` all carry specifically because
+   *omitting* it makes pixel measurements non-deterministic
+   (`video-check.mjs`'s own header comment). Re-running the unmodified
+   probe with only that one flag added reproduces 41.45–41.46/41.56 dB —
+   matching `quality-check.mjs`'s measurement of the shipped path almost
+   exactly, not the original 42.03/42.17 dB. There is no mediabunny defect
+   and no shipped-path quality regression; several mediabunny-specific
+   hypotheses were tested and ruled out first. The criterion is re-based on
+   the reproduced, flag-consistent number: **PSNR within ±0.5 dB of
+   41.45 dB (mp4) / 41.55 dB (webm), specks per frame stated**, superseding
+   the original 42.03/42.17 dB target. See the evidence file for every
+   command and number.
 2. **APNG.** 0 differing pixels across every frame against the lossless
    frames. Byte-identical across two runs within the harness. Sizes stated.
 3. **Lottie `line`.** Criterion 2 is measured with numbers, and the three §3.4

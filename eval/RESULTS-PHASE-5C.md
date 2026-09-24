@@ -61,9 +61,9 @@ Findings §1.2's 2x table (raw WebCodecs probe, no mediabunny): H.264
 8M constant 4,328 kbit/s / 42.03 dB / ~65 specks-per-frame; VP9 profile 0 8M
 5,837 kbit/s / 42.17 dB / 61.5 specks-per-frame.
 
-### 2026-09-25 fix round 1: reproducing findings §1.2's probe on today's tree (T1-R1)
+### 2026-09-25 fix round 1 (T1-R1): root cause found — a launch-flag difference, not a quality defect
 
-Raw numbers, recorded before interpretation, per ruling T1-R1. The
+**Raw numbers, recorded before interpretation, per ruling T1-R1.** The
 committed probe (`docs/research/2026-09-24-export-quality-probes/matrix.ts`
 + `matrix-run.mjs`) as-is, no modification, copied into `.visual-check/probe/`
 per findings §6 (confirmed byte-identical to the committed copies and to the
@@ -87,56 +87,109 @@ SCALE=2 CONFIGS=.visual-check/probe/configs2x.json node .visual-check/probe/matr
 {"name":"vp9-444-8M","W":1600,"H":1200,"supported":true,"frames":180,"kbps":3849,"psnr":45.17,"specksPerFrame":1}
 ```
 
-This reproduces findings §1.2's 2x table almost exactly (avc-sw-8M: 42.03 dB
-here vs 42.03 dB in findings; 66 specks/frame here vs ~65 in findings;
-vp9-8M: 42.17 dB / 61.5 specks/frame, identical to findings). **Outcome A**:
-the raw probe gives ≈42 dB on today's tree and today's default scene. The
-shipped path (`quality-check.mjs` via `runVideoExport`/mediabunny, same
-scene, same nominal encoder settings) measured 41.45/41.55 dB and
-~620 specks/frame in the same session (recorded above). So the shipped path
-is measurably losing quality relative to the raw-WebCodecs path at nominally
-identical settings, and that is a defect, not a re-based criterion. Diagnosis
-follows below.
+This reproduces findings §1.2's 2x table almost exactly on first read — the
+signal for **Outcome A** ("shipped path losing quality, diagnose it").
 
-**Concern, not fixed (filed for the controller).** PSNR is close (mp4: 42.03
-vs 41.45, Δ0.58 dB; webm: 42.17 vs 41.55, Δ0.62 dB) but just outside the
-spec's ±0.5 dB band, and the measured specks-per-frame is roughly 10x
-findings' number, despite bitrate matching within ~2%. Three hypotheses were
-tested and ruled out rather than assumed:
+**Chasing Outcome A, then finding it was a false lead.** `quality-check.mjs`
+measures 41.45/41.55 dB against the raw probe's 42.03/42.17 dB with the same
+nominal encoder settings, on the same scene. Three of this task's own
+changes were ruled out as the cause, each with a command and a measurement:
 
 1. **Not the Text-resolution fix (this task's own Step 6 change).** Re-ran
-   `quality-check.mjs` on the same scene with the export `Application`'s
-   `resolution` mutated back to `1` (command:
-   `sed -i '164s/resolution: video.plan.scale,/resolution: 1,/' src/compiler/export/videoPipeline.ts`,
-   then the same `quality-check.mjs` invocation, then reverted). Result:
-   mp4 4,330 kbit/s / 41.46 dB / 624.8 specks-per-frame; webm 5,840 kbit/s /
-   41.56 dB / 619.1 specks-per-frame — statistically identical to the
-   scale-2 numbers above. The Text-resolution change is not the cause.
-2. **Not frame misalignment.** `video-check.mjs` on the same scene (mp4 and
-   webm, see table above) reports 180/180 STRICT nearest-neighbour matches
-   with `argmin === k` for every frame, so decoded frame *k* is not being
-   scored against the wrong reference.
-3. **Not visually obvious.** `decoded_0090.png`/`reference_0090.png` from
-   the mp4 run (`.visual-check/video/default-mp4-2x/`) were read side by
-   side and are visually indistinguishable at this resolution.
+   `quality-check.mjs` with the export `Application`'s `resolution` mutated
+   back to `1` (`sed -i '164s/resolution: video.plan.scale,/resolution: 1,/'
+   src/compiler/export/videoPipeline.ts`, then reverted): mp4 4,330 kbit/s /
+   41.46 dB / 624.8 specks-per-frame; webm 5,840 kbit/s / 41.56 dB /
+   619.1 specks-per-frame — statistically identical to scale 2. Not the
+   cause.
+2. **Not frame misalignment.** `video-check.mjs` on the same scene reports
+   180/180 STRICT nearest-neighbour matches, `argmin === k` for every frame.
+3. **Not visually obvious.** `decoded_0090.png`/`reference_0090.png`
+   (`.visual-check/video/default-mp4-2x/`) read side by side, indistinguishable.
 
-The one variable not ruled out: **findings §1.2's numbers were measured by
-`docs/research/2026-09-24-export-quality-probes/matrix.ts`/`matrix-run.mjs`,
-which call raw `VideoEncoder`/`VideoDecoder` directly and never import
-`videoEncode.ts`** — i.e. they bypass mediabunny entirely, even for the rows
-labelled "(shipped)" (that label describes the encoder *config*, not the
-code path that produced the number). This task's `quality-check.mjs` is the
-first time these numbers have been measured through the actual shipped
-`runVideoExport` → `encodeVideo` → mediabunny path. A quality gap between
-mediabunny's own encoding and raw WebCodecs at nominally the same
-`VideoEncoderConfig` would explain a stable PSNR (mediabunny's `videoEncode.ts`
-is not touched by this task and is otherwise wired correctly — see
-`videoEncode.test.ts`, unaffected by this task other than the codec-string
-literal noted in the Task 1 commit) plus a jump in speck count concentrated
-at edges. Diagnosing *why* mediabunny would encode measurably more specks at
-a similar bitrate is outside this task's scope (`videoEncode.ts` is Phase
-5B's module, unmodified here); filed rather than fixed, per the dispatch's
-tie-break rule for gaps in adjacent, not required, behaviour.
+**Isolating the encoder.** A throwaway script
+(`.visual-check/probe5c/raw-vs-mediabunny.mjs`, not committed) called
+`window.__mareyExportVideo` once, took the EXACT `referenceFrames` PNGs
+mediabunny was fed for that export, and re-encoded them with a bare
+`VideoEncoder`/`VideoDecoder` at the same nominal config
+(`avc1.420028`/`vp09.00.40.08`, 8 Mbit/s, constant, quality,
+prefer-software). Result: **42.03/42.16 dB, 64–66 specks/frame** — matching
+the raw probe, not mediabunny. Repeated 3 times (`node
+.visual-check/probe5c/raw-vs-mediabunny.mjs`), and again with mediabunny's
+own bundle merely loaded (`raw-with-bundle-injected.mjs`) and with a full
+mediabunny decode run immediately before the raw encode
+(`raw-after-decode.mjs`, matching a decode-then-encode order) — always
+42.03/42.16 dB. So the reference frames and the raw-encoder config were not
+the difference, and neither was decode-before-encode ordering, ruling out
+several mediabunny-related hypotheses along the way.
+
+**The actual variable, found by building a single self-contained
+comparison** (`.visual-check/probe5c/same-session-compare.mjs`): one export
+call, decoding BOTH mediabunny's real output and a raw re-encode of the same
+reference frames, in the same page, same session. That script's raw path
+measured **41.45/41.55 dB — matching mediabunny, not the 42.03/42.16 dB from
+the scripts above.** A missing sort-by-timestamp on the raw decode was ruled
+out first (fixed and re-measured: no change). Line-by-line comparison of the
+two scripts' Chromium launch args found the actual difference: this script's
+`chromium.launch({ args: [...,  "--disable-accelerated-2d-canvas"] })`
+carries a flag the raw-only scripts above do not. That flag is also present
+in `quality-check.mjs` and in `video-check.mjs` (`tools/visual-check/
+video-check.mjs`'s own header comment: "without it, Chromium silently
+switches between GPU and software 2D rasterizers mid-session and measured
+pixel tolerances change depending on which frames a run happens to visit"),
+and it is **absent from the committed findings probe**
+(`docs/research/2026-09-24-export-quality-probes/matrix-run.mjs:6`,
+`chromium.launch({ args: ["--use-angle=swiftshader",
+"--enable-unsafe-swiftshader", "--use-gl=angle"] })` — no
+`--disable-accelerated-2d-canvas`).
+
+**Confirming experiment**: a copy of the committed, unmodified probe with
+only that one flag added:
+```
+cp .visual-check/probe/matrix-run.mjs .visual-check/probe5c/matrix-run-with-flag.mjs
+# add --disable-accelerated-2d-canvas to its chromium.launch args, nothing else
+SCALE=2 CONFIGS=.visual-check/probe/configs2x.json node .visual-check/probe5c/matrix-run-with-flag.mjs
+```
+Run twice, for stability:
+```
+{"name":"avc-sw-8M", ..., "psnr":41.46,"specksPerFrame":622.6}
+{"name":"vp9-8M", ..., "psnr":41.56,"specksPerFrame":619.1}
+```
+```
+{"name":"avc-sw-8M", ..., "psnr":41.45,"specksPerFrame":625.3}
+{"name":"vp9-8M", ..., "psnr":41.56,"specksPerFrame":619.1}
+```
+Stable at **41.45–41.46 / 41.56 dB**, matching `quality-check.mjs`'s
+41.45/41.55 dB almost exactly, and no longer matching findings §1.2's
+42.03/42.17 dB.
+
+**Conclusion.** There is no mediabunny quality defect and no shipped-path
+regression. The ~0.6 dB / ~10x-specks gap is caused entirely by
+`--disable-accelerated-2d-canvas`: present in `quality-check.mjs` (matching
+this project's established convention for `video-check.mjs`/`lottie-check.mjs`,
+adopted specifically because *omitting* it makes measurements
+non-deterministic — the flag's own documented purpose), absent from the
+committed findings-probe scripts that produced findings §1.2's numbers. The
+gap is codec-independent (affects H.264 and VP9 identically), consistent
+with a source/decode-side rasterization difference rather than an
+encoder-specific one — as the ruling anticipated. Mechanistically: the flag
+controls whether Chromium's 2D canvas operations (`drawImage`/
+`getImageData`, used both when `matrix.ts`'s `lossless()` builds its
+reference frames and when any script decodes/re-encodes through a canvas)
+run on the GPU or in forced software, and the two paths do not produce
+byte-identical pixels.
+
+**This is Outcome B, with a mechanism rather than a guess: the raw probe
+does NOT reproduce ≈42 dB under the flag this project's own harnesses require
+for deterministic measurement; it reproduces ≈41.5 dB, matching the shipped
+path exactly.** Findings §1.2's original number was measured without that
+flag — under a configuration `video-check.mjs`'s own header comment already
+documents as unreliable for exactly this kind of pixel comparison. The
+criterion is re-based below; see the dated amendment in the spec.
+
+Every throwaway script above lives under `.visual-check/probe5c/`
+(gitignored) and is not committed — they answer this task's own question and
+are recorded here rather than left as unverified claims.
 
 ### Text sharpness (spec §2.2)
 
@@ -175,17 +228,42 @@ empty).
 | (a) | `frameRaster.ts`'s `extract.canvas` `resolution: scale` → `resolution: 1` | `video-check.mjs --scene scenes/linear-motion.marey --container mp4` | Exit 1. Caught by the pre-existing `dimensionsMatch` gate: decoded video 800x600 vs the plan's declared 1600x1200 (`match: false`) — **not** by the new `codedSizeIsDouble` gate, which only checks `VideoPlan`'s own declared arithmetic and stays true regardless of what was actually rasterized. Both gates matter for different failure classes; this mutation shows which one actually catches a rasterization regression. | Yes, confirmed empty diff |
 | (b) | `videoPipeline.ts`'s app `resolution: video.plan.scale` → `resolution: 1` | The Step 8 text edge-band measurement (above) | Median band width widened 2px → 3px | Yes, confirmed empty diff |
 | (c) | `videoPipeline.ts`'s `if (limitRefusal) throw new Error(...)` → deleted | `npx vitest run` (headless suite) | **Stayed green: 946/946.** `deviceLimitDiagnostic` is a pure function tested directly in `videoContract.test.ts`; nothing headless exercises the pipeline's one-line integration of it. | — |
-| (c), continued | Same deletion | New browser check `.visual-check/probe5c/device-limit-check.mjs` (Playwright, `page.addInitScript` patches `WebGL2RenderingContext.prototype.getParameter` to return `100` for `MAX_TEXTURE_SIZE`/`MAX_RENDERBUFFER_SIZE` only, then calls `window.__mareyExportVideo` on the default (800x600) scene) | Before mutation: throws `[VIDEO_EXCEEDS_DEVICE_LIMITS] ... this device can render at most 100x100 pixels`, exit 0 (check passes). After deleting the throw: `{"threw": false}`, exit 1 (check correctly goes red). | Yes, confirmed empty diff |
+| (c), continued | Same deletion | `tools/visual-check/device-limit-check.mjs` (standing, committed script — see "2026-09-25 fix round 1" below), `--scene .visual-check/probe5c/default.marey --limit 100` | Before mutation: throws `VIDEO_EXCEEDS_DEVICE_LIMITS`, exit 0. After deleting the throw: `{"threw": false}`, exit 1 (correctly red). | Yes, confirmed empty diff |
 
 **Step 9(c) resolution: Option B was taken** — a browser check with a
-forced tiny limit was added (`device-limit-check.mjs`, not committed;
-throwaway, `.visual-check/` is gitignored, same convention as the other
-Phase 5C probes) rather than leaving the pipeline's one-line integration
-of `deviceLimitDiagnostic` covered only by the pure-function unit test.
-It is not part of the committed harness (no real device has a limit this
-small, so it is not a standing regression check the way `video-check.mjs`
-is); it exists to answer this task's own delete-and-run question and is
-recorded here rather than left as an unverified claim.
+forced tiny limit was added and, per fix round 1 (finding 3, below),
+promoted to a standing, committed script under
+`tools/visual-check/`, documented in `SKILL.md`. It patches
+`WebGL2RenderingContext.prototype.getParameter` via Playwright's
+`page.addInitScript`, entirely in the harness, so no production hook was
+needed — see `device-limit-check.mjs`'s own header comment and the fix-round
+section below.
+
+### 2026-09-25 fix round 1: findings 2 and 3
+
+**Finding 2 (minor).** `video-check.mjs`'s "decoded dimensions" console
+line labelled `runA.result.width`/`height` as "scene" when they are the
+CODED size (Phase 5C). Fixed: relabelled to "coded", and the header
+comment's matching exit-code bullet reworded to distinguish the coded size
+from `sceneWidth`/`sceneHeight`.
+
+**Finding 3 (minor).** The device-limit throw in `videoPipeline.ts:182` had
+no standing, committed regression check. Fixed: `device-limit-check.mjs` is
+now committed under `tools/visual-check/` and documented in
+`SKILL.md` ("Forcing a device-limit refusal"). It forces the limit via
+Playwright's `page.addInitScript`, which runs in the page before any of the
+app's own scripts and patches the browser's own
+`WebGL2RenderingContext.prototype.getParameter` — entirely inside the
+harness, not the shipped pipeline, so no production hook (dev seam or
+otherwise) was needed for this. Re-confirmed the mutation after promoting
+it: deleting `videoPipeline.ts`'s `if (limitRefusal) throw ...` line makes
+`node tools/visual-check/device-limit-check.mjs --scene
+.visual-check/probe5c/default.marey --limit 100` go from exit 0 to exit 1
+(`{"threw": false}`); reverted, `git diff --stat -- src/compiler/export/
+videoPipeline.ts` empty. Also verified the control case (a scene whose
+coded size fits under `--limit`, and a scene lacking a `duration:`) both
+correctly report a non-`VIDEO_EXCEEDS_DEVICE_LIMITS` failure rather than a
+false pass.
 
 ### Environment
 
