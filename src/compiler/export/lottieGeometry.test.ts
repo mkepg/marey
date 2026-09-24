@@ -27,9 +27,14 @@ describe("planLottie · refusals", () => {
     if (!r.ok) expect(r.diagnostics[0].message).toContain("scene.t");
   });
 
-  it("refuses a line node by name", () => {
+  it("plans a scene with a line ok, rather than refusing it", () => {
+    // Was "refuses a line node by name" (LOTTIE_UNSUPPORTED_LINE), which
+    // Task 2 deletes: `line` is now a supported kind. Replaced rather than
+    // removed outright — the geometry it produces is pinned separately in
+    // "planLottie · layer specs" below.
     const ir = irFor(`scene { size: (100, 100) duration: 1 line l { position: (0,0), points: [(0,0), (10,10)], thickness: 2 } }`);
-    expect(codes(planLottie(ir))).toContain("LOTTIE_UNSUPPORTED_LINE");
+    const r = planLottie(ir);
+    expect(r.ok).toBe(true);
   });
 
   it("finds an unsupported node nested inside a group", () => {
@@ -40,17 +45,21 @@ describe("planLottie · refusals", () => {
   });
 
   it("reports every unsupported node, not only the first", () => {
-    const ir = irFor(`scene { size: (100, 100) duration: 1 text t { position: (0,0), content: "hi" } line l { position: (0,0), points: [(0,0), (10,10)], thickness: 2 } }`);
+    // Was a text+line fixture (LOTTIE_UNSUPPORTED_LINE, deleted by Task 2).
+    // `text` is the only unsupported kind left (until Task 8), so "not only
+    // the first" now needs two of the same kind to have anything to miss:
+    // stopping at the first text node would report one diagnostic, not two.
+    const ir = irFor(`scene { size: (100, 100) duration: 1 text t1 { position: (0,0), content: "hi" } text t2 { position: (10,10), content: "there" } }`);
     const out = codes(planLottie(ir));
-    expect(out).toContain("LOTTIE_UNSUPPORTED_TEXT");
-    expect(out).toContain("LOTTIE_UNSUPPORTED_LINE");
+    expect(out.filter((c) => c === "LOTTIE_UNSUPPORTED_TEXT").length).toBe(2);
   });
 
-  it("accepts the four supported kinds", () => {
+  it("accepts the five supported kinds", () => {
     const ir = irFor(`scene { size: (100, 100) duration: 1
       circle c { position: (10,10), radius: 5 }
       rectangle r { position: (20,20), size: (4, 6) }
       polygon p { position: (30,30), points: [(0,0), (10,0), (5,10)] }
+      line l { position: (35,35), points: [(0,0), (10,10)], thickness: 2 }
       group g { position: (40,40) circle inner { position: (0,0), radius: 2 } }
     }`);
     expect(planLottie(ir).ok).toBe(true);
@@ -121,5 +130,24 @@ describe("planLottie · layer specs", () => {
     expect(c.color![0]).toBe(1);
     expect(c.color![1]).toBeCloseTo(128 / 255, 10);
     expect(c.color![2]).toBe(0);
+  });
+
+  it("plans a line as an open-path spec anchored like builder.ts's line case", () => {
+    // builder.ts's "line" case (builder.ts:280-317) scans the raw points for
+    // a min/max bbox, exactly like polygon — so this reuses `polygonBBox`
+    // rather than a second copy of the same scan. bbox is (0,0)-(100,50);
+    // origin 0.5/0.5 puts the anchor at its centre, (50,25).
+    const ir = irFor(
+      `scene { size: (100, 100) duration: 1 line l { position: (0,0), points: [(0,0), (100,0), (100,50)], thickness: 6, origin: (0.5, 0.5), color: #102030 } }`,
+    );
+    const r = planLottie(ir);
+    if (!r.ok) throw new Error(`unexpected refusal: ${r.diagnostics.map((d) => d.code).join(",")}`);
+    expect(r.layers[0].shape).toEqual({
+      kind: "line",
+      points: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 50 }],
+      thickness: 6,
+    });
+    expect(r.layers[0].anchor).toEqual({ x: 50, y: 25 });
+    expect(r.layers[0].color).toEqual([0x10 / 255, 0x20 / 255, 0x30 / 255]);
   });
 });

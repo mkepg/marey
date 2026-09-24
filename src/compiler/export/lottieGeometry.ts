@@ -10,7 +10,7 @@ import type { IRColor, IRObjectId, IRObjectNode, IRObjectProps, IRPointList, IRS
  * on that module: every applicable diagnostic is returned, not just the
  * first, and every message begins `[CODE] `.
  */
-export type LottieDiagnosticCode = "LOTTIE_UNSUPPORTED_TEXT" | "LOTTIE_UNSUPPORTED_LINE";
+export type LottieDiagnosticCode = "LOTTIE_UNSUPPORTED_TEXT";
 
 export interface LottieDiagnostic {
   readonly code: LottieDiagnosticCode;
@@ -26,6 +26,7 @@ export type LottieShapeSpec =
   | { readonly kind: "circle"; readonly radius: number }
   | { readonly kind: "rectangle"; readonly width: number; readonly height: number }
   | { readonly kind: "polygon"; readonly points: ReadonlyArray<{ readonly x: number; readonly y: number }> }
+  | { readonly kind: "line"; readonly points: ReadonlyArray<{ readonly x: number; readonly y: number }>; readonly thickness: number }
   | { readonly kind: "group" };
 
 /**
@@ -116,8 +117,9 @@ function lastSegment(id: IRObjectId): string {
  * Map one supported IR node's props to its Lottie shape, anchor and colour.
  * Every row is measured against `builder.ts`'s `buildNode` switch — see
  * `docs/architecture/renderer.md` and the module docstring above for the
- * per-kind bbox this derives from. `text` and `line` never reach here: the
- * caller only invokes this for the four kinds `planLottie` accepts.
+ * per-kind bbox this derives from. `text` never reaches here: the caller
+ * only invokes this for the five kinds `planLottie` accepts (Task 2 added
+ * `line` to what was four).
  */
 function shapeGeometryFor(
   props: IRObjectProps
@@ -147,6 +149,17 @@ function shapeGeometryFor(
         color: hexToRgb01(props.color),
       };
     }
+    case "line": {
+      // `builder.ts`'s "line" case (builder.ts:280-317) scans the raw points
+      // for a min/max bbox exactly the way its "polygon" case does — so this
+      // reuses `polygonBBox` rather than a second copy of the same scan.
+      const bbox = polygonBBox(props.points);
+      return {
+        shape: { kind: "line", points: props.points, thickness: props.thickness },
+        anchor: localPivot(props.origin, bbox),
+        color: hexToRgb01(props.color),
+      };
+    }
     case "group": {
       // D16: a group's pivot is always its own local origin, never derived
       // from its children — `builder.ts:351-361` passes a fixed `{0,0}`
@@ -161,9 +174,9 @@ function shapeGeometryFor(
       };
     }
     default: {
-      // Unreachable: `walk` below only calls this for the four kinds
-      // `planLottie` accepts. `text`/`line` are handled, and refused, before
-      // this function is ever invoked.
+      // Unreachable: `walk` below only calls this for the five kinds
+      // `planLottie` accepts (Task 2 added `line`). `text` is handled, and
+      // refused, before this function is ever invoked.
       throw new Error(`[LOTTIE] shapeGeometryFor called with unsupported kind '${(props as { kind: string }).kind}'`);
     }
   }
@@ -200,13 +213,7 @@ export function planLottie(ir: IRSceneNode): LottiePlanResult {
       case "text":
         diagnostics.push({
           code: "LOTTIE_UNSUPPORTED_TEXT",
-          message: `[LOTTIE_UNSUPPORTED_TEXT] Object '${node.id}' is a text node, which the Lottie exporter does not support. Remove it or replace it with a supported shape (circle, rectangle, polygon or group) before exporting.`,
-        });
-        break;
-      case "line":
-        diagnostics.push({
-          code: "LOTTIE_UNSUPPORTED_LINE",
-          message: `[LOTTIE_UNSUPPORTED_LINE] Object '${node.id}' is a line, which the Lottie exporter does not support. Remove it or replace it with a supported shape (circle, rectangle, polygon or group) before exporting.`,
+          message: `[LOTTIE_UNSUPPORTED_TEXT] Object '${node.id}' is a text node, which the Lottie exporter does not support. Remove it or replace it with a supported shape (circle, rectangle, polygon, line or group) before exporting.`,
         });
         break;
       default: {
