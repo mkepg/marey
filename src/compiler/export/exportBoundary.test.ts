@@ -89,10 +89,17 @@ function importsModule(source: string, moduleFragment: string): boolean {
  * not in the source.
  *
  * Known limitation: a regex literal containing `//` or `/*` would be read as
- * a comment. None of the guarded files contains a regex literal at all, and
- * each guard below re-asserts a code landmark from *after* the file's last
- * comment, so a scanner that ran off the rails mid-file fails loudly rather
- * than silently reporting a clean file.
+ * a comment. A character-class regex literal of the `/[/*]/` shape is worse
+ * than either: this scanner has no notion of regex literals at all, so the
+ * `/*` inside the character class is read as an ordinary block-comment
+ * opener -- and unlike the `//` case, which a line comment ends at the next
+ * newline, nothing bounds that misreading to one line. It consumes source
+ * until it reaches the file's own next block-comment terminator, however far
+ * away that is, rather than merely misreading a single line. None of the
+ * guarded files contains a regex literal at all, and each guard below
+ * re-asserts a code landmark from *after* the file's last comment, so a
+ * scanner that ran off the rails mid-file fails loudly rather than silently
+ * reporting a clean file.
  */
 function stripComments(source: string): string {
   const out: string[] = [];

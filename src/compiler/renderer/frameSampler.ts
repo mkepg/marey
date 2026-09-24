@@ -26,7 +26,7 @@ export interface ObjectSnapshot {
    * by `CULL_MARGIN` — the only runtime display property the renderer
    * mutates that this snapshot omitted before this field existed. Omitting
    * it silently dropped a culled object from every exported frame, including
-   * ones sampled before the cull happened, because `pngSequence.ts` replays
+   * ones sampled before the cull happened, because `frameRaster.ts` replays
    * frames onto the same tree `sampleFrames` just drove to its final state.
    */
   readonly visible: boolean;
@@ -43,7 +43,7 @@ export interface FrameSnapshot {
  * Read one snapshot's worth of transforms off a built scene tree.
  *
  * Public because it is the *inverse* of `applySnapshot`
- * (`../export/pngSequence.ts`), and a round trip is only checkable if both
+ * (`../export/frameRaster.ts`), and a round trip is only checkable if both
  * directions are reachable. Nothing else in the renderer needs it: the sampler
  * below is the only production caller.
  */
