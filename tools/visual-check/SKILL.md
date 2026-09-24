@@ -420,7 +420,12 @@ gate would fail most MP4 runs and hide a real failure behind the same exit 1.
 
 Exit code is non-zero if: either cold run failed; decode failed; the decoded
 frame count, dimensions or timestamp schedule disagree with what was
-requested; any frame's nearest-neighbour match is STRICT and wrong, or is a
+requested; **the reported coded size is not exactly 2x the scene's own
+declared size** (Phase 5C, spec §2.1 — added alongside `VIDEO_SCALE`; a
+pipeline that regressed to extracting at scale 1 would still pass every
+other gate here, because none of them look at absolute size against the
+scene, only at internal consistency between the decoded video and its own
+references); any frame's nearest-neighbour match is STRICT and wrong, or is a
 tie that excludes the frame itself; a sampled frame was never handed to the
 encoder; the two cold runs' snapshot hashes or reference-frame PNGs disagree;
 or, **for WebM only**, the two cold runs' raw container bytes disagree. Never
@@ -437,6 +442,63 @@ no longer exists; the masked MP4 comparison is always reported.
 See `eval/RESULTS-PHASE-5B.md` for a worked example specific to this script,
 including one frame where a faint lossy-codec compression artefact trailing a
 fast-moving edge was read and correctly not flagged as a defect.
+
+## Measuring video quality
+
+`video-check.mjs` proves a video's frames are the right ones, in the right
+order, at the right size. It says nothing about how much the codec's own
+lossy compression damaged each pixel. `quality-check.mjs` answers that
+question: it is the runnable home (spec §2.5) for the throwaway probes in
+`docs/research/2026-09-24-export-quality-probes/` (`matrix.ts`/
+`matrix-run.mjs`) that measured findings
+`docs/research/2026-09-24-export-quality-findings-and-options.md` §1.2's
+numbers by hand-rebuilding the render-and-encode loop with raw `pixi.js` and
+raw WebCodecs. This script ports the same scoring method onto
+`window.__mareyExportVideo` (`src/lib/devVideoSeam.ts`), so it measures the
+SHIPPED pipeline (`runVideoExport`) rather than a probe that could silently
+drift from it (ruling R45).
+
+It exports a scene **once** per requested container (not twice, like
+`video-check.mjs` — quality is not a reproducibility question), decodes the
+result back inside the page with a real `VideoDecoder` (mediabunny's ESM
+bundle injected the same way `video-check.mjs` injects it), and scores each
+decoded frame directly against the reference PNG at the SAME index — the
+exact canvas `runVideoExport`'s `onFrame` observer captured before the
+encoder consumed it. Two numbers per container, both defined exactly as
+`matrix.ts`'s `score` function defines them, so they are directly comparable
+to findings §1.2's table:
+
+- **PSNR over RGB** — `10 * log10(65025 / mse)`, averaged per frame then
+  reported both per frame and overall.
+- **Specks** — pixels whose worst-channel delta against the reference
+  exceeds 64, per frame and total.
+
+```bash
+node tools/visual-check/quality-check.mjs \
+  --scene tools/visual-check/scenes/... \
+  --containers mp4,webm --fps 30 \
+  --out .visual-check/quality/default
+```
+
+| Flag | Meaning |
+|---|---|
+| `--scene <path>` | A `.marey` file. Required — no `default` fallback |
+| `--containers <list>` | Comma-separated `mp4`/`webm` (default `mp4,webm`) |
+| `--fps <n>` | Export frame rate (default 30) |
+| `--duration <s>` | Export bound in seconds, overriding the scene's own `duration:` |
+| `--out <dir>` | Where `report.json` goes |
+| `--mediabunny-path <p>` | Override the mediabunny ESM bundle path |
+| `--url <origin>` | Dev server origin (default `http://localhost:5199`). Same `--strictPort` trap as `check.mjs` applies |
+| `--headed` | Show the browser window |
+
+Exit code is non-zero only if the export or the decode itself failed for a
+requested container — **never on how good or bad the measured PSNR or speck
+count is**, which is a judgement call for whoever reads the report, the same
+"reported, not gated" shape as `video-check.mjs`'s MP4 byte comparison.
+"The file plays" is not evidence: `report.json` records the exact command
+line that produced it (`commandLine`), alongside per-container `width`/
+`height` (coded) and `sceneWidth`/`sceneHeight`, so a number in this report
+is always paired with the invocation that produced it.
 
 ## Environment
 
@@ -455,7 +517,7 @@ local copy in `node_modules` instead (`page.route`), so `--renderer
 dotlottie-web` does not depend on outbound network access either, even
 though Playwright's Chromium here happens to have it.
 
-`video-check.mjs` additionally needs `mediabunny`, loaded the same way —
+`video-check.mjs` and `quality-check.mjs` additionally need `mediabunny`, loaded the same way —
 its self-contained ESM bundle
 (`node_modules/mediabunny/dist/bundles/mediabunny.mjs`) is injected into the
 page inline, with no network access. Unlike every other package named on this

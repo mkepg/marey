@@ -115,8 +115,11 @@
  *
  * Exit code is non-zero if: either cold run failed; decode failed; the
  * decoded frame count does not match the planned frame count; decoded
- * dimensions do not match the scene's; decoded timestamps are not strictly
- * increasing; decoded timestamps do not match the claimed fps's schedule
+ * dimensions do not match the scene's; the coded size the export reported is
+ * not exactly 2x the scene's own declared size (Phase 5C, spec §2.1 -- every
+ * MP4/WebM export is encoded at VIDEO_SCALE times the scene size, never a
+ * silent 1x); decoded timestamps are not strictly increasing; decoded
+ * timestamps do not match the claimed fps's schedule
  * within half a frame; any frame's nearest-neighbour match is STRICT and
  * wrong, or is a TIE that excludes the frame itself; a sampled frame was
  * never handed to the encoder; the two cold runs' snapshot hashes disagree;
@@ -589,6 +592,8 @@ report.runA = {
   frameCount: runA.result.frameCount ?? null,
   width: runA.result.width ?? null,
   height: runA.result.height ?? null,
+  sceneWidth: runA.result.sceneWidth ?? null,
+  sceneHeight: runA.result.sceneHeight ?? null,
   byteLength: runA.result.byteLength ?? null,
   encoderConfigs: runA.result.encoderConfigs ?? null,
   consoleErrors: runA.consoleErrors,
@@ -603,6 +608,8 @@ report.runB = {
   frameCount: runB.result.frameCount ?? null,
   width: runB.result.width ?? null,
   height: runB.result.height ?? null,
+  sceneWidth: runB.result.sceneWidth ?? null,
+  sceneHeight: runB.result.sceneHeight ?? null,
   byteLength: runB.result.byteLength ?? null,
   encoderConfigs: runB.result.encoderConfigs ?? null,
   consoleErrors: runB.consoleErrors,
@@ -779,6 +786,17 @@ const frameCountMatches = decode.decodedFrameCount === runA.result.frameCount;
 const dimensionsMatch =
   decode.frames.length > 0 &&
   decode.frames.every((f) => f.displayWidth === runA.result.width && f.displayHeight === runA.result.height);
+// Phase 5C, spec §2.1: every export is encoded at VIDEO_SCALE (2) times the
+// scene's own declared size, never a silent 1x. `runA.result.width/height`
+// are the CODED size the encoder actually produced; `sceneWidth`/
+// `sceneHeight` are the scene's own size, both reported by
+// `devVideoSeam.ts`/`VideoPlan`. Gating: a pipeline that regressed to
+// extracting at scale 1 (mutation (a) below) would still pass every other
+// gate on this page -- frame count, ordering, timestamps -- because none of
+// them look at absolute size against the SCENE, only at internal
+// consistency between the decoded video and its own references.
+const codedSizeIsDouble =
+  runA.result.width === 2 * runA.result.sceneWidth && runA.result.height === 2 * runA.result.sceneHeight;
 const timestamps = decode.frames.map((f) => f.timestamp);
 const timestampsStrictlyIncreasing = timestamps.every((t, i) => i === 0 || t > timestamps[i - 1]);
 // Half a frame duration of slack either side of the CLAIMED schedule
@@ -804,6 +822,7 @@ const minMarginAmongStrict =
 report.checks = {
   frameCountMatches,
   dimensionsMatch,
+  codedSizeIsDouble,
   timestampsStrictlyIncreasing,
   timestampsMatchExpectedSchedule,
   strictCount,
@@ -818,6 +837,7 @@ report.checks = {
 
 console.log(`\ndecoded frame count      ${decode.decodedFrameCount} (planned ${runA.result.frameCount}, match: ${frameCountMatches})`);
 console.log(`decoded dimensions       ${decode.frames[0]?.displayWidth}x${decode.frames[0]?.displayHeight} (scene ${runA.result.width}x${runA.result.height}, match: ${dimensionsMatch})`);
+console.log(`scene size / coded size  ${runA.result.sceneWidth}x${runA.result.sceneHeight} / ${runA.result.width}x${runA.result.height}  (coded = 2x scene: ${codedSizeIsDouble})`);
 console.log(`timestamps strictly increasing   ${timestampsStrictlyIncreasing}`);
 console.log(`timestamps match claimed fps schedule (±half frame)   ${timestampsMatchExpectedSchedule}`);
 console.log(
@@ -851,6 +871,7 @@ console.log(
 const fail =
   !frameCountMatches ||
   !dimensionsMatch ||
+  !codedSizeIsDouble ||
   !timestampsStrictlyIncreasing ||
   !timestampsMatchExpectedSchedule ||
   strictMismatches.length > 0 ||
