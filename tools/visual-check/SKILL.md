@@ -409,8 +409,9 @@ byte-identical and MP4 not, with the MP4 divergence traced to the encoder side
 rather than the renderer (the two runs' reference frames are bit-identical).
 For MP4 the script reports the raw comparison and one with mediabunny's six
 wall-clock timestamp fields masked, and **neither gates the exit code**
-(ruling R47): MP4 bytes differ between correct runs even masked, so a byte
-gate would fail every MP4 run and hide a real failure behind the same exit 1.
+(ruling R47): MP4 bytes differed between correct runs even masked in every
+800×600 run measured (two 1080p-sized runs matched once masked), so a byte
+gate would fail most MP4 runs and hide a real failure behind the same exit 1.
 
 Exit code is non-zero if: either cold run failed; decode failed; the decoded
 frame count, dimensions or timestamp schedule disagree with what was

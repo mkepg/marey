@@ -306,11 +306,47 @@ that documentation as the violation it exists to prevent.
 
 `frameRaster.ts` is the single rasterization seam the PNG-sequence and video
 exporters both replay frames through — measured, not assumed:
-`pngSequence.ts`, `videoPipeline.ts` and `src/lib/devVideoSeam.ts` all import
-`createFrameRasterizer` from it, not from one another. One seam means the two
+`pngSequence.ts` and `videoPipeline.ts` import `createFrameRasterizer` from
+it, not from one another. One seam means the two
 export paths cannot silently diverge on how a sampled frame gets rasterized
 back onto the scene tree — the same size, background and frame-identity
 guarantee the paragraph above already states for it.
+
+**One video orchestration, observed by the harness (Phase 5B fix wave,
+R45).** `videoPipeline.ts`'s `runVideoExport` is the only copy of compile →
+plan → probe → build → sample → rasterize → encode. The export button calls it
+through `useExportVideo.ts`'s dynamic `import()`; the dev seam
+`src/lib/devVideoSeam.ts` calls the same function with an optional observer
+(`onPlanned`, `onSampled`, `onFrame`, `onEncoderConfig`) to collect the
+reference PNGs, snapshot hash and encoder config `video-check.mjs` needs. Do
+not grow a second orchestration in the seam again: when it was a hand-copy,
+reversing or dropping frames in the shipped loop left every test and the
+harness green (whole-branch review I-2). Three properties of that loop are
+deliberate:
+- `assertVideoEncodable` (the one environment/codec probe, also called by
+  `encodeVideo`) runs before the scene is built or sampled, so a refusal
+  arrives before any simulation work.
+- Frames are rasterized lazily, one per encoder request, and each canvas is
+  zero-sized once the encoder has copied it (`new VideoSample(canvas)` copies
+  at construction). `extract.canvas()` allocates a new canvas per call, so an
+  eager `frames.map(rasterize)` held every frame at once.
+- The loop yields to the event loop every 100 ms of work, measured as the
+  cheapest interval that keeps the page repainting; see
+  `eval/RESULTS-PHASE-5B.md`, "Known limitations".
+
+**The codec string is a function of the plan (R43).** `h264LevelFor` and
+`vp9LevelFor` in `videoContract.ts` pick the lowest level whose limits admit
+the frame size, each dimension, the rate and the bitrate. The H.264 table is
+Rec. ITU-T H.264 (03/2010) Table A-1, which ends at level 5.1, so 5.1 is the
+top of the MP4 range and `planVideo` refuses beyond it with
+`VIDEO_EXCEEDS_CODEC_LEVELS`; the VP9 table is libvpx's `vp9_level_defs`,
+levels 1 to 6.2. Chromium enforces the H.264 frame-size limit, not the rate
+limit, and no VP9 level at all, so a wrong declaration is not caught by the
+browser: a single pinned string previously refused every MP4 above 720p and
+declared VP9 level 1.0 on every WebM. The encoder config mediabunny receives
+is built by `videoSourceConfig` (including the frames-to-seconds keyframe
+conversion) and pinned by `videoContract.test.ts` and, with mediabunny
+mocked, `videoEncode.test.ts`.
 
 **The container determinism asymmetry.** Repeated exports of the same scene
 are byte-identical for WebM, measured across independent cold page loads on
@@ -320,7 +356,10 @@ each cold run feeds to its own encoder are bit-identical, so the renderer is
 exonerated, and the divergence is inside the compressed bitstream itself,
 attributed to the encoder side and no further — this project's code does not
 control, and did not pinpoint, which layer of Chromium's H.264 stack produces
-it. See `eval/RESULTS-PHASE-5B.md` (criterion 2) for the measured breakdown;
+it. The whole-branch reviewer reproduced it with raw WebCodecs
+`VideoEncoder` and no mediabunny, which places it below the muxer. So
+`video-check.mjs` reports MP4 byte identity and never gates on it (R47); WebM
+bytes gate. See `eval/RESULTS-PHASE-5B.md` (criterion 2) for the measured breakdown;
 it is cited here rather than restated, so there is one copy of the numbers to
 keep true.
 

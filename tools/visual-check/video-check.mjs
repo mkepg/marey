@@ -71,13 +71,14 @@
  * masked one with those ranges zeroed in an in-memory copy.
  *
  * **MP4 byte identity is reported, never gating (ruling R47).** Phase 5B
- * measured MP4 bytes non-deterministic across cold runs even with the six
- * ranges masked: the reviewer reproduced it with raw WebCodecs and no
- * mediabunny, so the cause is below the muxer. A gate that fails every
- * correct run carries no information, and it hid real failures: before this
- * rule, a correct MP4 run and one with reordered frames both exited 1. WebM
- * bytes are measured identical across cold runs, so for WebM the raw
- * comparison gates.
+ * measured MP4 bytes differing across cold runs even with the six ranges
+ * masked in every 800x600 run (two 1920x1080-class runs did match once
+ * masked, so it is not universal); the whole-branch reviewer reproduced the
+ * difference with raw WebCodecs and no mediabunny, which places it below the
+ * muxer. A gate that fails most correct runs carries no information, and it
+ * hid real failures: before this rule, a correct MP4 run and one with
+ * reordered frames both exited 1. WebM bytes are measured identical across
+ * cold runs, so for WebM the raw comparison gates.
  *
  * Usage:
  *   node tools/visual-check/video-check.mjs \
