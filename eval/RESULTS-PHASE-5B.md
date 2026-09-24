@@ -528,4 +528,8 @@ Commits this task produced, in order:
 - `7c29c9b` — `docs(5b): exit-criteria evidence, criterion 2 (WIP)`
 - `45d6cac` — `docs(5b): exit-criteria evidence, criterion 3 (WIP)`
 - `2418053` — `docs(5b): exit-criteria evidence, Step 4 image descriptions (WIP)`
-- (this commit) — `docs(5b): exit-criteria evidence` (final)
+- `b5450c2` — `docs(5b): exit-criteria evidence` (limitations + environment sections)
+- one further commit, fixing this list's last entry to a real SHA rather than
+  a guess — per AGENT-LESSONS §1, a commit cannot cite its own hash, so that
+  final entry is deliberately left off rather than filled with a placeholder
+  (`git log --oneline` on this branch shows the true, complete list)
