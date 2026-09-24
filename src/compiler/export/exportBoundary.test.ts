@@ -370,7 +370,7 @@ describe("export boundary — R3 shared pipeline and its production entry points
   it("videoPipeline.ts does not import devVideoSeam.ts, and does not reach __mareyExportVideo", () => {
     const code = stripComments(videoPipelineSource);
     expect(code).toContain("export async function runVideoExport");
-    expect(code).toContain("app.destroy(true, { children: true })");
+    expect(code).toContain("if (app?.renderer) destroyExportApp(app);");
     expect(importsModule(code, "devVideoSeam")).toBe(false);
     expect(code).not.toContain("__mareyExportVideo");
   });
