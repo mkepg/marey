@@ -476,25 +476,46 @@ killed afterwards. `lottie-check.mjs` keeps `--disable-accelerated-2d-canvas`.
    Every `video-check.mjs` gate passes at 2×. Text edges are measured sharp
    at 2×.
 
-   **2026-09-25 amendment (ruling T1-R1, `eval/RESULTS-PHASE-5C.md`,
-   "fix round 1").** Findings §1.2's 2× numbers (42.03/42.17 dB) do not
-   reproduce under this project's own required measurement conditions.
-   Diagnosed to a single, precise cause: the committed findings probes
-   (`docs/research/2026-09-24-export-quality-probes/matrix.ts`/
-   `matrix-run.mjs`) launch Chromium without
-   `--disable-accelerated-2d-canvas`, the flag `video-check.mjs`/
-   `lottie-check.mjs`/`quality-check.mjs` all carry specifically because
-   *omitting* it makes pixel measurements non-deterministic
-   (`video-check.mjs`'s own header comment). Re-running the unmodified
-   probe with only that one flag added reproduces 41.45–41.46/41.56 dB —
-   matching `quality-check.mjs`'s measurement of the shipped path almost
-   exactly, not the original 42.03/42.17 dB. There is no mediabunny defect
-   and no shipped-path quality regression; several mediabunny-specific
-   hypotheses were tested and ruled out first. The criterion is re-based on
-   the reproduced, flag-consistent number: **PSNR within ±0.5 dB of
-   41.45 dB (mp4) / 41.55 dB (webm), specks per frame stated**, superseding
-   the original 42.03/42.17 dB target. See the evidence file for every
-   command and number.
+   **2026-09-25 amendment (ruling T1-R2, `eval/RESULTS-PHASE-5C.md`, "fix
+   round 2" — supersedes this note's first version from "fix round 1"/
+   ruling T1-R1, which localised the right variable
+   [`--disable-accelerated-2d-canvas`] to the wrong step).** A 2×2
+   experiment (encode mode × score mode, both GPU-accelerated and
+   forced-software Chromium 2D canvas) found: **the encoded file and the
+   extracted reference frames are unaffected by that flag.** WebM's two
+   encodes are byte-identical (same SHA-256) and decode to pixel-identical
+   frames (0 of 345,600,000 pixels differ); MP4's quality numbers agree to
+   within 0.01 dB between encode modes. This matches PixiJS's actual
+   mechanism: `extract.canvas` uses `gl.readPixels`+`putImageData`
+   (`GlTextureSystem.generateCanvas()`), never `drawImage`. **Only the
+   SCORE mode moves the number** — the step that draws a decoded frame via
+   `drawImage` and reads it back with `getImageData` (`quality-check.mjs`'s
+   and the findings probe's `score()` both do this). Scored with a
+   GPU-accelerated 2D canvas, the shipped file reproduces findings §1.2
+   almost exactly: 42.03 dB / 64.5 specks-per-frame (mp4), 42.16 dB /
+   61.7 specks-per-frame (webm). Scored with a forced-software 2D canvas
+   (`--disable-accelerated-2d-canvas`, `quality-check.mjs`'s current
+   configuration), the SAME file measures 41.45 dB / ~625 specks-per-frame
+   (mp4), 41.55 dB / ~618 specks-per-frame (webm) instead — a real,
+   reproducible number, but one that describes the *scorer's*
+   configuration, not the file an ordinary, GPU-accelerated browser
+   produces or plays.
+
+   The criterion is re-based to name the configuration it targets, not to
+   lower the target: **PSNR, scored with a GPU-accelerated 2D canvas (no
+   `--disable-accelerated-2d-canvas` on the scoring browser — the
+   configuration that reproduces findings §1.2's own methodology), within
+   ±0.5 dB of 42.03 dB (mp4) / 42.16 dB (webm), specks per frame stated.**
+   This is, within measurement noise, findings §1.2's original target —
+   confirmed reproducible by the shipped path once scored the way findings
+   §1.2 itself was measured, not lowered. `quality-check.mjs`'s own
+   41.45/41.55 dB is not evidence against this criterion; it is a
+   consequence of that script's scoring browser carrying a flag needed for
+   other scripts' reference-frame determinism (unnecessary for its own, per
+   this experiment) that also, incidentally, affects its unrelated
+   decode-and-compare step. Whether to change `quality-check.mjs`'s own
+   configuration is not decided here. See the evidence file for every
+   command, number and the full 2×2.
 2. **APNG.** 0 differing pixels across every frame against the lossless
    frames. Byte-identical across two runs within the harness. Sizes stated.
 3. **Lottie `line`.** Criterion 2 is measured with numbers, and the three §3.4

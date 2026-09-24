@@ -163,29 +163,18 @@ Stable at **41.45–41.46 / 41.56 dB**, matching `quality-check.mjs`'s
 41.45/41.55 dB almost exactly, and no longer matching findings §1.2's
 42.03/42.17 dB.
 
-**Conclusion.** There is no mediabunny quality defect and no shipped-path
-regression. The ~0.6 dB / ~10x-specks gap is caused entirely by
-`--disable-accelerated-2d-canvas`: present in `quality-check.mjs` (matching
-this project's established convention for `video-check.mjs`/`lottie-check.mjs`,
-adopted specifically because *omitting* it makes measurements
-non-deterministic — the flag's own documented purpose), absent from the
-committed findings-probe scripts that produced findings §1.2's numbers. The
-gap is codec-independent (affects H.264 and VP9 identically), consistent
-with a source/decode-side rasterization difference rather than an
-encoder-specific one — as the ruling anticipated. Mechanistically: the flag
-controls whether Chromium's 2D canvas operations (`drawImage`/
-`getImageData`, used both when `matrix.ts`'s `lossless()` builds its
-reference frames and when any script decodes/re-encodes through a canvas)
-run on the GPU or in forced software, and the two paths do not produce
-byte-identical pixels.
-
-**This is Outcome B, with a mechanism rather than a guess: the raw probe
-does NOT reproduce ≈42 dB under the flag this project's own harnesses require
-for deterministic measurement; it reproduces ≈41.5 dB, matching the shipped
-path exactly.** Findings §1.2's original number was measured without that
-flag — under a configuration `video-check.mjs`'s own header comment already
-documents as unreliable for exactly this kind of pixel comparison. The
-criterion is re-based below; see the dated amendment in the spec.
+**Conclusion — superseded by fix round 2, below.** This round correctly
+ruled out a mediabunny defect and a shipped-path regression (both hold up),
+and correctly identified `--disable-accelerated-2d-canvas` as the variable.
+But it treated "the flag controls `drawImage`/`getImageData`, used both in
+reference-frame construction and in decode/scoring" as one undifferentiated
+mechanism, and asserted "no shipped-path quality regression" without
+evidence distinguishing the encoded file from the measurement instrument.
+The re-review (fix round 2, T1-R2) correctly called this imprecise: PixiJS's
+`extract.canvas` does not use `drawImage`/`getImageData` at all (it is
+`gl.readPixels` + `putImageData`, `GlTextureSystem.generateCanvas()`) — only
+the SCORING step does. The 2×2 experiment below localises the effect
+precisely; read that section for the corrected conclusion.
 
 Every throwaway script above lives under `.visual-check/probe5c/`
 (gitignored) and is not committed — they answer this task's own question and
@@ -246,7 +235,69 @@ each encoded file: mp4 gpu `8c25ead74aa53178e2aba7d4b4057925d78e6278fca51d806bb5
 mp4 sw `cbde3ee149c2bf5077fa792f861158f084bae4da38276de1c4948686cdf24b96`;
 webm gpu and webm sw both `3bd4c7f93c18f83c9322bda8fc9a955c07b728f528aea6421f168aaf6cc8c7a9`.
 
-<!-- T1-R2-INTERPRETATION-PLACEHOLDER -->
+**Interpretation.**
+
+- **The encoded file, and the reference frames, do not depend on the flag.**
+  WebM's two encodes are byte-identical (same SHA-256) and, independently,
+  decode to pixel-identical frames (`maxDelta: 0`, `mismatchPixels: 0` of
+  345,600,000). MP4's two encodes differ in raw and masked bytes (as MP4
+  always does between separate encodes of identical content — R47,
+  `eval/RESULTS-PHASE-5B.md`), but the QUALITY numbers under a fixed score
+  mode agree to within 0.01 dB (42.03 vs 42.02 GPU-scored; 41.46 vs 41.45
+  SW-scored) and 0.1 specks/frame — noise, not a real encode-mode effect.
+  Reference frames are byte-identical between modes for both containers.
+  This matches PixiJS's actual mechanism (`gl.readPixels`+`putImageData`,
+  not `drawImage`): extraction does not go through the 2D-canvas
+  acceleration path the flag controls.
+- **Only the score mode moves the number.** Within each container, GPU-scored
+  cells agree with each other regardless of encode mode (42.03/42.02 mp4,
+  42.16/42.16 webm) and SW-scored cells agree with each other regardless of
+  encode mode (41.46/41.45 mp4, 41.55/41.55 webm) — a clean 2×2 with one
+  active factor, not two. **This is the ruling's second outcome: the gap
+  lives in the scoring instrument's decode-to-pixels step
+  (`sample.draw(ctx, ...)` onto a 2D canvas, then `getImageData` —
+  `quality-check.mjs`'s and the findings probe's `score()` both do this),
+  not in the file every user's browser actually receives.**
+- **Which score mode matches findings §1.2:** GPU (42.03/42.16 dB here vs
+  42.03/42.17 dB in findings — matching to within 0.01–0.01 dB, the closest
+  reproduction of findings §1.2 anywhere in this investigation).
+  `quality-check.mjs` and fix round 1's `matrix-run-with-flag.mjs` both used
+  the SW score mode (via `--disable-accelerated-2d-canvas`), which is why
+  they measured ~41.5 dB — an artefact of that flag's effect on the
+  scoring step, not a property of the file.
+- **The speck jump, explained by the numbers.** SW-scored specks/frame
+  (≈618–625) run roughly 10x GPU-scored (≈62–65) at a nearly-identical PSNR
+  (≈0.6 dB apart), for BOTH codecs and BOTH encode modes. PSNR is a mean
+  over every pixel, so a large population of small, widely-scattered
+  per-pixel deltas barely moves it; "specks" only count pixels whose worst
+  channel delta exceeds 64. The two score modes' `drawImage`+`getImageData`
+  round-trip of a decoded `VideoSample` therefore reconstruct RGB from the
+  decoder's YUV output with different rounding or a different colour-matrix
+  application — small enough to leave the mean (PSNR) almost unchanged, but
+  large enough, at scattered pixels, to cross the fixed 64-value speck
+  threshold roughly ten times as often under the software path. This is
+  consistent with a YUV→RGB reconstruction difference between Chromium's
+  GPU-accelerated and forced-software 2D canvas paths, specifically in the
+  step that draws a decoded frame — not with anything about the encoded
+  bitstream itself, which (per the byte/pixel identity above) does not
+  differ.
+
+**Conclusion, superseding fix round 1's.** There is no mediabunny defect and
+no shipped-path quality regression — fix round 1 got that part right, but
+for an imprecise reason. The precise finding: **the file an ordinary user's
+browser produces and receives is unaffected by
+`--disable-accelerated-2d-canvas`** (proven for WebM by byte and pixel
+identity; true for MP4's quality within measurement noise). The number that
+describes what such a browser's own GPU-accelerated canvas path would show,
+were it asked to draw and inspect a decoded frame the way this measurement
+does, is the **GPU-scored** one: **42.03 dB / 64.5 specks-per-frame (mp4)**,
+**42.16 dB / 61.7 specks-per-frame (webm)** — reproducing findings §1.2
+(42.03/42.17 dB) closely. The **41.45/41.55 dB, ~620 specks-per-frame**
+numbers `quality-check.mjs` reports describe the SW-scored measurement path
+only — a real, reproducible number, but one that is a property of running
+the *scorer* with `--disable-accelerated-2d-canvas`, not of the file. The
+spec's exit criterion is re-based below to name which configuration it
+measures.
 
 ### Text sharpness (spec §2.2)
 
