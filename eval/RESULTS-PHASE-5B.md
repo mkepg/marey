@@ -230,12 +230,17 @@ that adding the line changed nothing about the simulation.
 
 **Step 3 — decode and compare.** Reused `video-check.mjs`'s
 `decodeAndCompare(page, { videoBase64, referenceFramesBase64, writeIndices
-})` (line 357 at this task's BASE, `78b084f`) and `installMediabunny` (line
-339) — copied verbatim into the throwaway script rather than imported,
-because the function is not `export`-qualified and the file it lives in has
-side-effecting top-level code that runs a whole CLI invocation on load, so
-an ES-module import was not mechanically available without editing the file
-the brief says not to edit. Both containers were run — decoding a second
+})` (line 357 at this task's BASE, `78b084f`) — copied verbatim, byte-
+identical logic once comments are set aside, checked directly rather than
+assumed — and `installMediabunny` (line 339) — copied with one necessary
+change, inlining the `mediabunnyPath` constant as a local, since the
+original reads it from a module-level constant built from this task's own
+CLI-arg parsing, which this script has none of — into the throwaway script
+rather than imported, because neither function is `export`-qualified and
+the file they live in has side-effecting top-level code that runs a whole
+CLI invocation on load, so an ES-module import was not mechanically
+available without editing the file the brief says not to edit. Both
+containers were run — decoding a second
 15-frame container after the first was cheap, so there was no reason to
 name a gap here the way criterion 1 named one for MP4-on-`compound-logo`.
 
@@ -277,9 +282,10 @@ check reported the corruption rather than passing it. No tracked file was
 touched by this step — the swap is an array operation inside the gitignored
 throwaway script, not an edit to `video-check.mjs` or any fixture — so
 there is no revert to perform; confirmed instead that the repository was
-never dirtied by any part of this section: `git diff --stat` and
-`git status --porcelain` both returned empty after every step above,
-including this one.
+never dirtied by any part of this section: `git diff --stat` (the
+content-based check this document uses throughout, not `git status`, which
+`core.autocrlf` makes unreliable here) returned empty after every step
+above, including this one.
 
 **Net.** What is now covered that was not: for `freeze-midair.marey`, 30fps,
 0.5s, one file downloaded from a real click on each of the MP4 and WebM
