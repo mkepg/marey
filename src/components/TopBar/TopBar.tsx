@@ -247,6 +247,18 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
 
         <div className={styles.divider} />
 
+        {/* Generated at build time by vite-plugins/thirdPartyLicenses.ts. */}
+        <a
+          className={`${styles.btnIcon} ${styles.btnLink}`}
+          href={`${import.meta.env.BASE_URL}third-party-licenses.txt`}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Third-party licenses"
+          aria-label="Third-party licenses (opens in a new tab)"
+        >
+          licenses
+        </a>
+
         <button
           className={styles.btnIcon}
           title="Toggle theme"
