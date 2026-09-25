@@ -384,6 +384,111 @@ bytes gate. See `eval/RESULTS-PHASE-5B.md` (criterion 2) for the measured breakd
 it is cited here rather than restated, so there is one copy of the numbers to
 keep true.
 
+## The Lottie `line` stroke (Phase 5C)
+
+A `line` plans to `{ kind: "line", points, thickness }`, with its anchor
+from the same `polygonBBox` min/max scan `builder.ts`'s own `line` case
+uses, and encodes as an **open path followed by a stroke, never a fill**:
+`shapeItemsFor` pushes a `{ ty: "sh", ks: { k: { c: false, i: zeros, o:
+zeros, v: points } } }` and then a `{ ty: "st", lc: 1, lj: 1, ml: 10, ... }`,
+matching pixi's `GraphicsContext.defaultStrokeStyle` (alignment 0.5, cap
+butt, join miter, miterLimit 10). The stroke item goes **after** the path
+for the same backward-`searchShapes` reason the fill item does, above:
+put it before the path and lottie-web renders nothing (measured, Task 2
+Step 6). `LOTTIE_UNSUPPORTED_LINE` (5A) is gone; a scene containing a
+`line` no longer refuses.
+
+Two of design §3.4's three facts were confirmed by measurement; the third
+corrected the design's own prediction:
+
+- **Miter limit.** Lottie's `ml` follows the SVG rule (miter length ÷
+  stroke width, `1 / sin(θ/2)`) against the same limit (10) pixi's own
+  `buildLine.mjs` uses. A fixture with corners at 14° (ratio 8.206) and 9°
+  (ratio 12.745) straddles the cutoff: pixi and lottie-web agree at both
+  (14° miters, 9° bevels), so `ml: 10` needed no correction.
+- **Non-uniform scale — design §3.4.2's prose had the pairing backwards.**
+  A line's stroke cross-section is built in local space perpendicular to
+  the line's *own* direction, so a **horizontal**-path line's thickness
+  scales by `scale.y` and a **vertical**-path line's by `scale.x` — the
+  opposite of what §3.4.2 predicted. Measured on `scale: (0.35, 0.5)`,
+  thickness 10: the horizontal line reads ≈5px (`10 × scaleY`), the
+  vertical line ≈3.5px (`10 × scaleX`); both renderers agree with each
+  other and with this corrected pairing. See `eval/RESULTS-PHASE-5C.md`,
+  "Piece 2", for the pixel measurements.
+- **Butt caps and a repeated point.** Both renderers draw flat, sharp
+  butt caps on a two-point line, and a zero-length segment inside a line
+  (a repeated point) produces no visible difference from the plain line.
+
+## `ensureExportFonts` (Phase 5C)
+
+Every export pipeline — `rasterExport.ts`'s shared prefix (video, PNG,
+APNG) and `lottiePipeline.ts` — awaits `ensureExportFonts(ir)`
+(`export/exportFonts.ts`) before the scene is built: it calls
+`document.fonts.load(...)` once per distinct `fontSize` a `text` node in
+the IR uses, then `.check(...)`, and throws `EXPORT_FONT_UNAVAILABLE`
+(naming the family) rather than building with a browser fallback font if
+the check still fails after the load resolves. Without it, a cold page —
+one that never rendered the live preview first — measures and draws text
+with the fallback font, and the export silently disagrees with what the
+user saw in the preview.
+
+**A second, non-obvious hazard sits beneath that fix.** PixiJS's
+`CanvasTextMetrics._measurementCache` is a global LRU keyed by
+`` `${text}-${style.styleKey}-wordWrap-…` ``, and the key carries no
+font-load state, so a measurement taken once while the fallback font was
+still active is served stale to every later measurement of the same text
+and style — including a **fresh** `TextStyle` with identical properties,
+since the key does not distinguish object identity. `exportFonts.ts`
+clears that cache after the font load resolves and before the tree is
+built, for exactly this reason. A cold-page check (measure once with the
+fallback font active, load the font, export, and require the layout to
+match a warm export) pins it.
+
+## Text layout from pixi, glyphs from HarfBuzz (Phase 5C)
+
+Lottie `text` splits the way design §0's O5 decided: **pixi supplies
+layout, HarfBuzz supplies glyphs**, joined as plain data. After
+`buildNode`, `lottiePipeline.ts`'s `collectTextLayouts` walks the built
+tree — so it can read each text wrapper's own `__baseSize` and
+`CanvasTextMetrics.measureText` results — and produces two
+`ReadonlyMap<IRObjectId, …>`s, `TextLayout` and `TextGlyphRun`
+(`export/textOutline.ts`), which `planLottie` consumes as inert data. A
+`text` node missing an entry in either map is an invariant throw: every
+text node must be laid out and shaped before planning runs.
+`textOutline.ts` is the **only** module that imports harfbuzzjs, and
+neither `lottieGeometry.ts` nor `lottieEncode.ts` imports it or pixi.js —
+checked by `exportBoundary.test.ts`, the same way as the rest of the
+Lottie boundary. `lottieGeometry.ts` may import `textOutline.ts`'s
+**types** (`Contour`, `TextLayout`, `TextGlyphRun`) as a type-only
+import; `verbatimModuleSyntax` erases that import at compile time, so it
+is not a boundary violation, and the boundary test says so.
+
+**Missing glyphs are refused, not degraded.** HarfBuzz shaping a
+character to glyph id 0 (`.notdef`) means the font has no glyph for it —
+measured for `日` and `🙂`, both of which the *preview* draws from a real
+fallback glyph or a colour emoji, never tofu, so silently drawing nothing
+in the export would disagree with what the user saw. `LOTTIE_TEXT_MISSING_GLYPH`
+names the object id and the missing character's code point; it replaced
+`LOTTIE_UNSUPPORTED_TEXT`, which refused every text node outright.
+
+**A glyph's x/y do not add pixi's `padding`, unlike the design's original
+formula.** pixi draws a `Text`'s glyphs at `+padding` inside a texture
+that its own `updateTextBounds.mjs` then places at `-padding` in the
+`Text`'s local space, so the padding cancels; adding it again in
+`textOutline.ts`'s own placement would double-count it. Marey's styles
+carry padding 0 today, so both readings agree on every Marey scene, and a
+test pins the cancellation (`textOutline.test.ts`, "does not move glyphs
+by `padding`") so a future non-zero padding cannot silently regress it.
+
+**A text layer is masked to pixi's own measured box, only when a glyph
+leaves it.** pixi draws a `Text` into a texture sized to its measured
+layout box and clips ink outside that box, in the preview and in every
+raster export; an unclipped Lottie outline would draw further than the
+preview does whenever a glyph's contour — a combining mark's diacritic,
+for instance — extends past that box. The encoder adds a mask to
+`(0,0)-(w,h)` on exactly those text layers, never on the rest: of the six
+fixtures measured, only the one carrying a combining mark needed it.
+
 ## Non-obvious gotchas
 
 - **`physics` inside a group is only legal under a *static* group.** D17: the
