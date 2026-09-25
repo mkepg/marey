@@ -13,6 +13,16 @@
  *    max(HarfBuzz advance sum, HarfBuzz ink width from glyph extents), within
  *    MARK_TOLERANCE_PX, a number measured on this fixture and stated in
  *    `eval/RESULTS-PHASE-5C.md`, not chosen.
+ *
+ *    **What it cannot see.** It shapes with `textOutline.ts`'s `shapeLine`,
+ *    not `outline()`, and compares advance widths, so it says nothing about
+ *    how the exported outlines are built or placed. That includes the
+ *    baseline and pen placement, the whitespace rule as `outline()` applies
+ *    it, and whether `outline()` uses the shaped glyphs at all: outlining
+ *    each character unshaped keeps JetBrains Mono's monospaced advances, so
+ *    it passes here (Task 8 mutation (b)). Those are guarded elsewhere: by
+ *    the ink-bbox check (placement), the missing-glyph refusal (a tab
+ *    shaped as `.notdef`), and `textOutline.test.ts` (shaped glyphs).
  * 2. **Ink-bbox position check.** `lottie-check.mjs --compare-png` renders
  *    the exported document in lottie-web and diffs it against Marey's own
  *    PNG export of the same frames. At frame 0, a quarter, the midpoint and
