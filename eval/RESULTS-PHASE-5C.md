@@ -1518,8 +1518,10 @@ spread, not a shift:
   text texture there with bilinear sampling, so faint ink spills a second
   column (zoomed crop checked by eye).
 
-The binding rule is kept as written, so `text-check.mjs` exits 1 on this
-cell. It is left for a ruling.
+The table above is the brief's original any-ink rule (alpha > 0). **It is
+superseded: controller ruling T8-R3 made half coverage the binding
+definition, and under it this cell is 0 px and `text-check.mjs` exits 0.**
+See "Fix round 1" at the end of this section.
 
 **The mark fixture needed a clip.** pixi draws a `Text` into a texture the
 size of its measured box, and ink outside that box is cut off in the preview
@@ -1618,3 +1620,68 @@ Both texts are WebFetch transcriptions; the caveat is recorded in each file.
 
 Commands: `node tools/visual-check/text-check.mjs --out .visual-check/t8/full2`;
 `node tools/visual-check/lottie-click-check.mjs --scene eval/scenes-3b/compound-logo.marey [--url http://localhost:4173]`.
+
+### Fix round 1 (2026-09-26): half coverage is the binding position check (ruling T8-R3)
+
+**What changed, and why.** The brief defined the position check on the
+any-ink box, "alpha > 0", which on an opaque background means any pixel that
+differs from the background at all. Controller ruling T8-R3, refined by the
+task review, replaced that with a half-coverage box. The reason is ligature
+frame 29, which was the only failing cell:
+- pixi rasterises text into a canvas texture and draws it with bilinear
+  sampling;
+- at a fractional x (280.667 on that frame), the faintest ink spreads one
+  column further out than vector outlines put any ink;
+- the any-ink rule cannot tell that spread from a placement error, but
+  half-coverage edges follow a shift almost 1:1.
+
+The new definition:
+- **Ink**: a pixel whose largest channel difference `d` from the opaque
+  background is at least half of the text's own contrast with it in that
+  frame. The contrast is measured as the largest `d` in either image, within
+  the ink region, so both renders share one threshold. The threshold is
+  relative, not an absolute `d > 127`, so low-contrast text still has ink.
+- **Bound**: 1 px on every edge, as spec §6.6 says.
+- **Empty boxes**: empty in both renders is a **failure**, not 0 px. The
+  exception is a frame the fixture declares blank (`blankFrames`: the scaled
+  fixture's frame 0, at scale 0); there both boxes must be empty.
+  Undeclaring that frame makes the run fail with "no ink in either render,
+  and the frame is not declared blank".
+- **Any-ink box**: still computed and recorded next to the half-coverage box
+  (`summary.json` `anyInk`), but not judged.
+
+**Named exception, any-ink only: ligature frame 29, 2 px.**
+- Marey's any-ink box `(121,70)-(438,115)` contains lottie-web's
+  `(122,70)-(436,114)` on both sides.
+- The half-coverage boxes are identical, `(122,71)-(436,114)`, edge delta 0.
+- The cause is the bilinear-sampled text texture at a fractional x (above),
+  a property of how the preview draws text, not of the exported outlines.
+
+**Full re-run** (`node tools/visual-check/text-check.mjs --out .visual-check/t8/fr1-full`,
+**exit 0**). Cells are half-coverage edge delta / any-ink edge delta, px,
+lottie-web against Marey's PNG. The threshold was 127.5 for the black-on-white
+fixtures and 122.5 for the white-on-#0a0e1a ones:
+
+| Fixture | f0 | f¼ | f½ | last |
+|---|---|---|---|---|
+| ascii (0,7,15,29) | 1 / 1 | 1 / 1 | 1 / 1 | 0 / 1 |
+| ligature | 0 / 1 | 1 / 1 | 0 / 1 | **0 / 2** |
+| multiline | 0 / 0 | 1 / 1 | 0 / 0 | 0 / 1 |
+| mark | 1 / 1 | 1 / 1 | 1 / 1 | 1 / 1 |
+| scaled (0,15,30,59) | blank, both empty (declared) | 1 / 1 | 0 / 1 | 1 / 1 |
+
+Default scene, inside the ink region `150,0,650,118`: judged at frame 150
+(0 / 1) and frame 179 (1 / 1). The unjudged frames 75, 90 and 120 measured
+0, 1 and 1 at half coverage. Criterion 2, layout agreement and dotlottie-web
+numbers are unchanged from the tables above: same product, same run
+configuration.
+
+**Product mutations re-run under the new definition** (each applied, run
+and reverted in one command, `git diff --stat` empty after):
+
+| Mutation | Caught by, now |
+|---|---|
+| (a) baseline `+ descent` | half-coverage ink bbox: **11 px** at every ascii frame, **6 px** at every multiline frame. Any-ink: 12 and 6–7 |
+| (b) per-character outlining | still invisible to every binding browser check (`text-check.mjs` exits 0; half coverage 0–1 px; Criterion 2 maxDelta 101 → 255). Caught in Node: `outlines a ligature from the shaped glyphs` and the GPOS mark test, 2 red |
+| (c) missing-glyph check dropped | Node: 6 red (planner); 4 red (outliner half) |
+| (d) no whitespace replacement | the multiline export refuses `[LOTTIE_TEXT_MISSING_GLYPH] … (U+0009)`; `text-check.mjs` fails |
