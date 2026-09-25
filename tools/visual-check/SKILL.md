@@ -519,6 +519,117 @@ line that produced it (`commandLine`), alongside per-container `width`/
 `height` (coded) and `sceneWidth`/`sceneHeight`, so a number in this report
 is always paired with the invocation that produced it.
 
+## Exporting APNG
+
+`apng-check.mjs` exports a scene to APNG, decodes it back with a real
+`ImageDecoder`, and proves every decoded frame matches the lossless canvas
+it was muxed from — not "close enough," but **0 differing bytes**. It
+exists for the same headless-blind-spot reason every other script on this
+page does, sharpened by APNG's own losslessness: unlike a lossy video
+codec, there is no acceptable tolerance to argue about, so a real mismatch
+of even one byte is a real bug.
+
+It calls `window.__mareyExportApng` (installed dev-only by
+`src/lib/devApngSeam.ts`, wired in `main.tsx` behind `import.meta.env.DEV`)
+rather than clicking the top bar's **apng** button — same reasoning as
+`video-check.mjs`'s `window.__mareyExportVideo`: that seam calls the
+shipped `runApngExport` (`src/compiler/export/apngPipeline.ts`, the same
+function the button calls) with an observer that captures each canvas's
+raw pixels (`getImageData`) immediately before the pipeline reads them into
+PNG bytes, so this script measures the product's orchestration rather than
+a hand-kept copy of it.
+
+**The decode-back step runs INSIDE the page, with a real `ImageDecoder`.**
+Confirmed working in Playwright's Chromium before this script was written
+(a throwaway probe built a 3-frame APNG with `encodeApng` itself and
+decoded it back: `frameCount: 3`, correct dimensions, correct per-frame
+`duration`) — the brief's Node-side `zlib`-inflate fallback is therefore
+**not implemented**, because there was nothing to fall back from.
+
+**One measured memory limit shapes this script's whole design: the
+reference capture cannot scale to a long export.** `devApngSeam.ts` holds
+one raw, uncompressed RGBA base64 string per sampled frame — the lossless
+data byte-for-byte comparison needs — and that is a real cost: ~2.56MB of
+base64 per 800×600 frame. At 90–180 frames (3–6s) that is 230–460MB, fine;
+at 900 frames (a `--duration 30` export) it is over 2GB, and the page's
+execution context was measured being destroyed mid-export under that load
+("most likely because of a navigation" — consistent with Chromium
+OOM-killing the renderer). Two consequences, both load-bearing:
+
+- This script never ships that array across the Node/browser (CDP)
+  boundary twice. `runExport` stashes the seam's full result, including
+  `referenceRgba`, on a page-side global (`window.__apngCheckLastResult`);
+  `decodeAndCompare` reads it back in the SAME page realm rather than
+  receiving it as a second `page.evaluate` argument. An earlier version did
+  send it twice and reproduced the crash above at 90 frames already —
+  fixed by never re-serializing it, not by any duration limit.
+- For a **file-size** measurement on a long export (spec §5.3's "one scene
+  of at least 30s"), do not run this script at that duration. Call the
+  shipped `runApngExport` directly with no observer at all (a dynamic
+  `import("/src/compiler/export/apngPipeline.ts")` straight from the dev
+  server, the same technique the probes above use), exactly what a real
+  button click does — it holds only compressed PNG bytes in memory
+  (`apngPipeline.ts`'s own documented bound), never a reference-capture
+  array. Measured this way: `linear-motion.marey` at `--duration 30`
+  (900 frames, 800×600, 30fps) is 11,492,040 bytes in ~26s.
+
+```bash
+node tools/visual-check/apng-check.mjs \
+  --scene tools/visual-check/scenes/linear-motion.marey \
+  --fps 30 --out .visual-check/apng/linear-motion
+```
+
+| Flag | Meaning |
+|---|---|
+| `--scene <path>` | A `.marey` file. Required — no `default` fallback |
+| `--fps <n>` | Export frame rate (default 30) |
+| `--duration <s>` | Export bound in seconds, overriding the scene's own `duration:`. Keep this well under 900 frames' worth — see the memory limit above |
+| `--frames <list>` | Comma-separated decoded frame indices to write as PNG. Every decoded frame is still analysed numerically regardless of this flag. Default: an evenly-spaced spread of five indices |
+| `--out <dir>` | Where `scene.png`, `decoded_%04d.png` and `report.json` go |
+| `--url <origin>` | Dev server origin (default `http://localhost:5199`). Same `--strictPort` trap as `check.mjs` |
+| `--headed` | Show the browser window |
+
+**`referenceRgba[k]` is keyed by the sampled frame's own frozen
+`frame.index`, never by array position** (Task 4 ruling T4-R2, carried
+into `devApngSeam.ts`). That is what makes a reordered mux loop show up as
+exactly the swapped frames mismatching, rather than the harness comparing a
+wrong file against equally-wrong references — measured directly: swapping
+two frames inside `runApngExport`'s mux loop made only those two frames'
+`differingBytes` non-zero, everything else in the file still matched.
+
+**`fcTL` delays are parsed independently, in Node**, by a small
+from-scratch chunk walker (not a re-import of `apngEncode.ts`'s own parser)
+— the same "an independent check can't agree with a bug by construction"
+reasoning `apngEncode.test.ts`'s `fakePng` fixture follows. Every `fcTL`
+must show `delay_num=1`, `delay_den=<the requested fps>`, `dispose_op=0`,
+`blend_op=0`, `x_offset=y_offset=0`.
+
+**One measured Chromium quirk affects the duration check only, not the
+gating fcTL check.** `ImageDecoder`'s reported `VideoFrame.duration`
+quantizes an APNG frame's delay to the nearest whole millisecond — at
+30fps, the ideal `33333.33µs` decodes as exactly `33000µs` on every frame,
+a uniform `-333.33µs` difference, not per-frame jitter. This script
+compares against that millisecond-rounded value, not the un-quantized
+ideal, so the check stays tight (≤1µs) without permanently flagging every
+correct frame — the un-quantized `fcTL` bytes themselves are checked
+exactly, separately, by the Node-side parse above.
+
+Exit code is non-zero if: either cold run failed; the seam reported a
+sampled frame it never rasterized (`missingReferenceFrames`); decode
+failed, or decoded frame count does not match the seam's own reported
+frame count; ANY decoded frame differs from its reference by so much as
+one byte; any decoded frame's quantization-adjusted `duration` is off by
+more than 1µs; any parsed `fcTL` is wrong; the two cold runs' APNG bytes
+(sha256) disagree; or either run recorded a page error. Never on how the
+PNGs look, and never on a byte-for-byte comparison of the two cold runs'
+raw reference captures against each other (deliberately not computed —
+see the memory-limit note above).
+
+**Look at the PNGs.** `scene.png` is a real, valid APNG — open it in a
+modern browser and it animates natively, no JavaScript required. Also read
+`decoded_0000.png`, a mid-export frame, and the last decoded frame with the
+Read tool before trusting a run's numbers.
+
 ## Forcing a device-limit refusal
 
 `videoContract.ts`'s `deviceLimitDiagnostic` refuses a coded size larger than
