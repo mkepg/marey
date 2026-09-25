@@ -84,9 +84,10 @@ async function exportPng(source: string, opts: ExportPngOptions): Promise<Export
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    // Only the two refusals `withRasterExport` can throw before any
-    // Application exists for this seam (a compile failure, or a
-    // `planExport` diagnostic — this call passes no `beforeBuild`, so
+    // Only the refusals `withRasterExport` can throw before any
+    // Application exists for this seam (a compile failure, a `planExport`
+    // diagnostic, or, since Phase 5C Task 7, `ensureExportFonts`'s
+    // `EXPORT_FONT_UNAVAILABLE` — this call passes no `beforeBuild`, so
     // nothing else can throw ahead of `new Application()`) get this seam's
     // own `[export] ` marker, reproducing this function's pre-Task-4
     // behaviour exactly: an error from inside the build/sample/encode step

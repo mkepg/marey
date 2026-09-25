@@ -2,6 +2,7 @@ import { Application, Container } from "pixi.js";
 import type { ICanvas } from "pixi.js";
 import { compileSource } from "../compileSource";
 import { destroyExportApp } from "./exportApp";
+import { ensureExportFonts } from "./exportFonts";
 import { planExport, type SamplerPlan } from "./exportContract";
 import { createFrameRasterizer } from "./frameRaster";
 import { buildNode } from "../renderer/builder";
@@ -162,6 +163,17 @@ export async function withRasterExport<T>(
   // encode -- arrives before a single tick is simulated or a GL context is
   // opened.
   await opts.beforeBuild?.(ir, plan);
+
+  // Fonts first, for every export (spec §6.1): the one prefix all four
+  // exporters share, so video, APNG, Lottie and the PNG seam all wait for
+  // the export font here rather than at four call sites. Before any pixi
+  // object is built, because a `Text` measured on a cold page gets the
+  // fallback font's metrics (Task 6, Q6). After `beforeBuild`, so a scene
+  // a pipeline refuses outright (an unsupported codec, a Lottie scene it
+  // cannot encode) is refused without waiting on a font download it would
+  // never use. A text-free scene makes no call. Throws
+  // `[EXPORT_FONT_UNAVAILABLE]` if the font still is not available.
+  await ensureExportFonts(ir);
 
   const scale = typeof opts.scale === "function" ? opts.scale(ir, plan) : opts.scale;
 

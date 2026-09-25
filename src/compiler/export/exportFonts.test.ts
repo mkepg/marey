@@ -1,7 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { compileSource } from "../compileSource";
 import type { IRSceneNode } from "../sceneIR";
 import { ensureExportFonts, exportFontSizes, type ExportFontSet } from "./exportFonts";
+import { withRasterExport } from "./rasterExport";
+import { runApngExport } from "./apngPipeline";
+import { runLottieExport } from "./lottiePipeline";
 
 function compile(source: string): IRSceneNode {
   const outcome = compileSource(source);
@@ -107,5 +110,83 @@ describe("ensureExportFonts", () => {
     expect(message.startsWith("[EXPORT_FONT_UNAVAILABLE] ")).toBe(true);
     expect(message).not.toContain("NetworkError");
     expect(calls[0]).toBe("load 16px 'JetBrains Mono'");
+  });
+});
+
+/**
+ * The wiring: `withRasterExport` (the one export prefix) calls
+ * `ensureExportFonts`, so every exporter built on it waits for the font.
+ *
+ * Node has no `document`, so each test installs one whose only member is a
+ * recording `fonts`. What proves the call happens BEFORE `new
+ * Application()` is the message: in Node, `new Application()` fails for its
+ * own reason (no DOM), so a rejection reading `[EXPORT_FONT_UNAVAILABLE]`
+ * can only have come from ahead of it. The text-free control reaches past
+ * the font step and fails on that other reason instead.
+ */
+describe("ensureExportFonts is wired into the shared export prefix", () => {
+  const TEXT_SOURCE = `scene { size: (100, 100) duration: 1 text t { position: (0, 0), content: "hi", fontSize: 24 } }`;
+  const TEXT_FREE_SOURCE = `scene { size: (100, 100) duration: 1 circle c { position: (0, 0), radius: 10 } }`;
+
+  async function messageOf(run: () => Promise<unknown>): Promise<string> {
+    try {
+      await run();
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+    throw new Error("expected a rejection");
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("withRasterExport refuses a text scene whose font is unavailable, before any Application exists", async () => {
+    const { fonts, calls } = recordingFonts({ available: false });
+    vi.stubGlobal("document", { fonts });
+    const message = await messageOf(() =>
+      withRasterExport({ source: TEXT_SOURCE, fps: 30 }, async () => "used"),
+    );
+    expect(message.startsWith("[EXPORT_FONT_UNAVAILABLE] ")).toBe(true);
+    expect(calls).toEqual(["load 24px 'JetBrains Mono'", "check 24px 'JetBrains Mono'"]);
+  });
+
+  it("the text-free control makes no font call and fails later, on the missing DOM", async () => {
+    const { fonts, calls } = recordingFonts({ available: false });
+    vi.stubGlobal("document", { fonts });
+    const message = await messageOf(() =>
+      withRasterExport({ source: TEXT_FREE_SOURCE, fps: 30 }, async () => "used"),
+    );
+    expect(calls).toEqual([]);
+    expect(message).not.toContain("EXPORT_FONT_UNAVAILABLE");
+    expect(message).not.toContain("Source did not compile");
+  });
+
+  it("runApngExport, a pipeline built on the prefix, inherits the refusal", async () => {
+    const { fonts, calls } = recordingFonts({ available: false });
+    vi.stubGlobal("document", { fonts });
+    const message = await messageOf(() => runApngExport({ source: TEXT_SOURCE, fps: 30 }));
+    expect(message.startsWith("[EXPORT_FONT_UNAVAILABLE] ")).toBe(true);
+    expect(calls[0]).toBe("load 24px 'JetBrains Mono'");
+  });
+
+  it("runs after beforeBuild: Lottie's own text refusal arrives with no font call", async () => {
+    // Order is a judgment call (AGENT-LESSONS §2d), pinned here: a refusal
+    // a pipeline owns must not wait behind a font download.
+    const { fonts, calls } = recordingFonts({ available: false });
+    vi.stubGlobal("document", { fonts });
+    const message = await messageOf(() => runLottieExport({ source: TEXT_SOURCE, fps: 30 }));
+    expect(message.startsWith("[LOTTIE_UNSUPPORTED_TEXT] ")).toBe(true);
+    expect(calls).toEqual([]);
+  });
+
+  it("waits for the font when it is available, then goes on to build", async () => {
+    const { fonts, calls } = recordingFonts({ available: true });
+    vi.stubGlobal("document", { fonts });
+    const message = await messageOf(() =>
+      withRasterExport({ source: TEXT_SOURCE, fps: 30 }, async () => "used"),
+    );
+    expect(calls).toEqual(["load 24px 'JetBrains Mono'", "check 24px 'JetBrains Mono'"]);
+    expect(message).not.toContain("EXPORT_FONT_UNAVAILABLE");
   });
 });
