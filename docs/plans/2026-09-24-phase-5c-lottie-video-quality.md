@@ -1076,3 +1076,51 @@ it("drops the duplicate closing vertex when a contour ends where it began", () =
   `renderer.gl` property; how Vitest can read the TTF bytes; and whether
   `ImageDecoder` decodes APNG frames in Playwright's Chromium. Each has a
   stated fallback.
+
+---
+
+## Addendum, 2026-09-25: Task 6 outcomes that amend Tasks 7 and 8
+
+Written by the controller after Task 6's spike (evidence: `eval/RESULTS-PHASE-5C.md`,
+"Piece 5 spike"; probes: `docs/research/2026-09-24-export-quality-probes/text-spike/`).
+Where this addendum and a task body disagree, this addendum wins.
+
+1. **harfbuzzjs 1.6.2's glyph positions are camelCase:** `xAdvance`, `yAdvance`,
+   `xOffset`, `yOffset`. The spec's §6.3 step 4 and T7's text use snake_case, so
+   read "x_offset" as `xOffset` and so on throughout. It loads under Vite dev and
+   a production build with a plain `import * as hb from "harfbuzzjs"`. Rolldown
+   emits `harfbuzz-*.wasm` (433,766 B) with no `?url` wiring.
+2. **Pixi's layout rules for JetBrains Mono (T7 Step 4):**
+   - Line width is `metrics.width`, which beats the bounding-box width.
+   - `__baseSize` equals `textObj.width`/`height` exactly.
+   - `lineHeight = fontProperties.fontSize = ascent + descent` (60 px →
+     ascent 60, descent 11, lineHeight 71).
+   - The final padding is 0 for Marey's styles.
+   - `NEWLINE_MATCH_REGEX = /(?:\r\n|\r|\n)/`.
+   - pixi passes `\t` to `fillText` unchanged, and canvas turns it into U+0020.
+3. **Fill rule (T8 Step 2).** 19 of 100 glyphs render differently under
+   nonzero and even-odd, among them common letters (a b d e g h m n p q r).
+   So `r: 1` (nonzero) is load-bearing on ordinary text, not an edge case.
+   The fixture glyph for the flip is `8`.
+4. **Font fetch (T7 Step 4).** The URL is `/fonts/JetBrainsMono-Regular.ttf`,
+   with `BASE_URL` `/`. It is **not** a cache hit under `vite preview`
+   (`Cache-Control: no-cache`), so the export re-fetches about 115 KB. That is
+   acceptable; do not add a cache layer.
+5. **Measurement cache hazard (new, T7 Step 3/4).**
+   `CanvasTextMetrics._measurementCache` is a global LRU keyed by
+   `` `${text}-${style.styleKey}-wordWrap-…` `` (`CanvasTextMetrics.mjs:74`),
+   and the key carries no font-load state. A measurement taken while the
+   fallback font was active would therefore be served stale to a later
+   export, because a fresh `TextStyle` with the same props has the same
+   `styleKey`. T6 Q6 measured the stale return on a reused style. So
+   `ensureExportFonts` alone is not sufficient. T7 must:
+   - measure whether a **new** `TextStyle` with identical props hits a stale
+     entry written before the font loaded;
+   - if it does, invalidate before building, through a public pixi API if one
+     exists (read `CanvasTextMetrics`), otherwise the narrowest private access,
+     with a comment naming the pixi version;
+   - pin it with a cold-page check: measure first with the fallback font, then
+     load the font, then export, and the layout must match a warm export.
+6. **Missing glyphs (T8).** `日` and `🙂` both shape to glyph 0, while the
+   preview draws a real fallback glyph and a colour emoji, not tofu. This
+   confirms `LOTTIE_TEXT_MISSING_GLYPH` is the honest behaviour.
