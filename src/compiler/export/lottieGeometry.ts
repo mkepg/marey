@@ -39,7 +39,16 @@ export type LottieShapeSpec =
    * cut of `text` (R17) was about Lottie's *text layer*; this is shape
    * data, not a text layer, so R17's reason does not apply to it.
    */
-  | { readonly kind: "text"; readonly contours: ReadonlyArray<Contour> }
+  | {
+      readonly kind: "text";
+      readonly contours: ReadonlyArray<Contour>;
+      /**
+       * Present only when some glyph reaches outside the layout box: the
+       * encoder then masks the layer to `(0,0)-(width,height)`, the box pixi
+       * draws the text's texture into (see {@link textClip}).
+       */
+      readonly clip?: { readonly width: number; readonly height: number };
+    }
   | { readonly kind: "group" };
 
 /**
@@ -236,6 +245,37 @@ function missingGlyphDiagnostic(id: IRObjectId, missing: ReadonlyArray<MissingGl
 }
 
 /**
+ * The clip a text's outlines need to look like the preview, or none.
+ *
+ * pixi draws a `Text` into a canvas texture sized to its measured box and
+ * places it at `(0,0)-(width,height)` in the text's own space, so any ink
+ * outside that box is cut off in the preview and in every raster export.
+ * Measured (Task 8, `text-check.mjs`, `lottie-text-mark.marey`): the ring
+ * below in `B` + U+0325 + U+0301 hangs past both the descent and the last
+ * advance, and Marey's PNG stops exactly at the box's last row and column
+ * while unclipped outlines drew 4 px more on each of those edges. The
+ * Lottie reproduces the cut with a mask, but only when a glyph actually
+ * reaches outside: a curve never leaves the hull of its vertices and control
+ * points, so if every one of those is inside the box, a mask would change
+ * nothing and is not emitted.
+ */
+function textClip(
+  contours: ReadonlyArray<Contour>,
+  layout: TextLayout,
+): { readonly width: number; readonly height: number } | undefined {
+  const outside = (x: number, y: number) => x < 0 || y < 0 || x > layout.width || y > layout.height;
+  for (const { v, i, o } of contours) {
+    for (let k = 0; k < v.length; k++) {
+      const [x, y] = v[k];
+      if (outside(x, y) || outside(x + i[k][0], y + i[k][1]) || outside(x + o[k][0], y + o[k][1])) {
+        return { width: layout.width, height: layout.height };
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
  * A text node's shape, anchor and colour, from the pipeline's measurements.
  *
  * The anchor box is the layout's `width` x `height`, which is the built
@@ -261,9 +301,10 @@ function textGeometryFor(
     throw new Error(`[LOTTIE] text node '${id}' has no layout from the export pipeline`);
   }
   const bbox: LocalBBox = { min: { x: 0, y: 0 }, size: { x: layout.width, y: layout.height } };
+  const clip = textClip(run.contours, layout);
   return {
     geometry: {
-      shape: { kind: "text", contours: run.contours },
+      shape: { kind: "text", contours: run.contours, ...(clip ? { clip } : {}) },
       anchor: localPivot(props.origin, bbox),
       color: hexToRgb01(props.color),
     },

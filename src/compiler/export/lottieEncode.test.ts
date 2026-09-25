@@ -523,6 +523,39 @@ describe("encodeLottie · per-kind geometry", () => {
     expect(items[2].o).toEqual({ a: 0, k: 100 });
   });
 
+  it("masks a clipped text layer to its layout box, and leaves an unclipped one unmasked", () => {
+    // The mask is in the layer's own space (the space `a` is measured in),
+    // so the box is (0,0)-(w,h) with straight edges, additive, opaque.
+    const glyph = { v: [[0, 0], [10, 0], [10, 10]] as const, i: [[0, 0], [0, 0], [0, 0]] as const, o: [[0, 0], [0, 0], [0, 0]] as const };
+    const clipped = layerNamed(
+      only({
+        id: "scene.t", name: "t", shape: { kind: "text", contours: [glyph], clip: { width: 202, height: 71 } },
+        anchor: { x: 101, y: 35.5 }, color: [0, 0, 0], parentId: null,
+      }),
+      "t",
+    );
+    expect(clipped.hasMask).toBe(true);
+    expect(clipped.masksProperties).toEqual([
+      {
+        nm: "layout box",
+        mode: "a",
+        inv: false,
+        o: { a: 0, k: 100 },
+        x: { a: 0, k: 0 },
+        pt: { a: 0, k: { v: [[0, 0], [202, 0], [202, 71], [0, 71]], i: [[0, 0], [0, 0], [0, 0], [0, 0]], o: [[0, 0], [0, 0], [0, 0], [0, 0]], c: true } },
+      },
+    ]);
+    const plain = layerNamed(
+      only({
+        id: "scene.t", name: "t", shape: { kind: "text", contours: [glyph] },
+        anchor: { x: 5, y: 5 }, color: [0, 0, 0], parentId: null,
+      }),
+      "t",
+    );
+    expect(plain.hasMask).toBeUndefined();
+    expect(plain.masksProperties).toBeUndefined();
+  });
+
   it("emits a group as a null layer carrying no shapes", () => {
     const doc = only({
       id: "scene.g", name: "g", shape: { kind: "group" },

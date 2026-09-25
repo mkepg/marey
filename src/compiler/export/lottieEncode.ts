@@ -166,10 +166,26 @@ interface LottieLayerBase {
   readonly parent?: number;
 }
 
+/**
+ * A layer mask: a closed path in the layer's own space. `mode: "a"` adds
+ * (the layer shows only inside it), `x` is expansion, `o` opacity 0-100.
+ */
+export interface LottieMask {
+  readonly nm: string;
+  readonly mode: "a";
+  readonly inv: false;
+  readonly o: LottieScalarProperty;
+  readonly x: LottieScalarProperty;
+  readonly pt: { readonly a: 0; readonly k: LottieBezier };
+}
+
 /** `ty: 4`. Its `shapes` list is drawn bottom-up: geometry first, fill after. */
 export interface LottieShapeLayer extends LottieLayerBase {
   readonly ty: 4;
   readonly shapes: ReadonlyArray<LottieShapeItem>;
+  /** Only on a text layer whose glyphs reach outside the layout box. */
+  readonly hasMask?: true;
+  readonly masksProperties?: ReadonlyArray<LottieMask>;
 }
 
 /** `ty: 3`. A `group` draws nothing; it exists for its children to parent to. */
@@ -565,7 +581,24 @@ export function encodeLottie(
     if (spec.shape.kind === "group") {
       return { ...base, ty: 3 };
     }
-    return { ...base, ty: 4, shapes: shapeItemsFor(spec.shape, spec.color, spec.name) };
+    const shapes = shapeItemsFor(spec.shape, spec.color, spec.name);
+    if (spec.shape.kind === "text" && spec.shape.clip) {
+      // pixi's texture box (see `lottieGeometry.ts`'s `textClip`): the
+      // preview cuts off ink outside it, so the Lottie does too. In layer
+      // space, the same space as the glyph contours and the anchor.
+      const { width: w, height: h } = spec.shape.clip;
+      const zeros = [[0, 0], [0, 0], [0, 0], [0, 0]];
+      const box: LottieMask = {
+        nm: "layout box",
+        mode: "a",
+        inv: false,
+        o: staticScalar(100),
+        x: staticScalar(0),
+        pt: { a: 0, k: { v: [[0, 0], [w, 0], [w, h], [0, h]], i: zeros, o: zeros, c: true } },
+      };
+      return { ...base, ty: 4, shapes, hasMask: true, masksProperties: [box] };
+    }
+    return { ...base, ty: 4, shapes };
   });
 
   /**

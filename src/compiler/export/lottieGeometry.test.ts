@@ -254,4 +254,29 @@ describe("planLottie · layer specs", () => {
     expect(t.shape).toEqual({ kind: "text", contours: [CONTOUR, second] });
     expect(t.parentId).toBe("scene.g");
   });
+
+  it("clips a text to its layout box only when some glyph reaches outside it, as pixi's texture does", () => {
+    // pixi draws a Text into a texture the size of its measured box, so ink
+    // outside the box (a ring below that hangs past the descent, measured on
+    // `é x́ B̥́`) is cut off in the preview and in every raster export. The
+    // Lottie clips at the same box, but only when something reaches past it:
+    // a control point counts, since a curve stays inside its control hull.
+    const plan = (contours: ReadonlyArray<Contour>) => {
+      const r = planLottie(
+        irFor(`scene { size: (100,100) duration: 1 text t { position: (0,0), content: "hi" } }`),
+        textFor({ "scene.t": { layout: { width: 20, height: 10 }, contours } }),
+      );
+      if (!r.ok) throw new Error("unexpected refusal");
+      return r.layers[0].shape;
+    };
+    const inside: Contour = { v: [[0, 0], [20, 0], [20, 10]], i: [[0, 0], [0, 0], [0, 0]], o: [[0, 0], [0, 0], [0, 0]] };
+    expect(plan([inside])).toEqual({ kind: "text", contours: [inside] });
+    const pastRight: Contour = { v: [[0, 0], [21, 0], [20, 10]], i: [[0, 0], [0, 0], [0, 0]], o: [[0, 0], [0, 0], [0, 0]] };
+    expect(plan([inside, pastRight])).toEqual({ kind: "text", contours: [inside, pastRight], clip: { width: 20, height: 10 } });
+    // A vertex inside, but its out-tangent's control point below the box.
+    const controlBelow: Contour = { v: [[5, 9], [15, 9]], i: [[0, 0], [0, 0]], o: [[0, 2], [0, 0]] };
+    expect(plan([controlBelow])).toEqual({ kind: "text", contours: [controlBelow], clip: { width: 20, height: 10 } });
+    const pastTop: Contour = { v: [[5, -0.5], [15, 5]], i: [[0, 0], [0, 0]], o: [[0, 0], [0, 0]] };
+    expect(plan([pastTop])).toEqual({ kind: "text", contours: [pastTop], clip: { width: 20, height: 10 } });
+  });
 });
