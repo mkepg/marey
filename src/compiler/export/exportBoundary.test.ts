@@ -261,6 +261,26 @@ describe("export boundary", () => {
   });
 
   /**
+   * Task 8: `lottieGeometry.ts` needs `Contour`/`TextLayout`/`TextGlyphRun`,
+   * which live in `textOutline.ts`, the one module that imports harfbuzzjs.
+   * A type-only import is erased and keeps the geometry module free of it; a
+   * value import would put harfbuzzjs in its dependency graph, and in
+   * `lottieEncode.ts`'s through it. The direct-import guard above cannot see
+   * that, so this pins the form: every import of `textOutline` here is
+   * `import type`. (`import { type X }` is not enough: under
+   * `verbatimModuleSyntax` it leaves a side-effect import behind.)
+   */
+  it("lottieGeometry.ts imports textOutline.ts for types only", () => {
+    const code = stripComments(lottieGeometrySource);
+    expect(code).toContain("export function planLottie");
+    const imports = code.match(/import\s+[^;]*?from\s+["'][^"']*textOutline[^"']*["']/g) ?? [];
+    expect(imports.length).toBeGreaterThan(0);
+    expect(imports.every((line) => /^import\s+type\s/.test(line))).toBe(true);
+    // Nor a dynamic import, which would load it (and harfbuzzjs) at runtime.
+    expect(/import\s*\(\s*["'][^"']*textOutline/.test(code)).toBe(false);
+  });
+
+  /**
    * Global constraint 6 / design §7's table, Task 5's `apngEncode.ts`: a
    * pure muxer with no pixi.js and no Scene IR, the same shape as
    * `lottieEncode.ts`/`lottieGeometry.ts` above. Paired with an identity
