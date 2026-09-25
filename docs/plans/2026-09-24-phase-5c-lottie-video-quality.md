@@ -1176,7 +1176,7 @@ commits, which is expected since this task touches no file under `src/`,
    sha256-equal, across encode modes). Text sharpness: median antialiased
    edge-band width **2 px** natively at 2×, vs **3 px** for a mutated
    1×-app-then-2×-extracted control.
-2. **APNG.** **0** differing pixels on every frame, both fixtures
+2. **APNG.** **0** differing bytes on every frame, both fixtures
    (`linear-motion.marey`, 90 frames; the default scene, 180 frames),
    byte-identical (sha256) across two cold runs each. A ≥30 s scene (900
    frames, `--size-only`) is **11,504,757 B**, byte-identical across two
@@ -1265,6 +1265,45 @@ only a distinguishing title. Measured directly by the implementer
 anywhere in the file. Task 4's before/after refactor evidence had never
 been copied out of its own gitignored `task-4-report.md`. Flagged rather
 than silently worked around, and closed by this task (item C, below).
+
+### Every ruling, by id (18)
+
+The ledger records exactly 18 rulings across this plan's execution. Each
+is cited here by id with a one-line summary taken from the ledger's own
+"Ruling:" line, so a reader of this section alone — not the ledger — can
+find every one. Several are also discussed at length elsewhere in these
+notes (T1-R1/T1-R2 under "The process record"'s PSNR investigation;
+T2-R1/T3-R1/T3-R3 under its harness-artifact investigations; T4-R2 as
+defect #2, above; T7-R3/T8-R1/T8-R2/T8-R3 as the spec amendments T9 itself
+made); this table is the complete index regardless of what else mentions
+them.
+
+| id | Summary |
+|---|---|
+| T1-R1 | Before amending the §9.1 PSNR criterion, reproduce the findings probe on the current tree and explain the ~10× speck gap; if raw ≈42 dB the shipped path lost quality (diagnose it), if raw ≈41.5 dB the findings number does not reproduce today (re-base the criterion with a dated note). |
+| T1-R2 | Localise the launch flag's effect with a 2×2 (encode mode × score mode), saving the same encoded bytes and scoring both ways, to tell whether the flag changes what users get or only the scorer's own instrument. |
+| T2-R1 | The `lottie-check.mjs` harness-artifact finding is about evidence, not shipped code; route it to an independent browser-capable verifier given the question and the probe scripts, not the implementer's conclusion, before Task 3 relies on the harness. |
+| T3-R1 | Fix the harness, not the numbers: `lottie-check.mjs` must render lottie-web on a page/context that never created the export seam's WebGL `Application`; re-measure Task 2's line fixtures afterward through the official command. |
+| T3-R2 | Task 3 Step 5's regression gate becomes a same-machine A/B (`compound-logo` at main, via a temporary worktree, vs. HEAD), rather than a comparison against 5A's possibly-stale recorded table. |
+| T3-R3 | T3-R1's prescribed mechanism (a fresh page/context) was wrong; the implementer's measured fix — a genuinely separate process for the render half — stands instead. |
+| T4-R1 | `withRasterExport`'s prefix also serves `lottiePipeline.ts`, beyond the brief's original two-caller scope: the rasterizer becomes optional (created only when a `scale` is given), so one copy of the prefix remains across video, the PNG seam, and Lottie. |
+| T4-R2 | Fix now, not park: key `devVideoSeam`'s reference slot by the snapshot's own frozen `frame.index`, not `sampled.indexOf(frame)`, then re-run the Step 4 reversal mutation, which must now exit 1. |
+| T7-R1 | The plan addendum (commit `d16176f`) amends Tasks 7/8 from Task 6's answers; in particular the global `CanvasTextMetrics` cache must be invalidated or proven harmless before an export builds text. |
+| T7-R2 | Text-layout plumbing is a separately testable `collectTextLayouts`, since `planLottie` still refuses every text node before build until Task 8 — the refusal itself is unchanged by Task 7. |
+| T7-R3 | Accept the §6.3 step 4 deviation: glyph x/y do not add `padding`, because pixi's own `+padding` canvas offset and `-padding` quad shift cancel for a `Text` at anchor 0; pinned by a test. |
+| T8-R1 | Text planning moves after build: `withRasterExport` gains an `afterBuild` hook, and `runLottieExport` runs `collectTextLayouts` then a single `planLottie` call there instead of before build. |
+| T8-R2 | For the mark string, pixi's width is `max(advance, ink)` and ink wins; the layout-agreement check there compares against `max(HarfBuzz advance sum, HarfBuzz ink width)` with a measured tolerance, unlike the 0.01 px advance-only check used elsewhere. |
+| T8-R3 | The ink-bbox position check's binding definition becomes half coverage (a pixel is ink at ≥50% of the full text-vs-background difference), not any-ink (`alpha > 0`); the any-ink box is still recorded alongside, and the ligature frame 29 exception is named. |
+| T8-R4 | Accept the conditional clip mask provisionally — a text layer is masked to pixi's own measured layout box, only when a glyph leaves it — pending the reviewer confirming it renders correctly in dotlottie-web too and that text-free/in-box documents stay byte-unchanged. |
+| T8-R5 | Accept three small deviations: the `harfbuzzjs.embedded.txt` licence filename, comparing ink against an opaque background (no transparent export mode exists), and compressed fixture timing. |
+| T8-R6 | Fix round 1 applies T8-R3 with the reviewer's own refinements (a relative half-coverage threshold; empty-vs-empty failing except on declared-blank frames; the any-ink box recorded alongside) plus five cheap, in-file test-strength Minors. |
+| T8-R7 | Park the Minor found during fix round 1 (a path-3 test pinning exact V8/pixi error wording) for the final fix wave rather than a second fix round, since it can only fail loudly and never falsely pass. |
+
+`grep -n "T[1-9]-R[0-9]" docs/plans/2026-09-24-phase-5c-lottie-video-quality.md`,
+restricted to this file's "## Execution notes" section, hits all 18 ids
+above (each at least once in this table, several also in the prose
+sections named at the top of it) and no others — confirmed while writing
+this fix round.
 
 ### Mutation results, each beside its suite size
 
