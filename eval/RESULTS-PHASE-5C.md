@@ -672,14 +672,79 @@ plain line's own rectangle exactly (`node .visual-check/probe5c-t2/repeated-poin
 
 | Fixture | Official (`--compare-png`, harness as instructed) | Clean (harness artifact bypassed) |
 |---|---|---|
-| miter | maxDelta 255, 4323/150000 (2.8820%) | maxDelta 80, 671/150000 (0.4473%) |
-| scale | maxDelta 255, 94/66000 (0.1424%) | maxDelta 1, 136/66000 (0.2061%) |
-| caps | maxDelta 255, 808/89600 (0.9018%) | maxDelta 0, 0/89600 (0.0000%) |
+| miter | maxDelta 255, 4323/150000 (2.8820%) — **superseded, see below** | maxDelta 80, 671/150000 (0.4473%) |
+| scale | maxDelta 255, 94/66000 (0.1424%) — **superseded, see below** | maxDelta 1, 136/66000 (0.2061%) |
+| caps | maxDelta 255, 808/89600 (0.9018%) — **superseded, see below** | maxDelta 0, 0/89600 (0.0000%) |
 
-The "official" numbers for miter and caps are stated for the record because
-the brief instructs running `lottie-check.mjs --compare-png` and reporting
-what it says — but the "clean" numbers are the ones that actually answer
-design §3.4's question, per the artifact finding above.
+The "official" numbers for miter and caps were stated for the record at the
+time because the Task 2 brief instructed running `lottie-check.mjs
+--compare-png` and reporting what it said — but the "clean" numbers were
+already the ones that actually answered design §3.4's question, per the
+artifact finding above. Task 3 fixed the artifact in the harness itself
+(below), so the "official" column is now superseded: the SAME command,
+against the fixed harness, produces the "clean" numbers directly, and the
+harness-artifact distinction this table drew no longer applies going
+forward.
+
+### 2026-09-25 fix round (Task 3, ruling T3-R1): the harness itself fixed, and re-measured
+
+**Reason superseded, in one line.** The "official" row above was never a
+property of the exported document or of pixi/Lottie's geometry — it was an
+artifact of `lottie-check.mjs` running the export seam's pixi WebGL
+`Application` and lottie-web's forced-software 2D canvas render in the SAME
+Node.js process. Task 3 (T3-R1) fixed the harness by moving the render half
+into a separate spawned process (`lottie-render-worker.mjs`); see that
+task's report and `lottie-check.mjs`'s own header comment for the full
+measurement trail (a second page, and even a second `chromium.launch()` in
+the same process, were both measured to still carry the defect — only a
+genuinely separate `node` invocation removed it).
+
+**Re-measurement, same three fixtures, same official command, fixed
+harness.** Dev server: `npx vite --port 5199 --strictPort`, boundary netstat
+on 5199 confirmed free before starting and free again after killing it
+(exact commands in the Task 3 report).
+
+Miter:
+```
+node tools/visual-check/lottie-check.mjs \
+  --scene tools/visual-check/scenes/lottie-line-miter.marey \
+  --fps 30 --frames 0 --at 150,70 --at 150,120 --at 350,70 --at 350,120 \
+  --compare-png --out .visual-check/5c-t3/miter-fixed2
+```
+`(150,70) -> rgba(78,78,78,255)`, `(150,120) -> rgba(255,255,255,255)`,
+`(350,70) -> rgba(0,0,0,255)`, `(350,120) -> rgba(0,0,0,255)` — the 14°
+corner reads as a real antialiased spike, not a rounded bump.
+`--compare-png: maxDelta=80 at (347,250), mismatching pixels=671/150000
+(0.4473%)`.
+
+Scale:
+```
+node tools/visual-check/lottie-check.mjs \
+  --scene tools/visual-check/scenes/lottie-line-scale.marey \
+  --fps 30 --frames 0 --at <17 points across both edges> \
+  --compare-png --out .visual-check/5c-t3/scale-fixed
+```
+`--compare-png: maxDelta=1 at (198,80), mismatching pixels=136/66000
+(0.2061%)`.
+
+Caps:
+```
+node tools/visual-check/lottie-check.mjs \
+  --scene tools/visual-check/scenes/lottie-line-caps.marey \
+  --fps 30 --frames 0 \
+  --at 97,100 --at 102,100 --at 140,100 --at 178,100 --at 183,100 \
+  --at 97,220 --at 102,220 --at 140,220 --at 178,220 --at 183,220 \
+  --compare-png --out .visual-check/5c-t3/caps-fixed
+```
+`(183,100) -> rgba(0,0,0,255)` — a correct butt cap, not the rounded-bump
+white read the broken harness gave. `--compare-png: maxDelta=0 at null,
+mismatching pixels=0/89600 (0.0000%)`.
+
+**Result: all three fixtures' new official numbers, from the SAME command
+Task 2's brief specified, now equal the "clean" column above exactly** (80/
+671/150000/0.4473% for miter; 1/136/66000/0.2061% for scale; 0/0/89600/
+0.0000% for caps). The harness-artifact distinction this table drew in Task
+2 is no longer needed: there is now one number per fixture, not two.
 
 ### Stale doc mentions found (not edited, per this task's scope)
 
