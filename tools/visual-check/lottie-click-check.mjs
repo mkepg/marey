@@ -61,12 +61,21 @@
  *   --out <dir>      Where doc.json, frame PNGs and report.json go
  *   --headed         Show the browser window
  *
- * Exit code is non-zero on a hard failure of either scenario (compound-logo
+ * Exit code is non-zero on a hard failure of any scenario (compound-logo
  * success path: download missing/wrong filename/unparseable JSON, or a
- * page/console error; default-scene refusal path: no toast, or a toast not
- * starting with "[LOTTIE_UNSUPPORTED_TEXT]") — never on the pixel-compare
- * numbers, which are reported for a human to read, same convention as every
- * other script on this page.
+ * page/console error; default scene: no download, or a document without the
+ * `hello` text layer as glyph paths under a nonzero fill; missing-glyph
+ * scene: no toast, or a toast not starting with
+ * "[LOTTIE_TEXT_MISSING_GLYPH]") — never on the pixel-compare numbers, which
+ * are reported for a human to read, same convention as every other script on
+ * this page.
+ *
+ * Phase 5C Task 8 changed scenarios B and C. Until then the default scene's
+ * `text` was refused (`LOTTIE_UNSUPPORTED_TEXT`), and scenario B read that
+ * toast. Text now exports as glyph outlines, so scenario B clicks the button
+ * on the default scene and requires the download, and scenario C keeps a
+ * refusal path under test through the button: a text the font has no glyph
+ * for.
  */
 import { chromium } from "playwright";
 import LZString from "lz-string";
@@ -343,7 +352,7 @@ const report = { url, scene: scenePath, fps };
   await page.close();
 }
 
-// ─── Scenario B: the default scene (declares `text`), refusal path ────────
+// ─── Scenario B: the default scene (declares `text`), now exported ─────────
 {
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   const consoleErrors = [];
@@ -354,21 +363,77 @@ const report = { url, scene: scenePath, fps };
   await page.goto(codeUrl(defaultCode), { waitUntil: "load" });
   await page.locator(LOTTIE_BUTTON_SELECTOR).waitFor({ state: "visible", timeout: 20_000 });
 
+  // The default scene's 6 s export fetches the font and outlines `hello!`
+  // before sampling 180 frames, so this allows longer than scenario A.
+  const [download] = await Promise.all([
+    page.waitForEvent("download", { timeout: 60_000 }),
+    page.locator(LOTTIE_BUTTON_SELECTOR).click(),
+  ]);
+  const filename = download.suggestedFilename();
+  const downloadPath = await download.path();
+  let parsed = null;
+  let parseError = null;
+  try {
+    parsed = JSON.parse(readFileSync(downloadPath, "utf8"));
+    writeFileSync(`${outDir}/default-scene.json`, JSON.stringify(parsed));
+  } catch (e) {
+    parseError = String(e && e.message ? e.message : e);
+  }
+  const hello = parsed?.layers?.find((l) => l.nm === "hello") ?? null;
+  const kinds = hello?.shapes?.map((item) => item.ty) ?? [];
+  const textLayerOk =
+    hello !== null &&
+    hello.ty === 4 &&
+    kinds.length > 1 &&
+    kinds.slice(0, -1).every((k) => k === "sh") &&
+    kinds.at(-1) === "fl" &&
+    hello.shapes.at(-1).r === 1;
+  report.scenarioB = {
+    filename,
+    filenameOk: filename === "scene.json",
+    parseOk: parsed !== null,
+    parseError,
+    textLayer: hello ? { ty: hello.ty, contours: kinds.length - 1, fillRule: hello.shapes?.at(-1)?.r, anchor: hello.ks?.a?.k } : null,
+    textLayerOk,
+    consoleErrors,
+    pageErrors,
+  };
+  console.log(
+    `scenario B (default scene): filename=${filename} parseOk=${parsed !== null} ` +
+      `hello layer: ${hello ? `${kinds.length - 1} contours, fill r=${hello.shapes.at(-1).r}, anchor ${JSON.stringify(hello.ks.a.k)}` : "MISSING"}`,
+  );
+  if (!(report.scenarioB.filenameOk && textLayerOk && pageErrors.length === 0)) console.error("scenario B FAILED");
+  await page.close();
+}
+
+// ─── Scenario C: a character the font lacks, refusal path ─────────────────
+{
+  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  const consoleErrors = [];
+  const pageErrors = [];
+  page.on("console", (m) => m.type() === "error" && consoleErrors.push(m.text()));
+  page.on("pageerror", (e) => pageErrors.push(String(e)));
+
+  // `日` is U+65E5, which JetBrains Mono has no glyph for (Task 6 Q7).
+  const missingGlyphScene =
+    'scene { size: (400, 200) background: #ffffff duration: 1 text t { position: (200, 100), content: "a日b", fontSize: 60, color: #000000 } }';
+  await page.goto(codeUrl(missingGlyphScene), { waitUntil: "load" });
+  await page.locator(LOTTIE_BUTTON_SELECTOR).waitFor({ state: "visible", timeout: 20_000 });
+
   // No download is expected on this path -- the click throws inside
-  // `useExport.ts`'s try block and shows a toast instead. Racing
-  // `waitForEvent("download")` here would hang for its own timeout on the
-  // success path already proven above, so this scenario reads the toast
-  // directly.
+  // `useExport.ts`'s try block and shows a toast instead, so this scenario
+  // reads the toast directly rather than racing `waitForEvent("download")`.
   await page.locator(LOTTIE_BUTTON_SELECTOR).click();
   const toastLocator = page.locator('[role="status"]');
-  await toastLocator.first().waitFor({ state: "visible", timeout: 5_000 });
+  await toastLocator.first().waitFor({ state: "visible", timeout: 20_000 });
   const toastText = (await toastLocator.first().textContent()) ?? "";
 
-  const startsWithCode = toastText.trim().startsWith("[LOTTIE_UNSUPPORTED_TEXT]");
-  report.scenarioB = { toastText, startsWithCode, consoleErrors, pageErrors };
+  const startsWithCode = toastText.trim().startsWith("[LOTTIE_TEXT_MISSING_GLYPH]");
+  const namesCodePoint = toastText.includes("U+65E5");
+  report.scenarioC = { toastText, startsWithCode, namesCodePoint, consoleErrors, pageErrors };
 
-  console.log(`scenario B (default scene): toast="${toastText}" startsWithCode=${startsWithCode}`);
-  if (!startsWithCode) console.error("scenario B FAILED");
+  console.log(`scenario C (missing glyph): toast="${toastText}" startsWithCode=${startsWithCode} namesCodePoint=${namesCodePoint}`);
+  if (!(startsWithCode && namesCodePoint)) console.error("scenario C FAILED");
   await page.close();
 }
 
@@ -379,5 +444,7 @@ console.log(`\nwrote ${outDir}/report.json`);
 
 const scenarioAOk =
   report.scenarioA.filenameOk && report.scenarioA.parseOk && report.scenarioA.pageErrors.length === 0;
-const scenarioBOk = report.scenarioB.startsWithCode;
-process.exit(scenarioAOk && scenarioBOk ? 0 : 1);
+const scenarioBOk =
+  report.scenarioB.filenameOk && report.scenarioB.textLayerOk && report.scenarioB.pageErrors.length === 0;
+const scenarioCOk = report.scenarioC.startsWithCode && report.scenarioC.namesCodePoint;
+process.exit(scenarioAOk && scenarioBOk && scenarioCOk ? 0 : 1);
