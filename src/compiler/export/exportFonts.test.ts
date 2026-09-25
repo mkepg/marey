@@ -1,0 +1,111 @@
+import { describe, it, expect } from "vitest";
+import { compileSource } from "../compileSource";
+import type { IRSceneNode } from "../sceneIR";
+import { ensureExportFonts, exportFontSizes, type ExportFontSet } from "./exportFonts";
+
+function compile(source: string): IRSceneNode {
+  const outcome = compileSource(source);
+  if (!outcome.ok || !outcome.ir) {
+    throw new Error(`fixture did not compile: ${outcome.errors.map((e) => e.message).join(" | ")}`);
+  }
+  return outcome.ir;
+}
+
+const TEXT_SCENE = compile(`scene {
+  size: (400, 300)
+  duration: 1
+  text a { position: (10, 10), content: "big", fontSize: 60 }
+  group g {
+    position: (0, 100)
+    text b { position: (0, 0), content: "small", fontSize: 16 }
+    text c { position: (0, 40), content: "big again", fontSize: 60 }
+  }
+}`);
+
+const TEXT_FREE_SCENE = compile(`scene {
+  size: (400, 300)
+  duration: 1
+  circle c { position: (50, 50), radius: 10 }
+}`);
+
+/**
+ * A `FontFaceSet` stand-in that records every call it receives, in order,
+ * in one log, so a test can read both which specs were loaded and whether
+ * `check` came after `load` (AGENT-LESSONS §3d: the fake must record what
+ * the assertion reads).
+ */
+function recordingFonts(opts: { available: boolean; loadRejects?: boolean }) {
+  const calls: string[] = [];
+  const fonts: ExportFontSet = {
+    load: async (spec: string) => {
+      calls.push(`load ${spec}`);
+      if (opts.loadRejects) throw new DOMException("A network error occurred.", "NetworkError");
+      return [];
+    },
+    check: (spec: string) => {
+      calls.push(`check ${spec}`);
+      return opts.available;
+    },
+  };
+  return { fonts, calls };
+}
+
+describe("exportFontSizes", () => {
+  it("lists each text node's fontSize once, ascending, including text inside groups", () => {
+    expect(exportFontSizes(TEXT_SCENE)).toEqual([16, 60]);
+  });
+
+  it("is empty for a scene with no text", () => {
+    expect(exportFontSizes(TEXT_FREE_SCENE)).toEqual([]);
+  });
+});
+
+describe("ensureExportFonts", () => {
+  it("loads, then checks, the export font once per distinct size", async () => {
+    const { fonts, calls } = recordingFonts({ available: true });
+    await ensureExportFonts(TEXT_SCENE, fonts);
+    expect(calls).toEqual([
+      "load 16px 'JetBrains Mono'",
+      "check 16px 'JetBrains Mono'",
+      "load 60px 'JetBrains Mono'",
+      "check 60px 'JetBrains Mono'",
+    ]);
+  });
+
+  it("makes no call at all for a text-free scene", async () => {
+    const { fonts, calls } = recordingFonts({ available: true });
+    await ensureExportFonts(TEXT_FREE_SCENE, fonts);
+    expect(calls).toEqual([]);
+  });
+
+  it("does not reach for document.fonts when the scene has no text (so it runs in Node)", async () => {
+    // This suite runs with `environment: "node"`: there is no `document`, so
+    // a default that read `document.fonts` eagerly would throw here.
+    expect(typeof document).toBe("undefined");
+    await expect(ensureExportFonts(TEXT_FREE_SCENE)).resolves.toBeUndefined();
+  });
+
+  it("refuses with EXPORT_FONT_UNAVAILABLE, naming the family, when check is still false after load", async () => {
+    const { fonts } = recordingFonts({ available: false });
+    const error = await ensureExportFonts(TEXT_SCENE, fonts).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(error).toBeInstanceOf(Error);
+    const message = (error as Error).message;
+    expect(message.startsWith("[EXPORT_FONT_UNAVAILABLE] ")).toBe(true);
+    expect(message).toContain("'JetBrains Mono'");
+    expect(message).toContain("16px");
+  });
+
+  it("refuses with EXPORT_FONT_UNAVAILABLE, not the raw network error, when load itself rejects", async () => {
+    const { fonts, calls } = recordingFonts({ available: false, loadRejects: true });
+    const message = await ensureExportFonts(TEXT_SCENE, fonts).then(
+      () => "resolved",
+      (e: unknown) => (e as Error).message,
+    );
+    expect(message.startsWith("[EXPORT_FONT_UNAVAILABLE] ")).toBe(true);
+    expect(message).not.toContain("NetworkError");
+    expect(calls[0]).toBe("load 16px 'JetBrains Mono'");
+  });
+});
