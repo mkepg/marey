@@ -1214,6 +1214,19 @@ against `scenes/linear-motion.marey`, then reverted with `git checkout --`;
 | (b) Swap frames 5 and 6 (array-position swap before the loop) | **1** | decoded count still matches (90); total differing bytes **18,048 across exactly 2 frames** — frame 5 and frame 6 only, 9,024 bytes each, confirming `frame.index`-based reference slotting (T4-R2) stays correct while the file itself is wrong at exactly the swapped positions |
 | (c) `encodeApng(pngs, { fps: plan.fps + 1 })` | **1** | pixel bytes still identical (0 differing); `fcTL problems`: 90/90 (`delay_den` is 31, not the requested 30); bad-duration frames: 90/90 |
 
+**(d) A fourth, corroborating mutation, not required by the brief but
+directly testing the T4-R2 ruling this task was told to carry over.**
+Combined with (b) above: `devApngSeam.ts`'s `onFrame` changed from `const k
+= frame.index;` to `const k = sampled.indexOf(frame);` (reverting the T4-R2
+fix), WITH mutation (b)'s array-position swap still applied. Result: `apng-
+check.mjs` exit **0** — `total differing bytes 0 across 0 frame(s)`, the
+swap goes **completely undetected**. This is the exact blind spot
+`devVideoSeam.ts`'s own docstring describes for `indexOf`: since the swap
+permutes the SAME array both `onFrame`'s position-lookup and the mux loop
+walk, `indexOf` agrees with wherever each frame actually landed, so a
+whole-array reorder is invisible. Reverted (both files); `git diff --stat`
+was empty after.
+
 ### Files changed (`git diff --stat 411d598..HEAD`)
 
 ```
