@@ -62,7 +62,20 @@ if (!inputPath || !outputPath) {
 }
 
 const input = JSON.parse(readFileSync(resolve(inputPath), "utf8"));
-const { doc, renderer, requestedFrames, atPoints, pngExport, lottiePath, dotlottiePath, dotlottieWasmPath, headed, outDir } = input;
+const { doc, renderer, requestedFrames, atPoints, pngExport, lottiePath, dotlottiePath, dotlottieWasmPath, headed, outDir, inkRegion } = input;
+
+// The ink bounding box (Phase 5C Task 8, `text-check.mjs`'s position check)
+// is taken against the scene's own background colour, read from the
+// document's background solid layer (`lottieEncode.ts` always emits one, as
+// `ty: 1` with `sc` `#rrggbb`). Marey's PNG export has no transparent mode
+// (`withRasterExport` initialises every export at `backgroundAlpha: 1`), so
+// "ink" is any pixel that is not exactly the opaque background colour, in
+// both images alike: the same threshold as alpha > 0 on a transparent
+// render, applied symmetrically to both renderers.
+const backgroundLayer = (doc.layers ?? []).find((l) => l && l.ty === 1 && typeof l.sc === "string");
+const backgroundRgb = backgroundLayer
+  ? [1, 3, 5].map((k) => parseInt(backgroundLayer.sc.slice(k, k + 2), 16))
+  : null;
 
 const pad = (label) => String(label).replace(/\./g, "p").replace(/-/g, "neg");
 
@@ -286,7 +299,7 @@ for (const frame of requestedFrames) {
       const pngFramePath = `${outDir}/frame_${pad(frame)}_pngexport.png`;
       writeFileSync(pngFramePath, Buffer.from(pngBase64, "base64"));
       pngCompare = await page.evaluate(
-        async ({ pngBase64 }) => {
+        async ({ pngBase64, backgroundRgb, inkRegion }) => {
           const img = new Image();
           const loaded = new Promise((res, rej) => {
             img.onload = () => res();
@@ -356,6 +369,65 @@ for (const frame of requestedFrames) {
           dctx.putImageData(diffImageData, 0, 0);
           const diffPngBase64 = diffCanvas.toDataURL("image/png").split(",")[1];
 
+          // Ink bounding box of each image: every pixel that differs from
+          // the opaque background colour, optionally only inside
+          // `inkRegion` (inclusive pixel bounds), for a scene whose text
+          // shares the frame with other objects. `null` when no pixel is ink.
+          // `threshold` 0 is the binding rule (any difference at all, the
+          // opaque equivalent of alpha > 0). 127 is a diagnostic: pixels at
+          // least about half covered, which separates a box that is only
+          // wider (texture filtering spreads faint ink outward) from one that
+          // is shifted (a placement error moves the half-coverage edges too).
+          const inkBox = (data, threshold = 0) => {
+            if (!backgroundRgb) return undefined;
+            const x0 = inkRegion ? Math.max(0, inkRegion.x0) : 0;
+            const y0 = inkRegion ? Math.max(0, inkRegion.y0) : 0;
+            const x1 = inkRegion ? Math.min(off.width - 1, inkRegion.x1) : off.width - 1;
+            const y1 = inkRegion ? Math.min(off.height - 1, inkRegion.y1) : off.height - 1;
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            for (let y = y0; y <= y1; y++) {
+              for (let x = x0; x <= x1; x++) {
+                const i = (y * off.width + x) * 4;
+                const d = Math.max(
+                  Math.abs(data[i] - backgroundRgb[0]),
+                  Math.abs(data[i + 1] - backgroundRgb[1]),
+                  Math.abs(data[i + 2] - backgroundRgb[2]),
+                  255 - data[i + 3],
+                );
+                if (d > threshold) {
+                  if (x < minX) minX = x;
+                  if (x > maxX) maxX = x;
+                  if (y < minY) minY = y;
+                  if (y > maxY) maxY = y;
+                }
+              }
+            }
+            return minX === Infinity ? null : { minX, minY, maxX, maxY };
+          };
+          const pngInk = inkBox(pngData);
+          const lottieInk = inkBox(lottieData);
+          let inkBBox;
+          if (pngInk !== undefined) {
+            const edges = ["minX", "minY", "maxX", "maxY"];
+            const edgeDelta = (a, b) =>
+              a && b ? Math.max(...edges.map((k) => Math.abs(a[k] - b[k]))) : a === b ? 0 : null;
+            const pngHalf = inkBox(pngData, 127);
+            const lottieHalf = inkBox(lottieData, 127);
+            inkBBox = {
+              halfCoverage: { png: pngHalf, lottie: lottieHalf, maxEdgeDelta: edgeDelta(pngHalf, lottieHalf) },
+              region: inkRegion ?? null,
+              background: backgroundRgb,
+              png: pngInk,
+              lottie: lottieInk,
+              // Largest per-edge disagreement in pixels; 0 when both are
+              // empty (nothing drawn in either); null when only one is.
+              maxEdgeDelta:
+                pngInk && lottieInk
+                  ? Math.max(...edges.map((k) => Math.abs(pngInk[k] - lottieInk[k])))
+                  : pngInk === lottieInk ? 0 : null,
+            };
+          }
+
           return {
             maxDelta,
             maxDeltaAt:
@@ -368,9 +440,10 @@ for (const frame of requestedFrames) {
             width: off.width,
             height: off.height,
             diffPngBase64,
+            ...(inkBBox ? { inkBBox } : {}),
           };
         },
-        { pngBase64 },
+        { pngBase64, backgroundRgb, inkRegion: inkRegion ?? null },
       );
       pngCompare.pngExportPng = pngFramePath;
       if (pngCompare.diffPngBase64) {

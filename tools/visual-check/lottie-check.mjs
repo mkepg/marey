@@ -140,6 +140,10 @@
  *                        requested frame against Marey's own PNG render of
  *                        the same frame. See the header comment above for
  *                        the full methodology.
+ *   --ink-region <x0,y0,x1,y1>  with --compare-png, restrict the ink
+ *                        bounding box (see below) to these inclusive pixel
+ *                        bounds, for a scene whose text shares the frame
+ *                        with other objects. Default: the whole frame.
  *   --out <dir>          where doc.json, frame_<label>.png and report.json go
  *   --url <origin>       dev server origin (default http://localhost:5199)
  *   --lottie-path <path> path to the lottie-web UMD build (default
@@ -159,6 +163,12 @@
  *                        the bundle's own jsdelivr/unpkg CDN default (default
  *                        node_modules/@lottiefiles/dotlottie-web/dist/dotlottie-player.wasm)
  *   --headed             show the browser window
+ *
+ * With `--compare-png`, every compared frame also reports `inkBBox`: the
+ * bounding box of the pixels that are not exactly the scene's opaque
+ * background colour, in Marey's PNG and in the player's canvas, and the
+ * largest per-edge disagreement (`maxEdgeDelta`, px). `text-check.mjs` uses
+ * it as the text position check (Phase 5C Task 8, spec §6.6).
  *
  * Writes `<out>/doc.json` (the document actually handed to the player, i.e.
  * post-patch), `<out>/frame_<label>.png` per requested frame (label is the
@@ -234,6 +244,13 @@ const setFields = argAll("set").map((s) => {
   return { field: s.slice(0, i), value: JSON.parse(s.slice(i + 1)) };
 });
 const unsetFields = argAll("unset");
+const inkRegionArg = arg("ink-region", null);
+const inkRegion = inkRegionArg
+  ? (() => {
+      const [x0, y0, x1, y1] = inkRegionArg.split(",").map(Number);
+      return { x0, y0, x1, y1 };
+    })()
+  : null;
 const lottiePath = resolve(arg("lottie-path", "node_modules/lottie-web/build/player/lottie.min.js"));
 // Task 5, design §10's "second renderer, evaluated not promised": swaps
 // which player renders the document. Both branches end by exposing the
@@ -435,6 +452,7 @@ writeFileSync(
     dotlottieWasmPath,
     headed: has("headed"),
     outDir,
+    inkRegion,
   }),
 );
 
@@ -556,6 +574,12 @@ for (const fs_ of frameSamples) {
           `mismatching pixels=${c.mismatchCount}/${c.totalPixels} (share=${(c.share * 100).toFixed(4)}%)`,
       );
       console.log(`    pngExportPng: ${c.pngExportPng}`);
+      if (c.inkBBox) {
+        const box = (b) => (b ? `(${b.minX},${b.minY})-(${b.maxX},${b.maxY})` : "none");
+        console.log(
+          `    ink bbox: png ${box(c.inkBBox.png)}, player ${box(c.inkBBox.lottie)}, maxEdgeDelta=${c.inkBBox.maxEdgeDelta}`,
+        );
+      }
     }
   }
 }

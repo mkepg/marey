@@ -1,0 +1,16 @@
+// Phase 5C Task 8 text fixture (text-check.mjs): JetBrains Mono's `calt`
+// ligatures (`->` and `!=`), which Chromium's fillText applies and HarfBuzz
+// must too. Outlining each character on its own draws a different arrow.
+scene {
+  size: (600, 200)
+  background: #ffffff
+  duration: 1
+
+  text code {
+    position: (300, 100)
+    content: "a->b != c"
+    fontSize: 60
+    color: #000000
+    animate { property: position, to: (280, 90), duration: 1 }
+  }
+}

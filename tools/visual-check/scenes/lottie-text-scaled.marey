@@ -1,0 +1,30 @@
+// Phase 5C Task 8 text fixture (text-check.mjs): the default scene's
+// `hello!` group (src/store/defaultScene.ts), with its structure, colours,
+// rotation sway and scale pop kept. Only the timing is compressed (the pop
+// starts at 0.3 s rather than 2.3 s, the sway at 0.8 s rather than 2.8 s)
+// so a 2-second export exercises both, and the scene is cut to the band the
+// text occupies. The group rotates and the text scales, so the text layer
+// is parented and its anchor has to survive both.
+scene {
+  size: (800, 160)
+  background: #0a0e1a
+  duration: 2
+
+  group wave {
+    position: (400, 78)
+    rotation: -3
+    animate { property: rotation, to: 3, duration: 0.6, delay: 0.8, loop: true, yoyo: true }
+
+    text hello {
+      position: (0, 0)
+      content: "hello!"
+      fontSize: 60
+      color: #ffffff
+      scale: (0, 0)
+      sequence {
+        animate { property: scale, to: (1.15, 1.15), duration: 0.3, delay: 0.3, easing: easeOut }
+        animate { property: scale, to: (1, 1),       duration: 0.2 }
+      }
+    }
+  }
+}

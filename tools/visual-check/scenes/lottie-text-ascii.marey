@@ -1,0 +1,16 @@
+// Phase 5C Task 8 text fixture (text-check.mjs): plain ASCII, default origin.
+// One text object on a flat background, so the ink bounding box of a frame
+// is the text's own. It slides, so the checked frames are not all the same.
+scene {
+  size: (600, 200)
+  background: #ffffff
+  duration: 1
+
+  text label {
+    position: (260, 100)
+    content: "Marey 42"
+    fontSize: 60
+    color: #000000
+    animate { property: position, to: (340, 110), duration: 1 }
+  }
+}
