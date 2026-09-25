@@ -1434,3 +1434,187 @@ does not cover glyphs unreachable from ASCII 32–126 or the six Q2 strings
 (e.g. other GSUB-substituted forms), per the task's own scope.
 
 Full report: `.sdd/2026-09-24-phase-5c-lottie-video-quality/task-6-report.md`.
+
+
+---
+
+## Piece 5: `text` in Lottie (Task 8)
+
+Text exports as glyph outlines: one shape layer per text object, one closed
+`sh` per HarfBuzz contour, one `fl` with `r: 1`. There is no text layer. BASE
+`704220a`, HEAD `58cfb7a`. All numbers below come from
+`C:\Users\gomez\repos\PROGRAMMING_LANGUAGE\marey` with
+`npx vite --port 5199 --strictPort`. Full detail, including every mutation, is
+in `task-8-report.md`.
+
+**Suite.** `npx vitest run`: **43 files / 1049 tests** (BASE 42 / 1027).
+`npx tsc -b --noEmit`: exit 0. `npm run build`: exit 0.
+
+### Where planning runs (ruling T8-R1)
+
+`withRasterExport` gained `afterBuild(root, ir, plan)`, which runs after the
+`buildNode` loop and before the physics world and `sampleFrames`.
+`runLottieExport` plans there: first `collectTextLayouts`, then a single
+`planLottie(ir, { layouts, runs })`. Refusals now arrive after GL init and the
+build, but before sampling.
+
+`lottiePipeline.afterBuild.test.ts` pins that `onSampled` never fires on a
+refused scene. It runs the real pipeline in Node and stands in only the
+`Application`, `measureText`, `document.fonts` and `fetch`. Mutations R1a–R1e
+each turn it red:
+- hook not called;
+- hook before the build;
+- maps not passed;
+- collector not called;
+- refusal after `onSampled`.
+
+**Video, PNG and APNG are unchanged.** A/B on `lottie-text-ascii.marey`, with
+HEAD's `rasterExport.ts` against BASE's swapped in:
+
+| Output | Result |
+|---|---|
+| 30 PNG frames | byte-identical |
+| APNG `scene.png` | byte-identical (sha256 `b7cc6c7a…`) |
+| WebM `scene.webm` | byte-identical (sha256 `37b09def…`) |
+| snapshot hash | `d9039c99` on both |
+
+### Layout agreement (`text-check.mjs`, ruling T8-R2)
+
+| Fixture | Line | pixi width | HB advance sum | HB ink width | Compared | Delta |
+|---|---|---|---|---|---|---|
+| ascii | `Marey 42` | 288 | 288 | 279 | advance | 0 |
+| ligature | `a->b != c` | 324 | 324 | 315.18 | advance | 0 |
+| multiline | `one` | 57.59999 | 57.6 | 52.16 | advance | 0.000009 |
+| multiline | `two\tthree` | 172.79997 | 172.8 | 168.32 | advance | 0.000027 |
+| mark | `é x́ B̥́` | 202 | 180 | 200.1 | max(adv, ink) | **1.9** |
+| scaled | `hello!` | 216 | 216 | 196.98 | advance | 0 |
+
+The advance rows hold within 0.01 px. On the mark row, the canvas's own
+`actualBoundingBoxLeft + Right` is 202.0: pixi's width is Chromium's
+whole-pixel ink box, and HarfBuzz's glyph-extent ink width is 200.1. The mark
+tolerance is therefore the measured **1.9 px**.
+
+### Ink-bbox position check and Criterion 2 (lottie-web against Marey's PNG)
+
+"Ink" means pixels not exactly equal to the opaque scene background, in both
+images; Marey's PNG export has no transparent mode. Each cell reads:
+maxDelta / mismatching share / worst ink-box edge delta in px.
+
+| Fixture | f0 | f¼ | f½ | last |
+|---|---|---|---|---|
+| ascii (0,7,15,29) | 93 / 1.93% / 1 | 93 / 2.60% / 1 | 93 / 1.93% / 1 | 106 / 2.57% / 1 |
+| ligature | 101 / 1.69% / 1 | 108 / 2.05% / 1 | 101 / 1.69% / 1 | 103 / 1.97% / **2** |
+| multiline | 74 / 1.68% / 0 | 99 / 2.87% / 1 | 74 / 1.68% / 0 | 81 / 2.84% / 1 |
+| mark | 148 / 1.33% / 1 | 147 / 1.69% / 1 | 148 / 1.33% / 1 | 154 / 1.63% / 1 |
+| scaled (0,15,30,59) | 0 / 0% / 0 (scale 0) | 125 / 1.68% / 1 | 116 / 1.68% / 1 | 125 / 1.68% / 1 |
+
+**One cell fails the 1 px bound: ligature, frame 29, 2 px.** It is filtering
+spread, not a shift:
+- Marey's box `(121,70)-(438,115)` contains the player's `(122,70)-(436,114)`
+  on both sides, and the centres agree to 0.5 px.
+- At half coverage (a diagnostic box, pixels differing by more than 127), the
+  edge delta is **0**.
+- The text sits at x = 280.667 at that frame. pixi draws its canvas-rendered
+  text texture there with bilinear sampling, so faint ink spills a second
+  column (zoomed crop checked by eye).
+
+The binding rule is kept as written, so `text-check.mjs` exits 1 on this
+cell. It is left for a ruling.
+
+**The mark fixture needed a clip.** pixi draws a `Text` into a texture the
+size of its measured box, and ink outside that box is cut off in the preview
+and in every raster export. For `B` + U+0325 + U+0301, Marey's PNG stops
+exactly at the box's last row and column. Unclipped outlines drew 4 px further
+right and further down: edge delta 4, maxDelta 255.
+
+The encoder now masks a text layer to `(0,0)-(w,h)` only when a contour's
+vertices or control points leave the box. With the mask, the edge delta is 1
+at every frame. Of the six exported documents, only the mark fixture's
+carries a mask.
+
+### Default scene (`src/store/defaultScene.ts`)
+
+Criterion 2, lottie-web against Marey's PNG, on the whole 800×600 frame:
+
+| Frame | 0 | 75 | 90 | 120 | 150 | 179 |
+|---|---|---|---|---|---|---|
+| maxDelta | 9 | 125 | 116 | 125 | 116 | 132 |
+| share | 0.33% | 1.48% | 1.64% | 1.58% | 1.59% | 1.55% |
+
+**Position check.** It runs inside the ink region `150,0,650,118`, the band
+of `hello!`. It is judged at frames 150 and 179, after the confetti lands;
+both measure 1 px. The earlier frames also measure 0–1 px, but are only
+recorded.
+
+**The button exports the default scene.** `lottie-click-check.mjs`
+scenario B downloads `scene.json` in both dev and production (`vite preview`
+on 4173). Its `hello` layer is 9 closed contours plus `fl` `r: 1`, anchor
+[108, 35.5]. The dev and production documents are byte-identical: 1,220,298 B,
+sha256 `2d73d12c…`.
+
+Scenario C clicks on a scene containing `a日b` and toasts
+`[LOTTIE_TEXT_MISSING_GLYPH] Text 'scene.t' uses a character the export font
+'JetBrains Mono' has no glyph for: '日' (U+65E5). …`. Scenario A (compound-logo)
+measures 61 / 0.0777% and 61 / 0.0819% at frames 0 and 48.
+
+### dotlottie-web
+
+Every fixture and the default scene render in dotlottie-web (exit 0). Its
+diff against lottie-web's frames, measured on the canvas screenshots:
+- ascii: maxDelta 64–74, share 1.00–1.12%;
+- ligature: 57–75, 0.87–0.92%;
+- multiline: 57–69, 1.17–1.27%;
+- mark: 56–72, 0.70–0.81%;
+- scaled: 0–76, 0–0.76%;
+- default scene: 5–154, 0.32–1.48%.
+
+### Fill rule (spec §6.4)
+
+The fixture is `8` at 150 px, T6 Q4's glyph:
+
+| Fill | maxDelta against Marey's PNG | share |
+|---|---|---|
+| `r: 1` | 73 | 1.34% |
+| `r: 2`, mutated in the product | **255**, at (147,100), the waist | 1.59% |
+
+Under even-odd, the waist of the `8` renders as a hole (checked by eye). The
+ink box cannot see this, because only the interior changes. The unit test goes
+red (`expected 2 to be 1`).
+
+### Product mutations (spec §8; each applied, run and reverted, `git diff --stat` empty after)
+
+| Mutation | Caught by |
+|---|---|
+| (a) baseline `+ descent` | ink bbox: ascii 12 px, multiline 6–7 px, every frame. Only the top edge moves, because the clip mask cuts the shifted glyphs at the box bottom |
+| (b) per-character outlining | Criterion 2 on the ligature fixture only (maxDelta 101 → 255, share 1.69% → 2.43%). Layout agreement and ink bbox are both blind to it: monospace advances are identical and the ink box does not move. Closed with a Node test (`outlines a ligature from the shaped glyphs`), red under (b); the GPOS mark test was already red under (b) |
+| (c) missing-glyph check dropped (planner) | 6 Node tests red. In the outliner: 4 red |
+| (d) no whitespace replacement | the multiline export refuses `[LOTTIE_TEXT_MISSING_GLYPH] … '\t' (U+0009)`; `text-check.mjs` fails |
+
+### Licences (spec §6.5)
+
+`harfbuzzjs`'s own LICENSE is the wrapper's MIT and does not reproduce
+HarfBuzz's licence. `vite-plugins/licenses/harfbuzzjs.embedded.txt` carries
+HarfBuzz's COPYING at tag 14.5.0 (the version string inside the wasm).
+
+The fonts section now carries the full OFL 1.1 text, for JetBrains Mono and
+for Syne. Two sources were fetched, and they are identical from the licence
+header down.
+
+Both texts are WebFetch transcriptions; the caveat is recorded in each file.
+`dist/third-party-licenses.txt` contains `harfbuzzjs 1.6.2`, "Old MIT",
+`SIL OPEN FONT LICENSE Version 1.1` and `PERMISSION & CONDITIONS`.
+
+### Build (spec §9.7)
+
+| | Result |
+|---|---|
+| entry chunk `index-*.js`, aad331d (built in a temporary worktree) | **1,398,885 B** |
+| entry chunk, HEAD | **1,166,688 B** (−232,197 B) |
+| `grep -c harfbuzz dist/assets/index-*.js` | 0 |
+| chunks mentioning harfbuzz | only `lottiePipeline-*.js`, 41,864 B |
+| `harfbuzz-9Zbs1aEM.wasm` | 433,766 B |
+| mediabunny | only in `videoPipeline-*.js` |
+| files in `dist/` containing `__mareyExport` | 0 |
+
+Commands: `node tools/visual-check/text-check.mjs --out .visual-check/t8/full2`;
+`node tools/visual-check/lottie-click-check.mjs --scene eval/scenes-3b/compound-logo.marey [--url http://localhost:4173]`.
