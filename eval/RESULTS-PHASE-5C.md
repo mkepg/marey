@@ -1307,3 +1307,130 @@ build, same as every other dev seam).
 - Two mid-task stream interruptions occurred; the RED test commit
   (`01fb75d`) was momentarily uncommitted across one of them and is now
   committed per the coordinator's note.
+
+---
+
+## Piece 5 spike: `text` in Lottie (Task 6)
+
+**Measurement only. No production code.** Answers spec §6's seven open
+questions inside the real app, so the plan can re-derive T7/T8's details
+from measured numbers rather than the design-time throwaway probes in
+`.visual-check/probe5c/`. Full detail (every command, every number, every
+contradiction) is in `task-6-report.md`; this section is the standing
+evidence-file summary.
+
+**Baseline.** HEAD `855e0c7`, from
+`C:\Users\gomez\repos\PROGRAMMING_LANGUAGE\marey`: `npx vitest run` → **40
+files / 981 tests**; `npx tsc -b --noEmit` → exit 0. Unchanged after this
+task (measurement only): re-ran both at the end, same numbers.
+
+**Dependency.** `npm install harfbuzzjs@1.6.2 --save-exact` landed in
+`dependencies` (`package.json`), next to `mediabunny`, matching 5B's M-4
+precedent. `git diff --stat -- package.json package-lock.json` → `2 files
+changed, 8 insertions(+)`. Nothing under `src/` imports it.
+
+**Q1 (harfbuzzjs in Vite).** Loads and instantiates in both modes.
+- Dev (`npx vite --port 5199 --strictPort`, dynamic `import()` of a probe
+  module): wasm fetched from
+  `http://localhost:5199/node_modules/harfbuzzjs/dist/harfbuzz.wasm`, status
+  200; shaping a test string round-tripped correctly (`upem: 1000`,
+  `glyphCount: 11`).
+- Build (`npm run build` with a temporary `<script type="module">` tag in
+  `index.html`, reverted immediately after — never committed): Rolldown (the
+  bundler behind this Vite v8 beta) statically rewrote the Emscripten
+  loader's `locateFile("harfbuzz.wasm")` call into
+  `new URL("/assets/harfbuzz-9Zbs1aEM.wasm", ""+import.meta.url)` with **no
+  `?url` wiring needed**. Emitted `dist/assets/harfbuzz-9Zbs1aEM.wasm`,
+  **433,766 bytes**, byte-identical (`cmp`) to `node_modules/harfbuzzjs/dist/harfbuzz.wasm`.
+  Loaded correctly under `npx vite preview --port 4173 --strictPort` too.
+
+**Q2 (shaping parity in Chromium).** Ligature strings' ink bboxes agree with
+`fillText`'s within ±1px per edge, exactly as spec §1 predicted: `->`
+(63×36 vs 64×36), `!=` (exact), `==` (exact), `hello!` (exact), `a->b != c`
+(each edge off by ≤1px). The tab case confirms the design's own claim
+directionally: shaping the raw tab (harfbuzz maps U+0009 to glyph 0,
+`.notdef`) differs from `fillText`'s rendering by 1043 px; replacing the tab
+with U+0020 before shaping cuts that to 439 px. Neither hits 0 — some
+residual vector-fill-vs-raster-AA diff is expected per spec §6.6 and is not
+a defect.
+**Corrected the design-time probe while measuring this:** harfbuzzjs 1.6.2's
+`getGlyphPositions()` objects use **camelCase** (`xAdvance`, `yAdvance`,
+`xOffset`, `yOffset`) — the HarfBuzz C API's snake_case
+(`.visual-check/probe5c/hb.mjs`'s `pos[i].x_advance`) silently reads
+`undefined` there; nobody noticed because template-string interpolation
+prints "undefined" instead of throwing.
+
+**Q3 (pixi's layout numbers).** `metrics.width` always wins over the
+bounding-box width in `_measureText` for every JetBrains Mono string
+measured (both font sizes). `__baseSize` equals `textObj.width/height`
+exactly, by construction (`builder.ts:333` assigns it straight from the
+`Text` object). `NEWLINE_MATCH_REGEX` is
+`/(?:\r\n|\r|\n)/` (`textTokenization.mjs:41`). pixi passes `\t` through to
+`fillText` unchanged — confirmed both by quoting the call site
+(`CanvasTextGenerator.mjs:408`, `context.fillText(text, x, y);`, the
+`letterSpacing === 0` branch, which is Marey's default) and by measuring
+that `CanvasTextMetrics.measureText("a\tb", ...).width` equals the raw 2D
+context's own `measureText("a\tb").width` exactly.
+
+**Q4 (overlapping contours).** Checked 100 distinct glyphs (ASCII 32–126
+plus the ligature-run glyphs Q2 exercises). **19 differ** between `nonzero`
+and `evenodd` fill, including common lowercase letters (`a b d e g h m n p
+q r`), several digits/symbols (`$ 5 8 @ B Q }`), and the `é` ligature-run
+glyph. `eight` (digit `8`) has the largest difference, 28 px, and is the
+recommended T8 fixture glyph.
+
+**Q5 (font URL).** Built CSS: `url(/fonts/JetBrainsMono-Regular.ttf)`,
+unchanged and unhashed (leading-slash public-dir reference, copied
+verbatim). `import.meta.env.BASE_URL` is `"/"`, confirmed at runtime, not
+just read from `vite.config.ts`. `textOutline.ts` must fetch the identical
+literal `/fonts/JetBrainsMono-Regular.ttf`.
+**Contradicts an implicit assumption, not the spec's text:** the fetch is
+**not** a disk-cache hit after `@font-face` has already loaded the file.
+`npx vite preview`'s static server sends `Cache-Control: no-cache` for
+files under `public/`, so every request — the `@font-face` load, and a
+follow-up `fetch()` of the same URL — revalidates over the network
+(CDP `fromDiskCache: false` on all three requests observed). The server
+does honor conditional GETs (a manual `If-None-Match` got a real 304), so
+the cost is a cheap revalidation round trip, not a full re-download, but
+`textOutline.ts` should not assume a free/no-network hit.
+
+**Q6 (font readiness).** The race is real, and the app's own font-metrics
+cache can hide it: with a **freshly loaded, single-purpose page**
+(`q6-fresh.html` — navigating to the app's own `/` was rejected as a first
+attempt, because mounting the whole editor/preview already resolves the
+race before the check runs), `document.fonts.check(...)` is `false` before
+`document.fonts.load(...)` and `true` after. A `pixi.Text` built before
+loading measures the **fallback font's** width (`494.82px` for a 16-char
+string); after loading, reusing the *same* `TextStyle` **instance** returns
+the exact same stale `494.82px` — pixi's `CanvasTextMetrics` measurement
+cache is keyed by `text-styleKey-wordWrap`, so remeasuring the identical
+pair after the font loads does not self-correct. A brand-new `TextStyle`
+with identical field values (or any text never measured before) correctly
+returns JetBrains Mono's width (`540px`) after loading. This directly
+supports the design's `ensureExportFonts`-before-building-the-tree
+ordering (§6.1): remeasuring after the fact is not a reliable fallback.
+
+**Q7 (missing glyph).** `日` and `🙂` both shape to glyph id `0`
+(`.notdef`) in JetBrains Mono, confirmed by harfbuzz. The preview does
+**not** draw tofu: Chromium's font-fallback machinery draws a correct CJK
+glyph for `日` and a full-colour emoji for `🙂` (screenshots saved by the
+probe, `.visual-check/text-spike/q7-{cjk,emoji}.png`, gitignored — visually
+confirmed, not just ink-bbox-confirmed). Since HarfBuzz's glyph-outline
+path cannot reproduce a system fallback font's colour emoji as a vector
+Lottie shape, this is a real justification for the design's
+`LOTTIE_TEXT_MISSING_GLYPH` refusal (§6.3): a silent skip would render
+nothing where the preview shows real ink.
+
+**Contradictions of spec §1/§6 found:** none in the design's own claims —
+every §1 fact re-measured (or its equivalent) held. The one correction is
+to the *design-time probe* (`hb.mjs`'s snake_case), not to the design
+document's own numbers, which don't depend on it.
+
+**What was not done:** no changes to `textOutline.ts`, `lottieGeometry.ts`
+or any production module (out of scope — measurement only); no attempt to
+resolve the `Cache-Control: no-cache` behavior on a real production static
+host, only on `vite preview`'s dev-oriented default; Q4's 100-glyph sweep
+does not cover glyphs unreachable from ASCII 32–126 or the six Q2 strings
+(e.g. other GSUB-substituted forms), per the task's own scope.
+
+Full report: `.sdd/2026-09-24-phase-5c-lottie-video-quality/task-6-report.md`.
