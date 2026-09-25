@@ -1044,6 +1044,110 @@ checkout's own dev server). `git worktree list` after `git worktree remove
 
 ---
 
+## Piece 4 (refactor): the shared raster-export prefix (Task 4)
+
+**Copied from `task-4-report.md`** (added here in Task 9; see that
+section's own "A note on this section's title" below for why Task 5 found
+no such section when its dispatch said one already existed). Task 4
+extracted `withRasterExport` into a new `src/compiler/export/rasterExport.ts`
+as the **one** shared compile → plan → init → build → sample → (rasterize)
+→ teardown prefix; `runVideoExport`, `runLottieExport` (controller ruling
+T4-R1, beyond the brief's original two-caller scope) and
+`devExportSeam.ts`'s `exportPng` (`scale: 1`) were all rewritten on top of
+it. **No behaviour change**, proved by re-running the same three commands
+before extraction (`0ae9d65`) and after (`8b9c5e5`) and diffing the
+results.
+
+### Before (`0ae9d65`) / after (`8b9c5e5`)
+
+- **MP4** (`video-check.mjs --scene .../linear-motion.marey --container mp4`):
+  hash `fa8e64c2`/`fa8e64c2`, identical before and after; decode gates all
+  pass identically (90/90 frames, 1600x1200 coded = 2x scene, strict=90
+  tie=0 mismatches=0). MP4 bytes are not byte-stable across runs even
+  pre-Task-4 (5B); only the decode gates are the claim here.
+- **WebM** (same scene, `--container webm`): raw bytes equal `true`,
+  237614/237614 bytes both before and after, sha256
+  `b7dd721f602e64878b2c4c59c1bb29198c5ea9a4df4b0f256c969c806ee63d0b` —
+  **identical before/after.**
+- **PNG** (`export-check.mjs --scene eval/scenes-3b/compound-logo.marey`):
+  snapshot hash `26cca4e9` both before and after; `frame_0000.png` sha256
+  `7f152edb112a123bc2d0863725004be9729e722452db043aa458517b686cc204` —
+  **identical.**
+- **Lottie compare** (`lottie-check.mjs --compare-png` on the same scene,
+  frame 0): maxDelta 78 at (166,52), 560/480000 mismatching (0.1167%),
+  both before and after; `doc.json` and `frame_0.png` sha256 **identical**
+  before/after. (This is the pre-T3-R1-harness-fix number; see "Piece 3"
+  above for the fixed harness's re-measurement.)
+- **Suite/tsc:** before, 38 files / 957 tests, `npx tsc -b --noEmit` exit
+  0; after, 38 files / **958** tests (the one new `exportBoundary.test.ts`
+  row), `npx tsc -b --noEmit` exit 0.
+
+### Mutation (Step 4)
+
+Brief instruction: reverse `frames` inside `withRasterExport`;
+`video-check.mjs` must exit 1 for WebM. **Measured false as written, and
+reported loudly per the plan's own MEASURED/UNVERIFIED discipline:** exit
+0, every gate passed including the nearest-neighbour check. Root cause,
+confirmed by reading the source: `videoEncode.ts` assigns each sample's
+timestamp by positional loop index, and `devVideoSeam.ts`'s harness
+instrumentation originally captured its "reference" frames by
+`sampled.indexOf(frame)` against the very same array the encode loop
+walks — so a whole-array reversal of `frames` reverses what the observer
+is told to expect **and** what actually gets encoded, in lockstep, and is
+invisible to a check with no ground truth independent of that
+self-report. **Not a Task 4 regression**: the pre-Task-4 `runVideoExport`
+had the identical one-array structure, so the same mutation at the
+equivalent pre-refactor line would produce the same exit 0. Filed at the
+time as a gap in an *adjacent* behaviour (harness detection completeness,
+not the behaviour Task 4 was asked to preserve) per the scope tie-break —
+then fixed anyway once the task review raised it as an Important finding
+(fix round 1, below).
+
+A supplementary "drop frame 0" mutation on the same line **did** exit 1
+(`decoded frame count 89 (planned 90, match: false)`), confirming the
+extraction itself did not weaken observability in general — whole-array
+reversal specifically was the blind spot.
+
+### Fix round 1 (`411d598`, ruling T4-R2)
+
+`src/lib/devVideoSeam.ts`'s `onFrame` observer now keys the
+reference-frame slot by `frame.index` — `FrameSnapshot`'s own field,
+frozen and written once by `sampleFrames` — instead of
+`sampled.indexOf(frame)`, with the bounds check widened to an upper bound
+too. Harness-only change; no product code touched. Re-run after the fix:
+the reversal mutation now **exits 1** (nearest-reference ties reported
+throughout the clip, e.g. "frame 23: nearest references tie between [21,
+24]"); the unmutated control **exits 0** with the same hash/bytes as
+every other unmutated run in this report; the drop-frame mutation still
+**exits 1**, now caught earlier (a bounds-check throw) rather than by the
+frame-count gate. `npx tsc -b --noEmit` exit 0; suite 38 files / 958 tests
+(unchanged — `devVideoSeam.ts` has no dedicated test file; the mutation
+re-runs above are this fix's actual verification).
+
+### Files changed
+
+`git diff --stat 0ae9d65..8b9c5e5` (extraction commit):
+```
+ src/compiler/export/exportApp.test.ts      |  11 +-
+ src/compiler/export/exportBoundary.test.ts |  34 ++++-
+ src/compiler/export/lottiePipeline.ts      | 142 +++++++------------
+ src/compiler/export/rasterExport.ts        | 189 +++++++++++++++++++++++++
+ src/compiler/export/videoPipeline.ts       | 218 +++++++++++++----------------
+ src/lib/devExportSeam.ts                   | 119 ++++++----------
+ 6 files changed, 418 insertions(+), 295 deletions(-)
+```
+`git diff --stat 8b9c5e5..411d598` (fix round 1):
+```
+ src/lib/devVideoSeam.ts | 32 ++++++++++++++++++++++++++------
+ 1 file changed, 26 insertions(+), 6 deletions(-)
+```
+
+Commits: `8b9c5e5` (extraction), `411d598` (fix round 1, T4-R2). Full
+detail — including the `devExportSeam.ts` re-prefixing fragility concern
+and everything the task deliberately did not do — is in `task-4-report.md`.
+
+---
+
 ## Piece 4: APNG (Task 5)
 
 **A note on this section's title.** The Task 5 dispatch said "the existing
