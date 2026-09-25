@@ -39,8 +39,15 @@
         const bytes = await fetchExportFont();
         const outliner = await createTextOutliner(bytes.slice(0));
         // A second handle on the same font, for glyph extents only:
-        // textOutline.ts exposes shaping, not extents.
-        const font = new hb.Font(new hb.Face(new hb.Blob(bytes.slice(0))));
+        // textOutline.ts exposes shaping, not extents. harfbuzzjs 1.6.2 has
+        // no explicit destroy: it frees each wasm object through a
+        // FinalizationRegistry once the JS object is unreachable
+        // (node_modules/harfbuzzjs/dist/index.mjs, `registry`/`track`). So
+        // freeing it means dropping every reference, which the `finally`
+        // below does, rather than letting this closure keep them alive.
+        let blob = new hb.Blob(bytes.slice(0));
+        let face = new hb.Face(blob);
+        let font = new hb.Font(face);
         const ctx = document.createElement("canvas").getContext("2d");
         try {
           return await withRasterExport({ source, fps: 30 }, async ({ root, plan }) => {
@@ -89,6 +96,9 @@
           });
         } finally {
           outliner.destroy();
+          font = null;
+          face = null;
+          blob = null;
         }
       };
       window.__textLayoutReady = true;
