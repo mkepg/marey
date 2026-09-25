@@ -564,27 +564,52 @@ OOM-killing the renderer). Two consequences, both load-bearing:
   send it twice and reproduced the crash above at 90 frames already —
   fixed by never re-serializing it, not by any duration limit.
 - For a **file-size** measurement on a long export (spec §5.3's "one scene
-  of at least 30s"), do not run this script at that duration. Call the
-  shipped `runApngExport` directly with no observer at all (a dynamic
-  `import("/src/compiler/export/apngPipeline.ts")` straight from the dev
-  server, the same technique the probes above use), exactly what a real
-  button click does — it holds only compressed PNG bytes in memory
-  (`apngPipeline.ts`'s own documented bound), never a reference-capture
-  array. Measured this way: `linear-motion.marey` at `--duration 30`
-  (900 frames, 800×600, 30fps) is 11,492,040 bytes in ~26s.
+  of at least 30s"), pass **`--size-only`** (fix round 1, finding 2) instead
+  of running the full pixel-identity mode at that duration. It passes
+  `withReferenceCapture: false` to `window.__mareyExportApng`
+  (`devApngSeam.ts`), so the seam never allocates the raw-RGBA array at all
+  — the same memory-bound reasoning as `useExport.ts`'s video path
+  (`ExportVideoOptions.withReferenceFrames`), applied to APNG. Skips
+  decode-and-compare and `missingReferenceFrames` (there is no reference to
+  check either against); still runs both cold pages and checks byte/hash
+  reproducibility (spec §5.3's own determinism ask) and the independent
+  `fcTL` parse, both cheap regardless of frame count. Measured this way:
+  `linear-motion.marey --duration 30` (900 frames, 800×600, 30fps) is
+  **11,504,757 bytes**, byte-identical (sha256) across two cold runs, 0
+  `fcTL` problems.
+
+  An earlier version of this evidence came from an uncommitted scratch
+  probe calling `runApngExport` directly with no seam at all, which measured
+  **11,492,040 bytes** for the identical scene/fps/duration — a ~0.1%
+  difference from the number above. Both numbers are real measurements of
+  real runs; the difference is consistent with this project's own
+  documented determinism scope (`eval/RESULTS-GATE-B.md`,
+  `RESULTS-PHASE-5B.md`'s "page-cold, not process-cold"): each script
+  invocation launches its OWN Chromium process, and cross-*process*
+  bit-identical rendering is never claimed anywhere in this codebase, only
+  cross-*page* (two pages, one launched browser) — which `--size-only`'s own
+  two-cold-run comparison above proves directly. Use `--size-only`'s number
+  going forward; it is the one a rerun of the command below reproduces.
 
 ```bash
 node tools/visual-check/apng-check.mjs \
   --scene tools/visual-check/scenes/linear-motion.marey \
   --fps 30 --out .visual-check/apng/linear-motion
+
+# a >=30s file-size measurement (spec §5.3), without the memory-heavy
+# reference capture:
+node tools/visual-check/apng-check.mjs \
+  --scene tools/visual-check/scenes/linear-motion.marey \
+  --fps 30 --duration 30 --size-only --out .visual-check/apng/linear-motion-30s
 ```
 
 | Flag | Meaning |
 |---|---|
 | `--scene <path>` | A `.marey` file. Required — no `default` fallback |
 | `--fps <n>` | Export frame rate (default 30) |
-| `--duration <s>` | Export bound in seconds, overriding the scene's own `duration:`. Keep this well under 900 frames' worth — see the memory limit above |
-| `--frames <list>` | Comma-separated decoded frame indices to write as PNG. Every decoded frame is still analysed numerically regardless of this flag. Default: an evenly-spaced spread of five indices |
+| `--duration <s>` | Export bound in seconds, overriding the scene's own `duration:`. Without `--size-only`, keep this well under 900 frames' worth — see the memory limit above |
+| `--size-only` | Measure a file SIZE only, not pixel identity — see above. Skips decode-and-compare and `missingReferenceFrames`; still checks byte/hash reproducibility and `fcTL` |
+| `--frames <list>` | Comma-separated decoded frame indices to write as PNG. Every decoded frame is still analysed numerically regardless of this flag. Default: an evenly-spaced spread of five indices. Ignored under `--size-only` |
 | `--out <dir>` | Where `scene.png`, `decoded_%04d.png` and `report.json` go |
 | `--url <origin>` | Dev server origin (default `http://localhost:5199`). Same `--strictPort` trap as `check.mjs` |
 | `--headed` | Show the browser window |
@@ -623,7 +648,9 @@ more than 1µs; any parsed `fcTL` is wrong; the two cold runs' APNG bytes
 (sha256) disagree; or either run recorded a page error. Never on how the
 PNGs look, and never on a byte-for-byte comparison of the two cold runs'
 raw reference captures against each other (deliberately not computed —
-see the memory-limit note above).
+see the memory-limit note above). **Under `--size-only`**, only the
+`fcTL`/byte-hash/page-error checks apply — there is no reference and no
+decode step to gate on.
 
 **Look at the PNGs.** `scene.png` is a real, valid APNG — open it in a
 modern browser and it animates natively, no JavaScript required. Also read

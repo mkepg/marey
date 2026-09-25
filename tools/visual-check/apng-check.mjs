@@ -69,20 +69,34 @@
  *   --frames <list>   comma-separated decoded frame indices to write as PNG
  *                      (every decoded frame is still analysed numerically
  *                      regardless of this flag). Default: an evenly-spaced
- *                      spread of five indices.
+ *                      spread of five indices. Ignored under --size-only.
+ *   --size-only       measure a FILE SIZE only (spec §5.3's ">=30s" ask),
+ *                      not pixel identity. Passes `withReferenceCapture:
+ *                      false` to the seam (`devApngSeam.ts`) so it never
+ *                      allocates the raw-RGBA reference array that
+ *                      measurably crashes the page at long durations (fix
+ *                      round 1, finding 2 -- see `runExport`'s own comment
+ *                      for the exact error, and SKILL.md). Skips
+ *                      decode-and-compare and `missingReferenceFrames`;
+ *                      still runs both cold pages and checks byte/hash
+ *                      reproducibility and the independent fcTL parse.
  *   --out <dir>       where scene.png, decoded_%04d.png and report.json go
  *   --url <origin>    dev server origin (default http://localhost:5199)
  *   --headed          show the browser window
  *
- * Exit code is non-zero if: either cold run failed; the seam reported a
- * sampled frame it never rasterized (`missingReferenceFrames`); decode
- * failed, or decoded frame count does not match the seam's own reported
- * frame count; ANY decoded frame differs from its reference by so much as
- * one byte; any decoded frame's `duration` is off, by more than 1us, its
- * `1e6/fps` ideal ROUNDED to the nearest millisecond (measured: Chromium's
- * `ImageDecoder` quantizes an APNG frame's reported duration to whole
- * milliseconds -- `decodeAndCompare`'s own comment has the numbers); any
- * parsed `fcTL`'s `delay_num`/`delay_den` is not exactly
+ * Exit code under --size-only is non-zero only if: either cold run failed;
+ * any parsed `fcTL` is wrong; the two cold runs' APNG bytes (sha256)
+ * disagree; or either run recorded a page error.
+ *
+ * Exit code otherwise is non-zero if: either cold run failed; the seam
+ * reported a sampled frame it never rasterized (`missingReferenceFrames`);
+ * decode failed, or decoded frame count does not match the seam's own
+ * reported frame count; ANY decoded frame differs from its reference by so
+ * much as one byte; any decoded frame's `duration` is off, by more than
+ * 1us, its `1e6/fps` ideal ROUNDED to the nearest millisecond (measured:
+ * Chromium's `ImageDecoder` quantizes an APNG frame's reported duration to
+ * whole milliseconds -- `decodeAndCompare`'s own comment has the numbers);
+ * any parsed `fcTL`'s `delay_num`/`delay_den` is not exactly
  * `1`/`fps`; the two cold runs' APNG bytes (sha256) disagree; or either run
  * recorded a page error. Never on how the PNGs look -- **look at them
  * anyway**, same rule as every other script on this page.
@@ -127,6 +141,15 @@ const durationArg = arg("duration", null);
 const durationSeconds = durationArg === null ? undefined : Number(durationArg);
 const framesArg = arg("frames", null);
 const explicitWriteIndices = framesArg === null ? null : framesArg.split(",").map((s) => Number(s.trim()));
+// Fix round 1, finding 2: measures a SIZE only, without the raw RGBA
+// reference capture the full pixel-identity check needs -- see
+// `devApngSeam.ts`'s `withReferenceCapture` (this flag's own reason to
+// exist) and this file's header comment. Skips reference capture, the
+// missing-reference-frame check, and the in-page decode-and-compare (there
+// is no reference to decode against); still runs both cold pages and
+// compares the two runs' APNG bytes and this file's own independent fcTL
+// parse, both cheap regardless of frame count.
+const sizeOnly = has("size-only");
 
 const source = readFileSync(resolve(scenePath), "utf8");
 
@@ -226,9 +249,13 @@ async function runExport(browser, keepOpen) {
   }
 
   const result = await page.evaluate(
-    async ({ source, fps, durationSeconds }) => {
+    async ({ source, fps, durationSeconds, sizeOnly }) => {
       try {
-        const r = await window.__mareyExportApng(source, { fps, durationSeconds });
+        const r = await window.__mareyExportApng(source, {
+          fps,
+          durationSeconds,
+          withReferenceCapture: !sizeOnly,
+        });
         // Stash the FULL result -- including `referenceRgba`, one raw RGBA
         // buffer per frame (800x600x4 bytes = 1.92MB *raw*, ~2.56MB as
         // base64, times however many frames the scene has) -- on a
@@ -256,13 +283,13 @@ async function runExport(browser, keepOpen) {
           frameCount: r.frameCount,
           width: r.width,
           height: r.height,
-          missingReferenceFrames: r.referenceRgba.filter((x) => !x).length,
+          missingReferenceFrames: sizeOnly ? null : r.referenceRgba.filter((x) => !x).length,
         };
       } catch (e) {
         return { ok: false, error: String(e && e.message ? e.message : e) };
       }
     },
-    { source, fps, durationSeconds },
+    { source, fps, durationSeconds, sizeOnly },
   );
 
   if (!keepOpen) await page.close();
@@ -494,6 +521,34 @@ try {
     `fcTL count               ${fctls.length} (expect delay ${expectedDelayNum}/${expectedDelayDen}, dispose NONE, blend SOURCE, x/y 0)`,
   );
   console.log(`fcTL problems            ${fcTLProblems.length}`);
+
+  // --- size-only mode ends here (fix round 1, finding 2) ---
+  // No reference was ever captured (`withReferenceCapture: false`), so
+  // there is nothing for `decodeAndCompare` to diff a decoded frame
+  // against, and no `missingReferenceFrames` question to ask. Report a
+  // SIZE and the two cheap checks above (byte/hash reproducibility, the
+  // independent fcTL parse), close the still-open runA page, and stop.
+  if (sizeOnly) {
+    report.mode = "size-only";
+    report.notChecked = [
+      "decode-and-compare (no reference captured)",
+      "missingReferenceFrames (no reference captured)",
+    ];
+    await runA.page.close();
+    console.log(
+      "\nsize-only mode: decode-and-compare and missingReferenceFrames were NOT run (no reference\n" +
+        "was captured -- see devApngSeam.ts's withReferenceCapture). This measures a SIZE, not pixel\n" +
+        "identity; use this script without --size-only for that.",
+    );
+    console.log(`\nwrote ${outDir}/report.json and ${outDir}/scene.png`);
+    const sizeOnlyFail =
+      fcTLProblems.length > 0 ||
+      !(fctls.length > 0 && fctls[0].seq === 0) ||
+      !bytesEqual ||
+      runA.pageErrors.length > 0 ||
+      runB.pageErrors.length > 0;
+    await finish(sizeOnlyFail ? 1 : 0);
+  }
 
   // --- decode-back, in the page ---
   const writeIndices = explicitWriteIndices ?? defaultSpreadIndices(runA.result.frameCount, 5);

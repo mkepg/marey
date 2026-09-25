@@ -18,13 +18,30 @@ export interface ExportApngResult {
   readonly referenceRgba: (string | null)[];
   readonly fps: number;
   readonly frameCount: number;
-  readonly width: number;
-  readonly height: number;
+  /** `null` when `withReferenceCapture` is `false` -- no canvas was ever inspected to read a size off. */
+  readonly width: number | null;
+  readonly height: number | null;
 }
 
 export interface ExportApngOptions {
   readonly fps: number;
   readonly durationSeconds?: number;
+  /**
+   * Omit the raw RGBA reference capture when only the container bytes (or
+   * just their size) are wanted. Mirrors `devVideoSeam.ts`'s
+   * `withReferenceFrames`. Default `true`.
+   *
+   * Fix round 1, finding 2: `apng-check.mjs`'s full pixel-identity harness
+   * holds one raw RGBA capture per sampled frame (~2.56MB base64 per
+   * 800x600 frame) for the lossless byte-for-byte comparison, and that
+   * measurably crashes the page well before a `--duration 30` (900-frame)
+   * export completes (see that script's own header comment for the exact
+   * error). `--size-only` passes `withReferenceCapture: false` so a long
+   * export's file SIZE can still be measured through this same committed
+   * seam and script -- never allocating the array that crashes the page --
+   * rather than needing an uncommitted, unreproducible scratch probe.
+   */
+  readonly withReferenceCapture?: boolean;
 }
 
 declare global {
@@ -87,8 +104,10 @@ async function exportApng(
   source: string,
   opts: ExportApngOptions,
 ): Promise<ExportApngResult> {
-  let plan: { fps: number; frameCount: number; width: number; height: number } | undefined;
+  const withReferenceCapture = opts.withReferenceCapture !== false;
   let sampled: ReadonlyArray<FrameSnapshot> = [];
+  let width: number | null = null;
+  let height: number | null = null;
   const referenceRgba: (string | null)[] = [];
 
   let bytes: Uint8Array;
@@ -100,34 +119,44 @@ async function exportApng(
       observer: {
         onSampled: (frames) => {
           sampled = frames;
-          referenceRgba.push(...frames.map(() => null));
+          if (withReferenceCapture) referenceRgba.push(...frames.map(() => null));
         },
-        onFrame: (canvas, frame) => {
-          // `frame.index`, not `sampled.indexOf(frame)` -- see this
-          // function's own docstring (T4-R2) for why.
-          const k = frame.index;
-          if (k < 0 || k >= referenceRgba.length) {
-            throw new Error(
-              "[export] onFrame received a frame whose index is outside the sampled range",
-            );
-          }
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            throw new Error("[export] onFrame's canvas has no 2D context to read pixels from");
-          }
-          const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          referenceRgba[k] = rgbaToBase64(data);
-          if (!plan) {
-            plan = { fps: opts.fps, frameCount: sampled.length, width: canvas.width, height: canvas.height };
-          }
-        },
+        // `undefined`, not a no-op function, when the caller wants no
+        // capture: `runApngExport`'s own loop skips the `await
+        // observer.onFrame?.(...)` call entirely rather than invoking and
+        // discarding a callback that would still cost a `getImageData` read
+        // per frame -- see `apngPipeline.ts`.
+        onFrame: withReferenceCapture
+          ? (canvas, frame) => {
+              // `frame.index`, not `sampled.indexOf(frame)` -- see this
+              // function's own docstring (T4-R2) for why.
+              const k = frame.index;
+              if (k < 0 || k >= referenceRgba.length) {
+                throw new Error(
+                  "[export] onFrame received a frame whose index is outside the sampled range",
+                );
+              }
+              const ctx = canvas.getContext("2d");
+              if (!ctx) {
+                throw new Error("[export] onFrame's canvas has no 2D context to read pixels from");
+              }
+              const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              referenceRgba[k] = rgbaToBase64(data);
+              if (width === null) {
+                width = canvas.width;
+                height = canvas.height;
+              }
+            }
+          : undefined,
       },
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     throw new Error(`[export] ${message}`);
   }
-  if (!plan) throw new Error("[export] runApngExport returned without rasterizing any frame");
+  if (withReferenceCapture && width === null) {
+    throw new Error("[export] runApngExport returned without rasterizing any frame");
+  }
 
   // A `null` slot -- a sampled frame `onFrame` was never called for, e.g. a
   // dropped frame (Task 5 Step 7, mutation (a)) -- is reported, not thrown:
@@ -135,13 +164,15 @@ async function exportApng(
   // same shape `video-check.mjs` already uses for the identical question on
   // the video path), so the report names exactly which index the pipeline
   // never handed a canvas for rather than an opaque construction failure.
+  // With capture off, `referenceRgba` stays `[]` and `width`/`height` stay
+  // `null` -- there was nothing to inspect a size from.
   return {
     apng: toBase64(bytes),
     referenceRgba,
-    fps: plan.fps,
+    fps: opts.fps,
     frameCount: sampled.length,
-    width: plan.width,
-    height: plan.height,
+    width,
+    height,
   };
 }
 

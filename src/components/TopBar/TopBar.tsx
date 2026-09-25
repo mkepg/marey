@@ -3,6 +3,7 @@ import type { FunctionComponent } from "preact";
 import { useAppStore } from "../../store";
 import { useShare } from "../../hooks/useShare";
 import { useExport, type ExportKind } from "../../hooks/useExport";
+import { exportLabelFor } from "./exportLabel";
 import styles from "./TopBar.module.scss";
 
 const SunIcon: FunctionComponent = () => (
@@ -135,21 +136,9 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
     setTimeout(() => setConfirmingExample(false), 150);
   };
 
-  // The New/Example buttons reflect their confirm state in the label; this
-  // does the same for the one button currently mid-export, showing a percent
-  // rather than static text so a several-second export does not read as a
-  // hung tab. The other export buttons just go disabled. Lottie (and APNG,
-  // once it ships) has no per-frame progress at all, so its running label is
-  // always "…" rather than a percent or "starting…".
-  const exportLabel = (kind: ExportKind): string => {
-    if (progress && progress.kind === kind) {
-      if (kind === "lottie" || kind === "apng") return "…";
-      return progress.total > 0
-        ? `${Math.round((progress.done / progress.total) * 100)}%`
-        : "starting…";
-    }
-    return kind;
-  };
+  // See `exportLabelFor`'s own docstring above (module level) for what this
+  // shows and why APNG is not treated like Lottie.
+  const exportLabel = (kind: ExportKind): string => exportLabelFor(kind, progress);
 
   const handleExportClick = (kind: ExportKind): void => {
     void exportScene(kind);
