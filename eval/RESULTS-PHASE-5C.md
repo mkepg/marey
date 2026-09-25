@@ -782,3 +782,262 @@ Port 5199 confirmed free before starting vite (`netstat -ano | grep -E
 (`netstat` → one `LISTENING` row) before any browser check in this task.
 Killed and re-confirmed free after all Task 2 browser work — see the task
 report for the exact commands and output.
+
+---
+
+## Piece 3: the shipped Lottie button (Task 3)
+
+**Baseline.** At `123c55f` (Task 2 complete), from
+`C:\Users\gomez\repos\PROGRAMMING_LANGUAGE\marey`: `npx vitest run` → **37
+files / 950 tests**; `npx tsc -b --noEmit` → exit 0.
+
+**What changed.** `src/compiler/export/lottiePipeline.ts` (new) is the one
+copy of compile → `planExport` → `planLottie` → build → sample →
+`encodeLottie`, moved from `devLottieSeam.ts`'s `exportLottie`; every
+diagnostic reaches the caller unprefixed, joined `" | "`, and the
+document's `nm` is `"Marey scene"`. `lottieGeometry.ts` now exports
+`hexToRgb01`; the seam's and `lottieRoundTrip.test.ts`'s own copies are
+gone. `devLottieSeam.ts` is a thin observer (67 lines, down from 170).
+`src/hooks/useExport.ts` (new, replacing `useExportVideo.ts`) generalises
+to `ExportKind = "mp4" | "webm" | "apng" | "lottie"`, with one
+`isExporting`/progress shape and one `download()` helper; `lottie` calls
+the new pipeline via dynamic `import()` and downloads `scene.json`; `apng`
+throws its T5 placeholder. `TopBar.tsx` gains a **lottie** button next to
+**webm**, labelled `…` while running (no per-frame progress).
+`exportBoundary.test.ts`'s R3 block widens from video-only to both
+pipelines. `lottie-check.mjs` was fixed (ruling T3-R1, below) rather than
+left comments-only, because the seam's result shape did not change but the
+harness's own process model did.
+
+After the final commit: `npx vitest run` → **38 files / 957 tests**; `npx
+tsc -b --noEmit` → exit 0.
+
+### Files changed
+
+Exact `git diff --stat 123c55f..HEAD` for this task's paths:
+
+```
+ tools/visual-check/SKILL.md                    |  19 +
+ tools/visual-check/lottie-check.mjs             | 543 +++++++--------
+ tools/visual-check/lottie-click-check.mjs (new) | 383 ++++++
+ tools/visual-check/lottie-render-worker.mjs (new)| 396 ++++++
+ src/compiler/export/exportApp.test.ts                    |   4 +-
+ src/compiler/export/exportBoundary.test.ts               | 105 ++--
+ src/compiler/export/lottieGeometry.ts                    |   7 +-
+ src/compiler/export/lottiePipeline.test.ts (new)         | 119 +++
+ src/compiler/export/lottiePipeline.ts (new)              | 135 +++
+ src/compiler/export/lottieRoundTrip.test.ts              |  18 +-
+ src/compiler/export/videoEncode.ts                       |   2 +-
+ src/compiler/export/videoPipeline.test.ts                |   4 +-
+ src/compiler/export/videoPipeline.ts                     |   4 +-
+ src/components/TopBar/TopBar.tsx                         |  50 +-
+ src/hooks/useExport.ts (new)                             | 133 +++
+ src/hooks/useExportVideo.ts (deleted)                    | 116 ---
+ src/lib/devLottieSeam.ts                                 | 140 +---
+ src/lib/devVideoSeam.ts                                  |   2 +-
+ src/main.tsx                                             |   2 +-
+ src/store/defaultScene.test.ts                           |   2 +-
+ 20 files changed, 1499 insertions(+), 685 deletions(-)
+```
+
+plus `eval/RESULTS-PHASE-5C.md` (this section and the Piece 2 supersession
+above), not included in that diff range.
+
+### TDD evidence
+
+**Step 1 — move the orchestration.** `lottiePipeline.test.ts` is new: no
+RED/GREEN cycle for the move itself (it is a move, not new behaviour), but
+its own three refusal-path tests were written and run RED before the
+fixtures were fixed — see below.
+
+**`lottiePipeline.test.ts`'s own RED, read.** First run: 2 of 6 failed —
+`refuses a text node verbatim...` (`expected false to be true` on
+`.startsWith("[LOTTIE_UNSUPPORTED_TEXT] ")`) and `goes on to build the
+scene once planLottie accepts...` (message was a compile-phase `TYPE`
+error, not what the test needed past). Both named a fixture bug (both
+fixtures omitted the DSL's required `position` property, so the scene
+never compiled far enough to reach `planLottie` at all) rather than a
+missing behaviour. Fixed both fixtures (`position: (0,0), ...`); reran →
+6/6 green.
+
+**Boundary guards (Step 2), each proven by a temporary mutation, run, and
+manual revert** (untracked/modified files at the time — `useExport.ts` did
+not exist yet in git, and `TopBar.tsx`/`exportBoundary.test.ts` had other
+uncommitted changes — so `git checkout --` was not available; each mutation
+line was inserted with `sed`, tested, then deleted with `sed` again):
+
+| Guard | Mutation | Result |
+|---|---|---|
+| `lottiePipeline.ts` does not import `devLottieSeam` | `sed -i '1i import "../../lib/devLottieSeam";'` | RED: `expected true to be false` on the new "does not import devLottieSeam.ts" test |
+| `useExport.ts` does not import any dev seam | `sed -i '1i import "../lib/devVideoSeam";'` | RED: same assertion, `useExport.ts`'s row |
+| `useExport.ts` loads pipelines only via dynamic `import()` | added a static `import { runLottieExport as _x } from "../compiler/export/lottiePipeline";` | RED: `staticallyImportsModule(...)` — `expected true to be false` |
+| `TopBar.tsx` does not import any dev seam | `sed -i '1i import "../../lib/devLottieSeam";'` | RED: same assertion, `TopBar.tsx`'s row |
+
+All four reverted; `git diff --stat` empty after each.
+
+**Step 7 — product mutations, GC10:**
+
+| # | Mutation | Command | Result | Reverted |
+|---|---|---|---|---|
+| (a) | `runLottieExport` encodes `frames.slice().reverse()` | `sed -i '120s/.../.../' src/compiler/export/lottiePipeline.ts`, then `lottie-check.mjs --scene eval/scenes-3b/compound-logo.marey --fps 30 --frames 0,48,75,180,239 --compare-png` | RED on every requested frame: maxDelta jumped from 71–81 to **241**, share from ~0.12% to **~2.4–2.46%**, including frames 180/239 which exactly matched before | Yes, `git diff --stat` empty |
+| (b) | The hook downloads `JSON.stringify(doc).slice(0, -1)` | `sed -i '106s/.../.../' src/hooks/useExport.ts`, then `lottie-click-check.mjs --scene eval/scenes-3b/compound-logo.marey --url http://localhost:5199` | RED: `parseOk=false`, `Expected ',' or '}' after property value in JSON at position 42073` | Yes, `git diff --stat` empty |
+
+**One extra delete-and-run, for `lottiePipeline.test.ts`'s own load-bearing-ness (GC11):** `sed -i '68s/join(" | ")/join(" ")/' src/compiler/export/lottiePipeline.ts`, then `npx vitest run src/compiler/export/lottiePipeline.test.ts` → RED: `expected [ Array(1) ] to have a length of 2`. Reverted; `git diff --stat` empty; full suite reconfirmed 38/957 green afterward.
+
+### T3-R1: the Lottie harness fix, and the re-measured line fixtures
+
+The independent verification (`task-2-verify.md`) found that
+`lottie-check.mjs`'s stroke join/cap defect needed BOTH the export seam's
+pixi `Application` AND `--disable-accelerated-2d-canvas` on the same page.
+The ruling's own proposed fix — "export on one page, render in a fresh page
+or context" — was **measured and found insufficient**: a second
+`browser.newPage()` (its own `BrowserContext`) and even a second
+`chromium.launch()` (a fresh Chromium OS process) both still reproduced the
+broken join, provided export and render shared one Node.js process. Only
+spawning the render half as a genuinely separate `node` invocation
+(`lottie-render-worker.mjs`, via `child_process.spawnSync`) removed the
+defect — reproduced on repeated runs, and with a 3-second delay inserted
+between closing the first browser and launching the second, ruling out a
+teardown race. `lottie-check.mjs` still forces
+`--disable-accelerated-2d-canvas` (5A's own, separate determinism reason
+for that flag is untouched) and still runs `--compare-png`'s PNG export on
+the export side. Documented in `lottie-check.mjs`'s own header comment,
+`lottie-render-worker.mjs`'s header comment, and `SKILL.md`'s "Exporting
+Lottie" section.
+
+**Re-measured, same three fixtures, same official command Task 2's brief
+specified, fixed harness:**
+
+| Fixture | Command | New official result | Task 2's "clean" number |
+|---|---|---|---|
+| miter | `--scene scenes/lottie-line-miter.marey --frames 0 --at 150,70 --at 150,120 --at 350,70 --at 350,120 --compare-png` | maxDelta 80 at (347,250), 671/150000 (0.4473%); `(150,70)`→`rgba(78,78,78,255)` (real spike, not a rounded bump) | maxDelta 80, 671/150000 (0.4473%) — **exact match** |
+| scale | `--scene scenes/lottie-line-scale.marey --frames 0 --at <17 points> --compare-png` | maxDelta 1 at (198,80), 136/66000 (0.2061%) | maxDelta 1, 136/66000 (0.2061%) — **exact match** |
+| caps | `--scene scenes/lottie-line-caps.marey --frames 0 --at <10 points> --compare-png` | maxDelta 0, 0/89600 (0.0000%); `(183,100)`→`rgba(0,0,0,255)` (correct butt cap) | maxDelta 0, 0/89600 (0.0000%) — **exact match** |
+
+All three now equal Task 2's "clean" (artifact-bypassed) numbers exactly,
+through the SAME command the brief specified — see the Piece 2 update
+above for the superseded "official" numbers this replaces.
+
+### T3-R2: the same-machine A/B regression gate, and 5A's table alongside
+
+Command (identical on both sides — the SAME fixed `lottie-check.mjs` file,
+pointed at each server with `--url`):
+```
+node tools/visual-check/lottie-check.mjs --scene eval/scenes-3b/compound-logo.marey --fps 30 --frames 0,48,75,180,239 --compare-png --out <dir>
+```
+
+**main (`4a23e1d`, temporary `git worktree add ../marey-wt-main-t3 4a23e1d`,
+its own `npx vite --port 5199 --strictPort`, `node_modules` symlinked from
+this checkout since `package.json` is identical):**
+
+| Frame | maxDelta | At | Mismatching | Share |
+|---|---|---|---|---|
+| 0 | 78 | (166,52) | 560/480000 | 0.1167% |
+| 48 | 83 | (371,135) | 563/480000 | 0.1173% |
+| 75 | 71 | (480,470) | 559/480000 | 0.1165% |
+| 180 | 81 | (516,569) | 569/480000 | 0.1185% |
+| 239 | 81 | (516,569) | 569/480000 | 0.1185% |
+
+snapshot hash `26cca4e9`.
+
+**HEAD (this branch, commit `8f111ea`), identical command, `--url
+http://localhost:5199` (main's worktree server killed and replaced with
+this checkout's own):**
+
+| Frame | maxDelta | At | Mismatching | Share |
+|---|---|---|---|---|
+| 0 | 78 | (166,52) | 560/480000 | 0.1167% |
+| 48 | 83 | (371,135) | 563/480000 | 0.1173% |
+| 75 | 71 | (480,470) | 559/480000 | 0.1165% |
+| 180 | 81 | (516,569) | 569/480000 | 0.1185% |
+| 239 | 81 | (516,569) | 569/480000 | 0.1185% |
+
+snapshot hash `26cca4e9`.
+
+**Every row matches, byte for byte, including the snapshot hash. The A/B
+gate passes.**
+
+**5A's recorded table** (`eval/RESULTS-PHASE-5A.md`, Criterion 2), for
+context, not as a target this gate is graded against:
+
+| Frame | maxDelta | At | Mismatching | Share |
+|---|---|---|---|---|
+| 0 | 61 | (185,47) | 373/480000 | 0.0777% |
+| 48 | 61 | (407,128) | 393/480000 | 0.0819% |
+| 75 | 71 | (480,470) | 559/480000 | 0.1165% |
+| 180 | 81 | (516,569) | 569/480000 | 0.1185% |
+| 239 | 81 | (516,569) | 569/480000 | 0.1185% |
+
+Frames 75/180/239 reproduce 5A exactly; frames 0/48 measured higher (78/83
+vs 61/61) on BOTH main and HEAD identically. Since main and HEAD agree
+exactly with each other, this is not a regression introduced by this
+task's changes — the cause of the drift from 5A is not established, and is
+recorded here as open, per this task's own instruction not to assert one.
+
+### Real-click check ("Piece 3" evidence, Step 6)
+
+Harness: `lottie-click-check.mjs` (new — no committed Phase 5B Task 6b
+harness existed to reuse). Sets the editor's code via the `#code=`
+share-link hash (`device-limit-check.mjs`'s method), clicks the real
+**lottie** button (`[title="Export Lottie animation (JSON)"]`), and uses
+`page.waitForEvent("download")`.
+
+**Dev server** (`npx vite --port 5199 --strictPort`; scene
+`eval/scenes-3b/compound-logo.marey`, text-free):
+```
+node tools/visual-check/lottie-click-check.mjs --scene eval/scenes-3b/compound-logo.marey --url http://localhost:5199 --out .visual-check/5c-t3/click-dev2
+```
+`filename=scene.json` (✓), `parseOk=true` (✓), 0 console/page errors.
+Rendered the downloaded document in a real lottie-web player on the SAME
+page (deliberately, since this script omits
+`--disable-accelerated-2d-canvas` — see the harness's own header comment)
+and compared frames 0 and 48 against `window.__mareyExportPng` of the same
+source: frame 0 maxDelta 61, 373/480000 (0.0777%); frame 48 maxDelta 61,
+393/480000 (0.0819%) — matching 5A's own recorded numbers for these two
+frames exactly (this run does not force software 2D-canvas rendering, so
+it lands on the GPU-accelerated-equivalent numbers, not
+`lottie-check.mjs`'s forced-software ones). `lottiePipelineChunkRequested:
+false` (expected on the dev server, which has no build-time chunk of that
+name).
+
+**Production build** (`npm run build`; `npx vite preview --port 4173
+--strictPort`; boundary netstat on 4173 confirmed free before starting and
+free again after `taskkill`):
+```
+node tools/visual-check/lottie-click-check.mjs --scene eval/scenes-3b/compound-logo.marey --url http://localhost:4173 --out .visual-check/5c-t3/click-prod
+```
+`filename=scene.json` (✓), `parseOk=true` (✓), 0 console/page errors.
+`window.__mareyExportPng` does not exist (production strips every dev
+seam, as designed) — the script detected this and recorded
+`pngCompare.skipped` rather than crashing. **`lottiePipelineChunkRequested:
+true`** — the real network response for
+`dist/assets/lottiePipeline-*.js` was observed after the click, proving
+the lazy chunk and the download both work in the actual built artifact.
+
+**Refusal path, both servers** (default scene, which declares `text`):
+toast text `[LOTTIE_UNSUPPORTED_TEXT] Object 'scene.wave.hello' is a text
+node, which the Lottie exporter does not support. Remove it or replace it
+with a supported shape (circle, rectangle, polygon, line or group) before
+exporting.` — `startsWithCode: true` on both runs.
+
+**A RED read along the way, worth recording.** The first version of
+`extractDefaultCode()` (reads `src/store/defaultScene.ts`'s `DEFAULT_CODE`
+template literal by slicing between the first and last backtick in the
+file) failed scenario B outright: the toast read a `LEX` error on a stray
+backtick, because the file's own JSDoc header comment contains several
+markdown-style backtick pairs, so "first backtick in the file" was one of
+those, not the template literal's real opening delimiter. Fixed by
+anchoring on the literal text `"DEFAULT_CODE = \`"` instead of the file's
+first backtick; reran → both scenarios green.
+
+### Environment (Task 3)
+
+Port 5199: confirmed free (`netstat -ano | grep -E
+"[:.]5199[[:space:]].*LISTENING"` → no output) before the dev-server run
+above, and again after `taskkill //PID <pid> //F` at the end of the task —
+no second child PID appeared. Port 4173: confirmed free before `npx vite
+preview --port 4173 --strictPort`, and free again after `taskkill`. Port
+5199 was reused for main's temporary worktree server during the T3-R2 A/B
+(killed and confirmed free between the main run and restarting this
+checkout's own dev server). `git worktree list` after `git worktree remove
+../marey-wt-main-t3`: only this checkout listed.
