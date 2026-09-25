@@ -1124,3 +1124,359 @@ Where this addendum and a task body disagree, this addendum wins.
 6. **Missing glyphs (T8).** `日` and `🙂` both shape to glyph 0, while the
    preview draws a real fallback glyph and a colour emoji, not tofu. This
    confirms `LOTTIE_TEXT_MISSING_GLYPH` is the honest behaviour.
+
+---
+
+## Execution notes
+
+Written 2026-09-26 during Task 9, from `git log 4a23e1d..HEAD`, the ledger
+(`.sdd/2026-09-24-phase-5c-lottie-video-quality/progress.md`),
+and the task reviews (`task-{1,2,3,4,5,7,8}-review.md`, `task-2-verify.md`,
+`task-8-rereview.md`) — **not** from any task report's own self-summary,
+per AGENT-LESSONS §1. The task reports were used only to fetch a number the
+ledger pointed at (a diffstat, a byte count, a specific measured value),
+never for a claim about what a task did or found. Every number below was
+re-checked against the ledger or `git` while writing this; where the ledger
+and a report disagreed even slightly (the "Piece 4 (refactor)" section
+Task 5 was told already existed and did not — see below), the ledger's own
+account is what is recorded.
+
+Task 9 itself was dispatched normally (docs tier, no fix round needed).
+
+### Final evidence
+
+| Check | Command | Result |
+|---|---|---|
+| Unit suite | `npx vitest run` | **43 files / 1049 tests**, all passing |
+| Typecheck | `npx tsc -b --noEmit` | exit 0 |
+| Baseline (for comparison) | same commands at `4a23e1d` | 37 files / 937 tests, exit 0 |
+| Production build (Task 8's own measurement) | `npm run build` | exit 0; entry chunk **1,166,688 B** (was 1,398,885 B at `aad331d`, **−232,197 B**) |
+| harfbuzzjs confinement | `grep -c harfbuzz dist/assets/index-*.js` → 0; only `lottiePipeline-*.js` (41,864 B) and `harfbuzz-9Zbs1aEM.wasm` (433,766 B) mention it | confined to the lazy Lottie chunk, as required |
+| mediabunny confinement | grep `dist/` | only in `videoPipeline-*.js` |
+| Dev seams absent from `dist/` | grep for `__mareyExport` | 0 files |
+| Branch shape, as of `8131d71` (a commit cannot contain its own diffstat, so this is a snapshot, not a live count) | `git log --oneline 4a23e1d..HEAD \| wc -l`; `git diff --stat 4a23e1d..HEAD` | **74 commits**, **80 files changed, +12,618 / −1,031** |
+
+Re-running the suite and typecheck at the end of this task (per the brief)
+reproduced the expected **43 files / 1049 tests** and `tsc` exit 0 exactly —
+nothing moved between `b00a6a7` (Task 8's close) and this task's own docs
+commits, which is expected since this task touches no file under `src/`,
+`vite-plugins/`, or any harness `.mjs`.
+
+**Spec §9's seven exit criteria**, each against the number that closes it:
+
+1. **2× video.** Default scene MP4/WebM both 1600×1200 (2× 800×600).
+   PSNR, scored the way findings §1.2 was scored (GPU-accelerated 2D
+   canvas): **42.03 dB / 64.5 specks-per-frame (MP4)**, **42.16 dB / 61.7
+   specks-per-frame (WebM)** — within the criterion's own ±0.5 dB re-based
+   target (§9 amendment). `quality-check.mjs`'s own standing configuration
+   (forced-software 2D canvas, needed for other scripts' determinism)
+   reads a different, also-real number for the *same* encoded bytes —
+   **41.45 dB (MP4) / 41.55 dB (WebM)** — a scorer-configuration effect,
+   not a file-quality one (T1-R2's 2×2: the WebM file is byte-identical,
+   sha256-equal, across encode modes). Text sharpness: median antialiased
+   edge-band width **2 px** natively at 2×, vs **3 px** for a mutated
+   1×-app-then-2×-extracted control.
+2. **APNG.** **0** differing pixels on every frame, both fixtures
+   (`linear-motion.marey`, 90 frames; the default scene, 180 frames),
+   byte-identical (sha256) across two cold runs each. A ≥30 s scene (900
+   frames, `--size-only`) is **11,504,757 B**, byte-identical across two
+   cold runs of that same code path — the only same-code, same-process A/B
+   run for this figure (see "unexplained, non-gating" wording fixed by this
+   task, below).
+3. **Lottie `line`.** All three §3.4 facts measured (miter agreement at
+   both a mitred and a bevelled corner; non-uniform-scale stroke width,
+   with a corrected horizontal/vertical pairing — plan defect #1, below;
+   butt caps and a repeated point). Criterion 2 on the three line fixtures
+   stated with numbers (`eval/RESULTS-PHASE-5C.md`, "Piece 2").
+4. **Lottie button.** Criterion 2 on the shipped path reproduces
+   `compound-logo`'s **maxDelta 81, 569/480,000 (0.1185%)** at frames
+   180/239 exactly; frames 0/48/75 also match main-vs-HEAD exactly
+   (T3-R2's A/B), though they read higher than 5A's own recorded 61/61 at
+   frames 0/48 — open, unattributed to this phase's changes (below). A
+   real click (`lottie-click-check.mjs`) downloads `scene.json` and renders
+   it in lottie-web. At Task 3 (before Piece 5 landed), the default
+   scene's own click produced the interim `LOTTIE_UNSUPPORTED_TEXT` toast,
+   since every `text` node was refused outright; Task 8 moved that same
+   check onto a scene containing a genuinely unshapeable character
+   (`a日b`), because the default scene now exports successfully and its
+   click toasts nothing — the refusal path needed a different fixture
+   once text itself stopped being refused.
+5. **Lottie `text`.** Layout agreement holds within 0.01 px for ASCII,
+   ligature, multiline and scaled fixtures, and within a measured 1.9 px
+   for the mark fixture (spec §6.6 amendment, this task). The ink-bbox
+   position check passes at **≤1 px on every judged cell** under the
+   half-coverage definition (T8-R3, fix round 1); the ligature fixture's
+   frame 29 is a named, explained 2 px exception on the *any-ink* box
+   only (0 px at half coverage). Criterion 2 is measured per fixture and
+   on the default scene (`eval/RESULTS-PHASE-5C.md`, "Piece 5"). The
+   default scene exports through the real button and renders in both
+   lottie-web and dotlottie-web.
+6. **Refusals.** `VIDEO_EXCEEDS_DEVICE_LIMITS`, `LOTTIE_TEXT_MISSING_GLYPH`,
+   `EXPORT_FONT_UNAVAILABLE`, and the rewritten `VIDEO_EXCEEDS_CODEC_LEVELS`
+   are each pinned by delete-and-run. `LOTTIE_UNSUPPORTED_LINE` and
+   `LOTTIE_UNSUPPORTED_TEXT` are both gone (roadmap-and-process.md's stale
+   mention of them corrected in this task).
+7. **Suite, typecheck, build.** Covered in the table above.
+
+### Defects found in this plan (3)
+
+Numbered as the ledger recorded them; no gaps, none renumbered.
+
+1. **Design §3.4.2's non-uniform-scale prediction had the pairing
+   backwards.** It predicted "vertical 5px, horizontal 3.5px" for
+   `scale: (0.35, 0.5)`, thickness 10. Measured: the **horizontal**-path
+   line reads ≈5px and the **vertical**-path line ≈3.5px — the opposite
+   pairing, because a line's stroke cross-section is built perpendicular
+   to the line's *own* local direction, so a horizontal line's thickness
+   scales by `scale.y` and a vertical line's by `scale.x`. The two
+   *numbers* were exactly right; only which line each was attached to was
+   swapped. Both renderers agree with the corrected pairing (Task 2;
+   `eval/RESULTS-PHASE-5C.md`, "Piece 2"). Recorded in `renderer.md` by
+   this task.
+2. **Task 4 Step 4's mutation could not fail by construction.** The brief
+   said reversing `frames` inside `withRasterExport` must make
+   `video-check.mjs` exit 1; measured exit 0, because the pre-existing
+   harness captured its "reference" frames by `sampled.indexOf(frame)`
+   against the very array the encode loop itself walked, so a whole-array
+   reversal permuted the harness's expectation and the actual encode in
+   lockstep — invisible to a check with no ground truth independent of
+   that self-report. Not a Task 4 regression (the pre-Task-4 code had the
+   identical one-array structure); reported per AGENT-LESSONS §2f rather
+   than silently accepted, then **fixed anyway** once the task review
+   raised it as an Important finding (ruling T4-R2, fix round 1, commit
+   `411d598`): `devVideoSeam.ts` now keys the reference slot by
+   `FrameSnapshot.index` rather than `indexOf`. Task 5 independently
+   re-derived the identical blind spot for the APNG seam
+   (`devApngSeam.ts`, the T4-R2-carrying corroborating mutation, commit
+   `e3f3b9b`) before fixing it there in the same shape.
+3. **The brief's own claim about ligature glyph counts was wrong.** It
+   said `->` shapes to *fewer* glyphs than characters; measured, it keeps
+   2 glyphs for 2 characters (JetBrains Mono's `calt` substitutes glyph
+   *ids*, not glyph *count*, for this ligature). Accepted: the
+   implementer's test asserts the glyph-id substitution instead of a
+   glyph-count drop (Task 7 concern 4).
+
+**A related controller error, not a plan defect but recorded for the same
+reason** (AGENT-LESSONS §1's "the report is a claim" applies to dispatches,
+not only to reports): Task 5's dispatch told its implementer that an
+existing "Piece 4 (refactor)" section in `eval/RESULTS-PHASE-5C.md` needed
+only a distinguishing title. Measured directly by the implementer
+(`grep -n "Piece 4\|Task 4"` before editing): no such section existed
+anywhere in the file. Task 4's before/after refactor evidence had never
+been copied out of its own gitignored `task-4-report.md`. Flagged rather
+than silently worked around, and closed by this task (item C, below).
+
+### Mutation results, each beside its suite size
+
+| Task | Mutation | Suite at the time | Result |
+|---|---|---|---|
+| 1 | (a) `frameRaster.ts` extract `resolution: scale` → `resolution: 1` | 946 | `video-check.mjs`'s size gate: exit 1, decoded 800×600 vs the plan's declared 1600×1200 |
+| 1 | (b) export `Application` init `resolution: video.plan.scale` → `resolution: 1` | 946 | Text edge-band width: median 2px → 3px |
+| 1 | (c) delete the `deviceLimitDiagnostic` throw in `videoPipeline.ts` | 946 | Headless suite **stayed green, 946/946** (the pure function is tested directly; nothing headless exercises the pipeline's one-line integration). Caught instead by the standing browser script `device-limit-check.mjs` with a forced tiny limit: exit 0 → exit 1 |
+| 2 | Step 6: stroke item moved before the path | 950 | RED (encoder unit test) |
+| 2 | Step 6: line's path emitted with `c: true` (closed) | 950 | RED (same test) |
+| 3 | (a) `runLottieExport` encodes `frames.slice().reverse()` | 957 | RED on every frame of the shipped-path check: maxDelta 71–81 → **241**, share ~0.12% → ~2.4–2.46% |
+| 3 | (b) hook downloads `JSON.stringify(doc).slice(0, -1)` | 957 | RED: `parseOk=false`, a truncated-JSON parse error |
+| 4 | Reverse `frames` inside `withRasterExport` (brief's literal Step 4) | 958 | **Exit 0 — plan defect #2, above.** Reported loudly, then fixed in fix round 1 |
+| 4 | Fix round 1: same reversal, after keying by `frame.index` | 958 | **Exit 1** (nearest-reference ties reported throughout); unmutated control exit 0; drop-one-frame control still exit 1 (now caught earlier, by a bounds check) |
+| 5 | `num_plays`: 0 → 1 | 974 | RED: `[3,0]` vs `[3,1]` |
+| 5 | `blend_op`: SOURCE → OVER | 974 | RED on the last `fcTL` field |
+| 5 | `delay_den`: `fps` → `fps+1` | 974 | RED on `delay_den` |
+| 5 | Drop frame 5 / swap frames 5↔6 / `fps+1` to `encodeApng` (Step 7 a–c) | 974 | All three: `apng-check.mjs` exit 1, as predicted |
+| 5 | Extra, not required by the brief: swap frames 5↔6 **and** revert `devApngSeam.ts`'s slotting to `indexOf` | 974 | **Exit 0, 0 differing bytes — the swap goes completely undetected.** Confirms T4-R2's fix is genuinely load-bearing here too, not carried over by name only |
+| 7 | Remove the `ensureExportFonts` call from `withRasterExport`; fresh browser context, first action an MP4 export of 60px text | 1027 | Reference-frame text ink width **1238×108 px (fallback font)** vs **1343×115 px (product, JetBrains Mono)**; reverted, 1343×115 restored |
+| 8 | (a) baseline `+ descent` | 1049 | Ink bbox (half coverage): **11 px** every ascii frame, **6 px** every multiline frame |
+| 8 | (b) per-character (cmap) outlining instead of shaping | 1049 | Invisible to every binding browser check (monospace advances unchanged, ink box unmoved; Criterion 2 on the ligature fixture: maxDelta 101 → 255). Closed with a Node unit test instead |
+| 8 | (c) the `missing`-glyph check dropped | 1049 | 6 Node tests red in the planner, 4 in the outliner |
+| 8 | (d) whitespace replacement omitted | 1049 | The multiline fixture's tab is treated as a missing glyph; export refuses; `text-check.mjs` fails |
+| 8 | Fill rule `r: 1` → `r: 2` | 1049 | Unit test red (`expected 2 to be 1`); Criterion 2 on the `8` fixture: maxDelta 73 → **255** at the waist |
+
+### Deliberate gaps and deferrals, each with what makes it harmless today
+
+Items already closed by this task's own controller-assigned work (A–E) are
+not repeated here; see the task-9 report for their commits.
+
+1. **`quality-check.mjs`'s own scoring configuration does not match the
+   re-based criterion's.** It scores under `--disable-accelerated-2d-canvas`
+   (needed for *other* scripts' reference-frame determinism) and so prints
+   41.45/41.55 dB, not the criterion's 42.03/42.16 dB GPU-scored figures.
+   No decision was made on whether to change its launch args. *Harmless
+   today:* both numbers are recorded, each explicitly labelled by the
+   configuration that produced it (spec §9's dated amendment), so nobody
+   reading the evidence file can mistake one for the other.
+2. **The MP4 masked-byte comparison is reported only as a boolean.** *Harmless
+   today:* it answers a yes/no question (does masking change the encoded
+   bytes) that the quantitative PSNR/specks numbers already gate on
+   magnitude; the boolean adds a second, independent check, not the only one.
+3. **The 2×2 localisation script and the device-limit/edge-band one-off
+   probes remain uncommitted, in gitignored `.visual-check/probe5c/`.**
+   Only `device-limit-check.mjs` was separately promoted to a standing,
+   committed script, under `tools/visual-check/` rather than the
+   `docs/research/` location this deferral asked for. *Harmless today:*
+   every number these probes produced is transcribed as prose, with the
+   exact command line, into `eval/RESULTS-PHASE-5C.md`; only the
+   mechanical one-command re-run is currently blocked, not the evidence
+   itself.
+4. **`ml: 10`'s judgment-call flip was never run.** Spec §8 lists `ml` among
+   the flips to test; Task 2 flip-tested stroke order and the path's `c`
+   flag, not `ml`. *Harmless today:* `ml: 10` is still pinned by an exact
+   literal in a `toMatchObject` assertion, so any code change to a
+   different value fails that test today — what's missing is the flip
+   ritual, not test coverage of the value.
+5. **`lottieEncode.ts:745`'s `color!` sits beside an adjacent `color !==
+   null` guard, unreachable but inconsistent in style.** *Harmless today:*
+   the branch is unreachable given the surrounding control flow, so the
+   assertion cannot mask a real `null` at runtime.
+6. **Open, carried: `compound-logo` frames 0/48 read maxDelta 78/83 against
+   5A's recorded 61/61.** *Harmless today:* main and HEAD measure this
+   identically (T3-R2's same-machine A/B), so whatever produced the drift
+   from 5A's numbers predates this phase's changes; the regression gate
+   that actually matters does not depend on the stale 5A table.
+7. **`devLottieSeam.ts` is 67 lines, not the brief's estimated "about 30"**
+   (types and a `declare global` block retained). *Harmless today:* a size
+   estimate in the plan text being wrong is not a behavioural claim; the
+   seam still only observes `runLottieExport`, which is checked
+   structurally, not by line count.
+8. **Three Task 4 minors.** A commit message says "verified in the next
+   commit," and there is no such commit; a dead `if (!rasterize) throw`
+   guard remains in `videoPipeline.ts`; `devExportSeam.ts`'s error
+   re-prefixing matches on message shape (`"Source did not compile:"` /
+   `/^\[EXPORT_/`) rather than structurally. *Harmless today:* the stray
+   commit-message claim changes no shipped file; the dead guard is
+   unreachable because every video export always supplies a `scale`, so it
+   can never fire wrongly; the re-prefixing was verified against the only
+   two throw shapes reachable at that call site today, so it is fragile to
+   a *future* message-wording change, not wrong today.
+9. **`devVideoSeam.ts`'s outer catch double-prefixes an error as
+   `"[export] [export]"`** (pre-existing, before this phase).  *Harmless
+   today:* cosmetic — an extra repeated token in an already-clearly-labelled
+   string — and does not change which diagnostic fired.
+10. **Four Task 7 minors.** `exportBoundary.test.ts:284`'s regex escaping is
+    inconsistent in style with the file's own quoting; `rasterExport.ts:196`
+    calls `clearMetrics()` unconditionally, even for text-free scenes;
+    `exportFonts.ts:45` and `lottiePipeline.ts:71` each walk the IR for text
+    nodes independently; the padding-cancellation pin and
+    `collectTextLayouts`'s own numbers rest on browser probes, not on the
+    headless CI suite. *Harmless today:* the regex over-matches in the safe
+    direction (the same shape as 5B's own deferral #4); calling
+    `clearMetrics()` on a text-free scene clears a cache that export never
+    reads from anyway; the duplicated walkers are two copies of the same
+    simple traversal, not two copies of a judgment call that could drift
+    into disagreement; and the browser-only numbers are disclosed as such in
+    this task's own execution notes and in `renderer.md`, not silently
+    assumed to be CI-covered.
+11. **Parked to the final fix wave (ruling T8-R7), not this task:**
+    `lottiePipeline.test.ts`'s path-3 test pins the exact V8/pixi error
+    string `"document.createElement is not a function"`. *Harmless today,*
+    per the ruling: it fails loudly on any pixi/V8 wording change and can
+    never falsely pass, and the real guard is the adjacent init spy, not
+    this string.
+12. **`text-check.html`'s null-out comment slightly overstates what the
+    code does** (Task 8 review Minor 7, closed in fix round 1 for the code
+    itself; the comment wording was not separately revisited). *Harmless
+    today:* it is a comment, not code that anything downstream reads as
+    fact.
+
+### The process record
+
+This is the section the next phase's plan should read first.
+
+**Five interruptions, all recovered with no lost work** — every one of
+them either killed before committing anything, or killed after a clean
+commit boundary, confirmed each time by `git log --oneline -1`,
+`git diff --stat`, and `git status --porcelain --untracked-files=all`
+before resuming the same agent (AGENT-LESSONS §6):
+
+- **Task 1, fix round 1, attempt 1** — API rate limit. Nothing committed,
+  tree clean, port 5199 free. Resumed the same agent.
+- **Task 2** — a stream watchdog stall, after committing `17f0b69..123c55f`
+  but before writing its report. Resumed to write the report only; no
+  re-work.
+- **Task 5** — a stream watchdog stall, after writing one RED test with no
+  commits. Left an untracked `apngEncode.test.ts` and a stray Vite server
+  on port 5199 (PID 7592, killed by the controller — a named environment
+  cleanup, not a code change). Resumed the same agent.
+- **Task 7** — an API rate limit / session limit. Recovery check found 9
+  commits already in place (`d16176f..704220a`) with an empty `git diff
+  --stat` and no report yet; also a stray Vite server (PID 23264, killed).
+  Resumed the same agent, which went on to report `DONE_WITH_CONCERNS`.
+- **Task 8, fix round 1, attempt 1** — API rate limit, at the very start.
+  No commits past `13b4ff2`, empty diff, ports free. Resumed the same
+  agent.
+
+**Two model-tier escalations, both to OPUS, both named up front rather
+than discovered afterward.** Tasks 7 and 8 (`textOutline.ts`/layout
+plumbing, then text geometry/encoding/licences) were dispatched on OPUS as
+the plan's own two "Architecture" tier tasks (AGENT-LESSONS §7b), and their
+reviews were dispatched on OPUS too — Task 8's review explicitly because it
+was "the largest, riskiest diff" carrying the T8-R3/R4 judgement calls.
+Both tasks needed mid-task controller rulings the plan could not have
+written in advance (T7-R1 through T7-R3; T8-R1 through T8-R7), consistent
+with the plan's own prediction that Piece 5 (`text`) was where the
+UNVERIFIED shapes would need the most correction.
+
+**One controller error, named and closed rather than silently carried
+forward.** Task 5's dispatch asserted a "Piece 4 (refactor)" section
+already existed in `eval/RESULTS-PHASE-5C.md` and only needed a
+distinguishing title. It did not exist — Task 4's before/after evidence
+had never left its own gitignored `task-4-report.md`. The Task 5
+implementer measured this directly (a `grep` before editing) rather than
+trusting the dispatch, flagged it, and titled its own section to match the
+design spec's numbering instead of colliding with a section that was not
+there. This task (T9) closes the gap the error left open, copying Task 4's
+evidence in under the title it was always meant to have.
+
+**Two harness-artifact investigations, both filed as findings about the
+evidence rather than about the shipped code.** Both trace to the same root
+cause, discovered independently at two different points in the phase:
+
+- **Task 2's miter/cap measurements were confounded by the export
+  pipeline's own temporary WebGL `Application`.** Running the export
+  seam's `Application` on a page, then stroking a mitred join into a 2D
+  canvas forced into software rasterisation
+  (`--disable-accelerated-2d-canvas`), degraded that 2D canvas's *own*
+  miter-join computation for everything drawn on the same page afterward —
+  a Chromium/environment interaction between two of `lottie-check.mjs`'s
+  own launch choices, not a defect in `lottieEncode.ts`/`lottieGeometry.ts`
+  or in the exported document (confirmed by a from-a-blank-page clean
+  render of the identical `doc.json`, which read correctly). Filed, not
+  fixed, at the time (outside Task 2's file list); the review's residual
+  concern (ruling T2-R1) routed it to an independent browser-capable
+  verifier before Task 3 could rely on the same harness, and the verifier
+  **confirmed** it: only the seam's `Application` *and* the forced-software
+  flag *together* broke the join geometry; either alone was correct.
+- **Task 3 root-caused and fixed it — but the fix the ruling had prescribed
+  turned out to be the wrong mechanism.** Ruling T3-R1 proposed "export on
+  one page, render in a fresh page or context." Measured and found
+  insufficient: a second `browser.newPage()`, and even a second
+  `chromium.launch()` (a fresh OS process), both still reproduced the
+  broken join as long as export and render shared one Node.js process.
+  Only spawning the render half as a genuinely separate `node` invocation
+  (`lottie-render-worker.mjs`, via `child_process.spawnSync`) removed the
+  defect. The task review reproduced the *process*-boundary requirement
+  independently and reproduced that a fresh-page-same-process render stays
+  broken; ruling T3-R3 recorded that the ruling's own prescribed mechanism
+  was wrong and the implementer's measured fix stands — closed with no
+  further cost, because it had already been independently verified.
+
+**One multi-round criterion investigation, resolved by isolating which
+step of the pipeline a launch flag actually affects.** Task 1's first
+measurement of the re-based 2× PSNR criterion (41.45/41.55 dB) missed
+findings §1.2's ~42 dB target by more than the stated ±0.5 dB tolerance,
+with specks about 10× higher than expected. Ruling T1-R1's first diagnosis
+(a launch-flag difference, not a quality defect) correctly named the
+*variable* but not yet *which step* it affected. Ruling T1-R2 asked for a
+2×2 (encode mode × score mode, both GPU and forced-software) that saved the
+same encoded bytes and scored them both ways: the encoded file and
+extracted reference frames were unaffected by the flag (WebM byte-identical
+across encode modes, MP4 quality numbers agreeing to 0.01 dB); only the
+*scoring* step's own `drawImage`/`getImageData` round-trip moved the
+number. The criterion was re-based to name its scoring configuration
+explicitly (spec §9's dated amendment) rather than lowered — two rulings
+and two fix rounds to establish that the shipped pipeline had not
+regressed at all.
+
+**Commit-as-you-go continued to make every interruption cost at most a
+report** — consistent with Phases 5A and 5B's own process records, and the
+reason none of this phase's five interruptions needed to be re-done rather
+than resumed.
