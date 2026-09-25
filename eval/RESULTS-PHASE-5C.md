@@ -1041,3 +1041,246 @@ preview --port 4173 --strictPort`, and free again after `taskkill`. Port
 (killed and confirmed free between the main run and restarting this
 checkout's own dev server). `git worktree list` after `git worktree remove
 ../marey-wt-main-t3`: only this checkout listed.
+
+---
+
+## Piece 4: APNG (Task 5)
+
+**A note on this section's title.** The Task 5 dispatch said "the existing
+'Piece 4 (refactor)' section is Task 4's; keep both, and title yours so
+they don't collide." Measured directly: no such section exists anywhere in
+this file (`grep -n "Piece 4\|Task 4"` before this edit: no hits) — Task
+4's evidence lives entirely in its own `task-4-report.md`, never merged
+here. Flagging the discrepancy rather than silently working around it, per
+this task's own instructions; it did not block anything, since there was
+no real section to collide with. This section is titled to match the
+SPEC's own numbering (design section 5's own heading is "Piece 4: APNG"),
+which was never in conflict.
+
+### Spec sources read for APNG
+
+- Task brief: `.sdd/2026-09-24-phase-5c-lottie-video-quality/task-5-brief.md`.
+- Global constraints: `.sdd/2026-09-24-phase-5c-lottie-video-quality/global-constraints.md`.
+- Design spec §5 ("Piece 4: APNG") and §7 (boundaries table):
+  `docs/specs/2026-09-24-marey-phase-5c-lottie-completion-and-video-quality-design.md`.
+- The Mozilla APNG Specification, fetched directly
+  (<https://wiki.mozilla.org/APNG_Specification>): confirmed `acTL` (8
+  bytes: `num_frames` u32, `num_plays` u32), `fcTL` (26 bytes:
+  `sequence_number` u32, `width`/`height` u32, `x_offset`/`y_offset` u32,
+  `delay_num`/`delay_den` u16, `dispose_op`/`blend_op` u8 each), `fdAT`
+  (`sequence_number` u32 + IDAT payload), and the sequence-number rule:
+  `fcTL`/`fdAT` share one counter, starting at 0 at the first `fcTL`, "in
+  order, with no gaps or duplicates."
+
+### Step 1: measured Chromium PNG chunks (before writing the muxer)
+
+Scratch probe (not committed): `.visual-check/probe-chunks.mjs`, run against
+a warmed `npx vite --port 5199 --strictPort`.
+
+```
+=== plain <canvas> 800x600 opaque ===
+chunk types: IHDR, IDAT, IDAT, IDAT, IDAT, IEND
+IHDR: width=800 height=600 bitDepth=8 colourType=6 compression=0 filter=0 interlace=0
+
+=== pixi extract.canvas frame 0 ===
+chunk types: IHDR, IDAT, IDAT, IDAT, IDAT, IDAT, IEND
+IHDR: width=800 height=600 bitDepth=8 colourType=6 compression=0 filter=0 interlace=0
+```
+
+**Finding: zero ancillary chunks in either case.** No `sRGB`, no `gAMA`, no
+`pHYs` — just `IHDR`, one or more `IDAT`s, `IEND`. This is what pins
+`apngEncode.test.ts`'s chunk-order test to `["IHDR", "acTL", "fcTL", "IDAT",
+"fcTL", "fdAT", "fcTL", "fdAT", "IEND"]` with nothing between `IHDR` and
+`acTL`, and what a dedicated test
+("carries forward none of frame 0's chunks besides IHDR/IDAT, when there
+are none to carry") pins per the brief's "if it emits none, pin that with a
+test too."
+
+### TDD RED/GREEN evidence
+
+RED, `apngEncode.test.ts` created before `apngEncode.ts` existed:
+
+```
+FAIL  src/compiler/export/apngEncode.test.ts [ src/compiler/export/apngEncode.test.ts ]
+Error: Cannot find module './apngEncode' imported from .../apngEncode.test.ts
+```
+
+GREEN after implementing `apngEncode.ts` (`npx vitest run
+src/compiler/export/apngEncode.test.ts`): 12/12 passing (later 14/14 after
+the two delete-and-run gap fixes below). Full suite after: `npx vitest run`
+→ 39 files / 970 tests (38/958 baseline + 12 new); `npx tsc -b --noEmit` →
+exit 0.
+
+### Judgment-call flips (§2d), each applied/reverted in one command
+
+| Flip | Test that went red | Reverted, `git diff --stat` after |
+|---|---|---|
+| `acTL.num_plays`: 0 → 1 | `declares the frame count and loops forever (num_plays 0)`: expected `[3, 0]`, got `[3, 1]` | empty |
+| `fcTL.blend_op`: 0 → 1 (OVER) | `gives every frame a 1/fps delay, full size, dispose NONE, blend SOURCE`: expected `...0]`, got `...1]` | empty |
+| `fcTL.delay_den`: `fps` → `fps + 1` | same test: expected `[1, 24, 0, 0]`, got `[1, 25, 0, 0]` | empty |
+
+Commands: `sed -i 's/<original>/<mutated>/' src/compiler/export/apngEncode.ts
+&& npx vitest run src/compiler/export/apngEncode.test.ts; git checkout --
+src/compiler/export/apngEncode.ts && git diff --stat`, once per row.
+
+### Delete-and-run: two real gaps found and closed (global constraint 11/12)
+
+Both in `apngEncode.ts`'s "invariant throws" (spec §5.1). Both mutations
+were applied with `sed`, run, confirmed red or green, then reverted with
+`git checkout --`; `git diff --stat` was empty after every revert.
+
+1. **The PNG-signature check** (`readPngChunks`'s `if (!isPng) throw ...`).
+   Deleting it (forcing the guard to `if (false)`) left **12/12 tests
+   green** — the only fixture exercising a bad signature
+   (`new Uint8Array([1, 2, 3])`) is too short to produce any chunk either
+   way, so the *separate* "no IHDR chunk found" fallback threw the
+   identical message regardless of whether the signature check ran. Closed
+   by adding a fixture with a corrupted first signature byte behind
+   otherwise well-formed chunks (`refuses a frame whose signature is
+   corrupted even though its chunks parse fine`); re-running the same
+   deletion now fails that one test (`expected [Function] to throw an
+   error` / `Received: undefined`).
+2. **The `!ihdr0` fallback** (frame 0 has a valid signature but no `IHDR`
+   chunk at all). Deleting it also left every test green, for the mirror
+   reason: it was only ever reached by that same 3-byte fixture, which the
+   signature check already intercepts first. Closed by adding a bare
+   8-byte-signature-only fixture (`refuses a frame with a valid signature
+   but no IHDR chunk`); re-running the deletion now fails with `Cannot read
+   properties of undefined (reading 'data')`.
+
+Zero-frames, the fps-range check, and the per-frame IHDR-mismatch check
+were each individually deleted and re-run too; all three already had a
+discriminating test and went red immediately (no gap).
+
+**Filed, not fixed (adjacent, per the scope tie-break):** the ancillary-chunk
+carry-forward loop (`for (const c of ancillary0) ...`) has no test that can
+fail if deleted, since Step 1 measured zero ancillary chunks in both cases
+tested — carrying a hypothetical non-empty set is speculative code the
+brief does not ask for a test on when none were found.
+
+### `apng-check.mjs` results
+
+Two fixtures, each run twice (cold pages) plus an in-page `ImageDecoder`
+decode-and-compare, via `node tools/visual-check/apng-check.mjs
+--scene <path> --fps 30 --out <dir>`:
+
+| Scene | Frames | Size (both runs) | sha256 (both runs) | fcTL problems | Differing bytes | Missing ref frames | Bad-duration frames |
+|---|---|---|---|---|---|---|---|
+| `scenes/linear-motion.marey` | 90 | 1,148,097 B | `a35194bb...` (equal) | 0/90 | **0** across 0 frames | 0 | 0 |
+| default scene (`DEFAULT_CODE` saved to `.marey`) | 180 | 5,857,859 B | `dd444593...` (equal) | 0/180 | **0** across 0 frames | 0 | 0 |
+
+**≥30s size** (spec §5.3): the full pixel-identity harness does not scale to
+900 frames (see "One measured memory limit" in `SKILL.md`'s new section —
+holding one raw RGBA capture per frame is >2GB at this length and destroys
+the page: measured directly, `page.evaluate: Execution context was
+destroyed, most likely because of a navigation`). Measured instead via a
+direct call to the shipped `runApngExport` with no observer (scratch probe
+`.visual-check/probe-apng-size.mjs`, not committed):
+`linear-motion.marey --duration 30` (900 frames, 800×600, 30fps) →
+**11,492,040 bytes in 25,978 ms**.
+
+**ImageDecoder works in Playwright's Chromium** (scratch probe
+`.visual-check/probe-imagedecoder.mjs`, built a 3-frame APNG with
+`encodeApng` itself, fps 10): `frameCount: 3`, `firstFrameDims: {width: 16,
+height: 16}`, `firstFrameDuration: 100000` (exactly `1e6/10`, no
+quantization at this fps). The brief's Node-side `zlib`-inflate fallback is
+**not implemented** — there was nothing to fall back from.
+
+**Measured Chromium quirk:** `ImageDecoder`'s `VideoFrame.duration` for an
+APNG frame is quantized to the nearest whole millisecond. At 30fps, every
+one of the 90 `linear-motion.marey` frames reported `durationUs: 33000`
+(ideal `33333.33`), uniformly — not per-frame jitter. `apng-check.mjs`
+compares against the millisecond-rounded value, not the un-quantized ideal,
+documented in both the script and `SKILL.md`.
+
+**A CDP data-transfer crash, found and fixed while writing this script:**
+passing `devApngSeam.ts`'s `referenceRgba` array (raw RGBA, ~2.56MB base64
+per 800×600 frame) back INTO the page a second time, as a `page.evaluate`
+argument for the decode step, killed the renderer even at 90 frames
+(~230MB) the first time this script was run. Fixed by stashing the seam's
+result on a page-side global (`window.__apngCheckLastResult`) and reading
+it back in the same page realm, so that array never crosses the CDP
+boundary a second time.
+
+### Mutation table (§8, spec §5.3's "drop or swap")
+
+Each applied to `src/compiler/export/apngPipeline.ts` with `sed`, run
+against `scenes/linear-motion.marey`, then reverted with `git checkout --`;
+`git diff --stat` was empty after every revert.
+
+| Mutation | `apng-check.mjs` exit | What it reported |
+|---|---|---|
+| (a) Drop frame 5 (`if (frame.index === 5) continue;` in the mux loop) | **1** | `missingReferenceFrames`: runA=1, runB=1; decoded frame count 89 ≠ reference count 90; total differing bytes **760,194 across 83 frames** (every frame from 6 onward shifts one position in the file, cascading) |
+| (b) Swap frames 5 and 6 (array-position swap before the loop) | **1** | decoded count still matches (90); total differing bytes **18,048 across exactly 2 frames** — frame 5 and frame 6 only, 9,024 bytes each, confirming `frame.index`-based reference slotting (T4-R2) stays correct while the file itself is wrong at exactly the swapped positions |
+| (c) `encodeApng(pngs, { fps: plan.fps + 1 })` | **1** | pixel bytes still identical (0 differing); `fcTL problems`: 90/90 (`delay_den` is 31, not the requested 30); bad-duration frames: 90/90 |
+
+### Files changed (`git diff --stat 411d598..HEAD`)
+
+```
+ tools/visual-check/SKILL.md       | 111 ++++++
+ tools/visual-check/apng-check.mjs | 595 +++++++++++++++++++++++++++++
+ src/compiler/export/apngEncode.test.ts     | 207 ++++++++++
+ src/compiler/export/apngEncode.ts          | 244 ++++++++++++
+ src/compiler/export/apngPipeline.ts        | 118 ++++++
+ src/compiler/export/exportBoundary.test.ts |  65 +++-
+ src/compiler/export/pngSequence.ts         |  11 +-
+ src/compiler/export/rasterExport.ts        |  37 ++
+ src/compiler/export/videoPipeline.ts       |  31 +-
+ src/components/TopBar/TopBar.tsx           |  23 ++
+ src/hooks/useExport.ts                     |  53 +--
+ src/lib/devApngSeam.ts                     | 150 ++++++++
+ src/main.tsx                                |   6 +
+ 13 files changed, 1582 insertions(+), 69 deletions(-)
+```
+
+Final suite/typecheck/build (clean tree, all mutations reverted):
+`npx vitest run` → **39 files / 974 tests** (970 after the muxer, +2 from
+the delete-and-run gap-closing tests, +2 from the widened
+`exportBoundary.test.ts`). `npx tsc -b --noEmit` → exit 0. `npm run build`
+→ exit 0; `apngPipeline-*.js` gets its own lazy chunk; `grep -rl
+"__mareyExportApng" dist/` → no hits (confirmed dropped from the production
+build, same as every other dev seam).
+
+### What was not done
+
+- The brief's Node-side `zlib`-inflate fallback for `ImageDecoder` failing
+  to decode APNG frames: not implemented, because the probe confirmed
+  `ImageDecoder` decodes this muxer's own output correctly in Playwright's
+  Chromium.
+- A test for carrying a non-empty set of frame-0 ancillary chunks (e.g.
+  `sRGB`): not written, because Step 1 measured zero ancillary chunks from
+  either tested Chromium PNG encoder — the brief's own tie-break for this
+  case ("if it emits none, pin that with a test too") was followed instead.
+- A byte-for-byte comparison of the two cold runs' raw `referenceRgba`
+  captures against each other in `apng-check.mjs`: not computed, because
+  doing so would require holding both runs' ~170MB-per-run arrays in the
+  same place at once — the exact transfer that crashed the page the one
+  time this was tried. Spec §5.3 only asks that the two runs' MUXED APNGs
+  be byte-identical, which the sha256 check proves.
+- No `apng-click-check.mjs` (a real-button-click end-to-end check, the
+  shape Task 3 built for Lottie): not in this task's Files list, and the
+  brief's Step 6 only asks to "call the seam."
+- No second-fps / non-30 fps run of `apng-check.mjs` against the default
+  scene: `useExport.ts`'s `EXPORT_FPS` constant is 30 for every export kind,
+  so 30 is the only fps a real click ever uses; `apngEncode.test.ts`
+  exercises fps 24 and 10 directly.
+
+### Concerns
+
+- **Dispatch discrepancy:** the task dispatch stated an existing "Piece 4
+  (refactor)" section in this file was Task 4's. No such section exists;
+  Task 4's evidence lives only in its own `task-4-report.md`. Flagged above,
+  did not block this task.
+- **`devApngSeam.ts`'s reference-capture design has a real, measured memory
+  ceiling** (roughly 200-400 frames at 800×600 before the page is at risk):
+  it holds one raw RGBA buffer per sampled frame for the harness's
+  byte-for-byte comparison, unlike the shipped pipeline itself, which only
+  ever holds compressed PNG bytes. This is inherent to a *lossless*
+  pixel-identity check, not a bug, but it means `apng-check.mjs` cannot be
+  the tool for measuring a long export's file size — `SKILL.md` documents
+  the split. A future task that needs to run this harness against a scene
+  longer than a few hundred frames would need a streaming or chunked
+  comparison design.
+- Two mid-task stream interruptions occurred; the RED test commit
+  (`01fb75d`) was momentarily uncommitted across one of them and is now
+  committed per the coordinator's note.
