@@ -1,12 +1,13 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { Container, Text } from "pixi.js";
 import { compileSource } from "../compileSource";
 import type { IRSceneNode } from "../sceneIR";
 import { collectTextLayouts, runLottieExport, type RunLottieExportOptions } from "./lottiePipeline";
 
 /**
- * `lottiePipeline.ts`'s refusal paths, which all execute before `new
- * Application()` and therefore need no browser — modelled directly on
+ * `lottiePipeline.ts`'s refusal paths that execute before `new
+ * Application()` and therefore need no browser (the ones after the build are
+ * in `lottiePipeline.afterBuild.test.ts`) — modelled directly on
  * `videoPipeline.test.ts` (Task 5's F3 fix round), which the same "hooks are
  * verified through the app" argument does not excuse a plain
  * `src/compiler/export/` module from either.
@@ -86,38 +87,35 @@ describe("runLottieExport · refusal path 2, planExport", () => {
 });
 
 /**
- * Ruling/design §2's "diagnostics are properties of the scene, not of the
- * frames": `planLottie` runs before any Pixi object exists, so a `text`
- * node is refused before `new Application()` -- which would fail in this
- * node suite anyway (no DOM), but for a DIFFERENT reason. The control test
- * below is what actually proves `planLottie` ran first: a text-free scene
- * with the same bounds reaches past it and fails on the missing DOM
- * instead, with none of `planLottie`'s own diagnostic text.
+ * Lottie's own planning (`planLottie`) no longer runs before the build.
+ * Phase 5C Task 8 (ruling T8-R1) moved it into `withRasterExport`'s
+ * `afterBuild`, because text needs the built tree's measurements, so its
+ * refusals arrive after `new Application()` and before sampling. Node
+ * cannot get past `new Application()`, so those tests live in
+ * `lottiePipeline.afterBuild.test.ts`, which stands in for the Application
+ * alone. What is left to pin here is that a bounded scene with text passes
+ * every pre-build step this module used to own and reaches the Application:
+ * the control below fails on the missing DOM, with no diagnostic text.
  */
-describe("runLottieExport · refusal path 3, planLottie", () => {
-  it("refuses a text node verbatim, with no added prefix, before any Application exists", async () => {
-    const message = await refusalMessage({
-      ...BASE,
-      source: 'scene { size: (100, 100) duration: 1 text t { position: (0,0), content: "hi" } }',
-    });
-    expect(message.startsWith("[LOTTIE_UNSUPPORTED_TEXT] ")).toBe(true);
-    expect(message).not.toContain("[export]");
-    expect(message).not.toContain("[EXPORT_");
-    expect(message).not.toContain("Source did not compile");
-  });
-
-  it("goes on to build the scene once planLottie accepts, past every diagnostic this module owns", async () => {
-    // The control: the same bounds, no `text` node. Both prior contracts and
-    // `planLottie` all pass, so what actually stops this in a node
-    // environment is `new Application()` failing on the missing DOM --
-    // proving `planLottie` really did run (and pass) before reaching it.
-    const message = await refusalMessage({
-      ...BASE,
-      source: "scene { size: (100, 100) duration: 1 circle c { position: (0,0), radius: 10 } }",
-    });
-    expect(message).not.toContain("[LOTTIE_");
-    expect(message).not.toContain("[EXPORT_");
-    expect(message).not.toContain("Source did not compile");
+describe("runLottieExport · refusal path 3, after the build", () => {
+  it("lets a bounded text scene reach new Application() with no pre-build Lottie refusal", async () => {
+    // The font step runs for a text scene; report the font as loaded so the
+    // run reaches the Application instead of refusing on the font.
+    vi.stubGlobal("document", { fonts: { load: async () => [], check: () => true } });
+    try {
+      const message = await refusalMessage({
+        ...BASE,
+        source: 'scene { size: (100, 100) duration: 1 text t { position: (0,0), content: "日" } }',
+      });
+      // Before Task 8 this was `[LOTTIE_UNSUPPORTED_TEXT] ...`, from a
+      // pre-build `planLottie`. Now nothing Lottie-specific can refuse
+      // before the build, even for a character the font lacks.
+      expect(message).not.toContain("[LOTTIE");
+      expect(message).not.toContain("[EXPORT_");
+      expect(message).not.toContain("Source did not compile");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

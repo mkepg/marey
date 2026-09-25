@@ -24,9 +24,9 @@ import type { IRSceneNode } from "../sceneIR";
  * prevent: a fix to the Text-texture trap, the try/finally teardown
  * rationale or the device-limit check had to be copied by hand into every
  * copy, with nothing enforcing that it was. `withRasterExport` is now the
- * only place any of the steps below happen; the three callers differ only in
- * what they pass through `beforeBuild`/`afterInit`/`scale` and what they do
- * with the `PreparedRasterExport` they get back inside `use`.
+ * only place any of the steps below happen; the callers differ only in what
+ * they pass through `beforeBuild`/`afterInit`/`afterBuild`/`scale` and what
+ * they do with the `PreparedRasterExport` they get back inside `use`.
  */
 
 /**
@@ -60,8 +60,7 @@ export interface RasterExportOptions {
    * refuse. `runVideoExport` runs `planVideo` and the codec probe
    * `assertVideoEncodable` here (5B ruling I-4: both before the scene is
    * built or sampled, so a refusal never waits behind a build-and-sample
-   * pass); `runLottieExport` runs `planLottie` here (design §2: "diagnostics
-   * are properties of the scene, not of the frames").
+   * pass).
    */
   readonly beforeBuild?: (ir: IRSceneNode, plan: SamplerPlan) => Promise<void> | void;
   /**
@@ -73,6 +72,20 @@ export interface RasterExportOptions {
    * the rest of `videoContract.ts`.
    */
   readonly afterInit?: (app: Application) => void;
+  /**
+   * Runs after `buildNode` has built the whole tree, before the physics
+   * world exists and before a single frame is sampled. Throw to refuse.
+   *
+   * `runLottieExport` plans here (Phase 5C Task 8, ruling T8-R1): `text`
+   * needs pixi's layout of the built `Text` and HarfBuzz's outlines of it
+   * (spec §6.2-6.3), and neither exists before the build. Its refusals
+   * (`LOTTIE_TEXT_MISSING_GLYPH`) therefore arrive after the GL context is
+   * opened and the tree is built (both torn down in `finally`), but still
+   * before sampling: design §2's "diagnostics are properties of the scene,
+   * not of the frames" holds, because no frame is ever produced for a
+   * refused scene. Video, APNG and the PNG seam pass none.
+   */
+  readonly afterBuild?: (root: Container, ir: IRSceneNode, plan: SamplerPlan) => Promise<void> | void;
 }
 
 /**
@@ -159,9 +172,10 @@ export async function withRasterExport<T>(
   const plan = planned.plan;
 
   // Runs before any Application exists (5B ruling I-4): a refusal here -- an
-  // unsupported codec, an unbounded scene, a `text` node Lottie cannot
-  // encode -- arrives before a single tick is simulated or a GL context is
-  // opened.
+  // unsupported codec, a scene too large to encode -- arrives before a
+  // single tick is simulated or a GL context is opened. (An unbounded scene
+  // is refused by `planExport` just above.) Lottie's text refusals cannot be
+  // made here, because they need the built tree; see `afterBuild`.
   await opts.beforeBuild?.(ir, plan);
 
   // Fonts first, for every export (spec §6.1): the one prefix all four
@@ -169,9 +183,10 @@ export async function withRasterExport<T>(
   // the export font here rather than at four call sites. Before any pixi
   // object is built, because a `Text` measured on a cold page gets the
   // fallback font's metrics (Task 6, Q6). After `beforeBuild`, so a scene
-  // a pipeline refuses outright (an unsupported codec, a Lottie scene it
-  // cannot encode) is refused without waiting on a font download it would
-  // never use. A text-free scene makes no call. Throws
+  // a pipeline refuses outright (an unsupported codec) is refused without
+  // waiting on a font download it would never use. (Lottie's missing-glyph
+  // refusal comes later, in `afterBuild`, and does wait: it needs the font
+  // to measure the text at all.) A text-free scene makes no call. Throws
   // `[EXPORT_FONT_UNAVAILABLE]` if the font still is not available.
   await ensureExportFonts(ir);
 
@@ -238,6 +253,10 @@ export async function withRasterExport<T>(
 
     root = new Container();
     for (const node of ir.children) root.addChild(buildNode(node));
+
+    // After the build, before the world and before sampling (T8-R1): a
+    // refusal here means no frame is ever sampled for the scene.
+    await opts.afterBuild?.(root, ir, plan);
 
     const world = new MatterWorld(ir.width, ir.height);
     runtime = new SceneRuntime(world, root);

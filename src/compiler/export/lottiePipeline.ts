@@ -40,9 +40,8 @@ export interface CollectedTextLayouts {
  * The font is fetched once, only if the scene has text, and the outliner is
  * destroyed in `finally`. A text-free scene fetches nothing.
  *
- * `runLottieExport` calls this, but until Task 8 lifts `planLottie`'s
- * `LOTTIE_UNSUPPORTED_TEXT` refusal, every scene reaching that call is
- * text-free, so there it always returns two empty maps.
+ * `runLottieExport` calls this from `withRasterExport`'s `afterBuild`, and
+ * passes both maps straight into `planLottie` (Task 8, ruling T8-R1).
  */
 export async function collectTextLayouts(
   root: Container,
@@ -160,7 +159,7 @@ export interface RunLottieExportOptions {
 export async function runLottieExport(opts: RunLottieExportOptions): Promise<LottieDoc> {
   const observer = opts.observer ?? {};
 
-  // Stashed by `beforeBuild`, so the encode step inside `use` can read the
+  // Stashed by `afterBuild`, so the encode step inside `use` reads the
   // layers `planLottie` already computed rather than a second copy.
   let layers: ReadonlyArray<LayerSpec> | undefined;
 
@@ -169,26 +168,31 @@ export async function runLottieExport(opts: RunLottieExportOptions): Promise<Lot
       source: opts.source,
       fps: opts.fps,
       durationSeconds: opts.durationSeconds,
-      // Fires before any Pixi object exists, matching design §2's
-      // "diagnostics are properties of the scene, not of the frames" — an
-      // unsupported node is rejected before a single tick is simulated, and
-      // before any GL context is opened.
-      beforeBuild: (ir) => {
-        const geometry = planLottie(ir);
+      // Planning runs after the build and before sampling (ruling T8-R1).
+      // `text` needs pixi's layout of the built `Text` and HarfBuzz's
+      // outlines of it (spec §6.2-6.3), and neither exists before the
+      // build, so a pre-build `planLottie` could not see them, and a second,
+      // post-build call would be a second copy of planning. One call, here:
+      // a refusal (`LOTTIE_TEXT_MISSING_GLYPH`) arrives after the export
+      // `Application` and the tree exist (both torn down by
+      // `withRasterExport`'s `finally`) but before a single tick is sampled,
+      // so design §2's "diagnostics are properties of the scene, not of the
+      // frames" still holds: `observer.onSampled` never fires for a refused
+      // scene. A text-free scene fetches no font and measures nothing
+      // (`collectTextLayouts` returns two empty maps).
+      afterBuild: async (root, ir) => {
+        const { textLayouts, glyphRuns } = await collectTextLayouts(root, ir);
+        const geometry = planLottie(ir, { layouts: textLayouts, runs: glyphRuns });
         if (!geometry.ok) {
           throw new Error(geometry.diagnostics.map((d) => d.message).join(" | "));
         }
         layers = geometry.layers;
       },
     },
-    async ({ ir, plan, root, frames }) => {
+    async ({ ir, plan, frames }) => {
       observer.onSampled?.(frames);
-      // Text layouts and glyph runs, for Task 8 to pass into `planLottie`
-      // and encode. Two empty maps today: `beforeBuild`'s `planLottie`
-      // still refuses every `text` node before anything is built.
-      await collectTextLayouts(root, ir);
-      // `beforeBuild` always runs, and always sets `layers` when it does not
-      // throw, before `use` is ever called.
+      // `afterBuild` always runs before sampling, and always sets `layers`
+      // when it does not throw, so `use` is never reached without them.
       if (!layers) {
         throw new Error("[export] runLottieExport reached encoding with no planned layers.");
       }

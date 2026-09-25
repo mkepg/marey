@@ -171,14 +171,42 @@ describe("ensureExportFonts is wired into the shared export prefix", () => {
     expect(calls[0]).toBe("load 24px 'JetBrains Mono'");
   });
 
-  it("runs after beforeBuild: Lottie's own text refusal arrives with no font call", async () => {
+  it("runs after beforeBuild: a pipeline's own pre-build refusal arrives with no font call", async () => {
     // Order is a judgment call (AGENT-LESSONS §2d), pinned here: a refusal
-    // a pipeline owns must not wait behind a font download.
+    // a pipeline owns before the build (video's codec probe, today) must not
+    // wait behind a font download. This used to be pinned through Lottie's
+    // pre-build text refusal, which Task 8 removed (ruling T8-R1: Lottie now
+    // plans in `afterBuild`); a `beforeBuild` that refuses is the direct
+    // form of the same order.
+    const { fonts, calls } = recordingFonts({ available: false });
+    vi.stubGlobal("document", { fonts });
+    const message = await messageOf(() =>
+      withRasterExport(
+        {
+          source: TEXT_SOURCE,
+          fps: 30,
+          beforeBuild: () => {
+            throw new Error("[TEST_PRE_BUILD_REFUSAL] refused before the build");
+          },
+        },
+        async () => "used",
+      ),
+    );
+    expect(message).toBe("[TEST_PRE_BUILD_REFUSAL] refused before the build");
+    expect(calls).toEqual([]);
+  });
+
+  it("Lottie's text planning waits for the font: an unavailable font refuses a text scene first", async () => {
+    // The other side of T8-R1: `runLottieExport` measures and outlines text
+    // after the build, so a text scene reaches the font step before any
+    // Lottie diagnostic can exist. With the font unavailable, the refusal
+    // is the font's own, not a Lottie one.
     const { fonts, calls } = recordingFonts({ available: false });
     vi.stubGlobal("document", { fonts });
     const message = await messageOf(() => runLottieExport({ source: TEXT_SOURCE, fps: 30 }));
-    expect(message.startsWith("[LOTTIE_UNSUPPORTED_TEXT] ")).toBe(true);
-    expect(calls).toEqual([]);
+    expect(message.startsWith("[EXPORT_FONT_UNAVAILABLE] ")).toBe(true);
+    expect(message).not.toContain("[LOTTIE");
+    expect(calls[0]).toBe("load 24px 'JetBrains Mono'");
   });
 
   it("waits for the font when it is available, then goes on to build", async () => {
