@@ -134,6 +134,22 @@ describe("createTextOutliner (JetBrains Mono, real font)", () => {
     expect(shaped.every((id) => id !== 0)).toBe(true);
   });
 
+  it("outlines a ligature from the shaped glyphs, not from each character on its own", () => {
+    // Task 8, mutation (b): outlining `->` one character at a time keeps the
+    // advances (JetBrains Mono is monospaced) and the ink box, so neither
+    // browser check that binds can see it; only the pixels change (Criterion
+    // 2 on the ligature fixture: maxDelta 101 -> 255). This pins it in Node.
+    // Per character, `-` sits at pen 0 and `>` at pen 36 (after one
+    // 600-unit advance, which a leading space reproduces without context).
+    const shaped = outliner.outline(layout60(["->"]), 60).contours;
+    const perCharacter = [
+      ...outliner.outline(layout60(["-"]), 60).contours,
+      ...outliner.outline(layout60([" >"]), 60).contours,
+    ];
+    expect(perCharacter.length).toBeGreaterThan(0);
+    expect(shaped).not.toEqual(perCharacter);
+  });
+
   it("applies ccmp: e + combining acute shapes to the same single glyph as precomposed é", () => {
     expect(ids("e\u0301")).toEqual(ids("\u00e9"));
     expect(ids("e\u0301")).toHaveLength(1);
