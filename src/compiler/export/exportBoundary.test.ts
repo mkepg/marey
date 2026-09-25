@@ -16,6 +16,7 @@ import videoEncodeSource from "./videoEncode.ts?raw";
 import videoContractSource from "./videoContract.ts?raw";
 import videoPipelineSource from "./videoPipeline.ts?raw";
 import lottiePipelineSource from "./lottiePipeline.ts?raw";
+import rasterExportSource from "./rasterExport.ts?raw";
 import useExportSource from "../../hooks/useExport.ts?raw";
 import topBarSource from "../../components/TopBar/TopBar.tsx?raw";
 import lottieEncodeSource from "./lottieEncode.ts?raw";
@@ -401,7 +402,11 @@ describe("export boundary — R3 shared pipelines and their production entry poi
   it("videoPipeline.ts does not import devVideoSeam.ts, and does not reach __mareyExportVideo", () => {
     const code = stripComments(videoPipelineSource);
     expect(code).toContain("export async function runVideoExport");
-    expect(code).toContain("if (app?.renderer) destroyExportApp(app);");
+    // Task 4 moved the teardown this landmark used to pin into
+    // `rasterExport.ts` (see the retargeted `exportApp.test.ts` assertion,
+    // and the `withRasterExport` guard below). This file's own
+    // near-the-end landmark is now the lazy encode loop's own call.
+    expect(code).toContain("return await encodeVideo(plan, rasterized(), {");
     expect(importsModule(code, "devVideoSeam")).toBe(false);
     expect(code).not.toContain("__mareyExportVideo");
   });
@@ -409,9 +414,34 @@ describe("export boundary — R3 shared pipelines and their production entry poi
   it("lottiePipeline.ts does not import devLottieSeam.ts, and does not reach __mareyExportLottie", () => {
     const code = stripComments(lottiePipelineSource);
     expect(code).toContain("export async function runLottieExport");
-    expect(code).toContain("if (app?.renderer) destroyExportApp(app);");
+    // Same Task 4 retargeting as videoPipeline.ts above: this file's own
+    // teardown moved into `rasterExport.ts` too, so the near-the-end
+    // landmark is now the encode call.
+    expect(code).toContain("const doc: LottieDoc = encodeLottie(layers, frames, plan, {");
     expect(importsModule(code, "devLottieSeam")).toBe(false);
     expect(code).not.toContain("__mareyExportLottie");
+  });
+
+  /**
+   * Task 4's new shared module: `videoPipeline.ts`, `lottiePipeline.ts` and
+   * `devExportSeam.ts` are all built on `withRasterExport`
+   * (`rasterExport.ts`), so a dev-seam import reaching in through the one
+   * remaining copy of the compile -> plan -> build -> sample prefix would
+   * defeat the whole point of extracting it (global constraint 6's last
+   * row, design §7's table). `rasterExport.ts` has no reason to reach any
+   * of the three dev-only globals either, since it is the shared prefix,
+   * not an entry point -- checked for the same reason the entry points
+   * above are, even though nothing currently calls through it that way.
+   */
+  it("rasterExport.ts does not import any dev seam, and does not reach a dev export global", () => {
+    const code = stripComments(rasterExportSource);
+    expect(code).toContain("export async function withRasterExport");
+    expect(importsModule(code, "devVideoSeam")).toBe(false);
+    expect(importsModule(code, "devLottieSeam")).toBe(false);
+    expect(importsModule(code, "devExportSeam")).toBe(false);
+    expect(code).not.toContain("__mareyExportVideo");
+    expect(code).not.toContain("__mareyExportLottie");
+    expect(code).not.toContain("__mareyExportPng");
   });
 
   it("useExport.ts does not import any dev seam, and does not reach a dev export global", () => {

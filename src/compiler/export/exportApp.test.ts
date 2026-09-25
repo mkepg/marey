@@ -5,6 +5,7 @@ import { destroyExportApp } from "./exportApp";
 import videoPipelineSource from "./videoPipeline.ts?raw";
 import devExportSeamSource from "../../lib/devExportSeam.ts?raw";
 import lottiePipelineSource from "./lottiePipeline.ts?raw";
+import rasterExportSource from "./rasterExport.ts?raw";
 
 /**
  * An export builds a second pixi Application beside the preview's long-lived
@@ -39,13 +40,21 @@ describe("destroyExportApp", () => {
   });
 
   it("is the only way the export paths destroy an Application", () => {
+    // Phase 5C Task 4 moved the compile -> plan -> build -> sample prefix
+    // and its `finally` teardown out of all three of these callers into the
+    // one shared `rasterExport.ts` (`withRasterExport`), so the literal
+    // `destroyExportApp(app)` call no longer appears in any of them --
+    // retargeted below to the file that now owns it. What still holds for
+    // all three is the property this test actually pins: none of them
+    // reaches around the helper to call `app.destroy` itself.
     for (const [file, source] of [
       ["videoPipeline.ts", videoPipelineSource],
       ["devExportSeam.ts", devExportSeamSource],
       ["lottiePipeline.ts", lottiePipelineSource],
     ] as const) {
       expect(source, file).not.toMatch(/\bapp\??\.destroy\(/);
-      expect(source, file).toContain("destroyExportApp(app)");
     }
+    expect(rasterExportSource).not.toMatch(/\bapp\??\.destroy\(/);
+    expect(rasterExportSource).toContain("destroyExportApp(app)");
   });
 });
