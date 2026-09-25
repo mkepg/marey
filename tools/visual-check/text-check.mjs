@@ -16,10 +16,26 @@
  * 2. **Ink-bbox position check.** `lottie-check.mjs --compare-png` renders
  *    the exported document in lottie-web and diffs it against Marey's own
  *    PNG export of the same frames. At frame 0, a quarter, the midpoint and
- *    the last frame, the bounding box of every non-background pixel must
- *    agree on each edge within 1 px. This is the binding guard on glyph
+ *    the last frame, the two HALF-COVERAGE ink boxes must agree on each edge
+ *    within 1 px. Half coverage means a pixel whose largest channel
+ *    difference from the background is at least half of the text's own
+ *    contrast with it in that frame. This is the binding guard on glyph
  *    placement: a baseline off by the descent passes a loose pixel delta
  *    and fails this.
+ *
+ *    The binding definition changed from the brief's "alpha > 0" to half
+ *    coverage under controller ruling T8-R3. The reason: pixi draws its
+ *    canvas-rendered text texture with bilinear sampling, so at a fractional
+ *    x the faintest ink spreads a column outward that vector outlines do not
+ *    have. Measured on the ligature fixture's frame 29 (x = 280.667): the
+ *    any-ink boxes differ by 2 px, Marey's contains lottie-web's on both
+ *    sides, and the half-coverage boxes agree exactly. A shift moves the
+ *    half-coverage edges nearly 1:1, which the any-ink rule cannot separate
+ *    from a spread. The any-ink box is still computed and recorded, not
+ *    judged.
+ *
+ *    An empty box in both renders is a failure, not 0 px, except on frames
+ *    a fixture declares blank (`blankFrames`), where both must be empty.
  * 3. **Criterion 2**: the same run's maxDelta and mismatching share, per
  *    frame, recorded (measured, not a pass/fail).
  *
@@ -83,7 +99,8 @@ const FIXTURES = [
   { name: "ligature", layout: "advance" },
   { name: "multiline", layout: "advance" },
   { name: "mark", layout: "ink" },
-  { name: "scaled", layout: "advance" },
+  // Frame 0 is at scale (0, 0): nothing is drawn in either render.
+  { name: "scaled", layout: "advance", blankFrames: [0] },
 ].filter((f) => !only || only.includes(f.name));
 
 // Same launch arguments as lottie-check.mjs, so text measures the same way.
@@ -214,7 +231,7 @@ function diffPngFiles(a, b) {
   return { maxDelta, share: mismatch / (A.width * A.height) };
 }
 
-function judgeRun(label, run, { inkFrames, entry }) {
+function judgeRun(label, run, { inkFrames, entry, blankFrames = [] }) {
   if (run.status !== 0 || !run.report?.frameSamples) {
     fail(`${label}: lottie-check exited ${run.status}${run.stderr ? `: ${run.stderr.trim().split("\n").slice(-2).join(" / ")}` : ""}`);
     return;
@@ -226,25 +243,37 @@ function judgeRun(label, run, { inkFrames, entry }) {
       continue;
     }
     const ink = c.inkBBox;
+    const half = ink?.halfCoverage ?? null;
+    const any = ink?.anyInk ?? null;
     const row = {
       frame: s.frame,
       maxDelta: c.maxDelta,
       share: c.share,
       mismatchCount: c.mismatchCount,
       totalPixels: c.totalPixels,
-      inkPng: ink?.png ?? null,
-      inkPlayer: ink?.lottie ?? null,
-      maxEdgeDelta: ink?.maxEdgeDelta ?? null,
-      // Diagnostic only (not judged): the same box at half coverage.
-      halfCoverage: ink?.halfCoverage ?? null,
+      contrast: ink?.contrast ?? null,
+      // Binding (T8-R3): half the text's own contrast in this frame.
+      halfCoverage: half,
+      // Recorded, not judged.
+      anyInk: any,
     };
     entry.push(row);
     const box = (b) => (b ? `(${b.minX},${b.minY})-(${b.maxX},${b.maxY})` : "none");
     console.log(
-      `  ${label} frame ${s.frame}: maxDelta ${c.maxDelta}, share ${(c.share * 100).toFixed(4)}% | ink png ${box(row.inkPng)} player ${box(row.inkPlayer)} edge delta ${row.maxEdgeDelta} (half-coverage ${row.halfCoverage?.maxEdgeDelta})`,
+      `  ${label} frame ${s.frame}: maxDelta ${c.maxDelta}, share ${(c.share * 100).toFixed(4)}% | ` +
+        `half-coverage (d >= ${half?.threshold}) png ${box(half?.png)} player ${box(half?.lottie)} edge delta ${half?.maxEdgeDelta} | ` +
+        `any-ink edge delta ${any?.maxEdgeDelta}`,
     );
-    if (inkFrames(s.frame) && !(row.maxEdgeDelta !== null && row.maxEdgeDelta <= INK_EDGE_TOLERANCE_PX)) {
-      fail(`${label} frame ${s.frame}: ink bbox edge delta ${row.maxEdgeDelta} > ${INK_EDGE_TOLERANCE_PX}`);
+    if (!inkFrames(s.frame)) continue;
+    const bothEmpty = half && half.png === null && half.lottie === null;
+    if (blankFrames.includes(s.frame)) {
+      if (!bothEmpty) fail(`${label} frame ${s.frame}: declared blank, but ink was found (png ${box(half?.png)}, player ${box(half?.lottie)})`);
+    } else if (!half) {
+      fail(`${label} frame ${s.frame}: no ink measurement`);
+    } else if (bothEmpty) {
+      fail(`${label} frame ${s.frame}: no ink in either render, and the frame is not declared blank`);
+    } else if (!(half.maxEdgeDelta !== null && half.maxEdgeDelta <= INK_EDGE_TOLERANCE_PX)) {
+      fail(`${label} frame ${s.frame}: half-coverage ink bbox edge delta ${half.maxEdgeDelta} > ${INK_EDGE_TOLERANCE_PX}`);
     }
   }
 }
@@ -271,7 +300,7 @@ for (const f of FIXTURES) {
   console.log(`\n${f.name}: frames ${entry.frames.join(",")}`);
   const lwDir = `${outDir}/${f.name}/lottie-web`;
   const lw = runLottieCheck(entry.scene, entry.frames, lwDir);
-  judgeRun("lottie-web", lw, { inkFrames: () => true, entry: entry.criterion2 });
+  judgeRun("lottie-web", lw, { inkFrames: () => true, entry: entry.criterion2, blankFrames: f.blankFrames ?? [] });
   if (!has("skip-dotlottie")) {
     const dlDir = `${outDir}/${f.name}/dotlottie-web`;
     const dl = runLottieCheck(entry.scene, entry.frames, dlDir, ["--renderer", "dotlottie-web"]);

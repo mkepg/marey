@@ -164,11 +164,13 @@
  *                        node_modules/@lottiefiles/dotlottie-web/dist/dotlottie-player.wasm)
  *   --headed             show the browser window
  *
- * With `--compare-png`, every compared frame also reports `inkBBox`: the
- * bounding box of the pixels that are not exactly the scene's opaque
- * background colour, in Marey's PNG and in the player's canvas, and the
- * largest per-edge disagreement (`maxEdgeDelta`, px). `text-check.mjs` uses
- * it as the text position check (Phase 5C Task 8, spec §6.6).
+ * With `--compare-png`, every compared frame also reports `inkBBox`, the
+ * ink bounding boxes of Marey's PNG and of the player's canvas measured
+ * against the scene's opaque background colour, each with its largest
+ * per-edge disagreement (`maxEdgeDelta`, px; null unless both boxes exist):
+ * `halfCoverage` (pixels at least half the text's own contrast in that
+ * frame; the binding position check in `text-check.mjs`, Phase 5C Task 8
+ * ruling T8-R3) and `anyInk` (any difference at all; recorded only).
  *
  * Writes `<out>/doc.json` (the document actually handed to the player, i.e.
  * post-patch), `<out>/frame_<label>.png` per requested frame (label is the
@@ -576,9 +578,11 @@ for (const fs_ of frameSamples) {
       console.log(`    pngExportPng: ${c.pngExportPng}`);
       if (c.inkBBox) {
         const box = (b) => (b ? `(${b.minX},${b.minY})-(${b.maxX},${b.maxY})` : "none");
+        const { halfCoverage: h, anyInk: a } = c.inkBBox;
         console.log(
-          `    ink bbox: png ${box(c.inkBBox.png)}, player ${box(c.inkBBox.lottie)}, maxEdgeDelta=${c.inkBBox.maxEdgeDelta}`,
+          `    ink bbox, half coverage (d >= ${h.threshold}): png ${box(h.png)}, player ${box(h.lottie)}, maxEdgeDelta=${h.maxEdgeDelta}`,
         );
+        console.log(`    ink bbox, any ink: png ${box(a.png)}, player ${box(a.lottie)}, maxEdgeDelta=${a.maxEdgeDelta}`);
       }
     }
   }

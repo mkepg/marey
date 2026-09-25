@@ -69,9 +69,10 @@ const { doc, renderer, requestedFrames, atPoints, pngExport, lottiePath, dotlott
 // document's background solid layer (`lottieEncode.ts` always emits one, as
 // `ty: 1` with `sc` `#rrggbb`). Marey's PNG export has no transparent mode
 // (`withRasterExport` initialises every export at `backgroundAlpha: 1`), so
-// "ink" is any pixel that is not exactly the opaque background colour, in
-// both images alike: the same threshold as alpha > 0 on a transparent
-// render, applied symmetrically to both renderers.
+// ink is measured as each pixel's largest channel difference from the
+// opaque background colour, in both images alike. Two boxes are reported:
+// half coverage (binding for `text-check.mjs`, ruling T8-R3) and any ink
+// (recorded, not binding). See the ink-box code below.
 const backgroundLayer = (doc.layers ?? []).find((l) => l && l.ty === 1 && typeof l.sc === "string");
 const backgroundRgb = backgroundLayer
   ? [1, 3, 5].map((k) => parseInt(backgroundLayer.sc.slice(k, k + 2), 16))
@@ -369,32 +370,54 @@ for (const frame of requestedFrames) {
           dctx.putImageData(diffImageData, 0, 0);
           const diffPngBase64 = diffCanvas.toDataURL("image/png").split(",")[1];
 
-          // Ink bounding box of each image: every pixel that differs from
-          // the opaque background colour, optionally only inside
-          // `inkRegion` (inclusive pixel bounds), for a scene whose text
-          // shares the frame with other objects. `null` when no pixel is ink.
-          // `threshold` 0 is the binding rule (any difference at all, the
-          // opaque equivalent of alpha > 0). 127 is a diagnostic: pixels at
-          // least about half covered, which separates a box that is only
-          // wider (texture filtering spreads faint ink outward) from one that
-          // is shifted (a placement error moves the half-coverage edges too).
-          const inkBox = (data, threshold = 0) => {
+          // Ink bounding boxes, optionally only inside `inkRegion`
+          // (inclusive pixel bounds) for a scene whose text shares the frame
+          // with other objects. `d` is a pixel's largest channel difference
+          // from the opaque background.
+          //
+          // - Half coverage (binding in `text-check.mjs`, ruling T8-R3): ink
+          //   is `d >= contrast / 2`, where `contrast` is the text's own
+          //   contrast with the background in THIS frame, measured as the
+          //   largest `d` in either image (a fully covered stem pixel). One
+          //   threshold for both images, so the two boxes are cut at the
+          //   same coverage. Relative, not an absolute `d > 127`: text whose
+          //   contrast is 127 or less would otherwise have no ink at all.
+          // - Any ink (`d > 0`, the opaque equivalent of alpha > 0; recorded,
+          //   not binding): pixi draws its canvas-rendered text texture with
+          //   bilinear sampling at fractional positions, so faint ink spreads
+          //   a column or row outward that vector outlines do not have
+          //   (measured: ligature frame 29, 2 px any-ink, 0 px half coverage).
+          //
+          // `null` when no pixel qualifies.
+          const region = {
+            x0: inkRegion ? Math.max(0, inkRegion.x0) : 0,
+            y0: inkRegion ? Math.max(0, inkRegion.y0) : 0,
+            x1: inkRegion ? Math.min(off.width - 1, inkRegion.x1) : off.width - 1,
+            y1: inkRegion ? Math.min(off.height - 1, inkRegion.y1) : off.height - 1,
+          };
+          const diffAt = (data, i) =>
+            Math.max(
+              Math.abs(data[i] - backgroundRgb[0]),
+              Math.abs(data[i + 1] - backgroundRgb[1]),
+              Math.abs(data[i + 2] - backgroundRgb[2]),
+              255 - data[i + 3],
+            );
+          const peakContrast = (data) => {
+            let peak = 0;
+            for (let y = region.y0; y <= region.y1; y++) {
+              for (let x = region.x0; x <= region.x1; x++) peak = Math.max(peak, diffAt(data, (y * off.width + x) * 4));
+            }
+            return peak;
+          };
+          // `inclusive`: half coverage counts `d >= threshold`; any ink
+          // counts `d > 0`.
+          const inkBox = (data, threshold, inclusive) => {
             if (!backgroundRgb) return undefined;
-            const x0 = inkRegion ? Math.max(0, inkRegion.x0) : 0;
-            const y0 = inkRegion ? Math.max(0, inkRegion.y0) : 0;
-            const x1 = inkRegion ? Math.min(off.width - 1, inkRegion.x1) : off.width - 1;
-            const y1 = inkRegion ? Math.min(off.height - 1, inkRegion.y1) : off.height - 1;
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            for (let y = y0; y <= y1; y++) {
-              for (let x = x0; x <= x1; x++) {
-                const i = (y * off.width + x) * 4;
-                const d = Math.max(
-                  Math.abs(data[i] - backgroundRgb[0]),
-                  Math.abs(data[i + 1] - backgroundRgb[1]),
-                  Math.abs(data[i + 2] - backgroundRgb[2]),
-                  255 - data[i + 3],
-                );
-                if (d > threshold) {
+            for (let y = region.y0; y <= region.y1; y++) {
+              for (let x = region.x0; x <= region.x1; x++) {
+                const d = diffAt(data, (y * off.width + x) * 4);
+                if (inclusive ? d >= threshold : d > threshold) {
                   if (x < minX) minX = x;
                   if (x > maxX) maxX = x;
                   if (y < minY) minY = y;
@@ -404,27 +427,26 @@ for (const frame of requestedFrames) {
             }
             return minX === Infinity ? null : { minX, minY, maxX, maxY };
           };
-          const pngInk = inkBox(pngData);
-          const lottieInk = inkBox(lottieData);
           let inkBBox;
-          if (pngInk !== undefined) {
+          if (backgroundRgb) {
             const edges = ["minX", "minY", "maxX", "maxY"];
-            const edgeDelta = (a, b) =>
-              a && b ? Math.max(...edges.map((k) => Math.abs(a[k] - b[k]))) : a === b ? 0 : null;
-            const pngHalf = inkBox(pngData, 127);
-            const lottieHalf = inkBox(lottieData, 127);
+            // Largest per-edge disagreement in pixels, or null unless both
+            // boxes exist. Both empty is null too: `text-check.mjs` decides
+            // whether a blank frame was expected, rather than this reading
+            // "nothing in either" as agreement.
+            const edgeDelta = (a, b) => (a && b ? Math.max(...edges.map((k) => Math.abs(a[k] - b[k]))) : null);
+            const contrast = Math.max(peakContrast(pngData), peakContrast(lottieData));
+            const threshold = contrast / 2;
+            const pngHalf = contrast > 0 ? inkBox(pngData, threshold, true) : null;
+            const lottieHalf = contrast > 0 ? inkBox(lottieData, threshold, true) : null;
+            const pngAny = inkBox(pngData, 0, false);
+            const lottieAny = inkBox(lottieData, 0, false);
             inkBBox = {
-              halfCoverage: { png: pngHalf, lottie: lottieHalf, maxEdgeDelta: edgeDelta(pngHalf, lottieHalf) },
               region: inkRegion ?? null,
               background: backgroundRgb,
-              png: pngInk,
-              lottie: lottieInk,
-              // Largest per-edge disagreement in pixels; 0 when both are
-              // empty (nothing drawn in either); null when only one is.
-              maxEdgeDelta:
-                pngInk && lottieInk
-                  ? Math.max(...edges.map((k) => Math.abs(pngInk[k] - lottieInk[k])))
-                  : pngInk === lottieInk ? 0 : null,
+              contrast,
+              halfCoverage: { threshold, png: pngHalf, lottie: lottieHalf, maxEdgeDelta: edgeDelta(pngHalf, lottieHalf) },
+              anyInk: { png: pngAny, lottie: lottieAny, maxEdgeDelta: edgeDelta(pngAny, lottieAny) },
             };
           }
 
