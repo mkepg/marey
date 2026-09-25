@@ -167,6 +167,28 @@ describe("encodeApng", () => {
     expect(() => encodeApng([new Uint8Array([1, 2, 3])], { fps: 30 })).toThrow("frame 0 is not a PNG");
   });
 
+  // Delete-and-run (global constraint 11) found that the test above alone
+  // does not pin the signature check: a 3-byte input trips the "no IHDR
+  // chunk found" fallback regardless of whether the 8-byte signature is
+  // ever inspected, so deleting the signature check left every test green.
+  // This fixture isolates it: a well-formed chunk sequence (a real IHDR
+  // sits at the same offset a valid PNG would put it) behind a corrupted
+  // first signature byte, so only an actual signature check can catch it.
+  it("refuses a frame whose signature is corrupted even though its chunks parse fine", () => {
+    const corrupted = fakePng(4, 2, [1]);
+    corrupted[0] = 0x00;
+    expect(() => encodeApng([corrupted], { fps: 30 })).toThrow("frame 0 is not a PNG");
+  });
+
+  // Delete-and-run also found this line unreachable by every other test: a
+  // valid signature followed by no IHDR chunk at all (truncated right after
+  // the signature) is a distinct, legitimate way for a frame to have no
+  // IHDR without ever tripping the signature check above.
+  it("refuses a frame with a valid signature but no IHDR chunk", () => {
+    const signatureOnly = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    expect(() => encodeApng([signatureOnly], { fps: 30 })).toThrow("frame 0 is not a PNG");
+  });
+
   it("refuses an fps that does not fit fcTL's u16 delay_den field", () => {
     expect(() => encodeApng([a], { fps: 0 })).toThrow("0");
     expect(() => encodeApng([a], { fps: 1.5 })).toThrow("1.5");
