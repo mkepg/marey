@@ -154,16 +154,29 @@ describe("font licence text", () => {
     expect(fontLicenseText("Apache License, Version 2.0", SUPPLIED)).toMatch(/no full licence text/);
   });
 
-  it("carries the full OFL 1.1 text, after the copyright notice, in the notices for the shipped font", () => {
+  it("carries the full OFL 1.1 text after each shipped font's own copyright notice", () => {
     const { notices, problems } = readFonts("public", SUPPLIED);
     expect(problems).toEqual([]);
+    // Both families under public/fonts, so dropping one entirely fails too.
+    expect(notices.map((n) => n.family)).toEqual(["JetBrains Mono", "Syne"]);
     const out = renderNotices([], notices);
-    expect(out).toContain("SIL OPEN FONT LICENSE Version 1.1");
-    expect(out).toContain("PERMISSION & CONDITIONS");
-    // OFL condition 2: the copyright notice and the licence, together.
-    const copyrightAt = out.indexOf("Copyright 2020 The JetBrains Mono Project Authors");
-    expect(copyrightAt).toBeGreaterThan(-1);
-    expect(out.indexOf("PERMISSION & CONDITIONS")).toBeGreaterThan(copyrightAt);
+    // Judged per font block, not over the whole file: with two OFL fonts, a
+    // whole-file search still passes when one font's copy is missing
+    // (review Minor 5). Blocks are separated by the renderer's 72-dash rule
+    // on its own line; the OFL's own rule is 59 dashes, so it never splits.
+    const blocks = out.split(`\n${"-".repeat(72)}\n`);
+    for (const n of notices) {
+      const block = blocks.find((b) => b.startsWith(`${n.family} font`));
+      expect(block, n.family).toBeDefined();
+      // OFL condition 2: this font's copyright notice, then the licence.
+      const copyrightAt = block!.indexOf(n.copyright);
+      expect(copyrightAt, n.family).toBeGreaterThan(-1);
+      expect(block!.indexOf("SIL OPEN FONT LICENSE Version 1.1"), n.family).toBeGreaterThan(copyrightAt);
+      expect(block!.indexOf("PERMISSION & CONDITIONS"), n.family).toBeGreaterThan(copyrightAt);
+    }
+    expect(notices.find((n) => n.family === "JetBrains Mono")!.copyright).toContain(
+      "Copyright 2020 The JetBrains Mono Project Authors",
+    );
   });
 });
 
