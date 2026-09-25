@@ -493,6 +493,36 @@ describe("encodeLottie · per-kind geometry", () => {
     });
   });
 
+  it("encodes a text as one closed path per contour, then a single nonzero fill", () => {
+    // Spec §6.4. Nonzero (`r: 1`) is load-bearing, not a nicety: Task 6 Q4
+    // found 19 of 100 JetBrains Mono glyphs render differently under
+    // even-odd, among them `a b d e g h m n p q r` and `8`. The fill goes
+    // AFTER every path, for the backward-`searchShapes` reason above.
+    const glyphA = {
+      v: [[0, 0], [10, 0], [10, 10]] as const,
+      i: [[0, 0], [0, 0], [-1, 2]] as const,
+      o: [[3, 0], [0, 0], [0, 0]] as const,
+    };
+    const glyphB = {
+      v: [[20, 0], [30, 0], [25, 8]] as const,
+      i: [[0, 0], [0, 0], [0, 0]] as const,
+      o: [[0, 0], [0, 0], [0, 0]] as const,
+    };
+    const doc = only({
+      id: "scene.t", name: "t", shape: { kind: "text", contours: [glyphA, glyphB] },
+      anchor: { x: 15, y: 5 }, color: [1, 1, 1], parentId: null,
+    });
+    const layer = layerNamed(doc, "t");
+    expect(layer.ty).toBe(4);
+    const items = layer.shapes;
+    expect(items.map((s: { ty: string }) => s.ty)).toEqual(["sh", "sh", "fl"]);
+    expect(items[0].ks.k).toEqual({ v: [[0, 0], [10, 0], [10, 10]], i: [[0, 0], [0, 0], [-1, 2]], o: [[3, 0], [0, 0], [0, 0]], c: true });
+    expect(items[1].ks.k).toEqual({ v: [[20, 0], [30, 0], [25, 8]], i: [[0, 0], [0, 0], [0, 0]], o: [[0, 0], [0, 0], [0, 0]], c: true });
+    expect(items[2].r).toBe(1);
+    expect(items[2].c).toEqual({ a: 0, k: [1, 1, 1] });
+    expect(items[2].o).toEqual({ a: 0, k: 100 });
+  });
+
   it("emits a group as a null layer carrying no shapes", () => {
     const doc = only({
       id: "scene.g", name: "g", shape: { kind: "group" },

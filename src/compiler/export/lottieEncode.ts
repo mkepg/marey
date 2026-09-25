@@ -399,6 +399,22 @@ function shapeItemsFor(shape: LottieShapeSpec, color: LayerSpec["color"], name: 
       items.push({ ty: "sh", nm: name, ks: { a: 0, k: { i: zeros, o: zeros, v, c: false } } });
       break;
     }
+    case "text": {
+      // Spec §6.4: one CLOSED path per glyph contour, in text-local pixels
+      // (`textOutline.ts` already produced Lottie-shaped `v`/`i`/`o`, with
+      // tangents relative to their own vertex), and one fill for all of
+      // them, pushed by the shared fill branch below. Copied rather than
+      // aliased, so the document owns plain arrays.
+      const copy = (points: ReadonlyArray<readonly [number, number]>) => points.map((p) => [p[0], p[1]]);
+      for (const contour of shape.contours) {
+        items.push({
+          ty: "sh",
+          nm: name,
+          ks: { a: 0, k: { i: copy(contour.i), o: copy(contour.o), v: copy(contour.v), c: true } },
+        });
+      }
+      break;
+    }
     case "group":
       // Unreachable: the caller emits a null layer for a group and never asks
       // for its shape items.
@@ -438,6 +454,13 @@ function shapeItemsFor(shape: LottieShapeSpec, color: LayerSpec["color"], name: 
     // configures `renderer: "canvas"`), so the renderer that actually matters
     // here is `elements/canvasElements/CVShapeElement.js:186`, the backward
     // loop inside `CVShapeElement.prototype.searchShapes` (`.js:175`).
+    //
+    // `r: 1` is nonzero winding, the rule canvas `fill()` and pixi's text
+    // rasterizer use. For circle/rectangle/polygon a single simple path
+    // makes the rule moot, but for `text` it is load-bearing: a glyph's
+    // counters and overlapping contours are separate `sh` items under this
+    // one fill, and Task 6 Q4 found 19 of 100 JetBrains Mono glyphs (`a`,
+    // `e`, `8` among them) render differently under even-odd (`r: 2`).
     items.push({ ty: "fl", nm: `${name} fill`, c: { a: 0, k: [...color] }, o: staticScalar(100), r: 1 });
   }
   return items;
