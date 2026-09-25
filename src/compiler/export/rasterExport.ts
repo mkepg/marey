@@ -1,4 +1,4 @@
-import { Application, Container } from "pixi.js";
+import { Application, CanvasTextMetrics, Container } from "pixi.js";
 import type { ICanvas } from "pixi.js";
 import { compileSource } from "../compileSource";
 import { destroyExportApp } from "./exportApp";
@@ -174,6 +174,26 @@ export async function withRasterExport<T>(
   // never use. A text-free scene makes no call. Throws
   // `[EXPORT_FONT_UNAVAILABLE]` if the font still is not available.
   await ensureExportFonts(ir);
+
+  // Loading the font is not enough on its own: pixi may already have
+  // measured it WITHOUT the font. `CanvasTextMetrics.measureFont` caches
+  // ascent/descent/fontSize in a static `_fonts` map keyed by the CSS font
+  // string alone (pixi.js 8.16.0, `CanvasTextMetrics.mjs`), with nothing in
+  // the key that records whether the face had loaded. So if the live preview
+  // built this scene's text on a cold page, before the font arrived, every
+  // later `TextStyle` with the same font props, the fresh ones
+  // `buildNode` makes below included, is served the fallback font's
+  // metrics. Measured on a fresh page (`docs/research/2026-09-24-export-
+  // quality-probes/text-plumbing/cache-run.mjs`): after one fallback
+  // measurement the export built a 60px two-line text at 504 x 126
+  // (lineHeight 63, ascent 51) where a warm page builds 504 x 142
+  // (lineHeight 71, ascent 60). Width was right either way: the per-text
+  // `_measurementCache` is keyed by `styleKey`, which is `${uid}-${tick}`,
+  // so a new `TextStyle` never hits an entry an older one wrote.
+  // `clearMetrics()` with no argument is pixi's public way to empty
+  // `_fonts`; it costs one re-measure per font string, for the preview too,
+  // which then picks up the loaded font's real metrics as well.
+  CanvasTextMetrics.clearMetrics();
 
   const scale = typeof opts.scale === "function" ? opts.scale(ir, plan) : opts.scale;
 

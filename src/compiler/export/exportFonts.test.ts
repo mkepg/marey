@@ -1,4 +1,5 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
+import { CanvasTextMetrics } from "pixi.js";
 import { compileSource } from "../compileSource";
 import type { IRSceneNode } from "../sceneIR";
 import { ensureExportFonts, exportFontSizes, type ExportFontSet } from "./exportFonts";
@@ -188,5 +189,52 @@ describe("ensureExportFonts is wired into the shared export prefix", () => {
     );
     expect(calls).toEqual(["load 24px 'JetBrains Mono'", "check 24px 'JetBrains Mono'"]);
     expect(message).not.toContain("EXPORT_FONT_UNAVAILABLE");
+  });
+});
+
+/**
+ * Addendum item 5: pixi's font-metrics cache.
+ *
+ * `CanvasTextMetrics.measureFont` caches ascent/descent/fontSize in the
+ * private static `_fonts`, keyed by the CSS font string alone, with no
+ * font-load state in the key. Measured on a fresh page (`text-plumbing/
+ * cache-run.mjs`): one fallback measurement before the font loaded left the
+ * real export prefix building a 504 x 126 text box (lineHeight 63, ascent 51)
+ * where a warm page builds 504 x 142 (lineHeight 71, ascent 60). So the
+ * prefix must empty that cache once the font is in. This test seeds a stale
+ * entry the way a cold preview would, and requires the prefix to drop it
+ * before it builds anything.
+ */
+describe("the export prefix drops pixi's stale font metrics once the font is loaded", () => {
+  const TEXT_SOURCE = `scene { size: (100, 100) duration: 1 text t { position: (0, 0), content: "hi", fontSize: 24 } }`;
+  const fontCache = () => (CanvasTextMetrics as unknown as { _fonts: Record<string, unknown> })._fonts;
+  const STALE_KEY = "normal normal normal 24px 'JetBrains Mono',monospace";
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    CanvasTextMetrics.clearMetrics();
+  });
+
+  it("empties the cache before building", async () => {
+    fontCache()[STALE_KEY] = { ascent: 51, descent: 12, fontSize: 63 };
+    const { fonts } = recordingFonts({ available: true });
+    vi.stubGlobal("document", { fonts });
+    let cacheAtBuild: Record<string, unknown> | undefined;
+    // `new Application()` fails in Node (no DOM), so nothing is built and
+    // nothing re-measures: read the cache when that rejection arrives, by
+    // which point the font step has run.
+    await withRasterExport({ source: TEXT_SOURCE, fps: 30 }, async () => "used").catch(() => {
+      cacheAtBuild = { ...fontCache() };
+    });
+    expect(cacheAtBuild).toBeDefined();
+    expect(cacheAtBuild).not.toHaveProperty([STALE_KEY]);
+  });
+
+  it("control: a refusal before the font step leaves the cache alone", async () => {
+    fontCache()[STALE_KEY] = { ascent: 51, descent: 12, fontSize: 63 };
+    const { fonts } = recordingFonts({ available: false });
+    vi.stubGlobal("document", { fonts });
+    await withRasterExport({ source: TEXT_SOURCE, fps: 30 }, async () => "used").catch(() => undefined);
+    expect(fontCache()).toHaveProperty([STALE_KEY]);
   });
 });
