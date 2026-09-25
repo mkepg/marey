@@ -1,4 +1,9 @@
-import type { IRColor, IRObjectId, IRObjectNode, IRObjectProps, IRPointList, IRSceneNode } from "../sceneIR";
+import type { IRColor, IRObjectId, IRObjectNode, IRObjectProps, IRPointList, IRSceneNode, IRTextProps } from "../sceneIR";
+// Types only: `textOutline.ts` owns the harfbuzzjs import, and this module
+// must never import harfbuzzjs itself (spec §7, `exportBoundary.test.ts`).
+// A `TextLayout` and a `TextGlyphRun` are plain numbers and arrays measured
+// by the pipeline (`lottiePipeline.ts`'s `collectTextLayouts`).
+import type { Contour, MissingGlyph, TextGlyphRun, TextLayout } from "./textOutline";
 
 /**
  * Diagnostics for a scene the Lottie exporter refuses to bake.
@@ -10,7 +15,7 @@ import type { IRColor, IRObjectId, IRObjectNode, IRObjectProps, IRPointList, IRS
  * on that module: every applicable diagnostic is returned, not just the
  * first, and every message begins `[CODE] `.
  */
-export type LottieDiagnosticCode = "LOTTIE_UNSUPPORTED_TEXT";
+export type LottieDiagnosticCode = "LOTTIE_TEXT_MISSING_GLYPH";
 
 export interface LottieDiagnostic {
   readonly code: LottieDiagnosticCode;
@@ -27,6 +32,14 @@ export type LottieShapeSpec =
   | { readonly kind: "rectangle"; readonly width: number; readonly height: number }
   | { readonly kind: "polygon"; readonly points: ReadonlyArray<{ readonly x: number; readonly y: number }> }
   | { readonly kind: "line"; readonly points: ReadonlyArray<{ readonly x: number; readonly y: number }>; readonly thickness: number }
+  /**
+   * A text object as its glyph outlines (spec §6.3-6.4): closed contours in
+   * text-local pixels, y down, the same space `builder.ts`'s `Text` child
+   * draws in. The encoder fills them all with one nonzero `fl`. Phase 5A's
+   * cut of `text` (R17) was about Lottie's *text layer*; this is shape
+   * data, not a text layer, so R17's reason does not apply to it.
+   */
+  | { readonly kind: "text"; readonly contours: ReadonlyArray<Contour> }
   | { readonly kind: "group" };
 
 /**
@@ -122,9 +135,9 @@ function lastSegment(id: IRObjectId): string {
  * Map one supported IR node's props to its Lottie shape, anchor and colour.
  * Every row is measured against `builder.ts`'s `buildNode` switch — see
  * `docs/architecture/renderer.md` and the module docstring above for the
- * per-kind bbox this derives from. `text` never reaches here: the caller
- * only invokes this for the five kinds `planLottie` accepts (Task 2 added
- * `line` to what was four).
+ * per-kind bbox this derives from. `text` never reaches here: its box is
+ * not a property of the IR at all but the pipeline's measurement, so
+ * `planLottie`'s walk handles it with {@link textGeometryFor}.
  */
 function shapeGeometryFor(
   props: IRObjectProps
@@ -179,12 +192,83 @@ function shapeGeometryFor(
       };
     }
     default: {
-      // Unreachable: `walk` below only calls this for the five kinds
-      // `planLottie` accepts (Task 2 added `line`). `text` is handled, and
-      // refused, before this function is ever invoked.
+      // Unreachable: `walk` below routes `text` to `textGeometryFor` and
+      // calls this only for the five IR-measurable kinds.
       throw new Error(`[LOTTIE] shapeGeometryFor called with unsupported kind '${(props as { kind: string }).kind}'`);
     }
   }
+}
+
+/**
+ * What the export pipeline measured for every `text` node, by IR id (spec
+ * §6.2-6.3): pixi's layout of the built `Text` and HarfBuzz's glyph
+ * outlines for it. Plain data; see `textOutline.ts` for both shapes.
+ */
+export interface LottieTextInput {
+  readonly layouts: ReadonlyMap<IRObjectId, TextLayout>;
+  readonly runs: ReadonlyMap<IRObjectId, TextGlyphRun>;
+}
+
+/** `U+65E5`, `U+1F642`: at least four hex digits, upper case, never a surrogate. */
+function codePointLabel(codePoint: number): string {
+  return `U+${codePoint.toString(16).toUpperCase().padStart(4, "0")}`;
+}
+
+/**
+ * The one place `LOTTIE_TEXT_MISSING_GLYPH`'s wording lives (spec §6.3).
+ *
+ * Glyph 0 (`.notdef`) from shaping means JetBrains Mono has no glyph for
+ * the character. The preview does not draw tofu there: Chromium falls back
+ * to a system font (a real CJK glyph, a colour emoji; Task 6 Q7), which a
+ * Lottie file of glyph outlines cannot reproduce. So the export refuses,
+ * naming the object and every such character, once each.
+ */
+function missingGlyphDiagnostic(id: IRObjectId, missing: ReadonlyArray<MissingGlyph>): LottieDiagnostic {
+  const one = missing.length === 1;
+  const chars = missing.map((m) => `'${m.char}' (${codePointLabel(m.codePoint)})`).join(", ");
+  return {
+    code: "LOTTIE_TEXT_MISSING_GLYPH",
+    message:
+      `[LOTTIE_TEXT_MISSING_GLYPH] Text '${id}' uses ${one ? "a character" : "characters"} the export font ` +
+      `'JetBrains Mono' has no glyph for: ${chars}. The preview draws ${one ? "it" : "them"} from a fallback ` +
+      `font, which a Lottie file cannot reproduce. Remove or replace ${one ? "it" : "them"} before exporting.`,
+  };
+}
+
+/**
+ * A text node's shape, anchor and colour, from the pipeline's measurements.
+ *
+ * The anchor box is the layout's `width` x `height`, which is the built
+ * wrapper's `__baseSize`: the exact box `builder.ts`'s text case pivoted on
+ * (`min (0,0)`, `size (textObj.width, textObj.height)`), so the anchor
+ * matches the sampled snapshots by construction. It is deliberately not
+ * recomputed from the glyphs: pixi's line width is `max(advance, ink)`
+ * (Task 7 measured 202 px against an advance sum of 180 for a string with
+ * combining marks), and the snapshots were taken against pixi's number.
+ *
+ * Both entries are required. A text node with no layout or no glyph run is
+ * a pipeline bug, not a property of the scene, so it throws rather than
+ * becoming a diagnostic a person would be asked to act on.
+ */
+function textGeometryFor(
+  id: IRObjectId,
+  props: IRTextProps,
+  text: LottieTextInput | undefined,
+): { readonly geometry: ReturnType<typeof shapeGeometryFor>; readonly missing: ReadonlyArray<MissingGlyph> } {
+  const layout = text?.layouts.get(id);
+  const run = text?.runs.get(id);
+  if (!layout || !run) {
+    throw new Error(`[LOTTIE] text node '${id}' has no layout from the export pipeline`);
+  }
+  const bbox: LocalBBox = { min: { x: 0, y: 0 }, size: { x: layout.width, y: layout.height } };
+  return {
+    geometry: {
+      shape: { kind: "text", contours: run.contours },
+      anchor: localPivot(props.origin, bbox),
+      color: hexToRgb01(props.color),
+    },
+    missing: run.missing,
+  };
 }
 
 /**
@@ -203,10 +287,14 @@ function shapeGeometryFor(
  * as a colour at all (a `PARSE` error, long before an IR exists). A colour
  * diagnostic here would be a branch no input can reach.
  *
- * Returns `layers: []` on the success path; Task 2 populates it from this
- * same walk. The signature does not change between the two tasks.
+ * `text` (Phase 5C Task 8) needs what only the built tree knows: pixi's
+ * layout and HarfBuzz's outlines, passed in as `text`. It is optional, so a
+ * text-free caller (and every test that has no text) is unchanged; a text
+ * node with no entry in both maps throws (see {@link textGeometryFor}).
+ * Because of that, `runLottieExport` calls this after the build and before
+ * sampling (ruling T8-R1), not before the build as Phase 5A did.
  */
-export function planLottie(ir: IRSceneNode): LottiePlanResult {
+export function planLottie(ir: IRSceneNode, text?: LottieTextInput): LottiePlanResult {
   const diagnostics: LottieDiagnostic[] = [];
   const layers: LayerSpec[] = [];
 
@@ -215,12 +303,15 @@ export function planLottie(ir: IRSceneNode): LottiePlanResult {
   // down to each child, `null` at the top level.
   function walk(node: IRObjectNode, parentId: IRObjectId | null): void {
     switch (node.props.kind) {
-      case "text":
-        diagnostics.push({
-          code: "LOTTIE_UNSUPPORTED_TEXT",
-          message: `[LOTTIE_UNSUPPORTED_TEXT] Object '${node.id}' is a text node, which the Lottie exporter does not support. Remove it or replace it with a supported shape (circle, rectangle, polygon, line or group) before exporting.`,
-        });
+      case "text": {
+        const { geometry, missing } = textGeometryFor(node.id, node.props, text);
+        if (missing.length > 0) {
+          diagnostics.push(missingGlyphDiagnostic(node.id, missing));
+          break;
+        }
+        layers.push({ id: node.id, name: lastSegment(node.id), ...geometry, parentId });
         break;
+      }
       default: {
         const { shape, anchor, color } = shapeGeometryFor(node.props);
         layers.push({
