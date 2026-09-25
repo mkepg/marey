@@ -44,31 +44,33 @@ function download(bytes: Uint8Array | string, filename: string, mime: string): v
 
 /**
  * Export for every one of the top bar's export buttons — generalised from
- * Phase 5B's video-only export hook to cover Lottie now and APNG once Task 5
- * lands. `"apng"` is in the `ExportKind` union from this task onward, but its
- * branch throws until T5 replaces it; no apng button renders yet
- * (`TopBar.tsx`).
+ * Phase 5B's video-only export hook to cover Lottie (Task 3) and APNG
+ * (Task 5), the last of the four kinds `ExportKind` names.
  *
  * Modelled on `useShare.ts`: a `useCallback` returning a `Promise<void>`,
  * `showToast` for the end states, and the `download` helper above.
  *
  * Progress is reported as local hook state, not through `showToast`:
- * `runVideoExport`'s `onProgress` fires once per frame — 240 times for a
- * 240-frame export — and `showToast` (`store/index.ts`) appends a new,
- * independently auto-dismissing toast on every call. Wiring a per-frame
- * callback into it would flood the toast stack rather than reassure anyone
- * that a several-second export is progressing and not a hung tab. Lottie (and
- * APNG once it lands) has no per-frame encode progress worth showing —
- * `progress.total` stays 0, and `TopBar.tsx`'s `exportLabel` reads that as
- * "starting…"/"…" rather than a percentage.
+ * `runVideoExport`'s and `runApngExport`'s `onProgress` each fire once per
+ * frame — 240 times for a 240-frame export — and `showToast`
+ * (`store/index.ts`) appends a new, independently auto-dismissing toast on
+ * every call. Wiring a per-frame callback into it would flood the toast
+ * stack rather than reassure anyone that a several-second export is
+ * progressing and not a hung tab. Lottie has no per-frame encode progress
+ * worth showing — `progress.total` stays 0, and `TopBar.tsx`'s
+ * `exportLabel` reads that as "starting…"/"…" rather than a percentage; APNG
+ * gets the same percent label video does, since `runApngExport` rasterizes
+ * and muxes one frame at a time just as `runVideoExport` rasterizes and
+ * encodes one.
  *
- * Each pipeline (`videoPipeline.ts`, `lottiePipeline.ts`) is loaded with a
- * dynamic `import()` inside the callback, not a static top-level import, so
- * neither pipeline — nor `mediabunny`, which only `videoPipeline.ts` pulls in
- * — sits in the eager entry chunk every page load pays for. Measured
- * (Phase 5B task-5-report.md, "FIX 1"): a static import of just the video
- * path put +283,561 bytes (+6.6%, ~+74 kB gzipped) of new weight into the
- * chunk every visitor downloads, for a feature only exporters use.
+ * Each pipeline (`videoPipeline.ts`, `lottiePipeline.ts`, `apngPipeline.ts`)
+ * is loaded with a dynamic `import()` inside the callback, not a static
+ * top-level import, so neither pipeline — nor `mediabunny`, which only
+ * `videoPipeline.ts` pulls in — sits in the eager entry chunk every page
+ * load pays for. Measured (Phase 5B task-5-report.md, "FIX 1"): a static
+ * import of just the video path put +283,561 bytes (+6.6%, ~+74 kB gzipped)
+ * of new weight into the chunk every visitor downloads, for a feature only
+ * exporters use.
  *
  * `isExporting` is set in a `finally`, not just on the success path: a
  * failed export (an unsupported codec, an out-of-memory 6,000-frame request,
@@ -106,11 +108,14 @@ export function useExport(): {
           download(JSON.stringify(doc), "scene.json", "application/json");
           showToast("Exported scene.json", "success");
         } else {
-          // T5 replaces this branch with the real APNG pipeline. No button
-          // reaches it yet (TopBar.tsx renders no apng button), so this
-          // throw is unreachable from the shipped UI today; it exists only
-          // so the ExportKind union and this switch stay in lockstep.
-          throw new Error("[export] APNG export is not available yet.");
+          const { runApngExport } = await import("../compiler/export/apngPipeline");
+          const bytes = await runApngExport({
+            source: code,
+            fps: EXPORT_FPS,
+            onProgress: (done, total) => setProgress({ kind, done, total }),
+          });
+          download(bytes, "scene.png", "image/apng");
+          showToast("Exported scene.png", "success");
         }
       } catch (error) {
         // VIDEO_*/EXPORT_*/LOTTIE_* diagnostic messages are already written

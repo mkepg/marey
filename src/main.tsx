@@ -45,4 +45,10 @@ if (import.meta.env.DEV) {
   import("./lib/devVideoSeam")
     .then((m) => m.installVideoSeam())
     .catch((err) => console.error("[devVideoSeam] failed to install:", err));
+
+  // Same reasoning, same shape, for Phase 5C Task 5's APNG harness
+  // (`tools/visual-check/apng-check.mjs`).
+  import("./lib/devApngSeam")
+    .then((m) => m.installApngSeam())
+    .catch((err) => console.error("[devApngSeam] failed to install:", err));
 }

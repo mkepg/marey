@@ -16,11 +16,13 @@ import videoEncodeSource from "./videoEncode.ts?raw";
 import videoContractSource from "./videoContract.ts?raw";
 import videoPipelineSource from "./videoPipeline.ts?raw";
 import lottiePipelineSource from "./lottiePipeline.ts?raw";
+import apngPipelineSource from "./apngPipeline.ts?raw";
 import rasterExportSource from "./rasterExport.ts?raw";
 import useExportSource from "../../hooks/useExport.ts?raw";
 import topBarSource from "../../components/TopBar/TopBar.tsx?raw";
 import lottieEncodeSource from "./lottieEncode.ts?raw";
 import lottieGeometrySource from "./lottieGeometry.ts?raw";
+import apngEncodeSource from "./apngEncode.ts?raw";
 
 /**
  * True if `source` imports a module whose specifier contains `moduleFragment`,
@@ -257,6 +259,18 @@ describe("export boundary", () => {
     expect(importsModule(lottieGeometrySource, "harfbuzzjs")).toBe(false);
   });
 
+  /**
+   * Global constraint 6 / design §7's table, Task 5's `apngEncode.ts`: a
+   * pure muxer with no pixi.js and no Scene IR, the same shape as
+   * `lottieEncode.ts`/`lottieGeometry.ts` above. Paired with an identity
+   * check for the same reason those two are.
+   */
+  it("apngEncode.ts does not import pixi.js or sceneIR in any form", () => {
+    expect(apngEncodeSource).toContain("export function encodeApng");
+    expect(importsModule(apngEncodeSource, "pixi\\.js")).toBe(false);
+    expect(importsModule(apngEncodeSource, "sceneIR")).toBe(false);
+  });
+
   it("matches a pixi.js export subpath, not just the bare specifier", () => {
     // The serious miss R21 names: pixi.js 8.16.0 declares 23 export
     // subpaths, so this is a real, compiling violation of "must not import
@@ -340,6 +354,7 @@ describe("export boundary", () => {
     expect(videoContractSource).toContain("export function planVideo");
     expect(lottieEncodeSource).toContain("export function encodeLottie");
     expect(lottieGeometrySource).toContain("export function planLottie");
+    expect(apngEncodeSource).toContain("export function encodeApng");
   });
 });
 
@@ -423,15 +438,29 @@ describe("export boundary — R3 shared pipelines and their production entry poi
   });
 
   /**
-   * Task 4's new shared module: `videoPipeline.ts`, `lottiePipeline.ts` and
-   * `devExportSeam.ts` are all built on `withRasterExport`
-   * (`rasterExport.ts`), so a dev-seam import reaching in through the one
-   * remaining copy of the compile -> plan -> build -> sample prefix would
-   * defeat the whole point of extracting it (global constraint 6's last
-   * row, design §7's table). `rasterExport.ts` has no reason to reach any
-   * of the three dev-only globals either, since it is the shared prefix,
-   * not an entry point -- checked for the same reason the entry points
-   * above are, even though nothing currently calls through it that way.
+   * Task 5's new pipeline, same shape as the `videoPipeline.ts`/
+   * `lottiePipeline.ts` guards above: built on `withRasterExport`, so it
+   * must not reach `devApngSeam.ts` or its `__mareyExportApng` global.
+   */
+  it("apngPipeline.ts does not import devApngSeam.ts, and does not reach __mareyExportApng", () => {
+    const code = stripComments(apngPipelineSource);
+    expect(code).toContain("export async function runApngExport");
+    expect(code).toContain("return encodeApng(pngs, { fps: plan.fps });");
+    expect(importsModule(code, "devApngSeam")).toBe(false);
+    expect(code).not.toContain("__mareyExportApng");
+  });
+
+  /**
+   * Task 4's new shared module: `videoPipeline.ts`, `lottiePipeline.ts`,
+   * `apngPipeline.ts` and `devExportSeam.ts` are all built on
+   * `withRasterExport` (`rasterExport.ts`), so a dev-seam import reaching in
+   * through the one remaining copy of the compile -> plan -> build -> sample
+   * prefix would defeat the whole point of extracting it (global constraint
+   * 6's last row, design §7's table). `rasterExport.ts` has no reason to
+   * reach any of the four dev-only globals either, since it is the shared
+   * prefix, not an entry point -- checked for the same reason the entry
+   * points above are, even though nothing currently calls through it that
+   * way.
    */
   it("rasterExport.ts does not import any dev seam, and does not reach a dev export global", () => {
     const code = stripComments(rasterExportSource);
@@ -439,9 +468,11 @@ describe("export boundary — R3 shared pipelines and their production entry poi
     expect(importsModule(code, "devVideoSeam")).toBe(false);
     expect(importsModule(code, "devLottieSeam")).toBe(false);
     expect(importsModule(code, "devExportSeam")).toBe(false);
+    expect(importsModule(code, "devApngSeam")).toBe(false);
     expect(code).not.toContain("__mareyExportVideo");
     expect(code).not.toContain("__mareyExportLottie");
     expect(code).not.toContain("__mareyExportPng");
+    expect(code).not.toContain("__mareyExportApng");
   });
 
   it("useExport.ts does not import any dev seam, and does not reach a dev export global", () => {
@@ -449,34 +480,42 @@ describe("export boundary — R3 shared pipelines and their production entry poi
     expect(code).toContain("export function useExport");
     expect(code).toContain('await import("../compiler/export/videoPipeline")');
     expect(code).toContain('await import("../compiler/export/lottiePipeline")');
+    expect(code).toContain('await import("../compiler/export/apngPipeline")');
     expect(importsModule(code, "devVideoSeam")).toBe(false);
     expect(importsModule(code, "devLottieSeam")).toBe(false);
+    expect(importsModule(code, "devApngSeam")).toBe(false);
     expect(code).not.toContain("__mareyExportVideo");
     expect(code).not.toContain("__mareyExportLottie");
+    expect(code).not.toContain("__mareyExportApng");
   });
 
-  it("useExport.ts loads videoPipeline and lottiePipeline only through a dynamic import()", () => {
+  it("useExport.ts loads videoPipeline, lottiePipeline and apngPipeline only through a dynamic import()", () => {
     // Whole-branch review M-3, ruling R49. The dynamic import is why
     // mediabunny and the rest of the export path live in a click-loaded
     // chunk instead of the entry chunk every visitor downloads (+283,561
     // bytes measured in Task 5). A static import added beside the dynamic
-    // one compiles, works, and silently undoes that. Task 3 widens this from
-    // "tells a static import of videoPipeline" to both pipelines the hook
-    // now loads.
+    // one compiles, works, and silently undoes that. Task 3 widened this
+    // from "tells a static import of videoPipeline" to both pipelines the
+    // hook loaded then; Task 5 widens it again to all three.
     const code = stripComments(useExportSource);
     expect(code).toContain('await import("../compiler/export/videoPipeline")');
     expect(code).toContain('await import("../compiler/export/lottiePipeline")');
+    expect(code).toContain('await import("../compiler/export/apngPipeline")');
     expect(staticallyImportsModule(code, "videoPipeline")).toBe(false);
     expect(staticallyImportsModule(code, "lottiePipeline")).toBe(false);
+    expect(staticallyImportsModule(code, "apngPipeline")).toBe(false);
   });
 
   it("TopBar.tsx does not import any dev seam, and does not reach a dev export global", () => {
     const code = stripComments(topBarSource);
     expect(code).toContain("export const TopBar");
     expect(code).toContain('handleExportClick("webm")');
+    expect(code).toContain('handleExportClick("apng")');
     expect(importsModule(code, "devVideoSeam")).toBe(false);
     expect(importsModule(code, "devLottieSeam")).toBe(false);
+    expect(importsModule(code, "devApngSeam")).toBe(false);
     expect(code).not.toContain("__mareyExportVideo");
     expect(code).not.toContain("__mareyExportLottie");
+    expect(code).not.toContain("__mareyExportApng");
   });
 });

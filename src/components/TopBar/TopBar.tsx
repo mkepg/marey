@@ -64,6 +64,14 @@ const VideoIcon: FunctionComponent = () => (
   </svg>
 );
 
+const ApngIcon: FunctionComponent = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
+    <path d="M21 15l-5-5L5 21" />
+  </svg>
+);
+
 const LottieIcon: FunctionComponent = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 12a9 9 0 1 1 9 9" />
@@ -252,6 +260,21 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
         >
           <VideoIcon />
           {exportLabel("webm")}
+        </button>
+
+        <button
+          className={`${styles.btnIcon}${progress?.kind === "apng" ? ` ${styles.btnExporting}` : ""}`}
+          onClick={() => handleExportClick("apng")}
+          disabled={isExporting}
+          aria-label={
+            progress?.kind === "apng"
+              ? `Exporting APNG image, ${exportLabel("apng")}`
+              : "Export scene as APNG image"
+          }
+          title="Export APNG image"
+        >
+          <ApngIcon />
+          {exportLabel("apng")}
         </button>
 
         <button
