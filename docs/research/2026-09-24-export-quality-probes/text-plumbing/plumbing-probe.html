@@ -97,6 +97,8 @@
             pixi[wrapper.__mareyId] = {
               textWidth: text.width, textHeight: text.height,
               lineWidths: m.lineWidths, fontString: text.style._fontString,
+              lines: [...m.lines], ascent: m.fontProperties.ascent, lineHeight: m.lineHeight,
+              padding: text.style._getFinalPadding(),
             };
           }
           return { collected, pixi };
@@ -116,7 +118,12 @@
           const deltas = advanceSums.map((s, k) => Math.abs(s - pixi[id].lineWidths[k]));
 
           // Placement: contours filled vs canvas fillText at pixi's own
-          // baseline rule (line j at j*lineHeight + ascent, x = 0).
+          // baseline rule (line j at j*lineHeight + ascent, x = 0), drawn
+          // from THIS page's own reading of the built Text, never from the
+          // collector's output: a reference built from `layout` would agree
+          // with a wrong layout (measured: an ascent read from the descent
+          // passed that version of this check).
+          const ref = pixi[id];
           const W = Math.ceil(layout.width) + 40, H = Math.ceil(layout.height) + 40, O = 20;
           const a = document.createElement("canvas"); a.width = W; a.height = H;
           const actx = a.getContext("2d");
@@ -124,7 +131,7 @@
           const b = document.createElement("canvas"); b.width = W; b.height = H;
           const bctx = b.getContext("2d");
           bctx.font = pixi[id].fontString; bctx.textBaseline = "alphabetic";
-          layout.lines.forEach((line, j) => bctx.fillText(line, O, O + j * layout.lineHeight + layout.ascent));
+          ref.lines.forEach((line, j) => bctx.fillText(line, O, O + j * ref.lineHeight + ref.ascent));
           const outlineInk = inkBBox(actx, W, H), fillTextInk = inkBBox(bctx, W, H);
           const edgeDelta = outlineInk && fillTextInk
             ? Math.max(...["minX", "minY", "maxX", "maxY"].map((k) => Math.abs(outlineInk[k] - fillTextInk[k])))
@@ -133,6 +140,12 @@
           report[key] = {
             layout,
             baseSizeMatchesText: layout.width === pixi[id].textWidth && layout.height === pixi[id].textHeight,
+            layoutMatchesPixi: {
+              lines: JSON.stringify(layout.lines) === JSON.stringify(ref.lines),
+              ascent: layout.ascent === ref.ascent,
+              lineHeight: layout.lineHeight === ref.lineHeight,
+              padding: layout.padding === ref.padding,
+            },
             contourCount: run.contours.length,
             missing: run.missing,
             advanceSums, pixiLineWidths: pixi[id].lineWidths,

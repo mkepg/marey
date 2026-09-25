@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Container } from "pixi.js";
+import { Container, Text } from "pixi.js";
 import { compileSource } from "../compileSource";
 import type { IRSceneNode } from "../sceneIR";
 import { collectTextLayouts, runLottieExport, type RunLottieExportOptions } from "./lottiePipeline";
@@ -184,5 +184,22 @@ describe("collectTextLayouts", () => {
       (e: unknown) => (e as Error).message,
     );
     expect(message).toMatch(/^\[export\] collectTextLayouts: text node 'scene\.g\.t' has no pixi Text child/);
+  });
+
+  it("requires the wrapper's __baseSize, the box the anchor was pivoted on", async () => {
+    // Constructing a pixi Text measures nothing, so this runs in Node; the
+    // failure is the missing size, reached before any measurement.
+    const root = new Container();
+    const wrapper = new Container();
+    wrapper.__mareyId = "scene.g.t";
+    wrapper.addChild(new Text({ text: "hi" }));
+    root.addChild(wrapper);
+    const { counter, fetchFont } = countingFetch();
+    const message = await collectTextLayouts(root, TEXT_IR(), fetchFont).then(
+      () => "resolved",
+      (e: unknown) => (e as Error).message,
+    );
+    expect(message).toMatch(/^\[export\] collectTextLayouts: text node 'scene\.g\.t' has no __baseSize/);
+    expect(counter.calls).toBe(0);
   });
 });
