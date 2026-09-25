@@ -574,7 +574,7 @@ Update:
 - every compiled fence and current prose in `docs/LANGUAGE.md`;
 - `src/compiler/languageDocs.test.ts` comments and new IR fields.
 
-Do not yet edit `.eval`, visual-check scenes, AGENTS/CLAUDE, or historical
+Do not yet edit `eval`, visual-check scenes, AGENTS.md, or historical
 plans/specs; later tasks own those scopes.
 
 - [ ] **Step 7: Run rename, language-doc, default-scene, renderer, and type tests**
@@ -1252,8 +1252,8 @@ commit above. Never use a directory-wide `git add` for this final review step.
 
 - [ ] **Step 10: Invoke verification and branch-finishing workflows**
 
-Use `superpowers:verification-before-completion` with the fresh outputs from
-Steps 1–6. Then use `superpowers:finishing-a-development-branch` to present
+Re-verify against the fresh outputs from
+Steps 1–6. Then finish the branch and present
 integration choices. Do not merge, push, or open a PR without explicit user
 authorization.
 

@@ -26,8 +26,14 @@ dist-ssr
 # Others
 .repomix
 .worktrees/
+
+# Local assistant scaffolding. Kept on disk, never committed.
 .superpowers/
-# Output from the visual-check skill (PNGs and reports)
+.sdd/
+docs/superpowers/
+CLAUDE.md
+
+# Output from the visual-check harness (PNGs and reports)
 .visual-check/
 
 # Rendered PNGs from the authorability baseline

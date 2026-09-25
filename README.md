@@ -158,7 +158,7 @@ the build.
 The test suite is headless by design and cannot see a canvas. Anything that needs
 one — does a scene actually render, does the ticker stop, does a scene replay
 identically across a reload — goes through the browser harness described in
-[`tools/visual-check/SKILL.md`](tools/visual-check/SKILL.md).
+[`tools/visual-check/README.md`](tools/visual-check/README.md).
 That harness is deliberately **not** in CI: it needs a real browser and a human
 reading the captures, and a green check on a determinism test nobody looked at
 would be worse than no check at all.

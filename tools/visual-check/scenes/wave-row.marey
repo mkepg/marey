@@ -15,7 +15,7 @@
 //
 // What to look for: a smooth arc of beads, not a scatter. `loop: true` means
 // this scene never rests, so `frozen at rest` and `deterministic` do not apply
-// (see SKILL.md).
+// (see README.md).
 
 let ink = #e2e8f0
 let dim = #64748b

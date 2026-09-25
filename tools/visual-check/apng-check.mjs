@@ -76,7 +76,7 @@
  *                      allocates the raw-RGBA reference array that
  *                      measurably crashes the page at long durations (fix
  *                      round 1, finding 2 -- see `runExport`'s own comment
- *                      for the exact error, and SKILL.md). Skips
+ *                      for the exact error, and README.md). Skips
  *                      decode-and-compare and `missingReferenceFrames`;
  *                      still runs both cold pages and checks byte/hash
  *                      reproducibility and the independent fcTL parse.

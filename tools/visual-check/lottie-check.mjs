@@ -66,7 +66,7 @@
  * produced, not a second live render by the child, so it carries none of
  * the risk — only lottie-web/dotlottie-web's OWN rendering, which happens
  * exclusively inside the worker process, was ever implicated. See
- * `SKILL.md`'s "Exporting Lottie" section for the same explanation kept in
+ * `README.md`'s "Exporting Lottie" section for the same explanation kept in
  * sync with this one, and `lottie-render-worker.mjs`'s own header comment
  * for the worker's side of this split.
  *
