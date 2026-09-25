@@ -23,6 +23,7 @@ import topBarSource from "../../components/TopBar/TopBar.tsx?raw";
 import lottieEncodeSource from "./lottieEncode.ts?raw";
 import lottieGeometrySource from "./lottieGeometry.ts?raw";
 import apngEncodeSource from "./apngEncode.ts?raw";
+import textOutlineSource from "./textOutline.ts?raw";
 
 /**
  * True if `source` imports a module whose specifier contains `moduleFragment`,
@@ -271,6 +272,45 @@ describe("export boundary", () => {
     expect(importsModule(apngEncodeSource, "sceneIR")).toBe(false);
   });
 
+  /**
+   * Global constraint 6 / design §7's table, Task 7's `textOutline.ts`: it
+   * gets what it knows about a text object as a `TextLayout` of plain
+   * numbers, so it needs neither pixi.js nor the Scene IR. Paired with an
+   * identity check for the same reason the rows above are.
+   */
+  it("textOutline.ts does not import pixi.js or sceneIR in any form", () => {
+    expect(textOutlineSource).toContain("export async function createTextOutliner");
+    expect(importsModule(textOutlineSource, "harfbuzzjs")).toBe(true);
+    expect(importsModule(textOutlineSource, "pixi\.js")).toBe(false);
+    expect(importsModule(textOutlineSource, "sceneIR")).toBe(false);
+  });
+
+  it("lottiePipeline.ts reaches harfbuzzjs only through textOutline.ts", () => {
+    expect(lottiePipelineSource).toContain("export async function collectTextLayouts");
+    expect(importsModule(lottiePipelineSource, "textOutline")).toBe(true);
+    expect(importsModule(lottiePipelineSource, "harfbuzzjs")).toBe(false);
+  });
+
+  /**
+   * Spec §6.3/§7: `textOutline.ts` is the ONLY module that imports
+   * harfbuzzjs. The two rows above name two files; this one reads every
+   * `.ts`/`.tsx` file under `src/` through Vite's `import.meta.glob`, so a
+   * third importer anywhere fails here. The count guard stops a glob that
+   * silently matched nothing from passing.
+   */
+  it("no module under src/ but textOutline.ts imports harfbuzzjs", () => {
+    const sources = import.meta.glob<string>("../../**/*.{ts,tsx}", {
+      query: "?raw",
+      import: "default",
+      eager: true,
+    });
+    const paths = Object.keys(sources);
+    expect(paths.length).toBeGreaterThan(100);
+    expect(paths).toContain("./textOutline.ts");
+    const importers = paths.filter((path) => importsModule(sources[path], "harfbuzzjs"));
+    expect(importers).toEqual(["./textOutline.ts"]);
+  });
+
   it("matches a pixi.js export subpath, not just the bare specifier", () => {
     // The serious miss R21 names: pixi.js 8.16.0 declares 23 export
     // subpaths, so this is a real, compiling violation of "must not import
@@ -355,6 +395,7 @@ describe("export boundary", () => {
     expect(lottieEncodeSource).toContain("export function encodeLottie");
     expect(lottieGeometrySource).toContain("export function planLottie");
     expect(apngEncodeSource).toContain("export function encodeApng");
+    expect(textOutlineSource).toContain("export async function createTextOutliner");
   });
 });
 

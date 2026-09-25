@@ -2,6 +2,109 @@ import { planLottie, hexToRgb01, type LayerSpec } from "./lottieGeometry";
 import { encodeLottie, type LottieDoc } from "./lottieEncode";
 import type { FrameSnapshot } from "../renderer/frameSampler";
 import { withRasterExport } from "./rasterExport";
+import { CanvasTextMetrics, Container, Text } from "pixi.js";
+import type { IRObjectId, IRObjectNode, IRSceneNode, IRTextProps } from "../sceneIR";
+import { createTextOutliner, type TextGlyphRun, type TextLayout } from "./textOutline";
+import { fetchExportFont } from "./exportFonts";
+
+/** Every text object's pixi-measured layout and HarfBuzz outlines, by IR id. */
+export interface CollectedTextLayouts {
+  readonly textLayouts: ReadonlyMap<IRObjectId, TextLayout>;
+  readonly glyphRuns: ReadonlyMap<IRObjectId, TextGlyphRun>;
+}
+
+/**
+ * Measure every `text` node as the built tree actually laid it out, then
+ * outline it with HarfBuzz (spec §6.2, O5, and §6.3, O4).
+ *
+ * Runs after `buildNode`, on the tree `withRasterExport` built, so the
+ * numbers are the ones the sampled snapshots were taken against:
+ * - `width`/`height` are the wrapper's `__baseSize`, the exact box
+ *   `builder.ts` pivoted on (equal to the `Text`'s own width/height, Task
+ *   6 Q3), so the anchor matches the snapshots by construction;
+ * - `lines`, `lineHeight` and `fontProperties.ascent` come from
+ *   `CanvasTextMetrics.measureText` on the built `Text`'s own text and
+ *   style. That is a cache hit on the measurement pixi made while building
+ *   (`_measurementCache`, keyed by the style's `styleKey`), so it cannot
+ *   disagree with what was built; and the font-metrics cache under it was
+ *   emptied after the font loaded, in `withRasterExport`'s prefix;
+ * - `padding` is `style._getFinalPadding()` (tagged `@internal` in pixi
+ *   8.16.0's typings, but typed and the only source of the number).
+ *
+ * The IR id to container mapping is `__mareyId`, which `buildNode` stamps
+ * on every wrapper; the IR side is a walk of `ir.children`, the same tree
+ * `buildNode` was given. A text node with no container, or a container with
+ * no `Text` child, is an invariant failure: the builder produced something
+ * this module does not understand, and dropping it would drop ink.
+ *
+ * The font is fetched once, only if the scene has text, and the outliner is
+ * destroyed in `finally`. A text-free scene fetches nothing.
+ *
+ * `runLottieExport` calls this, but until Task 8 lifts `planLottie`'s
+ * `LOTTIE_UNSUPPORTED_TEXT` refusal, every scene reaching that call is
+ * text-free, so there it always returns two empty maps.
+ */
+export async function collectTextLayouts(
+  root: Container,
+  ir: IRSceneNode,
+  fetchFont: () => Promise<ArrayBuffer> = () => fetchExportFont(),
+): Promise<CollectedTextLayouts> {
+  const texts = textNodes(ir);
+  const textLayouts = new Map<IRObjectId, TextLayout>();
+  const glyphRuns = new Map<IRObjectId, TextGlyphRun>();
+  if (texts.length === 0) return { textLayouts, glyphRuns };
+
+  const built = containersById(root);
+  for (const { id } of texts) textLayouts.set(id, measureBuiltText(id, built.get(id)));
+
+  const outliner = await createTextOutliner(await fetchFont());
+  try {
+    for (const { id, props } of texts) {
+      glyphRuns.set(id, outliner.outline(textLayouts.get(id)!, props.fontSize));
+    }
+  } finally {
+    outliner.destroy();
+  }
+  return { textLayouts, glyphRuns };
+}
+
+function textNodes(ir: IRSceneNode): Array<{ id: IRObjectId; props: IRTextProps }> {
+  const out: Array<{ id: IRObjectId; props: IRTextProps }> = [];
+  const visit = (node: IRObjectNode): void => {
+    if (node.props.kind === "text") out.push({ id: node.id, props: node.props });
+    node.children.forEach(visit);
+  };
+  ir.children.forEach(visit);
+  return out;
+}
+
+function containersById(root: Container): Map<IRObjectId, Container> {
+  const out = new Map<IRObjectId, Container>();
+  const visit = (container: Container): void => {
+    if (container.__mareyId !== undefined) out.set(container.__mareyId, container);
+    for (const child of container.children) visit(child);
+  };
+  visit(root);
+  return out;
+}
+
+function measureBuiltText(id: IRObjectId, wrapper: Container | undefined): TextLayout {
+  const invariant = (what: string) =>
+    new Error(`[export] collectTextLayouts: text node '${id}' ${what}; the scene tree is not what buildNode builds.`);
+  if (!wrapper) throw invariant("has no built container");
+  const text = wrapper.children.find((child): child is Text => child instanceof Text);
+  if (!text) throw invariant("has no pixi Text child");
+  if (!wrapper.__baseSize) throw invariant("has no __baseSize");
+  const metrics = CanvasTextMetrics.measureText(text.text, text.style);
+  return {
+    width: wrapper.__baseSize.w,
+    height: wrapper.__baseSize.h,
+    ascent: metrics.fontProperties.ascent,
+    lineHeight: metrics.lineHeight,
+    padding: text.style._getFinalPadding(),
+    lines: [...metrics.lines],
+  };
+}
 
 /**
  * Optional observation points, for the dev harness (`devLottieSeam.ts`).
@@ -78,8 +181,12 @@ export async function runLottieExport(opts: RunLottieExportOptions): Promise<Lot
         layers = geometry.layers;
       },
     },
-    async ({ ir, plan, frames }) => {
+    async ({ ir, plan, root, frames }) => {
       observer.onSampled?.(frames);
+      // Text layouts and glyph runs, for Task 8 to pass into `planLottie`
+      // and encode. Two empty maps today: `beforeBuild`'s `planLottie`
+      // still refuses every `text` node before anything is built.
+      await collectTextLayouts(root, ir);
       // `beforeBuild` always runs, and always sets `layers` when it does not
       // throw, before `use` is ever called.
       if (!layers) {

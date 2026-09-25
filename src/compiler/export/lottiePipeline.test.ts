@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { runLottieExport, type RunLottieExportOptions } from "./lottiePipeline";
+import { Container } from "pixi.js";
+import { compileSource } from "../compileSource";
+import type { IRSceneNode } from "../sceneIR";
+import { collectTextLayouts, runLottieExport, type RunLottieExportOptions } from "./lottiePipeline";
 
 /**
  * `lottiePipeline.ts`'s refusal paths, which all execute before `new
@@ -115,5 +118,71 @@ describe("runLottieExport · refusal path 3, planLottie", () => {
     expect(message).not.toContain("[LOTTIE_");
     expect(message).not.toContain("[EXPORT_");
     expect(message).not.toContain("Source did not compile");
+  });
+});
+
+/**
+ * `collectTextLayouts` (Task 7, spec §6.2-6.3): the layout and glyph-run
+ * plumbing T8 encodes. Measuring needs pixi's canvas, so the measured
+ * numbers are checked in the browser (`text-plumbing/plumbing-run.mjs`).
+ * What Node can check is everything around the measurement: that a
+ * text-free scene fetches nothing, and that a text node with no built
+ * counterpart is an invariant failure rather than a silently missing layer.
+ */
+describe("collectTextLayouts", () => {
+  function compileIr(source: string): IRSceneNode {
+    const outcome = compileSource(source);
+    if (!outcome.ok || !outcome.ir) throw new Error("fixture did not compile");
+    return outcome.ir;
+  }
+  const TEXT_IR = () =>
+    compileIr(`scene { size: (100, 100) duration: 1 group g { position: (0, 0) text t { position: (0, 0), content: "hi" } } }`);
+
+  function countingFetch() {
+    const counter = { calls: 0 };
+    const fetchFont = async () => {
+      counter.calls += 1;
+      return new ArrayBuffer(0);
+    };
+    return { counter, fetchFont };
+  }
+
+  it("returns empty maps for a text-free scene without fetching the font", async () => {
+    const ir = compileIr(`scene { size: (100, 100) duration: 1 circle c { position: (0, 0), radius: 5 } }`);
+    const { counter, fetchFont } = countingFetch();
+    const collected = await collectTextLayouts(new Container(), ir, fetchFont);
+    expect(collected.textLayouts.size).toBe(0);
+    expect(collected.glyphRuns.size).toBe(0);
+    expect(counter.calls).toBe(0);
+  });
+
+  it("throws an invariant, naming the id, for a text node the built tree does not contain", async () => {
+    const { counter, fetchFont } = countingFetch();
+    const message = await collectTextLayouts(new Container(), TEXT_IR(), fetchFont).then(
+      () => "resolved",
+      (e: unknown) => (e as Error).message,
+    );
+    expect(message).toMatch(/^\[export\] collectTextLayouts: text node 'scene\.g\.t' has no built container/);
+    expect(counter.calls).toBe(0);
+  });
+
+  it("finds a text node's container inside a group, and requires its Text child", async () => {
+    // The wrapper is found (nested under the group's container), so the
+    // failure moves on to the next invariant: it holds no pixi Text.
+    const root = new Container();
+    const group = new Container();
+    // IR ids are full paths (`scene.g.t`), and `buildNode` stamps them as-is.
+    group.__mareyId = "scene.g";
+    const wrapper = new Container();
+    wrapper.__mareyId = "scene.g.t";
+    wrapper.__baseSize = { w: 10, h: 10 };
+    group.addChild(wrapper);
+    root.addChild(group);
+    const { fetchFont } = countingFetch();
+    const message = await collectTextLayouts(root, TEXT_IR(), fetchFont).then(
+      () => "resolved",
+      (e: unknown) => (e as Error).message,
+    );
+    expect(message).toMatch(/^\[export\] collectTextLayouts: text node 'scene\.g\.t' has no pixi Text child/);
   });
 });

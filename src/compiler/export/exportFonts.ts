@@ -77,11 +77,39 @@ export async function ensureExportFonts(ir: IRSceneNode, fonts?: ExportFontSet):
       // Judged by `check` below.
     }
     if (!fontSet.check(spec)) {
-      throw new Error(
-        `[EXPORT_FONT_UNAVAILABLE] The export font '${EXPORT_FONT_FAMILY}' did not load at ${size}px, ` +
-          `so this scene's text would be drawn in a fallback font that does not match the preview. ` +
-          `Check the connection and export again.`,
-      );
+      throw fontUnavailable(`did not load at ${size}px`);
     }
   }
+}
+
+/**
+ * The export font file's bytes, for HarfBuzz (`textOutline.ts`).
+ *
+ * Fetched once per export that has text. Not a cache hit under `vite
+ * preview`, which sends `Cache-Control: no-cache` for `public/` files, so
+ * this revalidates about 115 KB over the network (Task 6, Q5); the plan
+ * accepts that rather than adding a cache layer. A failure is the same
+ * refusal as a font that did not load: without the bytes there are no
+ * outlines to export.
+ */
+export async function fetchExportFont(fetchImpl: typeof fetch = fetch): Promise<ArrayBuffer> {
+  let response: Response;
+  try {
+    response = await fetchImpl(EXPORT_FONT_URL);
+  } catch {
+    throw fontUnavailable("could not be fetched from " + EXPORT_FONT_URL);
+  }
+  if (!response.ok) {
+    throw fontUnavailable(`could not be fetched from ${EXPORT_FONT_URL} (HTTP ${response.status})`);
+  }
+  return response.arrayBuffer();
+}
+
+/** The one place `EXPORT_FONT_UNAVAILABLE`'s wording lives. */
+function fontUnavailable(what: string): Error {
+  return new Error(
+    `[EXPORT_FONT_UNAVAILABLE] The export font '${EXPORT_FONT_FAMILY}' ${what}, ` +
+      `so this scene's text cannot be exported to match the preview. ` +
+      `Check the connection and export again.`,
+  );
 }

@@ -2,7 +2,7 @@ import { afterEach, describe, it, expect, vi } from "vitest";
 import { CanvasTextMetrics } from "pixi.js";
 import { compileSource } from "../compileSource";
 import type { IRSceneNode } from "../sceneIR";
-import { ensureExportFonts, exportFontSizes, type ExportFontSet } from "./exportFonts";
+import { ensureExportFonts, exportFontSizes, fetchExportFont, type ExportFontSet } from "./exportFonts";
 import { withRasterExport } from "./rasterExport";
 import { runApngExport } from "./apngPipeline";
 import { runLottieExport } from "./lottiePipeline";
@@ -236,5 +236,38 @@ describe("the export prefix drops pixi's stale font metrics once the font is loa
     vi.stubGlobal("document", { fonts });
     await withRasterExport({ source: TEXT_SOURCE, fps: 30 }, async () => "used").catch(() => undefined);
     expect(fontCache()).toHaveProperty([STALE_KEY]);
+  });
+});
+
+describe("fetchExportFont", () => {
+  it("fetches the URL @font-face loads and returns its bytes", async () => {
+    const requested: string[] = [];
+    const bytes = new Uint8Array([0, 1, 0, 0]).buffer;
+    const got = await fetchExportFont(async (input) => {
+      requested.push(String(input));
+      return new Response(bytes, { status: 200 });
+    });
+    expect(requested).toEqual(["/fonts/JetBrainsMono-Regular.ttf"]);
+    expect(new Uint8Array(got)).toEqual(new Uint8Array([0, 1, 0, 0]));
+  });
+
+  it("refuses with EXPORT_FONT_UNAVAILABLE on an HTTP error, naming the status", async () => {
+    const message = await fetchExportFont(async () => new Response("nope", { status: 404 })).then(
+      () => "resolved",
+      (e: unknown) => (e as Error).message,
+    );
+    expect(message.startsWith("[EXPORT_FONT_UNAVAILABLE] ")).toBe(true);
+    expect(message).toContain("HTTP 404");
+    expect(message).toContain("'JetBrains Mono'");
+  });
+
+  it("refuses with EXPORT_FONT_UNAVAILABLE when the request itself fails", async () => {
+    const message = await fetchExportFont(async () => {
+      throw new TypeError("Failed to fetch");
+    }).then(
+      () => "resolved",
+      (e: unknown) => (e as Error).message,
+    );
+    expect(message.startsWith("[EXPORT_FONT_UNAVAILABLE] ")).toBe(true);
   });
 });
