@@ -148,6 +148,19 @@ describe("createTextOutliner (JetBrains Mono, real font)", () => {
     ];
     expect(perCharacter.length).toBeGreaterThan(0);
     expect(shaped).not.toEqual(perCharacter);
+    // And positively (so an empty or wrong output fails too): the contours
+    // are exactly those of the glyph ids HarfBuzz shaped `->` to, each at
+    // its pen position on the line-0 baseline (ascent 60 at 60 px).
+    const scale = 60 / outliner.upem;
+    const glyphs = outliner.shapeLine("->");
+    const expected: ReturnType<typeof pathToContours> = [];
+    let pen = 0;
+    for (const g of glyphs) {
+      expected.push(...pathToContours(outliner.glyphPath(g.glyphId), scale, pen + g.xOffset * scale, 60 - g.yOffset * scale));
+      pen += g.xAdvance * scale;
+    }
+    expect(expected.length).toBeGreaterThan(0);
+    expect(shaped).toEqual(expected);
   });
 
   it("applies ccmp: e + combining acute shapes to the same single glyph as precomposed é", () => {

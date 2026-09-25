@@ -85,6 +85,13 @@ export interface TextOutliner {
    * (`canvasWhitespace`).
    */
   shapeLine(line: string): ReadonlyArray<ShapedGlyph>;
+  /**
+   * One glyph's outline as HarfBuzz's SVG path data, in font units with y
+   * up (the input `pathToContours` takes). Exposed so a test can build the
+   * contours a shaped line should produce from its glyph ids, independently
+   * of `outline`'s own loop.
+   */
+  glyphPath(glyphId: number): string;
   /** Every line of `layout`, shaped and outlined at `fontSize` px. */
   outline(layout: TextLayout, fontSize: number): TextGlyphRun;
   /** Drop the face and font. Any later call throws. */
@@ -181,6 +188,7 @@ export async function createTextOutliner(fontBytes: ArrayBuffer): Promise<TextOu
   return {
     upem,
     shapeLine,
+    glyphPath: (glyphId: number) => live().glyphToPath(glyphId),
     outline,
     destroy() {
       font = null;
