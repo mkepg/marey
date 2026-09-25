@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { Application } from "pixi.js";
 import { runVideoExport, type RunVideoExportOptions } from "./videoPipeline";
+import type { VideoPlan } from "./videoContract";
 
 /**
  * `videoPipeline.ts`'s four refusal paths (compile, `planExport`,
@@ -227,5 +229,49 @@ describe("runVideoExport · refusal path 4, the encoder probe runs before sampli
     expect(message).not.toContain("[VIDEO_");
     expect(message).not.toContain("[EXPORT_");
     expect(message).not.toContain("Source did not compile");
+  });
+});
+
+/**
+ * The Text-texture trap (spec §2.2; final review I-2). PixiJS rasterizes a
+ * `Text`'s own texture at the RENDERER's resolution, so an export
+ * `Application` initialised at `resolution: 1` and extracted at the plan's
+ * scale upscales already-blurry 1x text while every vector shape stays
+ * sharp. The output is still the right size, so `video-check.mjs` cannot see
+ * it; before this test, setting `rasterExport.ts`'s `resolution: scale ?? 1`
+ * to `resolution: 1` left the whole suite green (43 files / 1049 tests).
+ *
+ * The expected value is read from the plan the pipeline itself produced
+ * (`observer.onPlanned`), not written as a literal, so the test follows
+ * `VIDEO_SCALE` if it ever changes. The `not.toBe(1)` guard keeps it from
+ * going vacuous: at a scale of 1 the mutation above would be invisible.
+ */
+describe("runVideoExport · the export Application inits at the plan's scale", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("passes VideoPlan.scale to Application.init as its resolution", async () => {
+    vi.stubGlobal("VideoEncoder", {
+      isConfigSupported: async () => ({ supported: true }),
+    });
+    // Stops the run inside `init` without touching the (absent) DOM; the
+    // spy still records the options `init` was called with.
+    const init = vi
+      .spyOn(Application.prototype, "init")
+      .mockRejectedValue(new Error("stop: init reached"));
+    let planned: VideoPlan | undefined;
+    const message = await refusalMessage({
+      ...BASE,
+      source: "scene { size: (100, 100) duration: 1 }",
+      observer: { onPlanned: (plan) => (planned = plan) },
+    });
+    expect(message).toBe("stop: init reached");
+    expect(planned).toBeDefined();
+    expect(planned!.scale).not.toBe(1);
+    expect(init).toHaveBeenCalledTimes(1);
+    const options = init.mock.calls[0][0];
+    expect(options?.resolution).toBe(planned!.scale);
   });
 });
