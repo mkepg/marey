@@ -244,6 +244,25 @@ named seam beats re-implementing compile → plan → build → sample → encod
 page script, where a harness-only copy could silently diverge from the
 pipeline the app actually runs.
 
+**The export and the render happen in two separate `node` processes (Phase
+5C Task 3, ruling T3-R1).** `task-2-verify.md` found that lottie-web's own
+stroke join/cap geometry renders wrong only when a page that ran the export
+seam's pixi WebGL `Application` and `--disable-accelerated-2d-canvas` are
+both present. The fix this script actually needed was measured, not
+guessed: a second `page`, and even a second `chromium.launch()` in its own
+`BrowserContext`, still reproduced the broken join as long as the export and
+the render happened inside the SAME Node.js process; only spawning the
+render half as a genuinely separate OS process
+(`lottie-render-worker.mjs`, `lottie-check.mjs`'s sibling, invoked with
+`node`'s own `child_process.spawnSync`) reproduced the correct geometry
+every time. `lottie-check.mjs` still keeps `--disable-accelerated-2d-canvas`
+(5A pinned it for a real, separate determinism reason — see that flag's own
+comment in the script) and still runs `--compare-png`'s PNG export
+(`window.__mareyExportPng`) on the export side, since that call only reads
+back bytes the export process's own page produced. See
+`lottie-check.mjs`'s and `lottie-render-worker.mjs`'s own header comments
+for the full measurement trail.
+
 ```bash
 node tools/visual-check/lottie-check.mjs \
   --scene tools/visual-check/scenes/lottie-layer-order.marey \
