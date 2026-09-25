@@ -108,10 +108,22 @@ function plainEncoderConfig(config: VideoEncoderConfig): unknown {
  * The observers collect what `video-check.mjs` needs:
  * - `referenceFrames[k]` is a lossless PNG of **the canvas the encoder was
  *   handed** for sampled frame k, read in `onFrame` before the pipeline
- *   releases it. The slot is chosen by the snapshot's identity in the
- *   sampler's own array (`onSampled`), not by arrival order, so if the
- *   pipeline ever encodes frames out of order or skips one, the references
- *   stay in sampler order and the decoded file stops matching them.
+ *   releases it. The slot is `frame.index` — the snapshot's own frozen
+ *   position, written once by `sampleFrames` (`frameSampler.ts`) before any
+ *   pipeline code sees the array — not `sampled.indexOf(frame)`, which this
+ *   file used until Task 4 fix round 1 (T4-R2). `indexOf` finds a frame's
+ *   position within `sampled`, the very array `runVideoExport`'s encode
+ *   loop also iterates; a pipeline that permuted that one shared array
+ *   before handing it to its `use` callback would permute `onSampled`'s
+ *   report and the encode order in lockstep, so `indexOf` always agreed
+ *   with wherever the frame actually landed and a whole-array permutation
+ *   (e.g. a full reversal) was invisible to this harness — measured in
+ *   Task 4's own Step 4 mutation, which needed this fix before it went red.
+ *   `frame.index` has no such blind spot: it names each frame's TRUE
+ *   sampled position regardless of what order, or which array, later code
+ *   hands it around in, so if the pipeline ever encodes frames out of order
+ *   or skips one, the references stay in sampler order and the decoded
+ *   file stops matching them.
  * - `hash` is `hashFrames` over the sampler's output.
  * - `encoderConfigs` is what mediabunny reported through `onEncoderConfig`.
  *
@@ -146,8 +158,16 @@ async function exportVideo(
         },
         onFrame: withReferenceFrames
           ? async (canvas, frame) => {
-              const k = sampled.indexOf(frame);
-              if (k < 0) throw new Error("[export] onFrame received a frame the sampler never produced");
+              // `frame.index`, not `sampled.indexOf(frame)` — see this
+              // function's own docstring (T4-R2) for why a position lookup
+              // against the same array the encode loop walks has no ground
+              // truth independent of that array's own order.
+              const k = frame.index;
+              if (k < 0 || k >= referenceFrames.length) {
+                throw new Error(
+                  "[export] onFrame received a frame whose index is outside the sampled range",
+                );
+              }
               referenceFrames[k] = await canvasToPngBase64(canvas);
             }
           : undefined,
