@@ -1,0 +1,152 @@
+<!doctype html>
+<!--
+  Phase 5C Task 7: exercises collectTextLayouts (lottiePipeline.ts) in a real
+  browser, on the tree the real export prefix (withRasterExport) builds.
+  runLottieExport cannot reach it for a text scene yet -- planLottie still
+  refuses text in beforeBuild until Task 8 -- so this page calls the prefix
+  and the collector directly, the same two functions the pipeline composes,
+  with no copy of either. Cold like cache-probe.html: nothing touches
+  'JetBrains Mono' until a probe function runs. Driven by plumbing-run.mjs.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      @font-face {
+        font-family: 'JetBrains Mono';
+        src: url('/fonts/JetBrainsMono-Regular.ttf') format('truetype');
+        font-weight: 400;
+        font-style: normal;
+      }
+    </style>
+  </head>
+  <body>
+    <script type="module">
+      import { CanvasTextMetrics, TextStyle } from "pixi.js";
+      import { withRasterExport } from "/src/compiler/export/rasterExport.ts";
+      import { collectTextLayouts } from "/src/compiler/export/lottiePipeline.ts";
+      import { createTextOutliner } from "/src/compiler/export/textOutline.ts";
+      import { fetchExportFont } from "/src/compiler/export/exportFonts.ts";
+
+      const BS = String.fromCharCode(92); // a Marey escape's backslash
+      const marey = (s) => s.replaceAll("\n", BS + "n").replaceAll("\t", BS + "t");
+      // Spec §6.6's four layout-agreement strings, plus a missing glyph.
+      const TEXTS = {
+        ascii: { content: "hello, world 123", fontSize: 60 },
+        ligature: { content: "a->b != c", fontSize: 60 },
+        mark: { content: "é x́ B̥́", fontSize: 60 },
+        twoLineTab: { content: "tab\there\nsecond line", fontSize: 16 },
+        missing: { content: "a日b", fontSize: 60 },
+      };
+      const SOURCE = "scene { size: (900, 700) duration: 1 background: #ffffff\n" +
+        Object.entries(TEXTS).map(([id, t], k) =>
+          `  text ${id} { position: (10, ${10 + k * 120}), content: "${marey(t.content)}", fontSize: ${t.fontSize}, color: #000000 }`,
+        ).join("\n") + "\n}";
+      const SPEC = (size) => `${size}px 'JetBrains Mono'`;
+
+      function inkBBox(ctx, w, h) {
+        const data = ctx.getImageData(0, 0, w, h).data;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+          if (data[(y * w + x) * 4 + 3] > 0) {
+            if (x < minX) minX = x; if (x > maxX) maxX = x;
+            if (y < minY) minY = y; if (y > maxY) maxY = y;
+          }
+        }
+        return minX === Infinity ? null : { minX, minY, maxX, maxY };
+      }
+
+      // Contours -> Path2D, as Lottie reads a closed `sh`: segment k runs
+      // v[k] + o[k] -> v[k+1] + i[k+1] -> v[k+1], and the closing segment
+      // runs from v[last] + o[last] to v[0] + i[0].
+      function contoursPath(contours, ox, oy) {
+        const p = new Path2D();
+        for (const { v, i, o } of contours) {
+          p.moveTo(ox + v[0][0], oy + v[0][1]);
+          for (let k = 0; k < v.length; k++) {
+            const n = (k + 1) % v.length;
+            const a = v[k], b = v[n];
+            p.bezierCurveTo(
+              ox + a[0] + o[k][0], oy + a[1] + o[k][1],
+              ox + b[0] + i[n][0], oy + b[1] + i[n][1],
+              ox + b[0], oy + b[1],
+            );
+          }
+          p.closePath();
+        }
+        return p;
+      }
+
+      window.__collect = async ({ poison }) => {
+        const checkAtStart = document.fonts.check(SPEC(60));
+        if (poison) {
+          // A cold preview's measurement, at both sizes, before the font is in.
+          for (const size of [60, 16]) {
+            CanvasTextMetrics.measureText("poison", new TextStyle({ fontFamily: "'JetBrains Mono', monospace", fontSize: size }));
+          }
+        }
+        let fetches = 0;
+        const fetchFont = async () => { fetches++; return fetchExportFont(); };
+        const { collected, pixi } = await withRasterExport({ source: SOURCE, fps: 30 }, async ({ root, ir }) => {
+          const collected = await collectTextLayouts(root, ir, fetchFont);
+          // Independent readings straight off the built tree, for comparison.
+          const pixi = {};
+          for (const wrapper of root.children) {
+            const text = wrapper.children[0];
+            const m = CanvasTextMetrics.measureText(text.text, text.style);
+            pixi[wrapper.__mareyId] = {
+              textWidth: text.width, textHeight: text.height,
+              lineWidths: m.lineWidths, fontString: text.style._fontString,
+            };
+          }
+          return { collected, pixi };
+        });
+
+        const outliner = await createTextOutliner(await fetchExportFont());
+        const report = {};
+        for (const [id, layout] of collected.textLayouts) {
+          const run = collected.glyphRuns.get(id);
+          const key = id.replace(/^scene\./, "");
+          const fontSize = TEXTS[key].fontSize;
+          const scale = fontSize / outliner.upem;
+          // Spec §6.6 layout agreement: HarfBuzz advance sum per line vs
+          // pixi's measured line width.
+          const advanceSums = layout.lines.map((line) =>
+            outliner.shapeLine(line).reduce((s, g) => s + g.xAdvance * scale, 0));
+          const deltas = advanceSums.map((s, k) => Math.abs(s - pixi[id].lineWidths[k]));
+
+          // Placement: contours filled vs canvas fillText at pixi's own
+          // baseline rule (line j at j*lineHeight + ascent, x = 0).
+          const W = Math.ceil(layout.width) + 40, H = Math.ceil(layout.height) + 40, O = 20;
+          const a = document.createElement("canvas"); a.width = W; a.height = H;
+          const actx = a.getContext("2d");
+          actx.fill(contoursPath(run.contours, O, O), "nonzero");
+          const b = document.createElement("canvas"); b.width = W; b.height = H;
+          const bctx = b.getContext("2d");
+          bctx.font = pixi[id].fontString; bctx.textBaseline = "alphabetic";
+          layout.lines.forEach((line, j) => bctx.fillText(line, O, O + j * layout.lineHeight + layout.ascent));
+          const outlineInk = inkBBox(actx, W, H), fillTextInk = inkBBox(bctx, W, H);
+          const edgeDelta = outlineInk && fillTextInk
+            ? Math.max(...["minX", "minY", "maxX", "maxY"].map((k) => Math.abs(outlineInk[k] - fillTextInk[k])))
+            : null;
+
+          report[key] = {
+            layout,
+            baseSizeMatchesText: layout.width === pixi[id].textWidth && layout.height === pixi[id].textHeight,
+            contourCount: run.contours.length,
+            missing: run.missing,
+            advanceSums, pixiLineWidths: pixi[id].lineWidths,
+            maxAdvanceDelta: Math.max(...deltas),
+            outlineInk, fillTextInk, maxInkEdgeDelta: edgeDelta,
+          };
+        }
+        outliner.destroy();
+        // A digest of every contour coordinate, to compare runs exactly.
+        const all = JSON.stringify([...collected.glyphRuns]);
+        let h = 7;
+        for (let k = 0; k < all.length; k++) h = (h * 31 + all.charCodeAt(k)) >>> 0;
+        return { checkAtStart, fetchesDuringCollect: fetches, textCount: collected.textLayouts.size, digest: `${all.length}:${h}`, report };
+      };
+    </script>
+  </body>
+</html>
