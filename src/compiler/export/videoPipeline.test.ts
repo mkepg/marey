@@ -8,7 +8,7 @@ import { runVideoExport, type RunVideoExportOptions } from "./videoPipeline";
  *
  * Added in the Task 5 fix round (task-5-review.md, F3). The module shipped
  * with no test on the argument that "hooks in this repo are verified through
- * the app" -- fair for `useExportVideo.ts`, which would need a Preact test
+ * the app" -- fair for `useExport.ts`, which would need a Preact test
  * renderer this repo does not have, but `videoPipeline.ts` is not a hook. It
  * is a plain module in `src/compiler/export/`, where `exportContract.ts`,
  * `videoContract.ts`, `frameRaster.ts`, `lottieEncode.ts` and
@@ -17,7 +17,7 @@ import { runVideoExport, type RunVideoExportOptions } from "./videoPipeline";
  * These tests pin the property R23 rests on and which was previously
  * evidenced only by a one-off browser click: **the triggering diagnostic's
  * message reaches the caller verbatim**, with no added prefix and no
- * rewording, because `useExportVideo.ts` puts `error.message` straight into a
+ * rewording, because `useExport.ts` puts `error.message` straight into a
  * toast a person reads.
  *
  * Nothing here imports a message constant and compares the module's output to

@@ -15,7 +15,8 @@ import { describe, it, expect } from "vitest";
 import videoEncodeSource from "./videoEncode.ts?raw";
 import videoContractSource from "./videoContract.ts?raw";
 import videoPipelineSource from "./videoPipeline.ts?raw";
-import useExportVideoSource from "../../hooks/useExportVideo.ts?raw";
+import lottiePipelineSource from "./lottiePipeline.ts?raw";
+import useExportSource from "../../hooks/useExport.ts?raw";
 import topBarSource from "../../components/TopBar/TopBar.tsx?raw";
 import lottieEncodeSource from "./lottieEncode.ts?raw";
 import lottieGeometrySource from "./lottieGeometry.ts?raw";
@@ -83,9 +84,10 @@ function staticallyImportsModule(source: string, moduleFragment: string): boolea
  * Needed because the `__mareyExportVideo` guard below asks "does this file's
  * *code* reach for the dev-only global?", and a raw substring search cannot
  * tell code from prose. Both guarded modules earn their keep partly by
- * *explaining* the prohibition: `videoPipeline.ts:27` and
- * `useExportVideo.ts:52` each name `window.__mareyExportVideo` in a docstring
- * in order to say why they do not call it. Measured, not assumed — the first
+ * *explaining* the prohibition: `videoPipeline.ts` and `useExport.ts` (the
+ * Phase 5B video-only hook this was later generalised from) each name
+ * `window.__mareyExportVideo` in a docstring in order to say why they do not
+ * call it. Measured, not assumed — the first
  * version of this guard searched the raw source and went RED on both files
  * for exactly that reason (2 failed / 9 passed; see the FIX 2 section of this
  * task's report). Deleting the prose to appease the guard would have traded
@@ -341,21 +343,25 @@ describe("export boundary", () => {
 });
 
 /**
- * Task 5's R3: `useExportVideo.ts` needs the same compile -> plan -> build ->
- * sample -> rasterize -> encode pipeline `src/lib/devVideoSeam.ts` runs, but
- * must not reach it through `window.__mareyExportVideo` (dev-only, constant-
- * folded out of a production build) and must not import `devVideoSeam.ts`
- * itself (that module's own docstring is written for a Node harness, not a
- * shipped button, and importing it would pull its whole dev-seam shape --
- * base64 encoding, reference-frame re-extraction, `window` global assignment
- * -- into the production bundle regardless of whether it is ever called).
- * `videoPipeline.ts` is the extracted answer.
+ * Task 5's R3, widened by Task 3 from video-only to both shipped pipelines:
+ * `useExport.ts` (Task 3 generalised this from Phase 5B's video-only hook)
+ * needs the same compile -> plan -> build -> sample -> rasterize/encode
+ * pipelines `src/lib/devVideoSeam.ts` and `src/lib/devLottieSeam.ts` run,
+ * but must not
+ * reach either through its `window.__mareyExportVideo`/
+ * `window.__mareyExportLottie` global (both dev-only, constant-folded out of
+ * a production build) and must not import either dev seam itself (each dev
+ * seam's own docstring is written for a Node harness, not a shipped button,
+ * and importing one would pull its whole dev-seam shape -- base64 encoding,
+ * reference-frame re-extraction, `window` global assignment -- into the
+ * production bundle regardless of whether it is ever called).
+ * `videoPipeline.ts`/`lottiePipeline.ts` are the extracted answers.
  *
  * Review (task-5-review.md, F2) found the first version of this guard only
  * covered `videoPipeline.ts` -- the file *least* likely to reach for the dev
  * seam, since it was written from scratch in this task by an author who had
  * just read the constraint. The two files that actually form the production
- * entry point -- `useExportVideo.ts` and `TopBar.tsx` -- were unguarded, and
+ * entry point -- `useExport.ts` and `TopBar.tsx` -- were unguarded, and
  * a future edit adding `window.__mareyExportVideo?.(...)` to either would
  * ship a button broken in production with every test green. Worse:
  * `importsModule` can never detect `window.__mareyExportVideo` at all,
@@ -363,35 +369,35 @@ describe("export boundary", () => {
  * `devVideoSeam`-import check alone cannot catch the specific mechanism the
  * brief forbids ("Do not call `window.__mareyExportVideo`"), regardless of
  * which file it is pointed at. Each guarded file below therefore gets BOTH
- * an import-based check (`devVideoSeam`, reusing `importsModule`) and a
- * plain substring check for the `__mareyExportVideo` global -- they catch
- * different mistakes: importing the dev-only module (which would also pull
- * its whole seam shape into production regardless of whether it is ever
- * called) versus reaching through the global it installs.
+ * an import-based check (`devVideoSeam`/`devLottieSeam`, reusing
+ * `importsModule`) and a plain substring check for each dev-seam global --
+ * they catch different mistakes: importing the dev-only module (which would
+ * also pull its whole seam shape into production regardless of whether it is
+ * ever called) versus reaching through the global it installs.
  *
  * Both checks run against `stripComments(...)` output, not raw source. For
- * the `__mareyExportVideo` check that is mandatory, not tidiness: two of the
- * three files document the prohibition in a docstring, so the raw-source
- * version of this guard failed on them (see `stripComments`). The
- * `devVideoSeam` import check is stripped for the same reason one step
- * earlier -- `videoPipeline.ts:33` already writes "read directly from
- * `devVideoSeam.ts`'s `exportVideo`" in prose, which today escapes
- * `importsModule` only because the specifier is in backticks rather than
- * quotes. That is luck, not a property, and a guard that goes RED on a
- * comment edit trains people to weaken it.
+ * the dev-global checks that is mandatory, not tidiness: several of these
+ * files document the prohibition in a docstring, so the raw-source version
+ * of this guard failed on them (see `stripComments`). The dev-seam import
+ * check is stripped for the same reason one step earlier -- `videoPipeline.ts`
+ * already writes "read directly from `devVideoSeam.ts`'s `exportVideo`" in
+ * prose, which today escapes `importsModule` only because the specifier is
+ * in backticks rather than quotes. That is luck, not a property, and a guard
+ * that goes RED on a comment edit trains people to weaken it.
  *
  * Each test re-asserts a code landmark taken from *after* its file's last
  * long comment, so the two things that would make these guards vacuous both
  * fail loudly: reading the wrong source constant, and a `stripComments` that
  * ran off the rails and deleted the code it was meant to search.
  *
- * `videoPipeline.ts` legitimately imports `pixi.js` and `sceneIR`-adjacent
- * renderer modules -- unlike the encoder, it is the orchestration layer that
- * builds the scene tree -- so none of these three files are checked against
- * "must not import pixi.js"; that is a different property, already covered
- * for `videoContract.ts`/`videoEncode.ts` above.
+ * `videoPipeline.ts`/`lottiePipeline.ts` legitimately import `pixi.js` and
+ * `sceneIR`-adjacent renderer modules -- unlike the encoders, they are the
+ * orchestration layer that builds the scene tree -- so none of these files
+ * are checked against "must not import pixi.js"; that is a different
+ * property, already covered for `videoContract.ts`/`videoEncode.ts`/
+ * `lottieEncode.ts`/`lottieGeometry.ts` above.
  */
-describe("export boundary — R3 shared pipeline and its production entry points", () => {
+describe("export boundary — R3 shared pipelines and their production entry points", () => {
   it("videoPipeline.ts does not import devVideoSeam.ts, and does not reach __mareyExportVideo", () => {
     const code = stripComments(videoPipelineSource);
     expect(code).toContain("export async function runVideoExport");
@@ -400,30 +406,47 @@ describe("export boundary — R3 shared pipeline and its production entry points
     expect(code).not.toContain("__mareyExportVideo");
   });
 
-  it("useExportVideo.ts does not import devVideoSeam.ts, and does not reach __mareyExportVideo", () => {
-    const code = stripComments(useExportVideoSource);
-    expect(code).toContain("export function useExportVideo");
-    expect(code).toContain('await import("../compiler/export/videoPipeline")');
-    expect(importsModule(code, "devVideoSeam")).toBe(false);
-    expect(code).not.toContain("__mareyExportVideo");
+  it("lottiePipeline.ts does not import devLottieSeam.ts, and does not reach __mareyExportLottie", () => {
+    const code = stripComments(lottiePipelineSource);
+    expect(code).toContain("export async function runLottieExport");
+    expect(code).toContain("if (app?.renderer) destroyExportApp(app);");
+    expect(importsModule(code, "devLottieSeam")).toBe(false);
+    expect(code).not.toContain("__mareyExportLottie");
   });
 
-  it("useExportVideo.ts loads videoPipeline only through a dynamic import()", () => {
+  it("useExport.ts does not import any dev seam, and does not reach a dev export global", () => {
+    const code = stripComments(useExportSource);
+    expect(code).toContain("export function useExport");
+    expect(code).toContain('await import("../compiler/export/videoPipeline")');
+    expect(code).toContain('await import("../compiler/export/lottiePipeline")');
+    expect(importsModule(code, "devVideoSeam")).toBe(false);
+    expect(importsModule(code, "devLottieSeam")).toBe(false);
+    expect(code).not.toContain("__mareyExportVideo");
+    expect(code).not.toContain("__mareyExportLottie");
+  });
+
+  it("useExport.ts loads videoPipeline and lottiePipeline only through a dynamic import()", () => {
     // Whole-branch review M-3, ruling R49. The dynamic import is why
     // mediabunny and the rest of the export path live in a click-loaded
     // chunk instead of the entry chunk every visitor downloads (+283,561
     // bytes measured in Task 5). A static import added beside the dynamic
-    // one compiles, works, and silently undoes that.
-    const code = stripComments(useExportVideoSource);
+    // one compiles, works, and silently undoes that. Task 3 widens this from
+    // "tells a static import of videoPipeline" to both pipelines the hook
+    // now loads.
+    const code = stripComments(useExportSource);
     expect(code).toContain('await import("../compiler/export/videoPipeline")');
+    expect(code).toContain('await import("../compiler/export/lottiePipeline")');
     expect(staticallyImportsModule(code, "videoPipeline")).toBe(false);
+    expect(staticallyImportsModule(code, "lottiePipeline")).toBe(false);
   });
 
-  it("TopBar.tsx does not import devVideoSeam.ts, and does not reach __mareyExportVideo", () => {
+  it("TopBar.tsx does not import any dev seam, and does not reach a dev export global", () => {
     const code = stripComments(topBarSource);
     expect(code).toContain("export const TopBar");
     expect(code).toContain('handleExportClick("webm")');
     expect(importsModule(code, "devVideoSeam")).toBe(false);
+    expect(importsModule(code, "devLottieSeam")).toBe(false);
     expect(code).not.toContain("__mareyExportVideo");
+    expect(code).not.toContain("__mareyExportLottie");
   });
 });

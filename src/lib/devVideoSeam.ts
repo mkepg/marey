@@ -56,7 +56,7 @@ declare global {
      * encoding, frame hashing, reference-PNG capture, the `window` assignment
      * below — is dropped rather than merely left unreferenced. `mediabunny`
      * does ship: the top bar's MP4/WebM buttons reach the same
-     * `runVideoExport` through `useExportVideo.ts`'s click-loaded dynamic
+     * `runVideoExport` through `useExport.ts`'s click-loaded dynamic
      * `import()`.
      */
     __mareyExportVideo?: (

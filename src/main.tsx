@@ -10,7 +10,7 @@ render(<App />, document.getElementById("app")!);
 //
 // Updated in Phase 5B Task 5: this used to read "no product UI ships an
 // export button this phase", which stopped being true when the top bar's
-// MP4/WebM buttons shipped (`TopBar.tsx`, `useExportVideo.ts`). Those cover
+// MP4/WebM buttons shipped (`TopBar.tsx`, `useExport.ts`). Those cover
 // video only, and they do not replace any of these three seams even for
 // video: a download button hands bytes to the browser, while
 // `video-check.mjs` needs them handed back to Node as base64 together with a

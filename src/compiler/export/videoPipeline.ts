@@ -78,7 +78,7 @@ function yieldToEventLoop(): Promise<void> {
 /**
  * Compile, plan, probe, build, sample, then rasterize and encode one frame at
  * a time: the whole video export path, and the **only** copy of it. The top
- * bar's export buttons (`useExportVideo.ts`) call this, and so does the dev
+ * bar's export buttons (`useExport.ts`) call this, and so does the dev
  * harness seam (`devVideoSeam.ts`) through `observer`, so `video-check.mjs`
  * measures this orchestration rather than a hand-kept copy of it (ruling R45,
  * whole-branch review I-2: with two copies, reversing or thinning the frames
@@ -105,7 +105,7 @@ function yieldToEventLoop(): Promise<void> {
  * Every failure surfaces as a thrown `Error` whose `.message` is the
  * triggering diagnostic's `message` **verbatim** — `EXPORT_*` from
  * `planExport`, `VIDEO_*` from `planVideo` or `assertVideoEncodable` — never
- * rewrapped with an added prefix, because `useExportVideo.ts` shows it in a
+ * rewrapped with an added prefix, because `useExport.ts` shows it in a
  * toast as it is, and those messages are written for a person
  * (`videoContract.ts`, `exportContract.ts`).
  */

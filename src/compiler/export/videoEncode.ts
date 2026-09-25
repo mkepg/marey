@@ -202,7 +202,7 @@ export async function encodeVideo(
     // (`devVideoSeam.ts` adds it to every failure it rethrows, for a Node
     // author reading a stack trace); this module is shared production code,
     // and since Task 5 shipped the export button its throws reach a real
-    // user's toast verbatim -- `useExportVideo.ts` shows `error.message`
+    // user's toast verbatim -- `useExport.ts` shows `error.message`
     // unchanged, by design (R23). A bracketed harness tag in a toast is
     // noise to the only person now reading it. The seam keeps its own
     // prefix for the `VideoExportError` path it wraps; this one plain
