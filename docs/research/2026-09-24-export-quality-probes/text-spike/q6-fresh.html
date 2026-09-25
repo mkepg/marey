@@ -1,0 +1,76 @@
+<!doctype html>
+<!--
+  Phase 5C Task 6, Q6: font readiness. This page must do NOTHING with
+  'JetBrains Mono' before window.__q6Run() is called explicitly -- unlike
+  navigating to the app's own `/`, which mounts the whole editor/preview and
+  may use the font for something else first, resolving the very race this
+  question is about before we get to observe it. Only the @font-face rule
+  itself is declared (copied from src/styles/global.scss's), same as the
+  design-time probe5c/lig.html did for the ligature question.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      @font-face {
+        font-family: 'JetBrains Mono';
+        src: url('/fonts/JetBrainsMono-Regular.ttf') format('truetype');
+      }
+    </style>
+  </head>
+  <body>
+    <script type="module">
+      import { CanvasTextMetrics, Text, TextStyle } from "pixi.js";
+
+      window.__q6Run = async () => {
+        const checkBefore = document.fonts.check("60px 'JetBrains Mono'");
+        const style = new TextStyle({ fontFamily: "'JetBrains Mono', monospace", fontSize: 60, fill: 0x000000 });
+        const before = new Text({ text: "readiness-probe", style });
+        const widthBefore = before.width;
+        const heightBefore = before.height;
+        before.destroy(true);
+
+        await document.fonts.load("60px 'JetBrains Mono'");
+        const checkAfter = document.fonts.check("60px 'JetBrains Mono'");
+
+        // Same style INSTANCE as "before" -- CanvasTextMetrics keys its
+        // measurement cache by `${text}-${style.styleKey}-wordWrap-${...}`,
+        // so this can return the STALE pre-load measurement even though the
+        // font has since finished loading (checkAfter is true).
+        const afterSameStyle = new Text({ text: "readiness-probe", style });
+        const widthAfterSameStyle = afterSameStyle.width;
+        const heightAfterSameStyle = afterSameStyle.height;
+        afterSameStyle.destroy(true);
+
+        // A brand-new TextStyle instance, same field values. If styleKey is
+        // derived from the field values (not object identity), this should
+        // hit the SAME cache entry and be just as stale.
+        const freshStyle = new TextStyle({ fontFamily: "'JetBrains Mono', monospace", fontSize: 60, fill: 0x000000 });
+        const afterFreshStyle = new Text({ text: "readiness-probe", style: freshStyle });
+        const widthAfterFreshStyle = afterFreshStyle.width;
+        afterFreshStyle.destroy(true);
+
+        // Explicitly clear pixi's font-metrics cache (not the same as the
+        // per-text measurement cache, but the only public invalidation pixi
+        // exposes) and measure a NEVER-BEFORE-SEEN string, so no cache entry
+        // for it can possibly exist yet.
+        CanvasTextMetrics.clearMetrics();
+        const neverSeenStyle = new TextStyle({ fontFamily: "'JetBrains Mono', monospace", fontSize: 60, fill: 0x000000 });
+        const neverSeen = new Text({ text: "readiness-probe-2", style: neverSeenStyle });
+        const widthNeverSeenAfterLoad = neverSeen.width;
+        neverSeen.destroy(true);
+
+        return {
+          checkBefore,
+          widthBefore,
+          heightBefore,
+          checkAfter,
+          widthAfterSameStyle,
+          heightAfterSameStyle,
+          widthAfterFreshStyle,
+          widthNeverSeenAfterLoad,
+        };
+      };
+    </script>
+  </body>
+</html>

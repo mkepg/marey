@@ -31,13 +31,19 @@ function shapeString(font: any, text: string) {
   (hb as any).shape(font, buf);
   const infos = buf.getGlyphInfos();
   const pos = buf.getGlyphPositions();
+  // NOTE (measured, corrects the design-time probe): harfbuzzjs 1.6.2's
+  // getGlyphPositions() objects use camelCase (xAdvance/yAdvance/xOffset/
+  // yOffset), not the HarfBuzz C API's snake_case the design-time
+  // .visual-check/probe5c/hb.mjs read (pos[i].x_advance etc.) -- that probe
+  // silently printed "undefined" via template-string interpolation and
+  // nobody noticed. See task-6-report.md Q2 for the full account.
   return infos.map((g: any, i: number) => ({
     glyphId: g.codepoint as number,
     cluster: g.cluster as number,
-    xAdvance: pos[i].x_advance as number,
-    yAdvance: pos[i].y_advance as number,
-    xOffset: pos[i].x_offset as number,
-    yOffset: pos[i].y_offset as number,
+    xAdvance: pos[i].xAdvance as number,
+    yAdvance: pos[i].yAdvance as number,
+    xOffset: pos[i].xOffset as number,
+    yOffset: pos[i].yOffset as number,
   }));
 }
 
@@ -232,6 +238,24 @@ export async function q3PixiLayout() {
   }
   out.rawWinner = rawWinner;
 
+  // Confirm pixi passes \t through to fillText unchanged (design 6.3 step 2
+  // needs to know this to decide whether textOutline.ts must replicate a
+  // whitespace-collapsing step pixi itself does not do). measureText's
+  // width for a tab-containing string should equal the raw canvas
+  // context's own measureText for the identical string, i.e. pixi neither
+  // strips nor expands the tab before handing the line to the 2D context.
+  const tabString = "a\tb";
+  const tabStyle = new TextStyle({ fontFamily: FONT_FAMILY, fontSize: 60, fill: 0x000000 });
+  const tabMetrics = CanvasTextMetrics.measureText(tabString, tabStyle);
+  rawCtx.font = "60px 'JetBrains Mono'";
+  const rawTabWidth = rawCtx.measureText(tabString).width;
+  out.tabPassthrough = {
+    pixiMeasuredWidth: tabMetrics.width,
+    rawContextMeasureTextWidth: rawTabWidth,
+    equal: tabMetrics.width === rawTabWidth,
+    lines: tabMetrics.lines,
+  };
+
   return out;
 }
 
@@ -283,34 +307,29 @@ export async function q4FillRuleParity() {
   return { checked, differing };
 }
 
-// Q6 must run on a page that has done nothing else font-related yet -- the
-// caller (run.mjs) is responsible for using a fresh, single-purpose page.
-export async function q6FontReadiness() {
-  const checkBefore = document.fonts.check("60px 'JetBrains Mono'");
-  const style = new TextStyle({ fontFamily: FONT_FAMILY, fontSize: 60, fill: 0x000000 });
-  const textBefore = new Text({ text: "readiness-probe", style });
-  const widthBefore = textBefore.width;
-  const heightBefore = textBefore.height;
-  textBefore.destroy(true);
+// Q6 (fresh-page font readiness) does NOT live here: navigating to this
+// app's own `/` mounts the whole editor/preview first, which can use
+// 'JetBrains Mono' for something else before the check runs, resolving the
+// very race the question asks about. See q6-fresh.html, a dedicated
+// minimal document with nothing else in it, plus run.mjs's own comment.
 
-  await document.fonts.load("60px 'JetBrains Mono'");
-  const checkAfter = document.fonts.check("60px 'JetBrains Mono'");
-  const textAfter = new Text({ text: "readiness-probe", style });
-  const widthAfter = textAfter.width;
-  const heightAfter = textAfter.height;
-  textAfter.destroy(true);
-
-  return { checkBefore, widthBefore, heightBefore, checkAfter, widthAfter, heightAfter };
-}
-
-// Q7: missing glyphs -- CJK and emoji, neither in JetBrains Mono.
+// Q7: missing glyphs -- CJK and emoji, neither in JetBrains Mono. Also
+// returns a PNG data URL of the fillText rendering, because ink-bbox alone
+// cannot tell a fallback-font glyph apart from a tofu box -- both are
+// "ink" -- so run.mjs saves these for a human to look at.
 export async function q7MissingGlyph() {
   await document.fonts.load("60px 'JetBrains Mono'");
   const { font } = await getHbFont();
   const out: Record<string, unknown> = {};
   for (const ch of ["日" /* 日 */, "🙂" /* slightly smiling face emoji */]) {
     const run = shapeString(font, ch);
-    const ftData = renderFillText(ch);
+    const canvas = makeCanvas(CANVAS_W, CANVAS_H);
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#000";
+    ctx.textBaseline = "alphabetic";
+    ctx.font = `${FONT_SIZE}px ${FONT_FAMILY}`;
+    ctx.fillText(ch, PEN_X, BASELINE_Y);
+    const ftData = ctx.getImageData(0, 0, CANVAS_W, CANVAS_H).data;
     const bbox = inkBBox(ftData, CANVAS_W, CANVAS_H);
     out[ch] = {
       codePoint: ch.codePointAt(0),
@@ -318,6 +337,7 @@ export async function q7MissingGlyph() {
       allGlyphIdsZero: run.every((g) => g.glyphId === 0),
       fillTextDrewInk: bbox !== null,
       fillTextInkBBox: bbox,
+      pngDataUrl: canvas.toDataURL("image/png"),
     };
   }
   return out;
