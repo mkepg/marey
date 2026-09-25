@@ -2287,7 +2287,7 @@ is the same tick/paint-split mistake the Phase 0 plan made and its notes warn ab
 
 **Task 11's browser verification ran, and found a bug.** It was initially skipped for want
 of a browser driver; Playwright plus headless Chromium was added afterwards and packaged as
-the `visual-check` skill in `.claude/skills/`. Every check passed except one, and that one
+the `visual-check` harness in `tools/`. Every check passed except one, and that one
 mattered.
 
 A body frozen by `duration` expiry rendered to one of two different pixel results depending

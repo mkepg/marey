@@ -13,8 +13,8 @@ entrypoints to this document.
 4. Before starting a roadmap phase, read the prior phase's execution notes and
    the authoritative specs identified in `roadmap-and-process.md`.
 5. For browser-visible behavior, read
-   `tools/visual-check/SKILL.md` before running a visual check. The
-   skill's procedure and scripts are tool-neutral despite their location.
+   `tools/visual-check/README.md` before running a visual check. The
+   procedure and scripts there are tool-neutral.
 
 Do not rely on an agent-specific forwarding file as the source of project
 truth. Update the documents in this directory, and keep forwarding files as
@@ -36,7 +36,7 @@ npx vitest run -t "advances two ticks"                   # one test by name
 The test suite is headless by design and **cannot see a canvas**. For anything
 that needs one — does a scene actually render, does the ticker stop, does a
 scene replay identically across a page reload — follow the browser procedure in
-`tools/visual-check/SKILL.md`.
+`tools/visual-check/README.md`.
 
 ```bash
 npx playwright install chromium            # once, if you have not already
@@ -51,7 +51,7 @@ Use `--strictPort`: without it Vite walks forward to the next free port when
 5199 is taken, while `check.mjs` still defaults to 5199. A stale server from an
 earlier run then absorbs every capture and the check reports a confident pass
 without exercising your code at all. That has happened twice. The check itself
-found a determinism bug the whole headless suite missed, and `SKILL.md` records
+found a determinism bug the whole headless suite missed, and that README records
 two traps worth knowing before writing any browser check of your own.
 
 TypeScript is strict with `noUnusedLocals`, `noUnusedParameters`, and
@@ -109,7 +109,7 @@ backwards into `renderer/clock.ts`, which now just re-exports both.
 When a change crosses boundaries, read all matching documents. These files are
 the only home for this guidance — there is no agent-specific copy. A
 path-scoped `scoped rule files` split was tried in `b59d70a` and reverted in
-`4c70781`: it gave Claude lazy loading that Codex has no equivalent for, so the
+`4c70781`: it gave one client lazy loading that others have no equivalent for, so the
 two agents ended up reading different guidance. One set everyone reads beats a
 smaller one only some agents get.
 

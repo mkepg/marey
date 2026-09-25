@@ -728,7 +728,7 @@ risk Phase 1's notes recorded as unconfirmed.
 Behaviour-preserving: 121 tests green, and visual-check reports
 freeze-midair and pile byte-identical and still deterministic.
 
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1026,7 +1026,7 @@ adapter.ts with no coverage: the orphaned handoff velocity, the
 rotation-override release running in the paint phase, and the alpha-0 rule
 for anything fed into the world.
 
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1252,7 +1252,7 @@ Falsified LANGUAGE.md returns to full physics control and physics spec 6.11
 prediction that stepper would tumble rather than land flat. The default
 scene changes: stepper now tumbles.
 
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1425,7 +1425,7 @@ Fixed by snapping the animated property to its final value in the tick
 phase on completion, mirroring what snapContainerToBody already does for
 the freeze transition.
 
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1634,7 +1634,7 @@ git commit -m "feat(renderer): add pure 2D transform algebra
 One copy of the parent-child composition that both the builder's group
 flattening and physicsSync's ancestor composition need.
 
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -2109,7 +2109,7 @@ Verified against Matter 0.20.0: Detector skips parts[0] when parts.length
 > 1, so an L-shaped compound collides concavely rather than on its auto
 hull; and setVelocity reads only the parent's deltaTime.
 
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -2447,7 +2447,7 @@ First tests for builder.ts. Phase 1's notes said this needed a DOM; it does
 not — PixiJS Container and Graphics run in plain Node, and only Text needs
 a canvas.
 
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -2950,7 +2950,7 @@ convert through it. The transform is constant because D17's validator rules
 reject physics under a group that animates, which is what keeps it free of
 driver.alpha.
 
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -3204,7 +3204,7 @@ does not animate.
 A static chain is still allowed, so a template can carry physics — which is
 the case that was silently placing every instance at (0, 0).
 
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -3518,7 +3518,7 @@ Five behavioural assertions lock the new claims: the compound's parts, the
 reference point at the group's origin, both new compile errors, and D18's
 visual-only child animation.
 
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -3659,7 +3659,7 @@ logo tumbling as one rigid object. logo-freeze.marey checks determinism on
 a transient state rather than at rest, per Phase 1's finding that a settled
 pile converges even when the trajectory diverged.
 
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -3752,7 +3752,7 @@ Expected: clean, all green.
 git add docs/plans/2026-08-27-phase-2-compound-groups.md AGENTS.md
 git commit -m "docs: record Phase 2 execution notes and update the roadmap
 
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+"
 ```
 
 ---

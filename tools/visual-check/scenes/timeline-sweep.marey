@@ -7,7 +7,7 @@
 // diverge from it, the difference is the language change, not the scene.
 //
 // `loop: true` means this scene never comes to rest, so `frozen at rest` and
-// `deterministic` are meaningless for it (see SKILL.md). What it checks is that
+// `deterministic` are meaningless for it (see README.md). What it checks is that
 // `generate` over a computed range bound, with `%` and `if` inside it, still
 // lays out a diagram, and that the playhead sweeps the full span.
 

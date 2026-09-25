@@ -10,7 +10,7 @@ import TEST_CARD from "../../../tools/visual-check/scenes/test-card.marey?raw";
 /**
  * The motion test card was the app's default scene until the smiling face
  * replaced it. It still earns its keep as the scene for eyeballing renderer
- * changes (the visual-check skill's `scenes/test-card.marey`), so its
+ * changes (the visual-check harness's `scenes/test-card.marey`), so its
  * coverage is still checked here: if a zone is deleted, this fails rather
  * than silently reducing what a manual pass can catch.
  */

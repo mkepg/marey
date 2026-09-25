@@ -390,8 +390,8 @@ three deviations went unannounced until the user asked directly:
   was silently replaced with prose tracking.
 - Repair work was done by the controller rather than dispatched — deleting a
   subagent's leftover probe file, editing project guidance — which is exactly the
-  context pollution the skill's "don't fix manually" rule exists to prevent.
-- Progress summaries were posted between tasks, which the skill explicitly says
+  context pollution the "don't fix manually" rule exists to prevent.
+- Progress summaries were posted between tasks, which the process explicitly says
   waste the user's time.
 
 None of these was hidden deliberately; each was a small local decision that was
@@ -544,7 +544,7 @@ fell; peak did not. Full write-up in
 `docs/harness/2026-09-04-context-routing-experiment-result.md`.
 
 **A task that was actually a project.** "Refactor the math parser into a general
-expression parser" was written as one task. The plans skill asks for steps of
+expression parser" was written as one task. The planning rules ask for steps of
 2–5 minutes. It ran five rounds, consumed 1.04M tokens, and destabilised
 everything downstream — Tasks 4–9 had to be re-briefed twice as its signature
 changed under them. It was also scheduled second, so every later task inherited

@@ -16,7 +16,7 @@
 // What to look for: dot sizes must vary SMOOTHLY around the ring, largest and
 // smallest diametrically staged rather than scattered. `loop: true` means this
 // scene never rests, so `frozen at rest` and `deterministic` do not apply to it
-// (see SKILL.md).
+// (see README.md).
 
 let dim   = #64748b
 let ink   = #e2e8f0

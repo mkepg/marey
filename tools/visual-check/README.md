@@ -1,16 +1,13 @@
----
-name: visual-check
-description: Run the Marey playground in a real browser and capture what it renders. Use when verifying a renderer or physics change, checking that a scene settles where it should, that the ticker stops, or that a scene replays identically across a page reload — anything the headless Vitest suite structurally cannot see.
----
-
 # Visual check
+
+Run the Marey playground in a real browser and capture what it renders. Use it when verifying a renderer or physics change, checking that a scene settles where it should, that the ticker stops, or that a scene replays identically across a page reload — anything the headless Vitest suite structurally cannot see.
 
 The renderer's unit tests are deliberately headless — `clock.ts`, `timeline.ts`,
 `physicsWorld.ts` and `physicsSync.ts` import nothing from `pixi.js` so they run
 in Node. That is what makes them fast, and it is also what they cannot do: none
 of them can see a canvas.
 
-This skill covers the gap. It drives the real app in Chromium, captures PNGs you
+This harness covers the gap. It drives the real app in Chromium, captures PNGs you
 can look at, and measures three things the suite cannot.
 
 **It has already earned its keep.** The first run found a determinism bug that
@@ -204,7 +201,7 @@ still hash consistently and still pass `pngFramesMatch` and
 **The canonical Gate B scene.** `eval/scenes-3b/compound-logo.marey` is the
 corpus's one scene that genuinely animates in, hands off to physics, and
 settles — the other three canonical scenes are static by declaration. Run it
-the same way as any other scene, from outside this skill's own `scenes/`
+the same way as any other scene, from outside this harness's own `scenes/`
 directory:
 
 ```bash
