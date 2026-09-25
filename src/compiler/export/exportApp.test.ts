@@ -4,7 +4,7 @@ import { destroyExportApp } from "./exportApp";
 // exportBoundary.test.ts's header comment).
 import videoPipelineSource from "./videoPipeline.ts?raw";
 import devExportSeamSource from "../../lib/devExportSeam.ts?raw";
-import devLottieSeamSource from "../../lib/devLottieSeam.ts?raw";
+import lottiePipelineSource from "./lottiePipeline.ts?raw";
 
 /**
  * An export builds a second pixi Application beside the preview's long-lived
@@ -42,7 +42,7 @@ describe("destroyExportApp", () => {
     for (const [file, source] of [
       ["videoPipeline.ts", videoPipelineSource],
       ["devExportSeam.ts", devExportSeamSource],
-      ["devLottieSeam.ts", devLottieSeamSource],
+      ["lottiePipeline.ts", lottiePipelineSource],
     ] as const) {
       expect(source, file).not.toMatch(/\bapp\??\.destroy\(/);
       expect(source, file).toContain("destroyExportApp(app)");

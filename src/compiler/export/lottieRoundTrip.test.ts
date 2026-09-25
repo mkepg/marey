@@ -1,14 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { Container } from "pixi.js";
 import { encodeLottie, type LottieDoc } from "./lottieEncode";
-import { planLottie, type LayerSpec } from "./lottieGeometry";
+import { planLottie, hexToRgb01, type LayerSpec } from "./lottieGeometry";
 import { planExport, type SamplerPlan } from "./exportContract";
 import { sampleFrames, type FrameSnapshot } from "../renderer/frameSampler";
 import { buildNode } from "../renderer/builder";
 import { SceneRuntime } from "../renderer/sceneRuntime";
 import { MatterWorld } from "../renderer/physicsWorld";
 import { compileSource } from "../compileSource";
-import type { IRSceneNode, IRObjectNode, IRColor } from "../sceneIR";
+import type { IRSceneNode, IRObjectNode } from "../sceneIR";
 
 /**
  * Step 6: the whole headless pipeline — compile → plan → build → sample →
@@ -54,20 +54,6 @@ function buildRoot(ir: IRSceneNode): Container {
   const root = new Container();
   for (const node of ir.children) root.addChild(buildNode(node as IRObjectNode));
   return root;
-}
-
-/**
- * `lottieGeometry.ts`'s hex→0-1-float conversion is not exported either
- * (`hexToRgb01` is a private function there, and that file is not in this
- * task's allowed list), so the scene background needs the same one-line
- * conversion reproduced here to build the `LottieSceneInfo` `encodeLottie`
- * requires.
- */
-function hexToRgb01(hex: IRColor): readonly [number, number, number] {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return [r / 255, g / 255, b / 255];
 }
 
 interface Pipeline {

@@ -99,8 +99,13 @@ function polygonBBox(points: IRPointList): LocalBBox {
  * reaches the IR (`resolvers.ts`'s `normaliseColor`), so no validation is
  * needed here — just the hex-to-0..1-float conversion Lottie's `sc`/`c`
  * colour values want.
+ *
+ * Exported (Task 3): `lottiePipeline.ts` and `lottieRoundTrip.test.ts` each
+ * used to carry their own copy of this exact function, because this file was
+ * outside their editing task's allowed file list. That restriction was
+ * specific to those tasks; this file owns the one implementation now.
  */
-function hexToRgb01(hex: IRColor): readonly [number, number, number] {
+export function hexToRgb01(hex: IRColor): readonly [number, number, number] {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
