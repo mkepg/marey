@@ -2,13 +2,17 @@ import { readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
 import {
   byFamily,
+  fontLicenseText,
   fontNotice,
   isLicenseFile,
   packageDirOf,
   packageNotice,
   readFontNames,
+  readFonts,
+  readPackage,
   renderNotices,
   sourceLocations,
+  suppliedEmbeddedLicensePath,
   suppliedLicensePath,
   type FontNotice,
 } from "./thirdPartyLicenses";
@@ -93,6 +97,73 @@ describe("packageNotice", () => {
 describe("suppliedLicensePath", () => {
   it("maps a scoped name to a single file name", () => {
     expect(suppliedLicensePath("dir", "@pixi/colord").replace(/\\/g, "/")).toBe("dir/@pixi__colord.txt");
+  });
+});
+
+describe("suppliedEmbeddedLicensePath", () => {
+  it("names the always-appended licence of code a package embeds", () => {
+    expect(suppliedEmbeddedLicensePath("dir", "harfbuzzjs").replace(/\\/g, "/")).toBe("dir/harfbuzzjs.embedded.txt");
+  });
+});
+
+/**
+ * The real packages and the real checked-in texts, so a change to either the
+ * plugin or a licence file shows here (Phase 5C Task 8, spec §6.5).
+ */
+describe("readPackage, against the installed packages", () => {
+  const SUPPLIED = "vite-plugins/licenses";
+
+  it("adds HarfBuzz's own licence to harfbuzzjs, whose LICENSE covers only the wrapper", () => {
+    const n = readPackage("node_modules/harfbuzzjs", SUPPLIED);
+    if (typeof n === "string") throw new Error(n);
+    const own = n.texts.find((t) => t.file === "LICENSE");
+    expect(own?.content).toContain("The harfbuzzjs project authors");
+    // harfbuzzjs's LICENSE does not reproduce HarfBuzz's: the wasm needs this.
+    expect(own?.content).not.toContain("Old MIT");
+    const embedded = n.texts.find((t) => t.content.includes('HarfBuzz is licensed under the so-called "Old MIT" license'));
+    expect(embedded).toBeDefined();
+    expect(embedded!.content).toContain("Copyright © 2005,2006,2020,2021,2022,2023  Behdad Esfahbod");
+    expect(embedded!.content).toContain("THE COPYRIGHT HOLDER SPECIFICALLY DISCLAIMS ANY WARRANTIES");
+    expect(n.texts).toHaveLength(2);
+  });
+
+  it("still uses a replacement text only for a package that ships none (@pixi/colord)", () => {
+    const n = readPackage("node_modules/@pixi/colord", SUPPLIED);
+    if (typeof n === "string") throw new Error(n);
+    expect(n.texts.map((t) => t.file)).toEqual(["licence supplied by Marey (the package ships none)"]);
+  });
+
+  it("adds nothing to a package with neither supplement (pixi.js)", () => {
+    const n = readPackage("node_modules/pixi.js", SUPPLIED);
+    if (typeof n === "string") throw new Error(n);
+    expect(n.texts.every((t) => !t.file.includes("Marey"))).toBe(true);
+  });
+});
+
+describe("font licence text", () => {
+  const SUPPLIED = "vite-plugins/licenses";
+
+  it("finds the full OFL 1.1 text for a font whose metadata names it", () => {
+    const t = fontLicenseText("This Font Software is licensed under the SIL Open Font License, Version 1.1.", SUPPLIED);
+    if (typeof t !== "object") throw new Error(String(t));
+    expect(t.content).toContain("SIL OPEN FONT LICENSE Version 1.1");
+    expect(t.content).toContain("PERMISSION & CONDITIONS");
+  });
+
+  it("refuses a font licence it has no full text for, rather than printing a bare link", () => {
+    expect(fontLicenseText("Apache License, Version 2.0", SUPPLIED)).toMatch(/no full licence text/);
+  });
+
+  it("carries the full OFL 1.1 text, after the copyright notice, in the notices for the shipped font", () => {
+    const { notices, problems } = readFonts("public", SUPPLIED);
+    expect(problems).toEqual([]);
+    const out = renderNotices([], notices);
+    expect(out).toContain("SIL OPEN FONT LICENSE Version 1.1");
+    expect(out).toContain("PERMISSION & CONDITIONS");
+    // OFL condition 2: the copyright notice and the licence, together.
+    const copyrightAt = out.indexOf("Copyright 2020 The JetBrains Mono Project Authors");
+    expect(copyrightAt).toBeGreaterThan(-1);
+    expect(out.indexOf("PERMISSION & CONDITIONS")).toBeGreaterThan(copyrightAt);
   });
 });
 
