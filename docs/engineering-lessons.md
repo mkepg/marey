@@ -450,7 +450,7 @@ sends *every* agent through both files before doing anything, so a stale phase
 line misdirects the whole session rather than one edit.
 
 **Do instead:** state the phase in exactly one place and have the other point
-at it, the same way `AGENTS.md` forward here rather than
+at it, the same way an entrypoint file forwards here rather than
 restating guidance. Until that lands, treat "update both phase-status
 locations, and delete the branch reference if the branch is gone" as part of
 finishing a phase, not as documentation cleanup afterwards — the evidence is

@@ -31,7 +31,10 @@ dist-ssr
 .superpowers/
 .sdd/
 docs/superpowers/
+.claude/
 CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
 
 # Output from the visual-check harness (PNGs and reports)
 .visual-check/

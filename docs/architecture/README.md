@@ -1,8 +1,7 @@
 # Shared agent guidance
 
 This directory is the single source of project guidance for every coding agent
-working in this repository. `AGENTS.md` are identical
-entrypoints to this document.
+working in this repository.
 
 ## Required reading order
 
@@ -17,8 +16,7 @@ entrypoints to this document.
    procedure and scripts there are tool-neutral.
 
 Do not rely on an agent-specific forwarding file as the source of project
-truth. Update the documents in this directory, and keep forwarding files as
-pointers only.
+truth. Update the documents in this directory.
 
 ## Commands
 
