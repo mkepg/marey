@@ -180,8 +180,14 @@ explicitly rather than quietly deviating.
   frame rate, and physics baked to keyframes — the emitted file carries no
   Marey or Matter.js dependency at playback. Unsupported input is refused
   outright rather than degraded: `LOTTIE_UNSUPPORTED_TEXT` and
-  `LOTTIE_UNSUPPORTED_LINE` are the whole refusal surface, and both are pinned
-  by delete-and-run. Two structural rules carry the independence claim and are
+  `LOTTIE_UNSUPPORTED_LINE` were the whole refusal surface at the time, and
+  both were pinned by delete-and-run. **Superseded in Phase 5C** (T8 review
+  Minor 1): both codes are gone. `line` is no longer refused — Phase 5C
+  Task 2 maps it to Lottie stroke geometry. `LOTTIE_UNSUPPORTED_TEXT` was
+  removed in Task 8; the text refusal is now `LOTTIE_TEXT_MISSING_GLYPH`,
+  which names the object and the specific character's code point, because
+  HarfBuzz-shaped text is now supported and only a glyph the font truly
+  lacks is refused. Two structural rules carry the independence claim and are
   grep-checkable: neither `lottieGeometry.ts` nor `lottieEncode.ts` imports
   `pixi.js`, and `lottieEncode.ts` does not import `sceneIR` — it sees
   `FrameSnapshot`s only. The encoder boundary and the **opacity asymmetry**
