@@ -23,6 +23,7 @@
     "check": "npm run build:cli && node bin/marey.mjs check"
   },
   "dependencies": {
+    "harfbuzzjs": "1.6.2",
     "lz-string": "^1.5.0",
     "matter-js": "0.20.0",
     "mediabunny": "1.58.0",
