@@ -1173,11 +1173,21 @@ decode-and-compare, via `node tools/visual-check/apng-check.mjs
 900 frames (see "One measured memory limit" in `SKILL.md`'s new section —
 holding one raw RGBA capture per frame is >2GB at this length and destroys
 the page: measured directly, `page.evaluate: Execution context was
-destroyed, most likely because of a navigation`). Measured instead via a
-direct call to the shipped `runApngExport` with no observer (scratch probe
-`.visual-check/probe-apng-size.mjs`, not committed):
-`linear-motion.marey --duration 30` (900 frames, 800×600, 30fps) →
-**11,492,040 bytes in 25,978 ms**.
+destroyed, most likely because of a navigation`).
+
+**Superseded by fix round 1** (below): this figure originally came from an
+uncommitted scratch probe (`.visual-check/probe-apng-size.mjs`), which the
+task review correctly flagged as not re-runnable from the repo. Re-measured
+with the now-committed `apng-check.mjs --size-only` (`devApngSeam.ts`'s new
+`withReferenceCapture: false`):
+`node tools/visual-check/apng-check.mjs --scene
+tools/visual-check/scenes/linear-motion.marey --fps 30 --duration
+30 --size-only --out .visual-check/apng/linear-motion-30s` →
+**11,504,757 bytes**, byte-identical (sha256) across two cold runs, `fcTL`
+count 900, 0 problems, exit 0. (The scratch probe's own number,
+11,492,040 bytes, differed by ~0.1% — a cross-*process* difference, not a
+cross-*page* one; see fix round 1 for why that is expected and not a
+defect.)
 
 **ImageDecoder works in Playwright's Chromium** (scratch probe
 `.visual-check/probe-imagedecoder.mjs`, built a 3-frame APNG with
