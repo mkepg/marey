@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { Container, Text } from "pixi.js";
+import { Application, Container, Text } from "pixi.js";
 import { compileSource } from "../compileSource";
 import type { IRSceneNode } from "../sceneIR";
 import { collectTextLayouts, runLottieExport, type RunLottieExportOptions } from "./lottiePipeline";
@@ -102,6 +102,8 @@ describe("runLottieExport · refusal path 3, after the build", () => {
     // The font step runs for a text scene; report the font as loaded so the
     // run reaches the Application instead of refusing on the font.
     vi.stubGlobal("document", { fonts: { load: async () => [], check: () => true } });
+    // Wraps the real `init`, recording that the run got that far.
+    const init = vi.spyOn(Application.prototype, "init");
     try {
       const message = await refusalMessage({
         ...BASE,
@@ -109,11 +111,15 @@ describe("runLottieExport · refusal path 3, after the build", () => {
       });
       // Before Task 8 this was `[LOTTIE_UNSUPPORTED_TEXT] ...`, from a
       // pre-build `planLottie`. Now nothing Lottie-specific can refuse
-      // before the build, even for a character the font lacks.
-      expect(message).not.toContain("[LOTTIE");
-      expect(message).not.toContain("[EXPORT_");
-      expect(message).not.toContain("Source did not compile");
+      // before the build, even for a character the font lacks: the run
+      // reaches `app.init()`, and fails inside it, where pixi's renderer
+      // setup asks the stubbed `document` (fonts only) for an element.
+      // Measured in this suite: `TypeError: document.createElement is not a
+      // function`, thrown from pixi's `DOMPipe` during renderer creation.
+      expect(init).toHaveBeenCalledTimes(1);
+      expect(message).toBe("document.createElement is not a function");
     } finally {
+      init.mockRestore();
       vi.unstubAllGlobals();
     }
   });
