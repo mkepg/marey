@@ -82,6 +82,43 @@ export interface RasterExportOptions {
  * `undefined` here rather than a rasterizer nobody asked for and nobody
  * would call.
  */
+/**
+ * Let the browser run other tasks, including a repaint, if at least this
+ * long has passed since the last yield. A resolved promise is a microtask
+ * and never lets the page repaint; a `MessageChannel` message is a task, and
+ * unlike `setTimeout(0)` it is not clamped to 4 ms once nested.
+ *
+ * 100 ms rather than one display frame, measured (Phase 5B fix-wave report,
+ * item 3; headless Chromium with SwiftShader, the full app page): at 16 ms a
+ * 900-frame export took 43.7 s against 21-22 s with no explicit yield,
+ * because every yield also lets the live preview repaint; at 100 ms it took
+ * 22.1 s. The longest main-thread gap was the same, about 0.75 s, in all
+ * three, so the explicit yield is not what ended the freeze: it guarantees a
+ * repaint opportunity at least every 100 ms of rasterize-and-encode work
+ * without relying on mediabunny's own backpressure awaits to provide one.
+ *
+ * Moved here in Phase 5C Task 5 from `videoPipeline.ts`, whose lazy
+ * rasterize-and-encode loop was the only caller until `apngPipeline.ts`
+ * needed the identical pacing for its own lazy rasterize-and-mux loop.
+ * Exported rather than copied, per global constraint 7 ("one orchestration
+ * per export" -- the same reasoning that keeps `withRasterExport` itself as
+ * the single copy of the compile -> plan -> build -> sample prefix applies
+ * to this shared pacing helper too).
+ */
+export const YIELD_EVERY_MS = 100;
+
+export function yieldToEventLoop(): Promise<void> {
+  if (typeof MessageChannel === "undefined") return Promise.resolve();
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => {
+      channel.port1.close();
+      resolve();
+    };
+    channel.port2.postMessage(null);
+  });
+}
+
 export interface PreparedRasterExport {
   readonly ir: IRSceneNode;
   readonly plan: SamplerPlan;

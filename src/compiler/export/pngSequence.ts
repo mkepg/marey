@@ -2,8 +2,15 @@ import type { Application, Container, ICanvas } from "pixi.js";
 import type { FrameSnapshot } from "../renderer/frameSampler";
 import { createFrameRasterizer } from "./frameRaster";
 
-/** PNG bytes off an extracted canvas, whichever blob API the host provides. */
-function pngBytesOf(canvas: ICanvas): Promise<Uint8Array> {
+/**
+ * PNG bytes off an extracted canvas, whichever blob API the host provides.
+ *
+ * Exported since Phase 5C Task 5 so `apngPipeline.ts`'s `runApngExport` can
+ * read the same lossless per-frame PNG bytes this module already produces
+ * for `encodePngSequence`, rather than a second copy of the `toBlob`/
+ * `convertToBlob` branch.
+ */
+export function pngBytesOf(canvas: ICanvas): Promise<Uint8Array> {
   const toBytes = async (blob: Blob): Promise<Uint8Array> =>
     new Uint8Array(await blob.arrayBuffer());
 
