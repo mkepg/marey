@@ -483,6 +483,18 @@ that it never happens afterwards.
   suite count, and it went unnoticed until the baseline was checked.
 - **`visual-check` leaves a Vite server on port 5199.** Kill it when done; it
   blocked a worktree deletion at the end of Phase 3A.
+- **The shell's working directory must be spelled with a capital drive
+  letter.** Measured while taking Phase 5C's baseline: with the working
+  directory spelled `c:\Users\gomez\repos\PROGRAMMING_LANGUAGE\marey`
+  (lower-case `c:`), `npx vitest run` reports "no tests" and fails all 37
+  files then in the suite — not a subset, not a slow run, every file.
+  From `C:\Users\gomez\...` (capital `C:`) the identical command passes:
+  **37 files / 937 tests**. Nothing about the failure message points at
+  the drive letter, so a run that reports "no tests" should be treated as
+  this trap first, before concluding anything about the suite itself.
+  Recorded as Phase 5C's global constraint 2
+  (`.sdd/2026-09-24-phase-5c-lottie-video-quality/global-constraints.md`),
+  which every task in that phase carried.
 
 ---
 
