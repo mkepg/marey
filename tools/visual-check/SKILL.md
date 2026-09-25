@@ -582,14 +582,14 @@ OOM-killing the renderer). Two consequences, both load-bearing:
   probe calling `runApngExport` directly with no seam at all, which measured
   **11,492,040 bytes** for the identical scene/fps/duration — a ~0.1%
   difference from the number above. Both numbers are real measurements of
-  real runs; the difference is consistent with this project's own
-  documented determinism scope (`eval/RESULTS-GATE-B.md`,
-  `RESULTS-PHASE-5B.md`'s "page-cold, not process-cold"): each script
-  invocation launches its OWN Chromium process, and cross-*process*
-  bit-identical rendering is never claimed anywhere in this codebase, only
-  cross-*page* (two pages, one launched browser) — which `--size-only`'s own
-  two-cold-run comparison above proves directly. Use `--size-only`'s number
-  going forward; it is the one a rerun of the command below reproduces.
+  real runs, but they came from different code paths (the scratch probe
+  skipped `devApngSeam.ts` entirely), and no same-code two-process A/B was
+  run to isolate whether the gap is a process boundary or the differing
+  code path. So the gap itself is **unexplained, non-gating; determinism
+  is proven within one process only** — `--size-only`'s own two-cold-run
+  comparison above *is* a same-code, same-process A/B, and that one is
+  byte-identical. Use `--size-only`'s number going forward; it is the one
+  a rerun of the command below reproduces.
 
 ```bash
 node tools/visual-check/apng-check.mjs \

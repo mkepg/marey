@@ -1289,9 +1289,13 @@ tools/visual-check/scenes/linear-motion.marey --fps 30 --duration
 30 --size-only --out .visual-check/apng/linear-motion-30s` →
 **11,504,757 bytes**, byte-identical (sha256) across two cold runs, `fcTL`
 count 900, 0 problems, exit 0. (The scratch probe's own number,
-11,492,040 bytes, differed by ~0.1% — a cross-*process* difference, not a
-cross-*page* one; see fix round 1 for why that is expected and not a
-defect.)
+11,492,040 bytes, differed by ~0.1%. The two numbers came from different
+code paths — the scratch probe called `runApngExport` directly with no
+seam, this script goes through `devApngSeam.ts` — and no same-code
+two-process A/B was run to isolate the cause. So the gap is **unexplained,
+non-gating; determinism is proven within one process only.** See fix
+round 1 for the two-cold-run comparison that *is* same-code, same-process,
+and is byte-identical.)
 
 **ImageDecoder works in Playwright's Chromium** (scratch probe
 `.visual-check/probe-imagedecoder.mjs`, built a 3-frame APNG with
