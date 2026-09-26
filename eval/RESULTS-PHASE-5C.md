@@ -1084,8 +1084,9 @@ exactly with each other, this is not a regression introduced by this
 task's changes — the cause of the drift from 5A is not established, and is
 recorded here as open, per this task's own instruction not to assert one.
 
-**2026-09-26 (final review M-3): explained.** This is the scorer-flag
-effect ruling T1-R2 isolated, seen here in the Lottie harness.
+**2026-09-26 (final review M-3): consistent with the scorer-flag effect**
+ruling T1-R2 isolated, seen here in the Lottie harness (the flag and the
+process difference below were not separated).
 - `lottie-check.mjs` renders lottie-web with
   `--disable-accelerated-2d-canvas` and measures 78/83.
 - `lottie-click-check.mjs` omits the flag. On this same scene it measures
@@ -1948,7 +1949,7 @@ and reverted in one command, `git diff --stat` empty after):
 | Mutation | Caught by, now |
 |---|---|
 | (a) baseline `+ descent` | half-coverage ink bbox: **11 px** at every ascii frame, **6 px** at every multiline frame. Any-ink: 12 and 6–7 |
-| (b) per-character outlining | still invisible to every binding browser check (`text-check.mjs` exits 0; half coverage 0–1 px; Criterion 2 maxDelta 101 → 255). Caught in Node: `outlines a ligature from the shaped glyphs` and the GPOS mark test, 2 red |
+| (b) per-character outlining | **Superseded — see "A discrepancy with the Task 8 record" below: `text-check.mjs` exits 1 under (b).** As first recorded: still invisible to every binding browser check (`text-check.mjs` exits 0; half coverage 0–1 px; Criterion 2 maxDelta 101 → 255). Caught in Node: `outlines a ligature from the shaped glyphs` and the GPOS mark test, 2 red |
 | (c) missing-glyph check dropped | Node: 6 red (planner); 4 red (outliner half) |
 | (d) no whitespace replacement | the multiline export refuses `[LOTTIE_TEXT_MISSING_GLYPH] … (U+0009)`; `text-check.mjs` fails |
 

@@ -1178,9 +1178,11 @@ commits, which is expected since this task touches no file under `src/`,
    PSNR, scored the way findings §1.2 was scored (GPU-accelerated 2D
    canvas): **42.03 dB / 64.5 specks-per-frame (MP4)**, **42.16 dB / 61.7
    specks-per-frame (WebM)** — within the criterion's own ±0.5 dB re-based
-   target (§9 amendment). `quality-check.mjs`'s own standing configuration
-   (forced-software 2D canvas, needed for other scripts' determinism)
-   reads a different, also-real number for the *same* encoded bytes —
+   target (§9 amendment). Since the final fix wave, `quality-check.mjs`'s
+   default `--scorer gpu` is that configuration (re-run: 42.02 / 42.16 dB).
+   Its `--scorer software` mode (forced-software 2D canvas, the other
+   harnesses' determinism setting) reads a different, also-real number
+   for the *same* encoded bytes —
    **41.45 dB (MP4) / 41.55 dB (WebM)** — a scorer-configuration effect,
    not a file-quality one (T1-R2's 2×2: the WebM file is byte-identical,
    sha256-equal, across encode modes). Text sharpness: median antialiased
@@ -1202,7 +1204,8 @@ commits, which is expected since this task touches no file under `src/`,
    `compound-logo`'s **maxDelta 81, 569/480,000 (0.1185%)** at frames
    180/239 exactly; frames 0/48/75 also match main-vs-HEAD exactly
    (T3-R2's A/B). At frames 0/48 they read 78/83 against 5A's recorded
-   61/61. That gap is the canvas-flag effect T1-R2 isolated, not a file
+   61/61. That gap is consistent with the canvas-flag effect T1-R2 isolated
+   (the flag and the process difference were not separated), not a file
    difference: the real-click check, which launches without
    `--disable-accelerated-2d-canvas`, measures **61/61** on the same frames
    (deferral 6, below). A
@@ -1338,7 +1341,7 @@ this fix round.
 | 5 | Extra, not required by the brief: swap frames 5↔6 **and** revert `devApngSeam.ts`'s slotting to `indexOf` | 974 | **Exit 0, 0 differing bytes — the swap goes completely undetected.** Confirms T4-R2's fix is genuinely load-bearing here too, not carried over by name only |
 | 7 | Remove the `ensureExportFonts` call from `withRasterExport`; fresh browser context, first action an MP4 export of 60px text | 1027 | Reference-frame text ink width **1238×108 px (fallback font)** vs **1343×115 px (product, JetBrains Mono)**; reverted, 1343×115 restored |
 | 8 | (a) baseline `+ descent` | 1049 | Ink bbox (half coverage): **11 px** every ascii frame, **6 px** every multiline frame |
-| 8 | (b) per-character (cmap) outlining instead of shaping | 1049 | Invisible to every binding browser check (monospace advances unchanged, ink box unmoved; Criterion 2 on the ligature fixture: maxDelta 101 → 255). Closed with a Node unit test instead |
+| 8 | (b) per-character outlining (each character shaped alone) instead of shaping the line | 1049 | **Superseded by the final fix wave (RESULTS, "A discrepancy with the Task 8 record"): `text-check.mjs` exits 1 — the mark fixture's ink box moves 10 px, and the ligature fixture fails the new Criterion 2 gate.** As first recorded: invisible to every binding browser check (monospace advances unchanged, ink box unmoved; Criterion 2 on the ligature fixture: maxDelta 101 → 255). Closed with a Node unit test instead |
 | 8 | (c) the `missing`-glyph check dropped | 1049 | 6 Node tests red in the planner, 4 in the outliner |
 | 8 | (d) whitespace replacement omitted | 1049 | The multiline fixture's tab is treated as a missing glyph; export refuses; `text-check.mjs` fails |
 | 8 | Fill rule `r: 1` → `r: 2` | 1049 | Unit test red (`expected 2 to be 1`); Criterion 2 on the `8` fixture: maxDelta 73 → **255** at the waist |
