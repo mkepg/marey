@@ -204,4 +204,57 @@ describe("encodeApng", () => {
     const types = chunks(encodeApng([a], { fps: 30 })).map((x) => x.type);
     expect(types).toEqual(["IHDR", "acTL", "fcTL", "IDAT", "IEND"]);
   });
+
+  /**
+   * Final review M-6. Chromium's encoder writes no ancillary chunk (the test
+   * above), so this is the carry's only test. It uses a hand-built frame 0
+   * with chunks on both sides of IDAT:
+   * - `gAMA` and `pHYs` before it (PNG 3rd ed. Table 7: "Before PLTE and
+   *   IDAT" and "Before IDAT");
+   * - `tEXt` after it (ordering constraint "None").
+   *
+   * Each chunk keeps its side of the image data. The pre-IDAT ones go before
+   * `acTL`, which must itself come before IDAT. The post-IDAT one goes after
+   * the last `fdAT`, just before `IEND`. PNG's rule for editors is that a
+   * copied unknown chunk keeps its position relative to IDAT, and the carry
+   * is generic, so it cannot know the types it copies. Moving a post-IDAT
+   * chunk ahead of IDAT, which the carry's first version did, breaks that
+   * rule for any type whose position matters.
+   */
+  it("carries frame 0's ancillary chunks through, each on its own side of the image data", () => {
+    const signature = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const ihdr = chunks(a).find((x) => x.type === "IHDR")!.data;
+    const gama = new Uint8Array([0, 0, 0xb1, 0x8f]); // gamma 45455
+    const phys = new Uint8Array([0, 0, 0x0b, 0x13, 0, 0, 0x0b, 0x13, 1]); // 2835 px/m, metre
+    const text = new TextEncoder().encode("Comment\0carried");
+    const parts = [
+      signature,
+      buildChunk("IHDR", ihdr),
+      buildChunk("gAMA", gama),
+      buildChunk("pHYs", phys),
+      buildChunk("IDAT", new Uint8Array([1, 2, 3])),
+      buildChunk("tEXt", text),
+      buildChunk("IEND", new Uint8Array(0)),
+    ];
+    const frame0 = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+    let o = 0;
+    for (const p of parts) {
+      frame0.set(p, o);
+      o += p.length;
+    }
+
+    const out = chunks(encodeApng([frame0, b], { fps: 30 }));
+    expect(out.map((x) => x.type)).toEqual([
+      "IHDR", "gAMA", "pHYs", "acTL", "fcTL", "IDAT", "fcTL", "fdAT", "tEXt", "IEND",
+    ]);
+    // Carried byte for byte, with a valid CRC (checked independently).
+    for (const [type, data] of [["gAMA", gama], ["pHYs", phys], ["tEXt", text]] as const) {
+      const chunk = out.find((x) => x.type === type)!;
+      expect([...chunk.data]).toEqual([...data]);
+      const body = new Uint8Array(4 + chunk.data.length);
+      body.set(new TextEncoder().encode(type), 0);
+      body.set(chunk.data, 4);
+      expect(chunk.crc).toBe(testCrc32(body));
+    }
+  });
 });

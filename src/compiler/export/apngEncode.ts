@@ -171,15 +171,29 @@ function appendAll(parts: ReadonlyArray<Uint8Array>): Uint8Array {
  * Mux a sequence of single-frame PNGs (each already a complete, independent
  * PNG -- e.g. from `pngSequence.ts`'s `pngBytesOf`) into one APNG.
  *
- * Emits, in order: the PNG signature; frame 0's `IHDR`; any ancillary chunk
- * Chromium's own encoder wrote before `IDAT` in frame 0 (measured in Task 5
- * Step 1 to be none -- see `apngEncode.test.ts`'s zero-ancillary-chunk test
- * -- but carried through generically rather than assumed, in case a
- * different encoder ever adds one); `acTL`; then per frame an `fcTL` (frame
- * 0's precedes its `IDAT`, so a non-APNG viewer's default image is frame 0)
- * and that frame's image data, as `IDAT` for frame 0 and `fdAT` for every
- * later frame; `IEND`. `fcTL`/`fdAT` sequence numbers share one counter from
- * 0 (Mozilla APNG spec, this file's header comment).
+ * Emits, in order:
+ * - the PNG signature and frame 0's `IHDR`;
+ * - any other chunk frame 0 carries BEFORE its `IDAT`;
+ * - `acTL`;
+ * - per frame, an `fcTL` and that frame's image data: `IDAT` for frame 0,
+ *   `fdAT` for every later frame. Frame 0's `fcTL` precedes its `IDAT`, so a
+ *   non-APNG viewer's default image is frame 0;
+ * - any chunk frame 0 carries AFTER its `IDAT`;
+ * - `IEND`.
+ *
+ * `fcTL`/`fdAT` sequence numbers share one counter from 0 (Mozilla APNG
+ * spec, this file's header comment).
+ *
+ * Task 5 Step 1 measured Chromium's own encoder writing no chunk besides
+ * `IHDR`/`IDAT`/`IEND` (see `apngEncode.test.ts`'s zero-ancillary-chunk
+ * test). The rest are carried through generically anyway, in case a
+ * different encoder ever adds one. Each keeps its side of the image data.
+ * PNG's rule for editors (W3C PNG §14) is that a copied chunk the editor
+ * does not know keeps its position relative to `IDAT`, and this carry knows
+ * no chunk types. A pre-`IDAT` chunk lands before `acTL`, which PNG 3rd ed.
+ * Table 7 also requires before `IDAT`. A post-`IDAT` chunk (for example
+ * `tEXt`, `tIME`) lands after the last `fdAT`. Only frame 0's chunks are
+ * carried: every later frame contributes its image data alone.
  *
  * Throws, naming what is wrong:
  * - `frame N is not a PNG` -- missing signature;
@@ -217,13 +231,16 @@ export function encodeApng(
   const width = view0.getUint32(0);
   const height = view0.getUint32(4);
 
-  // Ancillary chunks between IHDR and IDAT, from frame 0 only -- see this
-  // function's own docstring and the header comment for why none is the
+  // Frame 0's other chunks, split at its first IDAT so each keeps its side
+  // of the image data -- see this function's docstring for why none is the
   // measured case, and why they are still carried generically.
-  const ancillary0 = parsed[0].filter((c) => c.type !== "IHDR" && c.type !== "IDAT" && c.type !== "IEND");
+  const firstIdat = parsed[0].findIndex((c) => c.type === "IDAT");
+  const carried = (c: { type: string }) => c.type !== "IHDR" && c.type !== "IDAT" && c.type !== "IEND";
+  const beforeIdat0 = parsed[0].slice(0, firstIdat === -1 ? parsed[0].length : firstIdat).filter(carried);
+  const afterIdat0 = firstIdat === -1 ? [] : parsed[0].slice(firstIdat).filter(carried);
 
   const parts: Uint8Array[] = [PNG_SIGNATURE, writeChunk("IHDR", ihdr0.data)];
-  for (const c of ancillary0) parts.push(writeChunk(c.type, c.data));
+  for (const c of beforeIdat0) parts.push(writeChunk(c.type, c.data));
   parts.push(writeChunk("acTL", acTL(pngs.length, 0)));
 
   let seq = 0;
@@ -238,6 +255,7 @@ export function encodeApng(
     seq += 1;
   }
 
+  for (const c of afterIdat0) parts.push(writeChunk(c.type, c.data));
   parts.push(writeChunk("IEND", new Uint8Array(0)));
 
   return appendAll(parts);
