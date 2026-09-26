@@ -532,6 +532,23 @@ describe("2x video (Phase 5C)", () => {
     );
   });
 
+  it("refuses when only the coded height exceeds the device limit (a portrait scene)", () => {
+    // Spec §2.3: "when *either* coded dimension exceeds". In the fixture
+    // above the WIDTH is always the larger side, so a check that compared
+    // only the width stayed green there (final review I-4). Here the coded
+    // size is 100x5000: the width is far under every limit below, and only
+    // the height can decide.
+    const r = planVideo(sceneOf(50, 2500), samplerPlan(30, 30), { container: "webm" });
+    if (!r.ok) throw new Error(`unexpected refusal: ${JSON.stringify(r.diagnostics)}`);
+    expect([r.plan.width, r.plan.height]).toEqual([100, 5000]);
+    expect(deviceLimitDiagnostic(r.plan, 4096, 8192)?.code).toBe("VIDEO_EXCEEDS_DEVICE_LIMITS");
+    expect(deviceLimitDiagnostic(r.plan, 4096, 8192)?.message).toContain(
+      "this 50x2500 scene needs a 100x5000 frame, but this device can render at most 4096x4096 pixels",
+    );
+    expect(deviceLimitDiagnostic(r.plan, 8192, 4999)?.code).toBe("VIDEO_EXCEEDS_DEVICE_LIMITS");
+    expect(deviceLimitDiagnostic(r.plan, 5000, 5000)).toBeNull(); // 5000 = coded height: allowed
+  });
+
   it("keeps the odd-dimension check on the coded size, where 2x makes it unreachable", () => {
     const r = planVideo(sceneOf(801, 601), samplerPlan(30, 30), { container: "mp4" });
     expect(r.ok).toBe(true); // 1602x1202: even
