@@ -1903,3 +1903,73 @@ and reverted in one command, `git diff --stat` empty after):
 | (b) per-character outlining | still invisible to every binding browser check (`text-check.mjs` exits 0; half coverage 0–1 px; Criterion 2 maxDelta 101 → 255). Caught in Node: `outlines a ligature from the shaped glyphs` and the GPOS mark test, 2 red |
 | (c) missing-glyph check dropped | Node: 6 red (planner); 4 red (outliner half) |
 | (d) no whitespace replacement | the multiline export refuses `[LOTTIE_TEXT_MISSING_GLYPH] … (U+0009)`; `text-check.mjs` fails |
+
+### 2026-09-26: Criterion 2 is a gate in `text-check.mjs` (final review I-5, ruling F-R5)
+
+Spec §6.6 gives each text fixture "its own measured tolerance". Until now
+`text-check.mjs` recorded Criterion 2 and never judged it. It now gates
+every checked frame of each fixture against that fixture's row in
+`CRITERION2_GATES`. The comparison is lottie-web against Marey's own PNG,
+and the gates are:
+
+- **ascii:** 117 / 2.86 %
+- **ligature:** 119 / 2.26 %
+- **multiline:** 109 / 3.16 %
+- **mark:** 170 / 1.87 %
+- **scaled:** 138 / 1.86 %
+- **default scene:** 146 / 1.81 %
+
+**How the gates were measured.** There were two clean runs at `a5a8ff9`,
+with the full default invocation (all fixtures, the default scene and
+dotlottie-web). The commands differ only in the `--out` directory:
+```
+node tools/visual-check/text-check.mjs --out .visual-check/text-final-clean1
+node tools/visual-check/text-check.mjs --out .visual-check/text-final-clean2
+```
+Both exited 0, and every per-frame maxDelta and share was identical
+between them. Each gate is the larger per-fixture maximum over the two runs
+× 1.1, rounded up. maxDelta rounds to a whole level. Share rounds to 0.01
+percentage points.
+
+| Fixture (frames) | Run 1 max maxDelta / share | Run 2 | Gate (+10 %, rounded up) |
+|---|---|---|---|
+| ascii (0,7,15,29) | 106 / 2.5983 % | 106 / 2.5983 % | 117 / 2.86 % |
+| ligature (0,7,15,29) | 108 / 2.0458 % | 108 / 2.0458 % | 119 / 2.26 % |
+| multiline (0,7,15,29) | 99 / 2.8700 % | 99 / 2.8700 % | 109 / 3.16 % |
+| mark (0,7,15,29) | 154 / 1.6930 % | 154 / 1.6930 % | 170 / 1.87 % |
+| scaled (0,15,30,59) | 125 / 1.6828 % | 125 / 1.6828 % | 138 / 1.86 % |
+| default scene (0,75,90,120,150,179) | 132 / 1.6402 % | 132 / 1.6402 % | 146 / 1.81 % |
+
+**The clean run with the gates in place.** Command:
+`node tools/visual-check/text-check.mjs --out .visual-check/text-final-gated`.
+Result: exit 0, "all binding checks passed".
+
+**Mutation (b), per-character outlining.**
+- The mutation: `textOutline.ts`'s `const glyphs = shapeLine(line);`
+  becomes `Array.from(line).flatMap(shapeLine)`.
+- Run: applied, the full harness run
+  (`--out .visual-check/text-final-mutb`), then reverted, all in one
+  command. `git diff --stat -- src/compiler/export/textOutline.ts` was
+  empty afterwards.
+- Result: **exit 1, 12 failures.**
+  - Ligature: all four frames fail Criterion 2 (maxDelta 255, share
+    2.43–2.71 % against 119 / 2.26 %). Nothing else fails for ligature.
+  - Mark: all four frames fail Criterion 2 (255 against 170). They also
+    fail the half-coverage ink bbox (edge delta 10 against 1).
+
+**Which check is doing the work.** To find out, the pre-gate harness was
+run under the same mutation. That is `a5a8ff9`'s `text-check.mjs`, copied
+temporarily beside the current one and deleted afterwards. Command:
+`--only ligature,mark --skip-dotlottie`.
+- Result: **exit 1**, with the 4 mark ink-bbox failures only.
+- The ligature fixture passed everything: half coverage 0–1 px, and
+  maxDelta 255 recorded but not judged.
+- So on the ligature fixture, the one spec §8 names for this breakage, the
+  new gate is the only browser check that catches it.
+
+**A discrepancy with the Task 8 record.** The earlier table says
+`text-check.mjs` still exits 0 under (b). At `a5a8ff9` that is not true:
+the mark fixture's ink box moves 10 px under (b). This probably happens
+because shaping each character alone loses the GPOS mark attachment. The
+earlier run's exact invocation is not recorded here, so the difference is
+recorded rather than explained.

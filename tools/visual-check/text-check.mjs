@@ -47,7 +47,14 @@
  *    An empty box in both renders is a failure, not 0 px, except on frames
  *    a fixture declares blank (`blankFrames`), where both must be empty.
  * 3. **Criterion 2**: the same run's maxDelta and mismatching share, per
- *    frame, recorded (measured, not a pass/fail).
+ *    frame. Gated per fixture since 2026-09-26 (ruling F-R5; spec §6.6, "its
+ *    own measured tolerance"). Each frame must stay within that fixture's
+ *    CRITERION2_GATES row: the fixture's measured maximum plus a 10 %
+ *    margin, rounded up. This is the only browser check that sees the
+ *    outlines' shapes rather than their box. Outlining a ligature per
+ *    character moves neither the advances nor the ink box, but it raises
+ *    the ligature fixture's maxDelta to 255 (Task 8 mutation (b)), and this
+ *    gate fails it.
  *
  * Each fixture is also rendered in dotlottie-web (`--renderer
  * dotlottie-web`): it must render, and its frames are diffed against
@@ -66,8 +73,8 @@
  *        [--skip-default] [--skip-dotlottie]
  *
  * Writes `<out>/summary.json` and one directory per fixture and renderer.
- * Exit 1 if any binding check fails (layout agreement, ink bbox, a
- * lottie-check run, dotlottie-web failing to render), 0 otherwise.
+ * Exit 1 if any binding check fails (layout agreement, ink bbox, Criterion
+ * 2, a lottie-check run, dotlottie-web failing to render), 0 otherwise.
  */
 import { chromium } from "playwright";
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
@@ -103,6 +110,37 @@ const MARK_TOLERANCE_PX = 1.9;
 const EPSILON = 1e-9;
 /** Ink-bbox tolerance per edge (spec §6.6). */
 const INK_EDGE_TOLERANCE_PX = 1;
+/**
+ * Criterion 2 gates, per fixture: lottie-web against Marey's own PNG, over
+ * every frame the fixture is checked at (ruling F-R5).
+ *
+ * Measured, not chosen. Two clean runs of this script on 2026-09-26, at
+ * commit a5a8ff9 (`--out .visual-check/text-final-clean1` and `-clean2`),
+ * gave identical per-frame numbers. Each row below is the larger of the two
+ * runs' per-fixture maxima, times 1.1, rounded up: maxDelta to a whole
+ * level, share to 0.01 percentage points.
+ *
+ * | fixture   | measured maxDelta | measured share | gate          |
+ * |-----------|-------------------|----------------|---------------|
+ * | ascii     | 106               | 2.5983 %       | 117 / 2.86 %  |
+ * | ligature  | 108               | 2.0458 %       | 119 / 2.26 %  |
+ * | multiline | 99                | 2.8700 %       | 109 / 3.16 %  |
+ * | mark      | 154               | 1.6930 %       | 170 / 1.87 %  |
+ * | scaled    | 125               | 1.6828 %       | 138 / 1.86 %  |
+ * | default   | 132               | 1.6402 %       | 146 / 1.81 %  |
+ *
+ * Every row is in eval/RESULTS-PHASE-5C.md. A change that legitimately
+ * moves these numbers re-measures them twice and restates the table. It
+ * does not widen a gate to make a run pass.
+ */
+const CRITERION2_GATES = {
+  ascii: { maxDelta: 117, sharePct: 2.86 },
+  ligature: { maxDelta: 119, sharePct: 2.26 },
+  multiline: { maxDelta: 109, sharePct: 3.16 },
+  mark: { maxDelta: 170, sharePct: 1.87 },
+  scaled: { maxDelta: 138, sharePct: 1.86 },
+  default: { maxDelta: 146, sharePct: 1.81 },
+};
 
 const FIXTURES = [
   { name: "ascii", layout: "advance" },
@@ -241,7 +279,7 @@ function diffPngFiles(a, b) {
   return { maxDelta, share: mismatch / (A.width * A.height) };
 }
 
-function judgeRun(label, run, { inkFrames, entry, blankFrames = [] }) {
+function judgeRun(label, run, { inkFrames, entry, blankFrames = [], gate }) {
   if (run.status !== 0 || !run.report?.frameSamples) {
     fail(`${label}: lottie-check exited ${run.status}${run.stderr ? `: ${run.stderr.trim().split("\n").slice(-2).join(" / ")}` : ""}`);
     return;
@@ -274,6 +312,16 @@ function judgeRun(label, run, { inkFrames, entry, blankFrames = [] }) {
         `half-coverage (d >= ${half?.threshold}) png ${box(half?.png)} player ${box(half?.lottie)} edge delta ${half?.maxEdgeDelta} | ` +
         `any-ink edge delta ${any?.maxEdgeDelta}`,
     );
+    // Criterion 2, judged on every frame (F-R5), including the ones the
+    // position check skips.
+    if (!gate) {
+      fail(`${label} frame ${s.frame}: no Criterion 2 gate for this fixture`);
+    } else if (!(c.maxDelta <= gate.maxDelta && c.share * 100 <= gate.sharePct + EPSILON)) {
+      fail(
+        `${label} frame ${s.frame}: Criterion 2 maxDelta ${c.maxDelta} / share ${(c.share * 100).toFixed(4)}% ` +
+          `exceeds the gate ${gate.maxDelta} / ${gate.sharePct}%`,
+      );
+    }
     if (!inkFrames(s.frame)) continue;
     const bothEmpty = half && half.png === null && half.lottie === null;
     if (blankFrames.includes(s.frame)) {
@@ -310,7 +358,12 @@ for (const f of FIXTURES) {
   console.log(`\n${f.name}: frames ${entry.frames.join(",")}`);
   const lwDir = `${outDir}/${f.name}/lottie-web`;
   const lw = runLottieCheck(entry.scene, entry.frames, lwDir);
-  judgeRun("lottie-web", lw, { inkFrames: () => true, entry: entry.criterion2, blankFrames: f.blankFrames ?? [] });
+  judgeRun("lottie-web", lw, {
+    inkFrames: () => true,
+    entry: entry.criterion2,
+    blankFrames: f.blankFrames ?? [],
+    gate: CRITERION2_GATES[f.name],
+  });
   if (!has("skip-dotlottie")) {
     const dlDir = `${outDir}/${f.name}/dotlottie-web`;
     const dl = runLottieCheck(entry.scene, entry.frames, dlDir, ["--renderer", "dotlottie-web"]);
@@ -340,7 +393,7 @@ if (!has("skip-default") && !only) {
   console.log(`\ndefault scene: frames ${frames.join(",")}, ink region ${region}`);
   const lwDir = `${outDir}/default/lottie-web`;
   const lw = runLottieCheck(scenePath, frames, lwDir, ["--ink-region", region]);
-  judgeRun("lottie-web", lw, { inkFrames: positionFrames, entry: entry.criterion2 });
+  judgeRun("lottie-web", lw, { inkFrames: positionFrames, entry: entry.criterion2, gate: CRITERION2_GATES.default });
   if (!has("skip-dotlottie")) {
     const dlDir = `${outDir}/default/dotlottie-web`;
     const dl = runLottieCheck(scenePath, frames, dlDir, ["--renderer", "dotlottie-web", "--ink-region", region]);
