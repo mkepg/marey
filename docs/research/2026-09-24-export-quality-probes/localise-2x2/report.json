@@ -1,0 +1,111 @@
+{
+  "mp4": {
+    "gpuExportMeta": {
+      "byteLength": 3292556,
+      "width": 1600,
+      "height": 1200,
+      "frameCount": 180
+    },
+    "swExportMeta": {
+      "byteLength": 3301197,
+      "width": 1600,
+      "height": 1200,
+      "frameCount": 180
+    },
+    "bytesIdentical": false,
+    "maskedBytesIdentical": false,
+    "gpuFileSha256": "8c25ead74aa53178e2aba7d4b4057925d78e6278fca51d806bb576bd3738ad06",
+    "swFileSha256": "cbde3ee149c2bf5077fa792f861158f084bae4da38276de1c4948686cdf24b96",
+    "refsIdentical": true,
+    "firstDifferingRef": null,
+    "cells": {
+      "encGPU_scoreGPU": {
+        "decodedFrames": 180,
+        "scored": 180,
+        "totalSpecks": 11614,
+        "specksPerFrame": 64.5,
+        "psnr": 42.03
+      },
+      "encGPU_scoreSW": {
+        "decodedFrames": 180,
+        "scored": 180,
+        "totalSpecks": 112444,
+        "specksPerFrame": 624.7,
+        "psnr": 41.46
+      },
+      "encSW_scoreGPU": {
+        "decodedFrames": 180,
+        "scored": 180,
+        "totalSpecks": 11620,
+        "specksPerFrame": 64.6,
+        "psnr": 42.02
+      },
+      "encSW_scoreSW": {
+        "decodedFrames": 180,
+        "scored": 180,
+        "totalSpecks": 112452,
+        "specksPerFrame": 624.7,
+        "psnr": 41.45
+      }
+    },
+    "decodedFileCompare": null
+  },
+  "webm": {
+    "gpuExportMeta": {
+      "byteLength": 4386180,
+      "width": 1600,
+      "height": 1200,
+      "frameCount": 180
+    },
+    "swExportMeta": {
+      "byteLength": 4386180,
+      "width": 1600,
+      "height": 1200,
+      "frameCount": 180
+    },
+    "bytesIdentical": true,
+    "maskedBytesIdentical": null,
+    "gpuFileSha256": "3bd4c7f93c18f83c9322bda8fc9a955c07b728f528aea6421f168aaf6cc8c7a9",
+    "swFileSha256": "3bd4c7f93c18f83c9322bda8fc9a955c07b728f528aea6421f168aaf6cc8c7a9",
+    "refsIdentical": true,
+    "firstDifferingRef": null,
+    "cells": {
+      "encGPU_scoreGPU": {
+        "decodedFrames": 180,
+        "scored": 180,
+        "totalSpecks": 11101,
+        "specksPerFrame": 61.7,
+        "psnr": 42.16
+      },
+      "encGPU_scoreSW": {
+        "decodedFrames": 180,
+        "scored": 180,
+        "totalSpecks": 111310,
+        "specksPerFrame": 618.4,
+        "psnr": 41.55
+      },
+      "encSW_scoreGPU": {
+        "decodedFrames": 180,
+        "scored": 180,
+        "totalSpecks": 11101,
+        "specksPerFrame": 61.7,
+        "psnr": 42.16
+      },
+      "encSW_scoreSW": {
+        "decodedFrames": 180,
+        "scored": 180,
+        "totalSpecks": 111310,
+        "specksPerFrame": 618.4,
+        "psnr": 41.55
+      }
+    },
+    "decodedFileCompare": {
+      "frameCountsMatch": true,
+      "frames": 180,
+      "maxDelta": 0,
+      "mismatchPixels": 0,
+      "totalPixels": 345600000,
+      "share": 0
+    }
+  }
+}

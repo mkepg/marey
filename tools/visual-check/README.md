@@ -506,6 +506,7 @@ node tools/visual-check/quality-check.mjs \
 | `--fps <n>` | Export frame rate (default 30) |
 | `--duration <s>` | Export bound in seconds, overriding the scene's own `duration:` |
 | `--out <dir>` | Where `report.json` goes |
+| `--scorer <gpu\|software>` | The scoring browser's 2D canvas (default `gpu`, the configuration spec §9.1's criterion names). `software` adds `--disable-accelerated-2d-canvas`. It changes only the decode-and-score step, not the file: about 0.6 dB lower and about 10× the specks (`eval/RESULTS-PHASE-5C.md`, the 2×2) |
 | `--mediabunny-path <p>` | Override the mediabunny ESM bundle path |
 | `--url <origin>` | Dev server origin (default `http://localhost:5199`). Same `--strictPort` trap as `check.mjs` applies |
 | `--headed` | Show the browser window |

@@ -299,6 +299,87 @@ the *scorer* with `--disable-accelerated-2d-canvas`, not of the file. The
 spec's exit criterion is re-based below to name which configuration it
 measures.
 
+### 2026-09-26: criterion 1 re-measured with committed tooling (final review I-3)
+
+**What changed.**
+- `quality-check.mjs` gains `--scorer gpu|software`, default `gpu`.
+  - `gpu` launches the scoring browser without
+    `--disable-accelerated-2d-canvas`. That is the configuration spec §9.1's
+    re-based criterion names (ruling T1-R2).
+  - `software` adds the flag and reproduces the script's earlier numbers.
+  - `report.json` now records `scorer` and `launchArgs`.
+- The 2×2 script moved from gitignored `.visual-check/probe5c/` to
+  `docs/research/2026-09-24-export-quality-probes/localise-2x2/`, with the
+  2026-09-25 run's `report.json` beside it (ruling F-R6).
+  - Its encoded videos, about 15 MB, are not committed. Re-running the
+    script regenerates them in `--out` (default `.visual-check/localise-2x2`).
+  - It now reads the scene from `DEFAULT_CODE` directly, instead of a saved
+    copy.
+- This closes the T1 minor "quality-check scores under the software flag".
+
+**Which scene.** Every number below comes from `DEFAULT_CODE`, extracted
+from `src/store/defaultScene.ts` on 2026-09-26. The 2026-09-25 runs above
+used `.visual-check/probe5c/default.marey`, a saved copy. `cmp` found the
+two byte-identical on 2026-09-26, so both sets of numbers describe the same
+scene.
+
+**A defect found on the way, and fixed.** With the flag gone,
+`quality-check.mjs` failed four runs out of four with "mediabunny did not
+attach window.__mediabunny". The same command passed with
+`--scorer software`.
+- Cause: `installMediabunny` read the global once, immediately after
+  `addScriptTag`. An inline module script runs asynchronously, so the read
+  can come before the bundle has assigned the global.
+- Fix: it now waits up to 30 s for the global. After the fix, both scorers
+  pass first time.
+- `video-check.mjs` has the same one-shot read. This may be the "mediabunny
+  did not attach" flake spec §10 files. It was not changed here.
+
+**Criterion 1, re-run.** Command:
+```
+node tools/visual-check/quality-check.mjs --scene .visual-check/final/default.marey --containers mp4,webm --fps 30 --out .visual-check/quality/final-default
+```
+
+| Scorer | Container | Coded size | kbit/s | PSNR | Window (§9.1) | In window | Specks/frame (total over 180) |
+|---|---|---|---|---|---|---|---|
+| default (`gpu`) | mp4 | 1600x1200 | 4,402 | **42.02 dB** | 42.03 ± 0.5 | yes | 62.8 (11,301) |
+| default (`gpu`) | webm | 1600x1200 | 5,848 | **42.16 dB** | 42.16 ± 0.5 | yes | 61.7 (11,101) |
+| `--scorer gpu` (explicit, separate run) | mp4 | 1600x1200 | 4,397 | 42.02 dB | 42.03 ± 0.5 | yes | 64.0 (11,512) |
+| `--scorer gpu` (explicit, separate run) | webm | 1600x1200 | 5,848 | 42.16 dB | 42.16 ± 0.5 | yes | 61.7 (11,101) |
+| `--scorer software` | mp4 | 1600x1200 | 4,402 | 41.46 dB | — | — | 625.2 (112,528) |
+| `--scorer software` | webm | 1600x1200 | 5,848 | 41.55 dB | — | — | 618.4 (111,310) |
+
+The software rows reproduce this file's first `quality-check.mjs` numbers
+(41.45 / 41.55 dB). That confirms the option changes only the scorer.
+
+**The 2×2, re-run from its committed location.** Command:
+```
+node docs/research/2026-09-24-export-quality-probes/localise-2x2/localise-2x2.mjs
+```
+The first attempt died partway through the WebM half with Playwright's
+"Execution context was destroyed". No vite reload was logged at that
+moment. The immediate re-run completed with exit 0:
+
+| Container | Encode | Score | PSNR | Specks/frame |
+|---|---|---|---|---|
+| mp4 | GPU | GPU | 42.03 | 64.0 |
+| mp4 | GPU | SW | 41.46 | 623.3 |
+| mp4 | SW | GPU | 42.02 | 62.3 |
+| mp4 | SW | SW | 41.45 | 625.5 |
+| webm | GPU | GPU | 42.16 | 61.7 |
+| webm | GPU | SW | 41.55 | 618.4 |
+| webm | SW | GPU | 42.16 | 61.7 |
+| webm | SW | SW | 41.55 | 618.4 |
+
+The reference frames are identical between modes for both containers.
+- WebM: the two encodes are byte-identical, and their SHA-256
+  (`3bd4c7f9…c7a9`) is the same as the 2026-09-25 run's. Decoding them gives
+  0 differing pixels out of 345,600,000.
+- MP4: the raw and masked bytes differ, as they always do between two
+  encodes (R47).
+
+These are the same cells as fix round 2, to within 0.01 dB.
+
 ### Text sharpness (spec §2.2)
 
 Fixture: `docs/research/2026-09-24-export-quality-probes/edge-band/text-stem.marey`

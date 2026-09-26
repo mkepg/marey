@@ -52,6 +52,15 @@
  *   --duration <s>         export bound in seconds, overriding the scene's
  *                          own `duration:`
  *   --out <dir>            where report.json goes
+ *   --scorer <gpu|software> the scoring browser's 2D canvas (default
+ *                          "gpu"). "gpu" launches Chromium without
+ *                          --disable-accelerated-2d-canvas. That is the
+ *                          configuration spec §9.1's criterion names (ruling
+ *                          T1-R2), and it reproduces findings §1.2's
+ *                          methodology. "software" adds the flag and gives
+ *                          this script's pre-2026-09-26 numbers (about
+ *                          0.6 dB lower, about 10x the specks). See below
+ *                          for why only the scoring step moves.
  *   --mediabunny-path <p>  override the mediabunny ESM bundle path
  *   --url <origin>         dev server origin (default http://localhost:5199)
  *   --headed               show the browser window
@@ -108,18 +117,34 @@ const mediabunnyPath = resolve(
 
 const source = readFileSync(resolve(scenePath), "utf8");
 
-// Same launch args as video-check.mjs and lottie-check.mjs, including
-// --disable-accelerated-2d-canvas: the reference PNGs and the decoded PNGs
-// this script compares both come from a 2D-canvas-backed path
-// (`renderer.extract.canvas()` and `VideoSample.draw()` respectively), and
-// without this flag Chromium can silently switch rasterizers mid-session,
-// which has been measured to change pixel tolerances between frames of the
-// same run.
+const scorer = arg("scorer", "gpu");
+if (scorer !== "gpu" && scorer !== "software") {
+  console.error(`quality-check.mjs: --scorer must be "gpu" or "software", got '${scorer}'`);
+  process.exit(2);
+}
+
+// The launch flag the scorer choice turns on or off. The first version of
+// this script always carried --disable-accelerated-2d-canvas, copied from
+// video-check.mjs and lottie-check.mjs, where it keeps reference-frame
+// comparisons deterministic. Here it only moves the SCORE. A 2x2 experiment
+// (encode browser x score browser, eval/RESULTS-PHASE-5C.md, "fix round 2";
+// the script is
+// docs/research/2026-09-24-export-quality-probes/localise-2x2/localise-2x2.mjs)
+// found:
+// - the encoded file and the reference frames are unaffected by the flag.
+//   WebM is byte-identical; MP4 agrees within 0.01 dB. `extract.canvas` is
+//   `gl.readPixels` + `putImageData` and never touches the accelerated
+//   2D path.
+// - the decoded frame's `sample.draw(ctx)` + `getImageData` below does
+//   change: forced-software scoring reads about 0.6 dB lower, with about
+//   10x the specks.
+// Spec §9.1's criterion (ruling T1-R2) names the GPU-accelerated scorer,
+// so that is the default.
 const LAUNCH_ARGS = [
   "--use-angle=swiftshader",
   "--enable-unsafe-swiftshader",
   "--use-gl=angle",
-  "--disable-accelerated-2d-canvas",
+  ...(scorer === "software" ? ["--disable-accelerated-2d-canvas"] : []),
 ];
 
 const sceneUrl = `${url}/#code=${LZString.compressToEncodedURIComponent(source)}`;
@@ -135,7 +160,21 @@ async function installMediabunny(page) {
     content: `${bundleJs}\nwindow.__mediabunny = { Input, BufferSource, ALL_FORMATS, VideoSampleSink };`,
     type: "module",
   });
-  return page.evaluate(() => typeof window.__mediabunny === "object" && window.__mediabunny !== null);
+  // Wait for the global rather than reading it once. An inline module
+  // script runs asynchronously, so `addScriptTag` can resolve before the
+  // bundle has assigned `window.__mediabunny`. Measured 2026-09-26: an
+  // immediate read failed on every run (4 of 4) with the GPU-accelerated
+  // scorer (no --disable-accelerated-2d-canvas) and passed with the
+  // software one.
+  return page
+    .waitForFunction(() => typeof window.__mediabunny === "object" && window.__mediabunny !== null, null, {
+      timeout: 30_000,
+      polling: 100,
+    })
+    .then(
+      () => true,
+      () => false,
+    );
 }
 
 /**
@@ -299,7 +338,7 @@ async function exportAndScore(page, container) {
   };
 }
 
-const report = { scene: scenePath, containers, requestedFps: fps, requestedDurationSeconds: durationSeconds ?? null, url, commandLine };
+const report = { scene: scenePath, containers, requestedFps: fps, requestedDurationSeconds: durationSeconds ?? null, scorer, launchArgs: LAUNCH_ARGS, url, commandLine };
 
 async function finish(exitCode) {
   writeFileSync(`${outDir}/report.json`, JSON.stringify(report, null, 2));
@@ -330,6 +369,7 @@ try {
 
   console.log(`scene                    ${scenePath}`);
   console.log(`fps / duration           ${fps} / ${durationSeconds ?? "(scene's own)"}`);
+  console.log(`scorer 2D canvas         ${scorer}${scorer === "software" ? " (--disable-accelerated-2d-canvas)" : ""}`);
 
   let anyFailed = false;
   report.results = {};
