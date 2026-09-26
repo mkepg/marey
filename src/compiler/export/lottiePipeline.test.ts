@@ -102,22 +102,47 @@ describe("runLottieExport · refusal path 3, after the build", () => {
     // The font step runs for a text scene; report the font as loaded so the
     // run reaches the Application instead of refusing on the font.
     vi.stubGlobal("document", { fonts: { load: async () => [], check: () => true } });
-    // Wraps the real `init`, recording that the run got that far.
-    const init = vi.spyOn(Application.prototype, "init");
+    // Wraps the real `init`, recording the error it throws, so the test can
+    // tell a failure inside `init` from one anywhere else.
+    const realInit = Application.prototype.init;
+    const thrownInsideInit: unknown[] = [];
+    const init = vi.spyOn(Application.prototype, "init").mockImplementation(async function (
+      this: Application,
+      ...args: Parameters<Application["init"]>
+    ) {
+      try {
+        return await realInit.apply(this, args);
+      } catch (error) {
+        thrownInsideInit.push(error);
+        throw error;
+      }
+    });
     try {
-      const message = await refusalMessage({
-        ...BASE,
-        source: 'scene { size: (100, 100) duration: 1 text t { position: (0,0), content: "日" } }',
-      });
+      let rejection: unknown = null;
+      try {
+        await runLottieExport({
+          ...BASE,
+          source: 'scene { size: (100, 100) duration: 1 text t { position: (0,0), content: "日" } }',
+        });
+      } catch (error) {
+        rejection = error;
+      }
       // Before Task 8 this was `[LOTTIE_UNSUPPORTED_TEXT] ...`, from a
       // pre-build `planLottie`. Now nothing Lottie-specific can refuse
       // before the build, even for a character the font lacks: the run
-      // reaches `app.init()`, and fails inside it, where pixi's renderer
+      // reaches `app.init()` and fails inside it, where pixi's renderer
       // setup asks the stubbed `document` (fonts only) for an element.
-      // Measured in this suite: `TypeError: document.createElement is not a
-      // function`, thrown from pixi's `DOMPipe` during renderer creation.
+      //
+      // The assertion is on WHERE the rejection came from, not on its
+      // wording. The wording is pixi's and V8's, not this module's (ruling
+      // T8-R7; final review M-13): the rejection must be the very error
+      // `init` threw, and it must carry no diagnostic prefix of ours.
       expect(init).toHaveBeenCalledTimes(1);
-      expect(message).toBe("document.createElement is not a function");
+      expect(thrownInsideInit).toHaveLength(1);
+      expect(rejection).toBe(thrownInsideInit[0]);
+      const message = rejection instanceof Error ? rejection.message : String(rejection);
+      expect(message).not.toContain("[LOTTIE_");
+      expect(message).not.toContain("[EXPORT_");
     } finally {
       init.mockRestore();
       vi.unstubAllGlobals();
