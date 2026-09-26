@@ -129,9 +129,9 @@ for a **complete, provable engineering artifact with a declarable finish
 line**, and acquisition work moved past that line. Read its §1 before
 proposing anything the old roadmap justified by adoption.
 
-Current phase: **5C — Lottie completion and video quality, done on branch
-`phase-5c-lottie-video-quality`, reviewed, not yet merged** (added by the
-project owner on 2026-09-24). It delivered:
+**5C — Lottie completion and video quality is done and merged** (merge
+commit `081c940` onto `main`, 2026-09-26; added by the project owner on
+2026-09-24). It delivered:
 - 2× MP4/WebM video;
 - APNG export;
 - Lottie `line` and `text` (HarfBuzz-shaped glyph outlines);

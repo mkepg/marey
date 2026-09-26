@@ -239,8 +239,8 @@ explicitly rather than quietly deviating.
   `docs/research/2026-09-24-export-quality-findings-and-options.md`, with
   the primary-source note `2026-09-24-video-export-quality-options.md`.
   Which options to take is decided in this phase's design, not here.
-  - **Status (2026-09-26): done on branch `phase-5c-lottie-video-quality`,
-    not yet merged.** The owner chose 2× video (option C) and APNG (option
+  - **Status (2026-09-26): done and merged** (merge commit `081c940` onto
+    `main`). The owner chose 2× video (option C) and APNG (option
     B). The phase shipped both, plus Lottie `line`, Lottie `text` as
     HarfBuzz-shaped outlines, and the Lottie button. MP4 specks stay deferred
     to the `marey export` CLI. Evidence is in `eval/RESULTS-PHASE-5C.md`.
