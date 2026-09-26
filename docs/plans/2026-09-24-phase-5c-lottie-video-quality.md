@@ -1141,7 +1141,17 @@ and a report disagreed even slightly (the "Piece 4 (refactor)" section
 Task 5 was told already existed and did not — see below), the ledger's own
 account is what is recorded.
 
-Task 9 itself was dispatched normally (docs tier, no fix round needed).
+Task 9 had one fix round. Its review found:
+- two rulings missing from the notes entirely (T4-R1 and T8-R4);
+- three more not cited by id (T7-R2, T8-R5, T8-R6);
+- APNG evidence worded as "0 differing pixels" where `apng-check.mjs`
+  measures bytes.
+
+`58d38fb` ("fix round 1 -- cite all 18 rulings by id, fix APNG byte
+wording") closed all of them. That commit was `c4bd956` before the branch's
+history was rewritten on 2026-09-26, and the final review cites it by that
+hash. (Corrected 2026-09-26, final review M-1: this line first said no fix
+round was needed.)
 
 ### Final evidence
 
@@ -1294,7 +1304,7 @@ them.
 | T8-R1 | Text planning moves after build: `withRasterExport` gains an `afterBuild` hook, and `runLottieExport` runs `collectTextLayouts` then a single `planLottie` call there instead of before build. |
 | T8-R2 | For the mark string, pixi's width is `max(advance, ink)` and ink wins; the layout-agreement check there compares against `max(HarfBuzz advance sum, HarfBuzz ink width)` with a measured tolerance, unlike the 0.01 px advance-only check used elsewhere. |
 | T8-R3 | The ink-bbox position check's binding definition becomes half coverage (a pixel is ink at ≥50% of the full text-vs-background difference), not any-ink (`alpha > 0`); the any-ink box is still recorded alongside, and the ligature frame 29 exception is named. |
-| T8-R4 | Accept the conditional clip mask provisionally — a text layer is masked to pixi's own measured layout box, only when a glyph leaves it — pending the reviewer confirming it renders correctly in dotlottie-web too and that text-free/in-box documents stay byte-unchanged. |
+| T8-R4 | Accept the conditional clip mask: a text layer is masked to pixi's own measured layout box, only when a glyph leaves it. **Confirmed by the Task 8 review, so no longer provisional** (final review M-2): dotlottie-web applies the mask on the mark fixture, as lottie-web does, and of the exported documents only the mark fixture's carries `masksProperties`. |
 | T8-R5 | Accept three small deviations: the `harfbuzzjs.embedded.txt` licence filename, comparing ink against an opaque background (no transparent export mode exists), and compressed fixture timing. |
 | T8-R6 | Fix round 1 applies T8-R3 with the reviewer's own refinements (a relative half-coverage threshold; empty-vs-empty failing except on declared-blank frames; the any-ink box recorded alongside) plus five cheap, in-file test-strength Minors. |
 | T8-R7 | Park the Minor found during fix round 1 (a path-3 test pinning exact V8/pixi error wording) for the final fix wave rather than a second fix round, since it can only fail loudly and never falsely pass. |
