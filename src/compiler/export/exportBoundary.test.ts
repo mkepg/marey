@@ -293,6 +293,25 @@ describe("export boundary", () => {
   });
 
   /**
+   * The rest of spec §7's `apngEncode.ts` row: "nothing from the app" and
+   * "must not import ... the DOM" (final review M-5). The muxer takes PNG
+   * bytes and returns APNG bytes, so it needs no import of any kind, and
+   * its code names no DOM global. Checked on comment-stripped source, so
+   * prose that explains the rule cannot trip it. The landmark is the
+   * function's last statement, so a stripper that ran off the rails
+   * mid-file fails here rather than hiding code.
+   */
+  it("apngEncode.ts imports nothing, and its code names no DOM global", () => {
+    const code = stripComments(apngEncodeSource);
+    expect(code).toContain("return appendAll(parts);");
+    expect(/(^|\n)\s*import\b/.test(code)).toBe(false);
+    expect(/\bimport\s*\(/.test(code)).toBe(false);
+    for (const global of ["document", "window", "HTMLCanvasElement"]) {
+      expect(new RegExp(`\\b${global}\\b`).test(code), global).toBe(false);
+    }
+  });
+
+  /**
    * Global constraint 6 / design §7's table, Task 7's `textOutline.ts`: it
    * gets what it knows about a text object as a `TextLayout` of plain
    * numbers, so it needs neither pixi.js nor the Scene IR. Paired with an
@@ -534,6 +553,32 @@ describe("export boundary — R3 shared pipelines and their production entry poi
     expect(code).not.toContain("__mareyExportLottie");
     expect(code).not.toContain("__mareyExportPng");
     expect(code).not.toContain("__mareyExportApng");
+  });
+
+  /**
+   * Spec §7's pipeline row: `lottiePipeline.ts`, `apngPipeline.ts`,
+   * `videoPipeline.ts` and `rasterExport.ts` must not import "the dev seams".
+   * That means all four, not only each pipeline's own. The tests above check
+   * each pipeline against its own seam. That leaves, for example,
+   * `videoPipeline.ts` importing `devApngSeam.ts` unguarded (final review
+   * M-5). This row checks every pipeline against every seam and every
+   * dev-only global. Each landmark is a line near the end of its own file,
+   * so a swapped source constant or a stripper that stopped early fails here.
+   */
+  it.each([
+    ["videoPipeline.ts", videoPipelineSource, "return await encodeVideo(plan, rasterized(), {"],
+    ["lottiePipeline.ts", lottiePipelineSource, "const doc: LottieDoc = encodeLottie(layers, frames, plan, {"],
+    ["apngPipeline.ts", apngPipelineSource, "return encodeApng(pngs, { fps: plan.fps });"],
+    ["rasterExport.ts", rasterExportSource, "return await use({ ir, plan, app, root, frames, rasterize });"],
+  ])("%s imports none of the four dev seams and reaches none of their globals", (_name, source, landmark) => {
+    const code = stripComments(source);
+    expect(code).toContain(landmark);
+    for (const seam of ["devVideoSeam", "devLottieSeam", "devApngSeam", "devExportSeam"]) {
+      expect(importsModule(code, seam), seam).toBe(false);
+    }
+    for (const global of ["__mareyExportVideo", "__mareyExportLottie", "__mareyExportApng", "__mareyExportPng"]) {
+      expect(code, global).not.toContain(global);
+    }
   });
 
   it("useExport.ts does not import any dev seam, and does not reach a dev export global", () => {
