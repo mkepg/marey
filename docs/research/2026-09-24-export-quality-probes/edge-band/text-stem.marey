@@ -1,0 +1,12 @@
+scene {
+  size: (400, 200)
+  duration: 1
+  background: #000000
+
+  text stem {
+    position: (200, 100)
+    content: "H"
+    fontSize: 60
+    color: #ffffff
+  }
+}

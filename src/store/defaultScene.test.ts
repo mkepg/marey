@@ -31,7 +31,7 @@ describe("DEFAULT_CODE", () => {
   });
 
   it("can be exported from the top bar as it loads", () => {
-    // The export buttons pass no explicit bound (`useExportVideo.ts` exports
+    // The export buttons pass no explicit bound (`useExport.ts` exports
     // at a fixed 30 fps and takes its length from the scene), so a default
     // scene without a top-level `duration:` makes a first-timer's first
     // export click fail with EXPORT_UNBOUNDED_SCENE. That shipped once.

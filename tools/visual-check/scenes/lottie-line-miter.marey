@@ -1,0 +1,47 @@
+// Phase 5C Task 2, design §3.4.1: whether pixi's `miterLimit: 10` and
+// Lottie's `ml: 10` agree on the same ratio (SVG's `1/sin(theta/2)`, theta
+// the corner's interior angle). Two lines, thickness 20, with a corner whose
+// interior angle sits on opposite sides of the two candidate readings'
+// cutoff at ratio 10: `miter14` at 14 degrees (ratio ~8.206, MITERED under
+// the SVG reading) and `miter9` at 9 degrees (ratio ~12.745, BEVELLED).
+//
+// Each line is three points forming a symmetric peak (a "tent"): two legs
+// each 100 units long, meeting at a vertex. `origin: (0.5, 0)` puts each
+// line's pivot exactly at that vertex (the bbox's horizontal centre and its
+// minimum y), so `position` names the vertex's own world coordinate
+// directly -- verified by `localPivot`'s formula: bbox.min + origin*size
+// collapses to (0,0) for a symmetric peak with origin.y=0.
+//
+// Confirmed directly by calling pixi.js's own `buildLine` (the exact
+// function `Graphics.stroke()` runs) outside a browser, on these two point
+// sets: `miter14` produces a joint vertex at distance 82.055 from the
+// vertex along the bisector (matching 10/sin(7deg) exactly, a real miter
+// spike); `miter9` produces its farthest joint vertices at distance 10.000
+// (the plain per-segment offset, i.e. a flat BEVEL edge, not a spike
+// reaching 127.45). So the sample point 30 units above each vertex, along
+// the upward bisector -- comfortably beyond where either bevel edge sits
+// (at or below the vertex itself) and comfortably short of a 14-degree
+// miter's reach (82) -- discriminates cleanly: filled for a genuine miter,
+// background for a genuine bevel, regardless of which of the two candidate
+// `ml` readings a renderer actually implements.
+scene {
+  size: (500, 300)
+  duration: 0.0333333333
+  background: #000000
+
+  line miter14 {
+    position: (150, 150)
+    origin: (0.5, 0)
+    points: [(12.1869, 99.2546), (0, 0), (-12.1869, 99.2546)]
+    thickness: 20
+    color: #ffffff
+  }
+
+  line miter9 {
+    position: (350, 150)
+    origin: (0.5, 0)
+    points: [(7.8459, 99.6917), (0, 0), (-7.8459, 99.6917)]
+    thickness: 20
+    color: #ffffff
+  }
+}

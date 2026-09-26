@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { Application, RendererType } from "pixi.js";
 import { runVideoExport, type RunVideoExportOptions } from "./videoPipeline";
+import type { VideoPlan } from "./videoContract";
 
 /**
  * `videoPipeline.ts`'s four refusal paths (compile, `planExport`,
@@ -8,7 +10,7 @@ import { runVideoExport, type RunVideoExportOptions } from "./videoPipeline";
  *
  * Added in the Task 5 fix round (task-5-review.md, F3). The module shipped
  * with no test on the argument that "hooks in this repo are verified through
- * the app" -- fair for `useExportVideo.ts`, which would need a Preact test
+ * the app" -- fair for `useExport.ts`, which would need a Preact test
  * renderer this repo does not have, but `videoPipeline.ts` is not a hook. It
  * is a plain module in `src/compiler/export/`, where `exportContract.ts`,
  * `videoContract.ts`, `frameRaster.ts`, `lottieEncode.ts` and
@@ -17,7 +19,7 @@ import { runVideoExport, type RunVideoExportOptions } from "./videoPipeline";
  * These tests pin the property R23 rests on and which was previously
  * evidenced only by a one-off browser click: **the triggering diagnostic's
  * message reaches the caller verbatim**, with no added prefix and no
- * rewording, because `useExportVideo.ts` puts `error.message` straight into a
+ * rewording, because `useExport.ts` puts `error.message` straight into a
  * toast a person reads.
  *
  * Nothing here imports a message constant and compares the module's output to
@@ -136,19 +138,25 @@ describe("runVideoExport · refusal path 2, planExport", () => {
 });
 
 describe("runVideoExport · refusal path 3, planVideo", () => {
-  it("refuses odd pixel dimensions for mp4, after planExport has passed", async () => {
+  // Phase 5C: was "refuses odd pixel dimensions for mp4, after planExport
+  // has passed", pinning an end-to-end VIDEO_ODD_DIMENSIONS refusal for a
+  // (101, 100) scene. `VIDEO_ODD_DIMENSIONS` is now evaluated on the CODED
+  // (2x) size (`videoContract.ts`), and doubling any integer scene
+  // dimension always lands on an even one, so there is no longer a real
+  // scene an end-to-end test can use to reach that diagnostic through this
+  // pipeline -- proven, not assumed: this exact fixture (101x100 -> coded
+  // 202x200) now passes both contracts instead of refusing. Per
+  // AGENT-LESSONS §2f, that unreachability is recorded here rather than
+  // faked with a test that cannot pass honestly.
+  it("no longer refuses an odd-dimensioned scene for mp4, since 2x makes the coded size even", async () => {
     const message = await refusalMessage({
       ...BASE,
       source: "scene { size: (101, 100) duration: 1 }",
     });
-    expect(message.startsWith("[VIDEO_ODD_DIMENSIONS] ")).toBe(true);
-    // Derived from this test's fixture, not from anything the module owns:
-    // a canned diagnostic that never looked at the scene could not produce
-    // these numbers.
-    expect(message).toContain("101x100");
-    // Proof the failure came from `planVideo` and not from `planExport`
-    // refusing earlier for some unrelated reason.
-    expect(message).not.toContain("[EXPORT_");
+    expect(message).not.toContain("[VIDEO_ODD_DIMENSIONS]");
+    // Both contracts passed; this environment's missing VideoEncoder is what
+    // actually stops it next.
+    expect(passedBothContracts(message)).toBe(true);
   });
 
   it("accepts the same odd-dimensioned scene for webm", async () => {
@@ -162,6 +170,22 @@ describe("runVideoExport · refusal path 3, planVideo", () => {
     });
     expect(message).not.toContain("[VIDEO_ODD_DIMENSIONS]");
     expect(passedBothContracts(message)).toBe(true);
+  });
+
+  // The end-to-end replacement for the odd-dimensions case above: this is
+  // the `planVideo` refusal that IS still reachable through a real scene at
+  // 2x, and it is the one the rewritten `VIDEO_EXCEEDS_CODEC_LEVELS` message
+  // (spec §2.3) needs an end-to-end check of, not just the unit-level one in
+  // `videoContract.test.ts`.
+  it("refuses a scene whose coded size exceeds every H.264 level, naming both sizes", async () => {
+    const message = await refusalMessage({
+      ...BASE,
+      source: "scene { size: (2000, 1500) duration: 1 }",
+    });
+    expect(message.startsWith("[VIDEO_EXCEEDS_CODEC_LEVELS] ")).toBe(true);
+    expect(message).toContain("2000x1500 scene");
+    expect(message).toContain("4000x3000 video");
+    expect(message).not.toContain("[EXPORT_");
   });
 });
 
@@ -205,5 +229,112 @@ describe("runVideoExport · refusal path 4, the encoder probe runs before sampli
     expect(message).not.toContain("[VIDEO_");
     expect(message).not.toContain("[EXPORT_");
     expect(message).not.toContain("Source did not compile");
+  });
+});
+
+/**
+ * The Text-texture trap (spec §2.2; final review I-2). PixiJS rasterizes a
+ * `Text`'s own texture at the RENDERER's resolution, so an export
+ * `Application` initialised at `resolution: 1` and extracted at the plan's
+ * scale upscales already-blurry 1x text while every vector shape stays
+ * sharp. The output is still the right size, so `video-check.mjs` cannot see
+ * it; before this test, setting `rasterExport.ts`'s `resolution: scale ?? 1`
+ * to `resolution: 1` left the whole suite green (43 files / 1049 tests).
+ *
+ * The expected value is read from the plan the pipeline itself produced
+ * (`observer.onPlanned`), not written as a literal, so the test follows
+ * `VIDEO_SCALE` if it ever changes. The `not.toBe(1)` guard keeps it from
+ * going vacuous: at a scale of 1 the mutation above would be invisible.
+ */
+describe("runVideoExport · the export Application inits at the plan's scale", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("passes VideoPlan.scale to Application.init as its resolution", async () => {
+    vi.stubGlobal("VideoEncoder", {
+      isConfigSupported: async () => ({ supported: true }),
+    });
+    // Stops the run inside `init` without touching the (absent) DOM; the
+    // spy still records the options `init` was called with.
+    const init = vi
+      .spyOn(Application.prototype, "init")
+      .mockRejectedValue(new Error("stop: init reached"));
+    let planned: VideoPlan | undefined;
+    const message = await refusalMessage({
+      ...BASE,
+      source: "scene { size: (100, 100) duration: 1 }",
+      observer: { onPlanned: (plan) => (planned = plan) },
+    });
+    expect(message).toBe("stop: init reached");
+    expect(planned).toBeDefined();
+    expect(planned!.scale).not.toBe(1);
+    expect(init).toHaveBeenCalledTimes(1);
+    const options = init.mock.calls[0][0];
+    expect(options?.resolution).toBe(planned!.scale);
+  });
+});
+
+/**
+ * Final review M-7. pixi.js falls back from WebGL to WebGPU and then canvas,
+ * and the device-limit check reads a WebGL context. On a fallback renderer
+ * `gl` is undefined, and without a guard the export died with a TypeError
+ * instead of a named refusal.
+ *
+ * `init` is replaced with one that installs a stand-in renderer, so the
+ * pipeline's own `afterInit` runs in Node. `destroy` is stubbed because the
+ * `finally` teardown calls it on that stand-in. The two WebGL controls prove
+ * the stand-in really reaches `afterInit`. One reads a tiny limit and gets
+ * the device-limit refusal; the other gets past it.
+ */
+describe("runVideoExport · a non-WebGL renderer is refused by name", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function withRenderer(renderer: object) {
+    vi.stubGlobal("VideoEncoder", {
+      isConfigSupported: async () => ({ supported: true }),
+    });
+    vi.spyOn(Application.prototype, "init").mockImplementation(async function (this: Application) {
+      (this as unknown as { renderer: object }).renderer = renderer;
+    });
+    vi.spyOn(Application.prototype, "destroy").mockImplementation(() => {});
+  }
+
+  const SCENE = "scene { size: (100, 100) duration: 1 }";
+
+  it.each([
+    [RendererType.WEBGPU, "webgpu"],
+    [RendererType.CANVAS, "canvas"],
+  ])("refuses renderer type %i ('%s') with VIDEO_NO_WEBGL, naming it", async (type, name) => {
+    withRenderer({ type, name });
+    const message = await refusalMessage({ ...BASE, source: SCENE });
+    expect(message.startsWith("[VIDEO_NO_WEBGL] ")).toBe(true);
+    expect(message).toContain(`gave Marey a '${name}' renderer`);
+  });
+
+  function fakeGl(limit: number) {
+    return {
+      MAX_TEXTURE_SIZE: 0x0d33,
+      MAX_RENDERBUFFER_SIZE: 0x84e8,
+      getParameter: () => limit,
+    };
+  }
+
+  it("lets a WebGL renderer through to the device-limit check (control: a 100 px limit refuses)", async () => {
+    withRenderer({ type: RendererType.WEBGL, name: "webgl", gl: fakeGl(100) });
+    const message = await refusalMessage({ ...BASE, source: SCENE });
+    // 100x100 codes to 200x200, over a 100 px limit.
+    expect(message.startsWith("[VIDEO_EXCEEDS_DEVICE_LIMITS] ")).toBe(true);
+  });
+
+  it("lets a WebGL renderer with room to spare past both refusals", async () => {
+    withRenderer({ type: RendererType.WEBGL, name: "webgl", gl: fakeGl(8192) });
+    const message = await refusalMessage({ ...BASE, source: SCENE });
+    expect(message).not.toContain("[VIDEO_NO_WEBGL]");
+    expect(message).not.toContain("[VIDEO_EXCEEDS_DEVICE_LIMITS]");
   });
 });

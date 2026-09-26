@@ -1,0 +1,38 @@
+// Phase 5C Task 2, design §3.4.3: butt caps on a two-point line, and a
+// zero-length segment WITHIN a line. `plain` is a straight two-point line,
+// 80 units long, thickness 12 -- the butt-cap reference. `repeated` is the
+// same line in the same position with one extra point repeating the
+// midpoint ((0,0),(40,0),(40,0),(80,0)), so it carries a genuine
+// zero-length segment in its interior rather than at either end.
+//
+// Confirmed directly by calling pixi.js's own `buildLine` outside a
+// browser on both point lists: the repeated point DOES produce NaN-valued
+// vertices for the degenerate join geometry (dividing by a zero segment
+// length), but every triangle touching a real (non-NaN) vertex reproduces
+// the plain line's own rectangle exactly -- (0,+-6) through (80,+-6) --
+// so the two fixtures are predicted to render pixel-identical, with the
+// NaN triangles either discarded by the rasterizer or invisible regardless.
+// `origin: (0, 0)` puts each line's pivot at its own first point (both
+// point lists have bbox min (0,0)), so `position` names that point's own
+// world coordinate.
+scene {
+  size: (280, 320)
+  duration: 0.0333333333
+  background: #000000
+
+  line plain {
+    position: (100, 100)
+    origin: (0, 0)
+    points: [(0, 0), (80, 0)]
+    thickness: 12
+    color: #ffffff
+  }
+
+  line repeated {
+    position: (100, 220)
+    origin: (0, 0)
+    points: [(0, 0), (40, 0), (40, 0), (80, 0)]
+    thickness: 12
+    color: #ffffff
+  }
+}

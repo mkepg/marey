@@ -1,0 +1,18 @@
+// Phase 5C Task 8 text fixture (text-check.mjs): a line break and a tab.
+// pixi splits lines on the newline and hands the tab to fillText, which
+// draws it as a space; the Lottie outlines must do both. Origin (0, 0), so
+// the anchor is the layout box's top-left corner.
+scene {
+  size: (400, 200)
+  background: #ffffff
+  duration: 1
+
+  text lines {
+    position: (40, 40)
+    origin: (0, 0)
+    content: "one\ntwo\tthree"
+    fontSize: 32
+    color: #000000
+    animate { property: position, to: (60, 70), duration: 1 }
+  }
+}

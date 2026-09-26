@@ -199,7 +199,32 @@ sites: `frameSampler.ts`'s `snapshotFor` (sampling) and
 onto a tree for re-rendering) — the same inverse pair that module's own
 docstring names. `frameRaster.ts` is the shared rasterization seam both the
 PNG and (Phase 5B) video exporter replay frames through, so they cannot
-disagree about the exported size, background or frame identity.
+disagree about the exported background or frame identity, or about the RULE
+that fixes the exported size: **the output is the scene's declared pixel
+size times the exporter's own scale — never the preview's
+`devicePixelRatio`, and never a content bounding box** (spec §2.2,
+Phase 5C). `createFrameRasterizer`'s `scale` is a required 4th argument, not
+a default, so a caller that forgets it is a type error rather than a silent
+1x. The PNG sequence and APNG exporters pass `1`; the video exporter passes
+`VideoPlan.scale` (`VIDEO_SCALE`, currently 2, `videoContract.ts`) — so the
+two exporters' outputs are no longer literally the same size, but both are
+still `createFrameRasterizer`'s one rule applied at a different scale, not
+two independent implementations that could drift apart. The scale multiplies
+the OUTPUT only: the `frame: region` handed to `extract.canvas` stays in
+scene units, because `GenerateTextureSystem` multiplies it by `resolution`
+itself (research §6) — multiplying it again here would double-scale the
+region instead of rasterizing it at a higher density. This is also the trap
+a 2x export has to avoid on the `Text` side: PixiJS rasterizes a `Text`'s own
+texture at the *renderer's* resolution, so an export `Application`
+initialised at `resolution: 1` and extracted at `resolution: 2` would
+upscale already-blurry 1x text while every vector shape came out sharp.
+`rasterExport.ts`'s `withRasterExport` avoids it by initialising the export
+`Application` itself at `resolution: scale`, the same scale frames are
+extracted at. For video, `runVideoExport` passes `VideoPlan.scale`.
+`videoPipeline.test.ts` pins this: it spies on `Application.prototype.init`
+and requires the `resolution` it receives to equal the plan's scale.
+Nothing else catches it. The output is still the right size, so
+`video-check.mjs` cannot see blurry text.
 
 ## The Lottie encoder boundary (Phase 5A)
 
@@ -296,7 +321,7 @@ constant, because the assertions themselves never distinguished which file
 produced a clean answer.
 
 A second, related pair of tests in the same file guards a boundary this phase
-added on top of Phase 5A's shape: `videoPipeline.ts`, `useExportVideo.ts` and
+added on top of Phase 5A's shape: `videoPipeline.ts`, `useExport.ts` and
 `TopBar.tsx` — the production path a real export click takes — may not import
 `src/lib/devVideoSeam.ts` in any form, and their code may not reach
 `window.__mareyExportVideo` (the dev-only global that seam installs) either.
@@ -307,16 +332,21 @@ that documentation as the violation it exists to prevent.
 
 `frameRaster.ts` is the single rasterization seam the PNG-sequence and video
 exporters both replay frames through — measured, not assumed:
-`pngSequence.ts` and `videoPipeline.ts` import `createFrameRasterizer` from
-it, not from one another. One seam means the two
+`pngSequence.ts` and `rasterExport.ts` import `createFrameRasterizer` from
+it, not from one another. `rasterExport.ts` is the shared prefix that video,
+APNG and the PNG seam rasterize through. One seam means the two
 export paths cannot silently diverge on how a sampled frame gets rasterized
 back onto the scene tree — the same size, background and frame-identity
 guarantee the paragraph above already states for it.
 
 **One video orchestration, observed by the harness (Phase 5B fix wave,
-R45).** `videoPipeline.ts`'s `runVideoExport` is the only copy of compile →
-plan → probe → build → sample → rasterize → encode. The export button calls it
-through `useExportVideo.ts`'s dynamic `import()`; the dev seam
+R45).** `videoPipeline.ts`'s `runVideoExport` is the only copy of the video
+export path. Since Phase 5C its compile → plan → build → sample prefix and the
+teardown around it are `rasterExport.ts`'s `withRasterExport`, which the APNG,
+Lottie and PNG exports share. `runVideoExport` adds only the probe (in
+`beforeBuild`), the device-limit check (in `afterInit`) and the lazy
+rasterize → encode loop. The export button calls it
+through `useExport.ts`'s dynamic `import()`; the dev seam
 `src/lib/devVideoSeam.ts` calls the same function with an optional observer
 (`onPlanned`, `onSampled`, `onFrame`, `onEncoderConfig`) to collect the
 reference PNGs, snapshot hash and encoder config `video-check.mjs` needs. Do
@@ -363,6 +393,125 @@ it. The whole-branch reviewer reproduced it with raw WebCodecs
 bytes gate. See `eval/RESULTS-PHASE-5B.md` (criterion 2) for the measured breakdown;
 it is cited here rather than restated, so there is one copy of the numbers to
 keep true.
+
+## The Lottie `line` stroke (Phase 5C)
+
+A `line` plans to `{ kind: "line", points, thickness }`, with its anchor
+from the same `polygonBBox` min/max scan `builder.ts`'s own `line` case
+uses, and encodes as an **open path followed by a stroke, never a fill**:
+`shapeItemsFor` pushes a `{ ty: "sh", ks: { k: { c: false, i: zeros, o:
+zeros, v: points } } }` and then a `{ ty: "st", lc: 1, lj: 1, ml: 10, ... }`,
+matching pixi's `GraphicsContext.defaultStrokeStyle` (alignment 0.5, cap
+butt, join miter, miterLimit 10). The stroke item goes **after** the path
+for the same backward-`searchShapes` reason the fill item does, above:
+put it before the path and lottie-web renders nothing (measured, Task 2
+Step 6). `LOTTIE_UNSUPPORTED_LINE` (5A) is gone; a scene containing a
+`line` no longer refuses.
+
+Two of design §3.4's three facts were confirmed by measurement; the third
+corrected the design's own prediction:
+
+- **Miter limit.** Lottie's `ml` follows the SVG rule (miter length ÷
+  stroke width, `1 / sin(θ/2)`) against the same limit (10) pixi's own
+  `buildLine.mjs` uses. A fixture with corners at 14° (ratio 8.206) and 9°
+  (ratio 12.745) straddles the cutoff: pixi and lottie-web agree at both
+  (14° miters, 9° bevels), so `ml: 10` needed no correction.
+- **Non-uniform scale — design §3.4.2's prose had the pairing backwards.**
+  A line's stroke cross-section is built in local space perpendicular to
+  the line's *own* direction, so a **horizontal**-path line's thickness
+  scales by `scale.y` and a **vertical**-path line's by `scale.x` — the
+  opposite of what §3.4.2 predicted. Measured on `scale: (0.35, 0.5)`,
+  thickness 10: the horizontal line reads ≈5px (`10 × scaleY`), the
+  vertical line ≈3.5px (`10 × scaleX`); both renderers agree with each
+  other and with this corrected pairing. See `eval/RESULTS-PHASE-5C.md`,
+  "Piece 2", for the pixel measurements.
+- **Butt caps and a repeated point.** Both renderers draw flat, sharp
+  butt caps on a two-point line, and a zero-length segment inside a line
+  (a repeated point) produces no visible difference from the plain line.
+
+## `ensureExportFonts` (Phase 5C)
+
+Every export pipeline — `rasterExport.ts`'s shared prefix (video, PNG,
+APNG) and `lottiePipeline.ts` — awaits `ensureExportFonts(ir)`
+(`export/exportFonts.ts`) before the scene is built: it calls
+`document.fonts.load(...)` once per distinct `fontSize` a `text` node in
+the IR uses, then `.check(...)`, and throws `EXPORT_FONT_UNAVAILABLE`
+(naming the family) rather than building with a browser fallback font if
+the check still fails after the load resolves. Without it, a cold page —
+one that never rendered the live preview first — measures and draws text
+with the fallback font, and the export silently disagrees with what the
+user saw in the preview.
+
+**A second, non-obvious hazard sits beneath that fix: pixi's font-metrics
+cache.** `CanvasTextMetrics.measureFont` caches ascent, descent and
+`fontSize` in the static `_fonts` map, keyed by the CSS font string alone
+(pixi.js 8.16.0, `CanvasTextMetrics.mjs`). Nothing in that key records
+whether the face had loaded. So if the live preview measured this scene's
+text on a cold page, before the font arrived, every later `TextStyle` with
+the same font properties is served the fallback font's metrics. That
+includes the fresh ones `buildNode` makes for the export.
+- **Measured** (`docs/research/2026-09-24-export-quality-probes/text-plumbing/cache-run.mjs`,
+  a fresh page): after one fallback measurement, the export built a 60 px
+  two-line text at 504 × 126 (lineHeight 63, ascent 51). A warm page builds
+  it at 504 × 142 (lineHeight 71, ascent 60).
+- **Why the width was right either way.** The per-text
+  `_measurementCache` is not the hazard. Its key includes the style's
+  `styleKey`, which is `` `${uid}-${tick}` `` (`TextStyle.mjs`). That key
+  carries the object's own id, so a new `TextStyle` never hits an entry an
+  older one wrote.
+- **The clear is in `rasterExport.ts`**, not `exportFonts.ts`. Right after
+  `ensureExportFonts` resolves and before anything is built,
+  `withRasterExport` calls `CanvasTextMetrics.clearMetrics()` with no
+  argument. That is pixi's public way to empty `_fonts`. It costs one
+  re-measure per font string, for the preview too, which then picks up the
+  loaded font's real metrics as well. The code comment above that call is
+  the primary record. `exportFonts.test.ts` ("empties the cache before
+  building") pins the clear.
+
+## Text layout from pixi, glyphs from HarfBuzz (Phase 5C)
+
+Lottie `text` splits the way design §0's O5 decided: **pixi supplies
+layout, HarfBuzz supplies glyphs**, joined as plain data. After
+`buildNode`, `lottiePipeline.ts`'s `collectTextLayouts` walks the built
+tree — so it can read each text wrapper's own `__baseSize` and
+`CanvasTextMetrics.measureText` results — and produces two
+`ReadonlyMap<IRObjectId, …>`s, `TextLayout` and `TextGlyphRun`
+(`export/textOutline.ts`), which `planLottie` consumes as inert data. A
+`text` node missing an entry in either map is an invariant throw: every
+text node must be laid out and shaped before planning runs.
+`textOutline.ts` is the **only** module that imports harfbuzzjs, and
+neither `lottieGeometry.ts` nor `lottieEncode.ts` imports it or pixi.js —
+checked by `exportBoundary.test.ts`, the same way as the rest of the
+Lottie boundary. `lottieGeometry.ts` may import `textOutline.ts`'s
+**types** (`Contour`, `TextLayout`, `TextGlyphRun`) as a type-only
+import; `verbatimModuleSyntax` erases that import at compile time, so it
+is not a boundary violation, and the boundary test says so.
+
+**Missing glyphs are refused, not degraded.** HarfBuzz shaping a
+character to glyph id 0 (`.notdef`) means the font has no glyph for it —
+measured for `日` and `🙂`, both of which the *preview* draws from a real
+fallback glyph or a colour emoji, never tofu, so silently drawing nothing
+in the export would disagree with what the user saw. `LOTTIE_TEXT_MISSING_GLYPH`
+names the object id and the missing character's code point; it replaced
+`LOTTIE_UNSUPPORTED_TEXT`, which refused every text node outright.
+
+**A glyph's x/y do not add pixi's `padding`, unlike the design's original
+formula.** pixi draws a `Text`'s glyphs at `+padding` inside a texture
+that its own `updateTextBounds.mjs` then places at `-padding` in the
+`Text`'s local space, so the padding cancels; adding it again in
+`textOutline.ts`'s own placement would double-count it. Marey's styles
+carry padding 0 today, so both readings agree on every Marey scene, and a
+test pins the cancellation (`textOutline.test.ts`, "does not move glyphs
+by `padding`") so a future non-zero padding cannot silently regress it.
+
+**A text layer is masked to pixi's own measured box, only when a glyph
+leaves it.** pixi draws a `Text` into a texture sized to its measured
+layout box and clips ink outside that box, in the preview and in every
+raster export; an unclipped Lottie outline would draw further than the
+preview does whenever a glyph's contour — a combining mark's diacritic,
+for instance — extends past that box. The encoder adds a mask to
+`(0,0)-(w,h)` on exactly those text layers, never on the rest: of the six
+fixtures measured, only the one carrying a combining mark needed it.
 
 ## Non-obvious gotchas
 

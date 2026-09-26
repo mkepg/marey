@@ -1,0 +1,106 @@
+<!doctype html>
+<!--
+  Phase 5C Task 8: the in-page half of text-check.mjs's layout-agreement
+  check (spec §6.6, ruling T8-R2). Served by the Vite dev server, so the
+  imports below resolve to the same modules the app runs.
+
+  window.__textLayout(source) builds the scene through the real export
+  prefix (withRasterExport, no copy of it), reads every built Text, and for
+  each line reports:
+  - pixi's measured line width (CanvasTextMetrics.measureText(...).lineWidths);
+  - the HarfBuzz advance sum, from textOutline.ts's own shapeLine (the same
+    shaping the exported outlines use);
+  - the HarfBuzz ink extent, from glyph extents placed at each glyph's pen
+    position plus its GPOS offset;
+  - the canvas's own measureText width and actualBoundingBox, for reference.
+  It returns plain numbers; text-check.mjs judges them.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      @font-face {
+        font-family: 'JetBrains Mono';
+        src: url('/fonts/JetBrainsMono-Regular.ttf') format('truetype');
+        font-weight: 400;
+        font-style: normal;
+      }
+    </style>
+  </head>
+  <body>
+    <script type="module">
+      import * as hb from "harfbuzzjs";
+      import { CanvasTextMetrics, Text } from "pixi.js";
+      import { withRasterExport } from "/src/compiler/export/rasterExport.ts";
+      import { createTextOutliner } from "/src/compiler/export/textOutline.ts";
+      import { fetchExportFont } from "/src/compiler/export/exportFonts.ts";
+
+      window.__textLayout = async (source) => {
+        const bytes = await fetchExportFont();
+        const outliner = await createTextOutliner(bytes.slice(0));
+        // A second handle on the same font, for glyph extents only:
+        // textOutline.ts exposes shaping, not extents. harfbuzzjs 1.6.2 has
+        // no explicit destroy: it frees each wasm object through a
+        // FinalizationRegistry once the JS object is unreachable
+        // (node_modules/harfbuzzjs/dist/index.mjs, `registry`/`track`). So
+        // freeing it means dropping every reference, which the `finally`
+        // below does, rather than letting this closure keep them alive.
+        let blob = new hb.Blob(bytes.slice(0));
+        let face = new hb.Face(blob);
+        let font = new hb.Font(face);
+        const ctx = document.createElement("canvas").getContext("2d");
+        try {
+          return await withRasterExport({ source, fps: 30 }, async ({ root, plan }) => {
+            const texts = [];
+            const visit = (container) => {
+              const text = container.children.find((c) => c instanceof Text);
+              if (container.__mareyId !== undefined && text) {
+                const m = CanvasTextMetrics.measureText(text.text, text.style);
+                const fontSize = text.style.fontSize;
+                const scale = fontSize / outliner.upem;
+                ctx.font = text.style._fontString;
+                const lines = m.lines.map((line, k) => {
+                  const glyphs = outliner.shapeLine(line);
+                  let pen = 0;
+                  let inkLeft = Infinity;
+                  let inkRight = -Infinity;
+                  for (const g of glyphs) {
+                    const e = font.glyphExtents(g.glyphId);
+                    if (e && e.width !== 0) {
+                      const left = pen + g.xOffset + e.xBearing;
+                      inkLeft = Math.min(inkLeft, left);
+                      inkRight = Math.max(inkRight, left + e.width);
+                    }
+                    pen += g.xAdvance;
+                  }
+                  const canvas = ctx.measureText(line);
+                  return {
+                    line,
+                    pixiLineWidth: m.lineWidths[k],
+                    hbAdvanceSum: pen * scale,
+                    hbInkLeft: inkLeft === Infinity ? null : inkLeft * scale,
+                    hbInkRight: inkRight === -Infinity ? null : inkRight * scale,
+                    hbInkWidth: inkLeft === Infinity ? 0 : (inkRight - inkLeft) * scale,
+                    glyphIds: glyphs.map((g) => g.glyphId),
+                    canvasWidth: canvas.width,
+                    canvasInkLeft: canvas.actualBoundingBoxLeft,
+                    canvasInkRight: canvas.actualBoundingBoxRight,
+                  };
+                });
+                texts.push({ id: container.__mareyId, fontSize, fontString: text.style._fontString, lines });
+              }
+              for (const child of container.children) visit(child);
+            };
+            visit(root);
+            return { frameCount: plan.frameCount, texts };
+          });
+        } finally {
+          outliner.destroy();
+          font = null;
+          face = null;
+          blob = null;
+        }
+      };
+      window.__textLayoutReady = true;
+    </script>
+  </body>

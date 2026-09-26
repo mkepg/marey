@@ -1,0 +1,19 @@
+// Phase 5C Task 8 text fixture (text-check.mjs, ruling T8-R2): combining
+// marks. U+00E9, then x + U+0301, then B + U+0325 + U+0301 (the acute is
+// positioned by GPOS mark offsets on top of the ring below). pixi's line
+// width is max(advance, ink) and the ink wins here (Task 7: 202 px against
+// an advance sum of 180), so layout agreement compares against HarfBuzz's
+// ink width as well as its advances.
+scene {
+  size: (500, 200)
+  background: #ffffff
+  duration: 1
+
+  text marks {
+    position: (250, 100)
+    content: "é x́ B̥́"
+    fontSize: 60
+    color: #000000
+    animate { property: position, to: (230, 110), duration: 1 }
+  }
+}

@@ -2,12 +2,13 @@ import { describe, it, expect } from "vitest";
 import { Container } from "pixi.js";
 import { buildNode } from "../renderer/builder";
 import { snapshotFor } from "../renderer/frameSampler";
-import { assertFrameSetMatchesTree } from "./frameRaster";
+import { assertFrameSetMatchesTree, createFrameRasterizer } from "./frameRaster";
 import { lex } from "../lexer";
 import { parse } from "../parser";
 import { typeCheck } from "../typeChecker";
 import type { IRSceneNode } from "../sceneIR";
 import type { FrameSnapshot } from "../renderer/frameSampler";
+import type { Application, ICanvas } from "pixi.js";
 
 function irFor(source: string): IRSceneNode {
   const { ast } = parse(lex(source));
@@ -74,5 +75,51 @@ describe("assertFrameSetMatchesTree", () => {
     // Guards the early return: without it this indexes undefined.
     const root = treeFor(TWO_OBJECTS);
     expect(() => assertFrameSetMatchesTree(root, [])).not.toThrow();
+  });
+});
+
+describe("createFrameRasterizer · scale", () => {
+  // This file had no existing mock of `Application`/`renderer.extract`
+  // before this test (the suite runs in `environment: "node"`, with no
+  // WebGL, so a real `Application` cannot be constructed here at all) --
+  // there was no pre-existing pattern to reuse, only `treeFor`/`frameFrom`
+  // for building a plain `Container`/`FrameSnapshot`. This is a minimal fake
+  // covering only the three `renderer` fields `createFrameRasterizer`
+  // actually reads (`width`, `height`, `background.colorRgba`) plus the one
+  // method it calls (`extract.canvas`), cast through `unknown` because it
+  // does not (and need not) satisfy the rest of PixiJS's `Application`
+  // shape.
+  function fakeApp(onExtract: (opts: { resolution: number }) => void): Application {
+    return {
+      renderer: {
+        width: 200,
+        height: 200,
+        background: { colorRgba: [0, 0, 0, 1] },
+        extract: {
+          canvas: (opts: { resolution: number }): ICanvas => {
+            onExtract(opts);
+            return {} as ICanvas;
+          },
+        },
+      },
+    } as unknown as Application;
+  }
+
+  it("passes the given scale through to extract.canvas as `resolution`", () => {
+    const root = treeFor(TWO_OBJECTS);
+    const frame = frameFrom(root);
+    const calls: number[] = [];
+    const rasterize = createFrameRasterizer(fakeApp((opts) => calls.push(opts.resolution)), root, [frame], 2);
+    rasterize(frame);
+    expect(calls).toEqual([2]);
+  });
+
+  it("passes scale 1 through unchanged, the PNG/APNG exporters' own call", () => {
+    const root = treeFor(TWO_OBJECTS);
+    const frame = frameFrom(root);
+    const calls: number[] = [];
+    const rasterize = createFrameRasterizer(fakeApp((opts) => calls.push(opts.resolution)), root, [frame], 1);
+    rasterize(frame);
+    expect(calls).toEqual([1]);
   });
 });

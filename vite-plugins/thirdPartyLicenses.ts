@@ -47,6 +47,14 @@ export interface FontNotice {
   readonly license: string;
   readonly licenseUrl: string;
   readonly source: string;
+  /**
+   * The licence's full text. The OFL's condition 2 requires each copy of a
+   * font to carry its copyright notice *and the licence itself*, so a link
+   * is not enough (Phase 5C spec §6.5). Always set by the build
+   * (`readFonts`); optional only so a notice can be built without one in a
+   * test.
+   */
+  readonly licenseText?: string;
 }
 
 /** The directory of the npm package a bundled module came from, or null. */
@@ -218,6 +226,7 @@ export function renderNotices(packages: readonly PackageNotice[], fonts: readonl
       "",
       f.license,
       ...(f.licenseUrl ? ["", `Licence text: ${f.licenseUrl}`] : []),
+      ...(f.licenseText ? ["", "--- full licence text ---", "", f.licenseText.replace(/\r\n/g, "\n").trimEnd()] : []),
       ""
     );
   }
@@ -235,7 +244,24 @@ export function suppliedLicensePath(suppliedDir: string, packageName: string): s
   return join(suppliedDir, `${packageName.replace("/", "__")}.txt`);
 }
 
-function readPackage(dir: string, suppliedDir: string): PackageNotice | string {
+/**
+ * Where a checked-in licence for code a package *embeds* lives, when the
+ * package's own licence file covers only the package's own code:
+ * `vite-plugins/licenses/<name, with "/" as "__">.embedded.txt`. Unlike
+ * {@link suppliedLicensePath}'s replacement, this one is always appended,
+ * because the package's own file is correct as far as it goes; it just does
+ * not reach the embedded code. harfbuzzjs is the case in point: its LICENSE
+ * is the wrapper's MIT, while `harfbuzz.wasm` is HarfBuzz itself, under
+ * HarfBuzz's own "Old MIT" licence (Phase 5C spec §6.5). A plain
+ * `harfbuzzjs.txt` would never be read, since harfbuzzjs ships a LICENSE.
+ * Each such file says in its own first lines where its text came from.
+ */
+export function suppliedEmbeddedLicensePath(suppliedDir: string, packageName: string): string {
+  return join(suppliedDir, `${packageName.replace("/", "__")}.embedded.txt`);
+}
+
+/** One installed package's notice, with any checked-in supplement applied. */
+export function readPackage(dir: string, suppliedDir: string): PackageNotice | string {
   const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as PackageJson;
   let texts: LicenseText[] = readdirSync(dir)
     .filter((f) => isLicenseFile(f) && statSync(join(dir, f)).isFile())
@@ -244,12 +270,44 @@ function readPackage(dir: string, suppliedDir: string): PackageNotice | string {
   if (texts.length === 0 && supplied && existsSync(supplied)) {
     texts = [{ file: "licence supplied by Marey (the package ships none)", content: readFileSync(supplied, "utf8") }];
   }
+  const embedded = pkg.name ? suppliedEmbeddedLicensePath(suppliedDir, pkg.name) : "";
+  if (embedded && existsSync(embedded)) {
+    texts.push({
+      file: "licence of code this package embeds, supplied by Marey",
+      content: readFileSync(embedded, "utf8"),
+    });
+  }
   return packageNotice(pkg, texts);
+}
+
+/**
+ * Font licences this build can reproduce in full, keyed by how a font's
+ * name-table licence description (name ID 13) names them. The texts live in
+ * `vite-plugins/licenses/fonts/`, each saying in its first lines where it
+ * came from.
+ */
+const FONT_LICENSE_TEXTS: ReadonlyArray<{ readonly names: RegExp; readonly file: string }> = [
+  { names: /SIL Open Font License,? Version 1\.1/i, file: "OFL-1.1.txt" },
+];
+
+/**
+ * The full text of a font's licence, or a sentence saying why there is none.
+ * A font whose licence this build cannot reproduce fails the build, for the
+ * same reason a package without a licence file does.
+ */
+export function fontLicenseText(license: string, suppliedDir: string): LicenseText | string {
+  const known = FONT_LICENSE_TEXTS.find((k) => k.names.test(license));
+  const path = known ? join(suppliedDir, "fonts", known.file) : "";
+  if (!known || !existsSync(path)) {
+    return `no full licence text for "${license.slice(0, 80)}" under ${join(suppliedDir, "fonts")}`;
+  }
+  return { file: known.file, content: readFileSync(path, "utf8") };
 }
 
 const FONT_EXT = new Set([".ttf", ".otf", ".woff", ".woff2"]);
 
-function readFonts(publicDir: string): { notices: FontNotice[]; problems: string[] } {
+/** Every font under `publicDir`, with its full licence text. */
+export function readFonts(publicDir: string, suppliedDir: string): { notices: FontNotice[]; problems: string[] } {
   const notices: FontNotice[] = [];
   const problems: string[] = [];
   const walk = (dir: string, rel: string): void => {
@@ -263,8 +321,13 @@ function readFonts(publicDir: string): { notices: FontNotice[]; problems: string
           continue;
         }
         const notice = fontNotice(basename(entry), readFontNames(readFileSync(path)));
-        if (typeof notice === "string") problems.push(notice);
-        else notices.push(notice);
+        if (typeof notice === "string") {
+          problems.push(notice);
+          continue;
+        }
+        const text = fontLicenseText(notice.license, suppliedDir);
+        if (typeof text === "string") problems.push(`${relPath}: ${text}`);
+        else notices.push({ ...notice, licenseText: text.content });
       }
     }
   };
@@ -307,7 +370,7 @@ export function thirdPartyLicenses(): Plugin[] {
           if (typeof notice === "string") problems.push(notice);
           else packages.push(notice);
         }
-        const fonts = readFonts(publicDir);
+        const fonts = readFonts(publicDir, suppliedDir);
         problems.push(...fonts.problems);
         if (problems.length > 0) {
           this.error(`Cannot write ${LICENSES_FILE}:\n  ${problems.sort().join("\n  ")}`);

@@ -1,0 +1,57 @@
+<!doctype html>
+<!--
+  Phase 5C Task 7, Step 5 (product mutation for ensureExportFonts): a fresh
+  page whose FIRST action is an MP4 export of a text scene through the
+  shipped runVideoExport, with no preview mounted first (Task 6 Q6's method:
+  the app's own `/` would load the font for the editor before the export
+  runs). Reads the text's ink width off the reference frame the encoder was
+  handed, via runVideoExport's own onFrame observer. Driven by
+  fresh-mp4-run.mjs.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      @font-face {
+        font-family: 'JetBrains Mono';
+        src: url('/fonts/JetBrainsMono-Regular.ttf') format('truetype');
+        font-weight: 400;
+        font-style: normal;
+      }
+    </style>
+  </head>
+  <body>
+    <script type="module">
+      import { runVideoExport } from "/src/compiler/export/videoPipeline.ts";
+
+      const SOURCE = `scene { size: (800, 200) duration: 0.1 background: #ffffff
+        text t { position: (400, 100), content: "readiness-probe-mp4", fontSize: 60, color: #000000 } }`;
+
+      window.__run = async () => {
+        const checkAtStart = document.fonts.check("60px 'JetBrains Mono'");
+        let reference = null;
+        const bytes = await runVideoExport({
+          source: SOURCE, container: "mp4", fps: 30,
+          observer: {
+            onFrame: (canvas, frame) => {
+              if (frame.index !== 0) return;
+              const ctx = canvas.getContext("2d");
+              const { width: w, height: h } = canvas;
+              const data = ctx.getImageData(0, 0, w, h).data;
+              let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+              for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+                const k = (y * w + x) * 4;
+                if (data[k] < 128 && data[k + 1] < 128 && data[k + 2] < 128) {
+                  if (x < minX) minX = x; if (x > maxX) maxX = x;
+                  if (y < minY) minY = y; if (y > maxY) maxY = y;
+                }
+              }
+              reference = { codedWidth: w, codedHeight: h, ink: { minX, minY, maxX, maxY }, inkWidth: maxX - minX + 1, inkHeight: maxY - minY + 1 };
+            },
+          },
+        });
+        return { checkAtStart, mp4Bytes: bytes.byteLength, reference, checkAtEnd: document.fonts.check("60px 'JetBrains Mono'") };
+      };
+    </script>
+  </body>
+</html>

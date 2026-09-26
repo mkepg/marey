@@ -139,7 +139,17 @@ export type LottieShapeItem =
   | { readonly ty: "el"; readonly nm: string; readonly p: LottieVectorProperty; readonly s: LottieVectorProperty }
   | { readonly ty: "rc"; readonly nm: string; readonly p: LottieVectorProperty; readonly s: LottieVectorProperty; readonly r: LottieScalarProperty }
   | { readonly ty: "sh"; readonly nm: string; readonly ks: { readonly a: 0; readonly k: LottieBezier } }
-  | { readonly ty: "fl"; readonly nm: string; readonly c: LottieColorProperty; readonly o: LottieScalarProperty; readonly r: 1 };
+  | { readonly ty: "fl"; readonly nm: string; readonly c: LottieColorProperty; readonly o: LottieScalarProperty; readonly r: 1 }
+  | {
+      readonly ty: "st";
+      readonly nm: string;
+      readonly c: LottieColorProperty;
+      readonly o: LottieScalarProperty;
+      readonly w: LottieScalarProperty;
+      readonly lc: 1;
+      readonly lj: 1;
+      readonly ml: number;
+    };
 
 interface LottieLayerBase {
   readonly ddd: 0;
@@ -156,10 +166,26 @@ interface LottieLayerBase {
   readonly parent?: number;
 }
 
+/**
+ * A layer mask: a closed path in the layer's own space. `mode: "a"` adds
+ * (the layer shows only inside it), `x` is expansion, `o` opacity 0-100.
+ */
+export interface LottieMask {
+  readonly nm: string;
+  readonly mode: "a";
+  readonly inv: false;
+  readonly o: LottieScalarProperty;
+  readonly x: LottieScalarProperty;
+  readonly pt: { readonly a: 0; readonly k: LottieBezier };
+}
+
 /** `ty: 4`. Its `shapes` list is drawn bottom-up: geometry first, fill after. */
 export interface LottieShapeLayer extends LottieLayerBase {
   readonly ty: 4;
   readonly shapes: ReadonlyArray<LottieShapeItem>;
+  /** Only on a text layer whose glyphs reach outside the layout box. */
+  readonly hasMask?: true;
+  readonly masksProperties?: ReadonlyArray<LottieMask>;
 }
 
 /** `ty: 3`. A `group` draws nothing; it exists for its children to parent to. */
@@ -381,12 +407,59 @@ function shapeItemsFor(shape: LottieShapeSpec, color: LayerSpec["color"], name: 
       items.push({ ty: "sh", nm: name, ks: { a: 0, k: { i: zeros, o: zeros, v, c: true } } });
       break;
     }
+    case "line": {
+      // An open path (c: false) with straight edges — pixi's `.poly(points,
+      // false)`. Bezier tangents are all [0, 0], same reasoning as polygon.
+      const v = shape.points.map((p) => [p.x, p.y]);
+      const zeros = v.map(() => [0, 0]);
+      items.push({ ty: "sh", nm: name, ks: { a: 0, k: { i: zeros, o: zeros, v, c: false } } });
+      break;
+    }
+    case "text": {
+      // Spec §6.4: one CLOSED path per glyph contour, in text-local pixels
+      // (`textOutline.ts` already produced Lottie-shaped `v`/`i`/`o`, with
+      // tangents relative to their own vertex), and one fill for all of
+      // them, pushed by the shared fill branch below. Copied rather than
+      // aliased, so the document owns plain arrays.
+      const copy = (points: ReadonlyArray<readonly [number, number]>) => points.map((p) => [p[0], p[1]]);
+      for (const contour of shape.contours) {
+        items.push({
+          ty: "sh",
+          nm: name,
+          ks: { a: 0, k: { i: copy(contour.i), o: copy(contour.o), v: copy(contour.v), c: true } },
+        });
+      }
+      break;
+    }
     case "group":
       // Unreachable: the caller emits a null layer for a group and never asks
       // for its shape items.
       throw new Error(`[export] shapeItemsFor was called for group '${name}', which draws nothing.`);
   }
-  if (color !== null) {
+  if (shape.kind === "line" && color !== null) {
+    // A line gets a STROKE, never a fill — an open path has no interior to
+    // fill. AFTER the path, for the same backward-`searchShapes` reason the
+    // fill below is (see that branch's comment for the citation): a stroke
+    // placed before its path paints nothing.
+    //
+    // pixi.js 8.16.0 `GraphicsContext.defaultStrokeStyle`: alignment 0.5
+    // (centred, which is the only alignment a Lottie stroke has — Lottie's
+    // `st` has no alignment concept at all), cap "butt" (lc 1), join "miter"
+    // (lj 1, the default), miterLimit 10 (ml). Whether pixi's miterLimit and
+    // Lottie's `ml` mean the same ratio was measured, not assumed — see
+    // design §3.4 and this task's report/evidence for the three lottie-web
+    // measurements (miter, non-uniform scale, caps).
+    items.push({
+      ty: "st",
+      nm: `${name} stroke`,
+      c: { a: 0, k: [...color] },
+      o: staticScalar(100),
+      w: staticScalar(shape.thickness),
+      lc: 1,
+      lj: 1,
+      ml: 10,
+    });
+  } else if (color !== null) {
     // AFTER the geometry, not before. lottie-web's `searchShapes` walks the
     // item list backwards, collecting styles and applying them to items at
     // LOWER indices — so a fill placed first paints nothing at all and the
@@ -397,6 +470,13 @@ function shapeItemsFor(shape: LottieShapeSpec, color: LayerSpec["color"], name: 
     // configures `renderer: "canvas"`), so the renderer that actually matters
     // here is `elements/canvasElements/CVShapeElement.js:186`, the backward
     // loop inside `CVShapeElement.prototype.searchShapes` (`.js:175`).
+    //
+    // `r: 1` is nonzero winding, the rule canvas `fill()` and pixi's text
+    // rasterizer use. For circle/rectangle/polygon a single simple path
+    // makes the rule moot, but for `text` it is load-bearing: a glyph's
+    // counters and overlapping contours are separate `sh` items under this
+    // one fill, and Task 6 Q4 found 19 of 100 JetBrains Mono glyphs (`a`,
+    // `e`, `8` among them) render differently under even-odd (`r: 2`).
     items.push({ ty: "fl", nm: `${name} fill`, c: { a: 0, k: [...color] }, o: staticScalar(100), r: 1 });
   }
   return items;
@@ -501,7 +581,24 @@ export function encodeLottie(
     if (spec.shape.kind === "group") {
       return { ...base, ty: 3 };
     }
-    return { ...base, ty: 4, shapes: shapeItemsFor(spec.shape, spec.color, spec.name) };
+    const shapes = shapeItemsFor(spec.shape, spec.color, spec.name);
+    if (spec.shape.kind === "text" && spec.shape.clip) {
+      // pixi's texture box (see `lottieGeometry.ts`'s `textClip`): the
+      // preview cuts off ink outside it, so the Lottie does too. In layer
+      // space, the same space as the glyph contours and the anchor.
+      const { width: w, height: h } = spec.shape.clip;
+      const zeros = [[0, 0], [0, 0], [0, 0], [0, 0]];
+      const box: LottieMask = {
+        nm: "layout box",
+        mode: "a",
+        inv: false,
+        o: staticScalar(100),
+        x: staticScalar(0),
+        pt: { a: 0, k: { v: [[0, 0], [w, 0], [w, h], [0, h]], i: zeros, o: zeros, c: true } },
+      };
+      return { ...base, ty: 4, shapes, hasMask: true, masksProperties: [box] };
+    }
+    return { ...base, ty: 4, shapes };
   });
 
   /**

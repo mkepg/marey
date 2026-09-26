@@ -15,8 +15,15 @@ import { describe, it, expect } from "vitest";
 import videoEncodeSource from "./videoEncode.ts?raw";
 import videoContractSource from "./videoContract.ts?raw";
 import videoPipelineSource from "./videoPipeline.ts?raw";
-import useExportVideoSource from "../../hooks/useExportVideo.ts?raw";
+import lottiePipelineSource from "./lottiePipeline.ts?raw";
+import apngPipelineSource from "./apngPipeline.ts?raw";
+import rasterExportSource from "./rasterExport.ts?raw";
+import useExportSource from "../../hooks/useExport.ts?raw";
 import topBarSource from "../../components/TopBar/TopBar.tsx?raw";
+import lottieEncodeSource from "./lottieEncode.ts?raw";
+import lottieGeometrySource from "./lottieGeometry.ts?raw";
+import apngEncodeSource from "./apngEncode.ts?raw";
+import textOutlineSource from "./textOutline.ts?raw";
 
 /**
  * True if `source` imports a module whose specifier contains `moduleFragment`,
@@ -81,9 +88,10 @@ function staticallyImportsModule(source: string, moduleFragment: string): boolea
  * Needed because the `__mareyExportVideo` guard below asks "does this file's
  * *code* reach for the dev-only global?", and a raw substring search cannot
  * tell code from prose. Both guarded modules earn their keep partly by
- * *explaining* the prohibition: `videoPipeline.ts:27` and
- * `useExportVideo.ts:52` each name `window.__mareyExportVideo` in a docstring
- * in order to say why they do not call it. Measured, not assumed — the first
+ * *explaining* the prohibition: `videoPipeline.ts` and `useExport.ts` (the
+ * Phase 5B video-only hook this was later generalised from) each name
+ * `window.__mareyExportVideo` in a docstring in order to say why they do not
+ * call it. Measured, not assumed — the first
  * version of this guard searched the raw source and went RED on both files
  * for exactly that reason (2 failed / 9 passed; see the FIX 2 section of this
  * task's report). Deleting the prose to appease the guard would have traded
@@ -231,6 +239,117 @@ describe("export boundary", () => {
     expect(importsModule(videoEncodeSource, "sceneIR")).toBe(false);
   });
 
+  /**
+   * Global Constraint 6 / design §7's table, Task 2's `line` piece: these two
+   * rows were never written down as tests even though `lottieEncode.ts` and
+   * `lottieGeometry.ts` have carried the constraint since Phase 5A. Each
+   * import check is paired with an identity check for the same reason the
+   * video-module tests above are, so a swapped source constant cannot pass
+   * silently just because both files happen to be clean today.
+   */
+  it("lottieEncode.ts does not import pixi.js, sceneIR or harfbuzzjs in any form", () => {
+    expect(lottieEncodeSource).toContain("export function encodeLottie");
+    expect(importsModule(lottieEncodeSource, "pixi\\.js")).toBe(false);
+    expect(importsModule(lottieEncodeSource, "sceneIR")).toBe(false);
+    expect(importsModule(lottieEncodeSource, "harfbuzzjs")).toBe(false);
+  });
+
+  it("lottieGeometry.ts does not import pixi.js or harfbuzzjs in any form", () => {
+    expect(lottieGeometrySource).toContain("export function planLottie");
+    expect(importsModule(lottieGeometrySource, "pixi\\.js")).toBe(false);
+    expect(importsModule(lottieGeometrySource, "harfbuzzjs")).toBe(false);
+  });
+
+  /**
+   * Task 8: `lottieGeometry.ts` needs `Contour`/`TextLayout`/`TextGlyphRun`,
+   * which live in `textOutline.ts`, the one module that imports harfbuzzjs.
+   * A type-only import is erased and keeps the geometry module free of it; a
+   * value import would put harfbuzzjs in its dependency graph, and in
+   * `lottieEncode.ts`'s through it. The direct-import guard above cannot see
+   * that, so this pins the form: every import of `textOutline` here is
+   * `import type`. (`import { type X }` is not enough: under
+   * `verbatimModuleSyntax` it leaves a side-effect import behind.)
+   */
+  it("lottieGeometry.ts imports textOutline.ts for types only", () => {
+    const code = stripComments(lottieGeometrySource);
+    expect(code).toContain("export function planLottie");
+    const imports = code.match(/import\s+[^;]*?from\s+["'][^"']*textOutline[^"']*["']/g) ?? [];
+    expect(imports.length).toBeGreaterThan(0);
+    expect(imports.every((line) => /^import\s+type\s/.test(line))).toBe(true);
+    // Nor a dynamic import, which would load it (and harfbuzzjs) at runtime.
+    expect(/import\s*\(\s*["'][^"']*textOutline/.test(code)).toBe(false);
+  });
+
+  /**
+   * Global constraint 6 / design §7's table, Task 5's `apngEncode.ts`: a
+   * pure muxer with no pixi.js and no Scene IR, the same shape as
+   * `lottieEncode.ts`/`lottieGeometry.ts` above. Paired with an identity
+   * check for the same reason those two are.
+   */
+  it("apngEncode.ts does not import pixi.js or sceneIR in any form", () => {
+    expect(apngEncodeSource).toContain("export function encodeApng");
+    expect(importsModule(apngEncodeSource, "pixi\\.js")).toBe(false);
+    expect(importsModule(apngEncodeSource, "sceneIR")).toBe(false);
+  });
+
+  /**
+   * The rest of spec §7's `apngEncode.ts` row: "nothing from the app" and
+   * "must not import ... the DOM" (final review M-5). The muxer takes PNG
+   * bytes and returns APNG bytes, so it needs no import of any kind, and
+   * its code names no DOM global. Checked on comment-stripped source, so
+   * prose that explains the rule cannot trip it. The landmark is the
+   * function's last statement, so a stripper that ran off the rails
+   * mid-file fails here rather than hiding code.
+   */
+  it("apngEncode.ts imports nothing, and its code names no DOM global", () => {
+    const code = stripComments(apngEncodeSource);
+    expect(code).toContain("return appendAll(parts);");
+    expect(/(^|\n)\s*import\b/.test(code)).toBe(false);
+    expect(/\bimport\s*\(/.test(code)).toBe(false);
+    for (const global of ["document", "window", "HTMLCanvasElement"]) {
+      expect(new RegExp(`\\b${global}\\b`).test(code), global).toBe(false);
+    }
+  });
+
+  /**
+   * Global constraint 6 / design §7's table, Task 7's `textOutline.ts`: it
+   * gets what it knows about a text object as a `TextLayout` of plain
+   * numbers, so it needs neither pixi.js nor the Scene IR. Paired with an
+   * identity check for the same reason the rows above are.
+   */
+  it("textOutline.ts does not import pixi.js or sceneIR in any form", () => {
+    expect(textOutlineSource).toContain("export async function createTextOutliner");
+    expect(importsModule(textOutlineSource, "harfbuzzjs")).toBe(true);
+    expect(importsModule(textOutlineSource, "pixi\\.js")).toBe(false);
+    expect(importsModule(textOutlineSource, "sceneIR")).toBe(false);
+  });
+
+  it("lottiePipeline.ts reaches harfbuzzjs only through textOutline.ts", () => {
+    expect(lottiePipelineSource).toContain("export async function collectTextLayouts");
+    expect(importsModule(lottiePipelineSource, "textOutline")).toBe(true);
+    expect(importsModule(lottiePipelineSource, "harfbuzzjs")).toBe(false);
+  });
+
+  /**
+   * Spec §6.3/§7: `textOutline.ts` is the ONLY module that imports
+   * harfbuzzjs. The two rows above name two files; this one reads every
+   * `.ts`/`.tsx` file under `src/` through Vite's `import.meta.glob`, so a
+   * third importer anywhere fails here. The count guard stops a glob that
+   * silently matched nothing from passing.
+   */
+  it("no module under src/ but textOutline.ts imports harfbuzzjs", () => {
+    const sources = import.meta.glob<string>("../../**/*.{ts,tsx}", {
+      query: "?raw",
+      import: "default",
+      eager: true,
+    });
+    const paths = Object.keys(sources);
+    expect(paths.length).toBeGreaterThan(100);
+    expect(paths).toContain("./textOutline.ts");
+    const importers = paths.filter((path) => importsModule(sources[path], "harfbuzzjs"));
+    expect(importers).toEqual(["./textOutline.ts"]);
+  });
+
   it("matches a pixi.js export subpath, not just the bare specifier", () => {
     // The serious miss R21 names: pixi.js 8.16.0 declares 23 export
     // subpaths, so this is a real, compiling violation of "must not import
@@ -312,25 +431,33 @@ describe("export boundary", () => {
     // They catch different mutations.
     expect(videoEncodeSource).toContain("export async function encodeVideo");
     expect(videoContractSource).toContain("export function planVideo");
+    expect(lottieEncodeSource).toContain("export function encodeLottie");
+    expect(lottieGeometrySource).toContain("export function planLottie");
+    expect(apngEncodeSource).toContain("export function encodeApng");
+    expect(textOutlineSource).toContain("export async function createTextOutliner");
   });
 });
 
 /**
- * Task 5's R3: `useExportVideo.ts` needs the same compile -> plan -> build ->
- * sample -> rasterize -> encode pipeline `src/lib/devVideoSeam.ts` runs, but
- * must not reach it through `window.__mareyExportVideo` (dev-only, constant-
- * folded out of a production build) and must not import `devVideoSeam.ts`
- * itself (that module's own docstring is written for a Node harness, not a
- * shipped button, and importing it would pull its whole dev-seam shape --
- * base64 encoding, reference-frame re-extraction, `window` global assignment
- * -- into the production bundle regardless of whether it is ever called).
- * `videoPipeline.ts` is the extracted answer.
+ * Task 5's R3, widened by Task 3 from video-only to both shipped pipelines:
+ * `useExport.ts` (Task 3 generalised this from Phase 5B's video-only hook)
+ * needs the same compile -> plan -> build -> sample -> rasterize/encode
+ * pipelines `src/lib/devVideoSeam.ts` and `src/lib/devLottieSeam.ts` run,
+ * but must not
+ * reach either through its `window.__mareyExportVideo`/
+ * `window.__mareyExportLottie` global (both dev-only, constant-folded out of
+ * a production build) and must not import either dev seam itself (each dev
+ * seam's own docstring is written for a Node harness, not a shipped button,
+ * and importing one would pull its whole dev-seam shape -- base64 encoding,
+ * reference-frame re-extraction, `window` global assignment -- into the
+ * production bundle regardless of whether it is ever called).
+ * `videoPipeline.ts`/`lottiePipeline.ts` are the extracted answers.
  *
  * Review (task-5-review.md, F2) found the first version of this guard only
  * covered `videoPipeline.ts` -- the file *least* likely to reach for the dev
  * seam, since it was written from scratch in this task by an author who had
  * just read the constraint. The two files that actually form the production
- * entry point -- `useExportVideo.ts` and `TopBar.tsx` -- were unguarded, and
+ * entry point -- `useExport.ts` and `TopBar.tsx` -- were unguarded, and
  * a future edit adding `window.__mareyExportVideo?.(...)` to either would
  * ship a button broken in production with every test green. Worse:
  * `importsModule` can never detect `window.__mareyExportVideo` at all,
@@ -338,67 +465,163 @@ describe("export boundary", () => {
  * `devVideoSeam`-import check alone cannot catch the specific mechanism the
  * brief forbids ("Do not call `window.__mareyExportVideo`"), regardless of
  * which file it is pointed at. Each guarded file below therefore gets BOTH
- * an import-based check (`devVideoSeam`, reusing `importsModule`) and a
- * plain substring check for the `__mareyExportVideo` global -- they catch
- * different mistakes: importing the dev-only module (which would also pull
- * its whole seam shape into production regardless of whether it is ever
- * called) versus reaching through the global it installs.
+ * an import-based check (`devVideoSeam`/`devLottieSeam`, reusing
+ * `importsModule`) and a plain substring check for each dev-seam global --
+ * they catch different mistakes: importing the dev-only module (which would
+ * also pull its whole seam shape into production regardless of whether it is
+ * ever called) versus reaching through the global it installs.
  *
  * Both checks run against `stripComments(...)` output, not raw source. For
- * the `__mareyExportVideo` check that is mandatory, not tidiness: two of the
- * three files document the prohibition in a docstring, so the raw-source
- * version of this guard failed on them (see `stripComments`). The
- * `devVideoSeam` import check is stripped for the same reason one step
- * earlier -- `videoPipeline.ts:33` already writes "read directly from
- * `devVideoSeam.ts`'s `exportVideo`" in prose, which today escapes
- * `importsModule` only because the specifier is in backticks rather than
- * quotes. That is luck, not a property, and a guard that goes RED on a
- * comment edit trains people to weaken it.
+ * the dev-global checks that is mandatory, not tidiness: several of these
+ * files document the prohibition in a docstring, so the raw-source version
+ * of this guard failed on them (see `stripComments`). The dev-seam import
+ * check is stripped for the same reason one step earlier -- `videoPipeline.ts`
+ * already writes "read directly from `devVideoSeam.ts`'s `exportVideo`" in
+ * prose, which today escapes `importsModule` only because the specifier is
+ * in backticks rather than quotes. That is luck, not a property, and a guard
+ * that goes RED on a comment edit trains people to weaken it.
  *
  * Each test re-asserts a code landmark taken from *after* its file's last
  * long comment, so the two things that would make these guards vacuous both
  * fail loudly: reading the wrong source constant, and a `stripComments` that
  * ran off the rails and deleted the code it was meant to search.
  *
- * `videoPipeline.ts` legitimately imports `pixi.js` and `sceneIR`-adjacent
- * renderer modules -- unlike the encoder, it is the orchestration layer that
- * builds the scene tree -- so none of these three files are checked against
- * "must not import pixi.js"; that is a different property, already covered
- * for `videoContract.ts`/`videoEncode.ts` above.
+ * `videoPipeline.ts`/`lottiePipeline.ts` legitimately import `pixi.js` and
+ * `sceneIR`-adjacent renderer modules -- unlike the encoders, they are the
+ * orchestration layer that builds the scene tree -- so none of these files
+ * are checked against "must not import pixi.js"; that is a different
+ * property, already covered for `videoContract.ts`/`videoEncode.ts`/
+ * `lottieEncode.ts`/`lottieGeometry.ts` above.
  */
-describe("export boundary — R3 shared pipeline and its production entry points", () => {
+describe("export boundary — R3 shared pipelines and their production entry points", () => {
   it("videoPipeline.ts does not import devVideoSeam.ts, and does not reach __mareyExportVideo", () => {
     const code = stripComments(videoPipelineSource);
     expect(code).toContain("export async function runVideoExport");
-    expect(code).toContain("if (app?.renderer) destroyExportApp(app);");
+    // Task 4 moved the teardown this landmark used to pin into
+    // `rasterExport.ts` (see the retargeted `exportApp.test.ts` assertion,
+    // and the `withRasterExport` guard below). This file's own
+    // near-the-end landmark is now the lazy encode loop's own call.
+    expect(code).toContain("return await encodeVideo(plan, rasterized(), {");
     expect(importsModule(code, "devVideoSeam")).toBe(false);
     expect(code).not.toContain("__mareyExportVideo");
   });
 
-  it("useExportVideo.ts does not import devVideoSeam.ts, and does not reach __mareyExportVideo", () => {
-    const code = stripComments(useExportVideoSource);
-    expect(code).toContain("export function useExportVideo");
+  it("lottiePipeline.ts does not import devLottieSeam.ts, and does not reach __mareyExportLottie", () => {
+    const code = stripComments(lottiePipelineSource);
+    expect(code).toContain("export async function runLottieExport");
+    // Same Task 4 retargeting as videoPipeline.ts above: this file's own
+    // teardown moved into `rasterExport.ts` too, so the near-the-end
+    // landmark is now the encode call.
+    expect(code).toContain("const doc: LottieDoc = encodeLottie(layers, frames, plan, {");
+    expect(importsModule(code, "devLottieSeam")).toBe(false);
+    expect(code).not.toContain("__mareyExportLottie");
+  });
+
+  /**
+   * Task 5's new pipeline, same shape as the `videoPipeline.ts`/
+   * `lottiePipeline.ts` guards above: built on `withRasterExport`, so it
+   * must not reach `devApngSeam.ts` or its `__mareyExportApng` global.
+   */
+  it("apngPipeline.ts does not import devApngSeam.ts, and does not reach __mareyExportApng", () => {
+    const code = stripComments(apngPipelineSource);
+    expect(code).toContain("export async function runApngExport");
+    expect(code).toContain("return encodeApng(pngs, { fps: plan.fps });");
+    expect(importsModule(code, "devApngSeam")).toBe(false);
+    expect(code).not.toContain("__mareyExportApng");
+  });
+
+  /**
+   * Task 4's new shared module: `videoPipeline.ts`, `lottiePipeline.ts`,
+   * `apngPipeline.ts` and `devExportSeam.ts` are all built on
+   * `withRasterExport` (`rasterExport.ts`), so a dev-seam import reaching in
+   * through the one remaining copy of the compile -> plan -> build -> sample
+   * prefix would defeat the whole point of extracting it (global constraint
+   * 6's last row, design §7's table). `rasterExport.ts` has no reason to
+   * reach any of the four dev-only globals either, since it is the shared
+   * prefix, not an entry point -- checked for the same reason the entry
+   * points above are, even though nothing currently calls through it that
+   * way.
+   */
+  it("rasterExport.ts does not import any dev seam, and does not reach a dev export global", () => {
+    const code = stripComments(rasterExportSource);
+    expect(code).toContain("export async function withRasterExport");
+    expect(importsModule(code, "devVideoSeam")).toBe(false);
+    expect(importsModule(code, "devLottieSeam")).toBe(false);
+    expect(importsModule(code, "devExportSeam")).toBe(false);
+    expect(importsModule(code, "devApngSeam")).toBe(false);
+    expect(code).not.toContain("__mareyExportVideo");
+    expect(code).not.toContain("__mareyExportLottie");
+    expect(code).not.toContain("__mareyExportPng");
+    expect(code).not.toContain("__mareyExportApng");
+  });
+
+  /**
+   * Spec §7's pipeline row: `lottiePipeline.ts`, `apngPipeline.ts`,
+   * `videoPipeline.ts` and `rasterExport.ts` must not import "the dev seams".
+   * That means all four, not only each pipeline's own. The tests above check
+   * each pipeline against its own seam. That leaves, for example,
+   * `videoPipeline.ts` importing `devApngSeam.ts` unguarded (final review
+   * M-5). This row checks every pipeline against every seam and every
+   * dev-only global. Each landmark is a line near the end of its own file,
+   * so a swapped source constant or a stripper that stopped early fails here.
+   */
+  it.each([
+    ["videoPipeline.ts", videoPipelineSource, "return await encodeVideo(plan, rasterized(), {"],
+    ["lottiePipeline.ts", lottiePipelineSource, "const doc: LottieDoc = encodeLottie(layers, frames, plan, {"],
+    ["apngPipeline.ts", apngPipelineSource, "return encodeApng(pngs, { fps: plan.fps });"],
+    ["rasterExport.ts", rasterExportSource, "return await use({ ir, plan, app, root, frames, rasterize } as RasterizingExport);"],
+  ])("%s imports none of the four dev seams and reaches none of their globals", (_name, source, landmark) => {
+    const code = stripComments(source);
+    expect(code).toContain(landmark);
+    for (const seam of ["devVideoSeam", "devLottieSeam", "devApngSeam", "devExportSeam"]) {
+      expect(importsModule(code, seam), seam).toBe(false);
+    }
+    for (const global of ["__mareyExportVideo", "__mareyExportLottie", "__mareyExportApng", "__mareyExportPng"]) {
+      expect(code, global).not.toContain(global);
+    }
+  });
+
+  it("useExport.ts does not import any dev seam, and does not reach a dev export global", () => {
+    const code = stripComments(useExportSource);
+    expect(code).toContain("export function useExport");
     expect(code).toContain('await import("../compiler/export/videoPipeline")');
+    expect(code).toContain('await import("../compiler/export/lottiePipeline")');
+    expect(code).toContain('await import("../compiler/export/apngPipeline")');
     expect(importsModule(code, "devVideoSeam")).toBe(false);
+    expect(importsModule(code, "devLottieSeam")).toBe(false);
+    expect(importsModule(code, "devApngSeam")).toBe(false);
     expect(code).not.toContain("__mareyExportVideo");
+    expect(code).not.toContain("__mareyExportLottie");
+    expect(code).not.toContain("__mareyExportApng");
   });
 
-  it("useExportVideo.ts loads videoPipeline only through a dynamic import()", () => {
+  it("useExport.ts loads videoPipeline, lottiePipeline and apngPipeline only through a dynamic import()", () => {
     // Whole-branch review M-3, ruling R49. The dynamic import is why
     // mediabunny and the rest of the export path live in a click-loaded
     // chunk instead of the entry chunk every visitor downloads (+283,561
     // bytes measured in Task 5). A static import added beside the dynamic
-    // one compiles, works, and silently undoes that.
-    const code = stripComments(useExportVideoSource);
+    // one compiles, works, and silently undoes that. Task 3 widened this
+    // from "tells a static import of videoPipeline" to both pipelines the
+    // hook loaded then; Task 5 widens it again to all three.
+    const code = stripComments(useExportSource);
     expect(code).toContain('await import("../compiler/export/videoPipeline")');
+    expect(code).toContain('await import("../compiler/export/lottiePipeline")');
+    expect(code).toContain('await import("../compiler/export/apngPipeline")');
     expect(staticallyImportsModule(code, "videoPipeline")).toBe(false);
+    expect(staticallyImportsModule(code, "lottiePipeline")).toBe(false);
+    expect(staticallyImportsModule(code, "apngPipeline")).toBe(false);
   });
 
-  it("TopBar.tsx does not import devVideoSeam.ts, and does not reach __mareyExportVideo", () => {
+  it("TopBar.tsx does not import any dev seam, and does not reach a dev export global", () => {
     const code = stripComments(topBarSource);
     expect(code).toContain("export const TopBar");
     expect(code).toContain('handleExportClick("webm")');
+    expect(code).toContain('handleExportClick("apng")');
     expect(importsModule(code, "devVideoSeam")).toBe(false);
+    expect(importsModule(code, "devLottieSeam")).toBe(false);
+    expect(importsModule(code, "devApngSeam")).toBe(false);
     expect(code).not.toContain("__mareyExportVideo");
+    expect(code).not.toContain("__mareyExportLottie");
+    expect(code).not.toContain("__mareyExportApng");
   });
 });

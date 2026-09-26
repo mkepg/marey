@@ -464,6 +464,98 @@ describe("encodeLottie · per-kind geometry", () => {
     expect(shapes[1].c).toEqual({ a: 0, k: [1, 0.5, 0] });
   });
 
+  it("encodes a line as an open path followed by a butt/miter/10 stroke, never a fill", () => {
+    // §3.2/design §3.4: a line is a `sh` with c:false and zero tangents
+    // (pixi's `.poly(points, false)`), followed by a STROKE rather than a
+    // fill — never both, and the stroke goes AFTER the path for the same
+    // backward-`searchShapes` reason the fill does (see `shapeItemsFor`'s
+    // comment on the "circle"/"fl" ordering above).
+    const doc = only({
+      id: "scene.l", name: "l",
+      shape: { kind: "line", points: [{ x: 0, y: 0 }, { x: 10, y: 0 }], thickness: 4 },
+      anchor: { x: 5, y: 0 }, color: [1, 0, 0], parentId: null,
+    });
+    const items = layerNamed(doc, "l").shapes;
+    expect(items.map((i: { ty: string }) => i.ty)).toEqual(["sh", "st"]);
+    const sh = items[0];
+    expect(sh.ks.k.c).toBe(false);
+    expect(sh.ks.k.v).toEqual([[0, 0], [10, 0]]);
+    expect(sh.ks.k.i).toEqual([[0, 0], [0, 0]]);
+    expect(sh.ks.k.o).toEqual([[0, 0], [0, 0]]);
+    expect(items[1]).toMatchObject({
+      ty: "st",
+      c: { a: 0, k: [1, 0, 0] },
+      o: { a: 0, k: 100 },
+      w: { a: 0, k: 4 },
+      lc: 1,
+      lj: 1,
+      ml: 10,
+    });
+  });
+
+  it("encodes a text as one closed path per contour, then a single nonzero fill", () => {
+    // Spec §6.4. Nonzero (`r: 1`) is load-bearing, not a nicety: Task 6 Q4
+    // found 19 of 100 JetBrains Mono glyphs render differently under
+    // even-odd, among them `a b d e g h m n p q r` and `8`. The fill goes
+    // AFTER every path, for the backward-`searchShapes` reason above.
+    const glyphA = {
+      v: [[0, 0], [10, 0], [10, 10]] as const,
+      i: [[0, 0], [0, 0], [-1, 2]] as const,
+      o: [[3, 0], [0, 0], [0, 0]] as const,
+    };
+    const glyphB = {
+      v: [[20, 0], [30, 0], [25, 8]] as const,
+      i: [[0, 0], [0, 0], [0, 0]] as const,
+      o: [[0, 0], [0, 0], [0, 0]] as const,
+    };
+    const doc = only({
+      id: "scene.t", name: "t", shape: { kind: "text", contours: [glyphA, glyphB] },
+      anchor: { x: 15, y: 5 }, color: [1, 1, 1], parentId: null,
+    });
+    const layer = layerNamed(doc, "t");
+    expect(layer.ty).toBe(4);
+    const items = layer.shapes;
+    expect(items.map((s: { ty: string }) => s.ty)).toEqual(["sh", "sh", "fl"]);
+    expect(items[0].ks.k).toEqual({ v: [[0, 0], [10, 0], [10, 10]], i: [[0, 0], [0, 0], [-1, 2]], o: [[3, 0], [0, 0], [0, 0]], c: true });
+    expect(items[1].ks.k).toEqual({ v: [[20, 0], [30, 0], [25, 8]], i: [[0, 0], [0, 0], [0, 0]], o: [[0, 0], [0, 0], [0, 0]], c: true });
+    expect(items[2].r).toBe(1);
+    expect(items[2].c).toEqual({ a: 0, k: [1, 1, 1] });
+    expect(items[2].o).toEqual({ a: 0, k: 100 });
+  });
+
+  it("masks a clipped text layer to its layout box, and leaves an unclipped one unmasked", () => {
+    // The mask is in the layer's own space (the space `a` is measured in),
+    // so the box is (0,0)-(w,h) with straight edges, additive, opaque.
+    const glyph = { v: [[0, 0], [10, 0], [10, 10]] as const, i: [[0, 0], [0, 0], [0, 0]] as const, o: [[0, 0], [0, 0], [0, 0]] as const };
+    const clipped = layerNamed(
+      only({
+        id: "scene.t", name: "t", shape: { kind: "text", contours: [glyph], clip: { width: 202, height: 71 } },
+        anchor: { x: 101, y: 35.5 }, color: [0, 0, 0], parentId: null,
+      }),
+      "t",
+    );
+    expect(clipped.hasMask).toBe(true);
+    expect(clipped.masksProperties).toEqual([
+      {
+        nm: "layout box",
+        mode: "a",
+        inv: false,
+        o: { a: 0, k: 100 },
+        x: { a: 0, k: 0 },
+        pt: { a: 0, k: { v: [[0, 0], [202, 0], [202, 71], [0, 71]], i: [[0, 0], [0, 0], [0, 0], [0, 0]], o: [[0, 0], [0, 0], [0, 0], [0, 0]], c: true } },
+      },
+    ]);
+    const plain = layerNamed(
+      only({
+        id: "scene.t", name: "t", shape: { kind: "text", contours: [glyph] },
+        anchor: { x: 5, y: 5 }, color: [0, 0, 0], parentId: null,
+      }),
+      "t",
+    );
+    expect(plain.hasMask).toBeUndefined();
+    expect(plain.masksProperties).toBeUndefined();
+  });
+
   it("emits a group as a null layer carrying no shapes", () => {
     const doc = only({
       id: "scene.g", name: "g", shape: { kind: "group" },

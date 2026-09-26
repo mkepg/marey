@@ -2,8 +2,8 @@ import { useState } from "preact/hooks";
 import type { FunctionComponent } from "preact";
 import { useAppStore } from "../../store";
 import { useShare } from "../../hooks/useShare";
-import { useExportVideo } from "../../hooks/useExportVideo";
-import type { VideoContainer } from "../../compiler/export/videoContract";
+import { useExport, type ExportKind } from "../../hooks/useExport";
+import { exportLabelFor } from "./exportLabel";
 import styles from "./TopBar.module.scss";
 
 const SunIcon: FunctionComponent = () => (
@@ -65,6 +65,21 @@ const VideoIcon: FunctionComponent = () => (
   </svg>
 );
 
+const ApngIcon: FunctionComponent = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
+    <path d="M21 15l-5-5L5 21" />
+  </svg>
+);
+
+const LottieIcon: FunctionComponent = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 12a9 9 0 1 1 9 9" />
+    <circle cx="12" cy="21" r="1.5" fill="currentColor" stroke="none" />
+  </svg>
+);
+
 interface TopBarProps {
   onRun: () => void;
 }
@@ -81,7 +96,7 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
   const handleShare = useShare();
   const code        = useAppStore((s) => s.code);
   const isExporting = useAppStore((s) => s.isExporting);
-  const { exportVideo, progress } = useExportVideo();
+  const { exportScene, progress } = useExport();
 
   const [confirmingNew, setConfirmingNew] = useState(false);
   const [confirmingExample, setConfirmingExample] = useState(false);
@@ -121,21 +136,12 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
     setTimeout(() => setConfirmingExample(false), 150);
   };
 
-  // The New/Example buttons reflect their confirm state in the label; this
-  // does the same for the one button currently mid-export, showing a percent
-  // rather than static text so a several-second export does not read as a
-  // hung tab. The other export button just goes disabled.
-  const exportLabel = (container: VideoContainer): string => {
-    if (progress && progress.container === container) {
-      return progress.total > 0
-        ? `${Math.round((progress.done / progress.total) * 100)}%`
-        : "starting…";
-    }
-    return container;
-  };
+  // See `exportLabelFor`'s own docstring above (module level) for what this
+  // shows and why APNG is not treated like Lottie.
+  const exportLabel = (kind: ExportKind): string => exportLabelFor(kind, progress);
 
-  const handleExportClick = (container: VideoContainer): void => {
-    void exportVideo(container);
+  const handleExportClick = (kind: ExportKind): void => {
+    void exportScene(kind);
   };
 
   return (
@@ -216,11 +222,11 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
         <div className={styles.divider} />
 
         <button
-          className={`${styles.btnIcon}${progress?.container === "mp4" ? ` ${styles.btnExporting}` : ""}`}
+          className={`${styles.btnIcon}${progress?.kind === "mp4" ? ` ${styles.btnExporting}` : ""}`}
           onClick={() => handleExportClick("mp4")}
           disabled={isExporting}
           aria-label={
-            progress?.container === "mp4"
+            progress?.kind === "mp4"
               ? `Exporting MP4 video, ${exportLabel("mp4")}`
               : "Export scene as MP4 video"
           }
@@ -231,11 +237,11 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
         </button>
 
         <button
-          className={`${styles.btnIcon}${progress?.container === "webm" ? ` ${styles.btnExporting}` : ""}`}
+          className={`${styles.btnIcon}${progress?.kind === "webm" ? ` ${styles.btnExporting}` : ""}`}
           onClick={() => handleExportClick("webm")}
           disabled={isExporting}
           aria-label={
-            progress?.container === "webm"
+            progress?.kind === "webm"
               ? `Exporting WebM video, ${exportLabel("webm")}`
               : "Export scene as WebM video"
           }
@@ -243,6 +249,36 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
         >
           <VideoIcon />
           {exportLabel("webm")}
+        </button>
+
+        <button
+          className={`${styles.btnIcon}${progress?.kind === "apng" ? ` ${styles.btnExporting}` : ""}`}
+          onClick={() => handleExportClick("apng")}
+          disabled={isExporting}
+          aria-label={
+            progress?.kind === "apng"
+              ? `Exporting APNG image, ${exportLabel("apng")}`
+              : "Export scene as APNG image"
+          }
+          title="Export APNG image"
+        >
+          <ApngIcon />
+          {exportLabel("apng")}
+        </button>
+
+        <button
+          className={`${styles.btnIcon}${progress?.kind === "lottie" ? ` ${styles.btnExporting}` : ""}`}
+          onClick={() => handleExportClick("lottie")}
+          disabled={isExporting}
+          aria-label={
+            progress?.kind === "lottie"
+              ? "Exporting Lottie animation"
+              : "Export scene as Lottie animation (JSON)"
+          }
+          title="Export Lottie animation (JSON)"
+        >
+          <LottieIcon />
+          {exportLabel("lottie")}
         </button>
 
         <div className={styles.divider} />

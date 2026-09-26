@@ -1,0 +1,91 @@
+<!doctype html>
+<!--
+  Phase 5C Task 7: pixi's text-measurement caches versus font loading.
+  Like Task 6's q6-fresh.html, this page does nothing with 'JetBrains Mono'
+  until a probe function is called, so a fresh page is genuinely cold. Only
+  the @font-face rule is declared, copied from src/styles/global.scss.
+  Driven by cache-run.mjs against `npx vite --port 5199 --strictPort`.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      @font-face {
+        font-family: 'JetBrains Mono';
+        src: url('/fonts/JetBrainsMono-Regular.ttf') format('truetype');
+        font-weight: 400;
+        font-style: normal;
+      }
+    </style>
+  </head>
+  <body>
+    <script type="module">
+      import { CanvasTextMetrics, TextStyle } from "pixi.js";
+      import { withRasterExport } from "/src/compiler/export/rasterExport.ts";
+
+      // Exactly the props builder.ts gives a text node's TextStyle.
+      const FAMILY = "'JetBrains Mono', monospace";
+      const style = () => new TextStyle({ fontFamily: FAMILY, fontSize: 60, fill: "#000000" });
+      const TEXT = "cache-probe->x";
+      // A Marey `\n` escape (backslash, n), built from char codes so no
+      // layer of quoting can turn it into a real newline, which a Marey
+      // string may not contain.
+      const NL = String.fromCharCode(92) + "n";
+      const SOURCE = `scene { size: (800, 200) duration: 1 background: #ffffff
+        text t { position: (10, 10), content: "${TEXT}${NL}line two", fontSize: 60, color: #000000 } }`;
+      const SPEC = "60px 'JetBrains Mono'";
+
+      const snap = (m) => ({
+        width: m.width, height: m.height, lineHeight: m.lineHeight,
+        ascent: m.fontProperties.ascent, descent: m.fontProperties.descent,
+        fontSize: m.fontProperties.fontSize,
+      });
+
+      // The raw question: which cache serves what, once a fallback
+      // measurement has happened and the font has loaded since.
+      window.__raw = async () => {
+        const checkBefore = document.fonts.check(SPEC);
+        const styleA = style();
+        const fontString = styleA._fontString;
+        const before = CanvasTextMetrics.measureText(TEXT, styleA);
+        await document.fonts.load(SPEC);
+        const checkAfter = document.fonts.check(SPEC);
+        const sameInstance = CanvasTextMetrics.measureText(TEXT, styleA);
+        const styleB = style();
+        const newInstance = CanvasTextMetrics.measureText(TEXT, styleB);
+        const neverSeenText = CanvasTextMetrics.measureText(TEXT + "!", style());
+        CanvasTextMetrics.clearMetrics(fontString);
+        const afterClearMetrics = CanvasTextMetrics.measureText(TEXT, style());
+        return {
+          fontString,
+          styleKeys: [styleA.styleKey, styleB.styleKey],
+          checkBefore, checkAfter,
+          before: snap(before),
+          sameInstance: { ...snap(sameInstance), isCachedObject: sameInstance === before },
+          newInstance: { ...snap(newInstance), isCachedObject: newInstance === before },
+          neverSeenText: snap(neverSeenText),
+          afterClearMetrics: snap(afterClearMetrics),
+        };
+      };
+
+      // The product question: what the real export prefix builds.
+      // `poison` measures DIFFERENT text in a new style first, on a cold
+      // page, the way the preview does when it builds a scene before the
+      // font has loaded. It can only reach the export through a cache keyed
+      // by the font string, never through `_measurementCache`.
+      window.__export = async ({ poison, preload }) => {
+        const checkAtStart = document.fonts.check(SPEC);
+        if (preload) await document.fonts.load(SPEC);
+        let poisoned = null;
+        if (poison) poisoned = snap(CanvasTextMetrics.measureText("something else entirely", style()));
+        const built = await withRasterExport({ source: SOURCE, fps: 30 }, async ({ root }) => {
+          const wrapper = root.children[0];
+          const text = wrapper.children[0];
+          const m = CanvasTextMetrics.measureText(text.text, text.style);
+          return { baseSize: wrapper.__baseSize, lines: m.lines, lineWidths: m.lineWidths, ...snap(m) };
+        });
+        return { checkAtStart, poisoned, built, checkAtEnd: document.fonts.check(SPEC) };
+      };
+    </script>
+  </body>
+</html>

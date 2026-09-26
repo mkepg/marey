@@ -1,14 +1,17 @@
 # Visual check
 
-Run the Marey playground in a real browser and capture what it renders. Use it when verifying a renderer or physics change, checking that a scene settles where it should, that the ticker stops, or that a scene replays identically across a page reload — anything the headless Vitest suite structurally cannot see.
+Runs the Marey playground in a real browser and captures what it renders. Use it
+when verifying a renderer or physics change, checking that a scene settles where
+it should, that the ticker stops, or that a scene replays identically across a
+page reload: anything the headless Vitest suite structurally cannot see.
 
 The renderer's unit tests are deliberately headless — `clock.ts`, `timeline.ts`,
 `physicsWorld.ts` and `physicsSync.ts` import nothing from `pixi.js` so they run
 in Node. That is what makes them fast, and it is also what they cannot do: none
 of them can see a canvas.
 
-This harness covers the gap. It drives the real app in Chromium, captures PNGs you
-can look at, and measures three things the suite cannot.
+This harness covers the gap. It drives the real app in Chromium, captures PNGs
+you can look at, and measures three things the suite cannot.
 
 **It has already earned its keep.** The first run found a determinism bug that
 all 94 headless tests missed: a body frozen by `duration` expiry kept its
@@ -241,6 +244,25 @@ named seam beats re-implementing compile → plan → build → sample → encod
 page script, where a harness-only copy could silently diverge from the
 pipeline the app actually runs.
 
+**The export and the render happen in two separate `node` processes (Phase
+5C Task 3, ruling T3-R1).** `task-2-verify.md` found that lottie-web's own
+stroke join/cap geometry renders wrong only when a page that ran the export
+seam's pixi WebGL `Application` and `--disable-accelerated-2d-canvas` are
+both present. The fix this script actually needed was measured, not
+guessed: a second `page`, and even a second `chromium.launch()` in its own
+`BrowserContext`, still reproduced the broken join as long as the export and
+the render happened inside the SAME Node.js process; only spawning the
+render half as a genuinely separate OS process
+(`lottie-render-worker.mjs`, `lottie-check.mjs`'s sibling, invoked with
+`node`'s own `child_process.spawnSync`) reproduced the correct geometry
+every time. `lottie-check.mjs` still keeps `--disable-accelerated-2d-canvas`
+(5A pinned it for a real, separate determinism reason — see that flag's own
+comment in the script) and still runs `--compare-png`'s PNG export
+(`window.__mareyExportPng`) on the export side, since that call only reads
+back bytes the export process's own page produced. See
+`lottie-check.mjs`'s and `lottie-render-worker.mjs`'s own header comments
+for the full measurement trail.
+
 ```bash
 node tools/visual-check/lottie-check.mjs \
   --scene tools/visual-check/scenes/lottie-layer-order.marey \
@@ -331,7 +353,7 @@ wired in `main.tsx` behind `import.meta.env.DEV`) rather than clicking the
 shipped export button. Since the Phase 5B fix wave that seam is **not** a copy
 of the export pipeline: it calls the shipped `runVideoExport`
 (`src/compiler/export/videoPipeline.ts`), the same function a click reaches
-through `useExportVideo.ts`, with observers that capture each canvas the
+through `src/hooks/useExport.ts`, with observers that capture each canvas the
 encoder is handed, the sampler's hash and the resolved encoder config. So a
 run of this script measures the product's orchestration. What still differs
 from a click is the entry point (a `window` global versus the button's
@@ -348,7 +370,7 @@ against equally wrong references.
 **A limitation of the shipped button this script's own `--duration` flag can
 mask if you are not watching for it.** `--duration` overrides a scene's own
 `duration:` field, so this script can export any scene, bounded or not. The
-shipped button has no such override — `useExportVideo.ts` never passes
+shipped button has no such override — `useExport.ts` never passes
 `durationSeconds` to `runVideoExport` — so a real click always falls through
 to the scene's own top-level `duration:` field, and **no scene lacking one can
 be exported from the UI at all**. The shipped default scene declares
@@ -417,7 +439,12 @@ gate would fail most MP4 runs and hide a real failure behind the same exit 1.
 
 Exit code is non-zero if: either cold run failed; decode failed; the decoded
 frame count, dimensions or timestamp schedule disagree with what was
-requested; any frame's nearest-neighbour match is STRICT and wrong, or is a
+requested; **the reported coded size is not exactly 2x the scene's own
+declared size** (Phase 5C, spec §2.1 — added alongside `VIDEO_SCALE`; a
+pipeline that regressed to extracting at scale 1 would still pass every
+other gate here, because none of them look at absolute size against the
+scene, only at internal consistency between the decoded video and its own
+references); any frame's nearest-neighbour match is STRICT and wrong, or is a
 tie that excludes the frame itself; a sampled frame was never handed to the
 encoder; the two cold runs' snapshot hashes or reference-frame PNGs disagree;
 or, **for WebM only**, the two cold runs' raw container bytes disagree. Never
@@ -434,6 +461,248 @@ no longer exists; the masked MP4 comparison is always reported.
 See `eval/RESULTS-PHASE-5B.md` for a worked example specific to this script,
 including one frame where a faint lossy-codec compression artefact trailing a
 fast-moving edge was read and correctly not flagged as a defect.
+
+## Measuring video quality
+
+`video-check.mjs` proves a video's frames are the right ones, in the right
+order, at the right size. It says nothing about how much the codec's own
+lossy compression damaged each pixel. `quality-check.mjs` answers that
+question: it is the runnable home (spec §2.5) for the throwaway probes in
+`docs/research/2026-09-24-export-quality-probes/` (`matrix.ts`/
+`matrix-run.mjs`) that measured findings
+`docs/research/2026-09-24-export-quality-findings-and-options.md` §1.2's
+numbers by hand-rebuilding the render-and-encode loop with raw `pixi.js` and
+raw WebCodecs. This script ports the same scoring method onto
+`window.__mareyExportVideo` (`src/lib/devVideoSeam.ts`), so it measures the
+SHIPPED pipeline (`runVideoExport`) rather than a probe that could silently
+drift from it (ruling R45).
+
+It exports a scene **once** per requested container (not twice, like
+`video-check.mjs` — quality is not a reproducibility question), decodes the
+result back inside the page with a real `VideoDecoder` (mediabunny's ESM
+bundle injected the same way `video-check.mjs` injects it), and scores each
+decoded frame directly against the reference PNG at the SAME index — the
+exact canvas `runVideoExport`'s `onFrame` observer captured before the
+encoder consumed it. Two numbers per container, both defined exactly as
+`matrix.ts`'s `score` function defines them, so they are directly comparable
+to findings §1.2's table:
+
+- **PSNR over RGB** — `10 * log10(65025 / mse)`, averaged per frame then
+  reported both per frame and overall.
+- **Specks** — pixels whose worst-channel delta against the reference
+  exceeds 64, per frame and total.
+
+```bash
+node tools/visual-check/quality-check.mjs \
+  --scene tools/visual-check/scenes/... \
+  --containers mp4,webm --fps 30 \
+  --out .visual-check/quality/default
+```
+
+| Flag | Meaning |
+|---|---|
+| `--scene <path>` | A `.marey` file. Required — no `default` fallback |
+| `--containers <list>` | Comma-separated `mp4`/`webm` (default `mp4,webm`) |
+| `--fps <n>` | Export frame rate (default 30) |
+| `--duration <s>` | Export bound in seconds, overriding the scene's own `duration:` |
+| `--out <dir>` | Where `report.json` goes |
+| `--scorer <gpu\|software>` | The scoring browser's 2D canvas (default `gpu`, the configuration spec §9.1's criterion names). `software` adds `--disable-accelerated-2d-canvas`. It changes only the decode-and-score step, not the file: about 0.6 dB lower and about 10× the specks (`eval/RESULTS-PHASE-5C.md`, the 2×2) |
+| `--mediabunny-path <p>` | Override the mediabunny ESM bundle path |
+| `--url <origin>` | Dev server origin (default `http://localhost:5199`). Same `--strictPort` trap as `check.mjs` applies |
+| `--headed` | Show the browser window |
+
+Exit code is non-zero only if the export or the decode itself failed for a
+requested container — **never on how good or bad the measured PSNR or speck
+count is**, which is a judgement call for whoever reads the report, the same
+"reported, not gated" shape as `video-check.mjs`'s MP4 byte comparison.
+"The file plays" is not evidence: `report.json` records the exact command
+line that produced it (`commandLine`), alongside per-container `width`/
+`height` (coded) and `sceneWidth`/`sceneHeight`, so a number in this report
+is always paired with the invocation that produced it.
+
+## Exporting APNG
+
+`apng-check.mjs` exports a scene to APNG, decodes it back with a real
+`ImageDecoder`, and proves every decoded frame matches the lossless canvas
+it was muxed from — not "close enough," but **0 differing bytes**. It
+exists for the same headless-blind-spot reason every other script on this
+page does, sharpened by APNG's own losslessness: unlike a lossy video
+codec, there is no acceptable tolerance to argue about, so a real mismatch
+of even one byte is a real bug.
+
+It calls `window.__mareyExportApng` (installed dev-only by
+`src/lib/devApngSeam.ts`, wired in `main.tsx` behind `import.meta.env.DEV`)
+rather than clicking the top bar's **apng** button — same reasoning as
+`video-check.mjs`'s `window.__mareyExportVideo`: that seam calls the
+shipped `runApngExport` (`src/compiler/export/apngPipeline.ts`, the same
+function the button calls) with an observer that captures each canvas's
+raw pixels (`getImageData`) immediately before the pipeline reads them into
+PNG bytes, so this script measures the product's orchestration rather than
+a hand-kept copy of it.
+
+**The decode-back step runs INSIDE the page, with a real `ImageDecoder`.**
+Confirmed working in Playwright's Chromium before this script was written
+(a throwaway probe built a 3-frame APNG with `encodeApng` itself and
+decoded it back: `frameCount: 3`, correct dimensions, correct per-frame
+`duration`) — the brief's Node-side `zlib`-inflate fallback is therefore
+**not implemented**, because there was nothing to fall back from.
+
+**One measured memory limit shapes this script's whole design: the
+reference capture cannot scale to a long export.** `devApngSeam.ts` holds
+one raw, uncompressed RGBA base64 string per sampled frame — the lossless
+data byte-for-byte comparison needs — and that is a real cost: ~2.56MB of
+base64 per 800×600 frame. At 90–180 frames (3–6s) that is 230–460MB, fine;
+at 900 frames (a `--duration 30` export) it is over 2GB, and the page's
+execution context was measured being destroyed mid-export under that load
+("most likely because of a navigation" — consistent with Chromium
+OOM-killing the renderer). Two consequences, both load-bearing:
+
+- This script never ships that array across the Node/browser (CDP)
+  boundary twice. `runExport` stashes the seam's full result, including
+  `referenceRgba`, on a page-side global (`window.__apngCheckLastResult`);
+  `decodeAndCompare` reads it back in the SAME page realm rather than
+  receiving it as a second `page.evaluate` argument. An earlier version did
+  send it twice and reproduced the crash above at 90 frames already —
+  fixed by never re-serializing it, not by any duration limit.
+- For a **file-size** measurement on a long export (spec §5.3's "one scene
+  of at least 30s"), pass **`--size-only`** (fix round 1, finding 2) instead
+  of running the full pixel-identity mode at that duration. It passes
+  `withReferenceCapture: false` to `window.__mareyExportApng`
+  (`devApngSeam.ts`), so the seam never allocates the raw-RGBA array at all
+  — the same memory-bound reasoning as `useExport.ts`'s video path
+  (`ExportVideoOptions.withReferenceFrames`), applied to APNG. Skips
+  decode-and-compare and `missingReferenceFrames` (there is no reference to
+  check either against); still runs both cold pages and checks byte/hash
+  reproducibility (spec §5.3's own determinism ask) and the independent
+  `fcTL` parse, both cheap regardless of frame count. Measured this way:
+  `linear-motion.marey --duration 30` (900 frames, 800×600, 30fps) is
+  **11,504,757 bytes**, byte-identical (sha256) across two cold runs, 0
+  `fcTL` problems.
+
+  An earlier version of this evidence came from an uncommitted scratch
+  probe calling `runApngExport` directly with no seam at all, which measured
+  **11,492,040 bytes** for the identical scene/fps/duration — a ~0.1%
+  difference from the number above. Both numbers are real measurements of
+  real runs, but they came from different code paths (the scratch probe
+  skipped `devApngSeam.ts` entirely), and no same-code two-process A/B was
+  run to isolate whether the gap is a process boundary or the differing
+  code path. So the gap itself is **unexplained, non-gating; determinism
+  is proven within one process only** — `--size-only`'s own two-cold-run
+  comparison above *is* a same-code, same-process A/B, and that one is
+  byte-identical. Use `--size-only`'s number going forward; it is the one
+  a rerun of the command below reproduces.
+
+```bash
+node tools/visual-check/apng-check.mjs \
+  --scene tools/visual-check/scenes/linear-motion.marey \
+  --fps 30 --out .visual-check/apng/linear-motion
+
+# a >=30s file-size measurement (spec §5.3), without the memory-heavy
+# reference capture:
+node tools/visual-check/apng-check.mjs \
+  --scene tools/visual-check/scenes/linear-motion.marey \
+  --fps 30 --duration 30 --size-only --out .visual-check/apng/linear-motion-30s
+```
+
+| Flag | Meaning |
+|---|---|
+| `--scene <path>` | A `.marey` file. Required — no `default` fallback |
+| `--fps <n>` | Export frame rate (default 30) |
+| `--duration <s>` | Export bound in seconds, overriding the scene's own `duration:`. Without `--size-only`, keep this well under 900 frames' worth — see the memory limit above |
+| `--size-only` | Measure a file SIZE only, not pixel identity — see above. Skips decode-and-compare and `missingReferenceFrames`; still checks byte/hash reproducibility and `fcTL` |
+| `--frames <list>` | Comma-separated decoded frame indices to write as PNG. Every decoded frame is still analysed numerically regardless of this flag. Default: an evenly-spaced spread of five indices. Ignored under `--size-only` |
+| `--out <dir>` | Where `scene.png`, `decoded_%04d.png` and `report.json` go |
+| `--url <origin>` | Dev server origin (default `http://localhost:5199`). Same `--strictPort` trap as `check.mjs` |
+| `--headed` | Show the browser window |
+
+**`referenceRgba[k]` is keyed by the sampled frame's own frozen
+`frame.index`, never by array position** (Task 4 ruling T4-R2, carried
+into `devApngSeam.ts`). That is what makes a reordered mux loop show up as
+exactly the swapped frames mismatching, rather than the harness comparing a
+wrong file against equally-wrong references — measured directly: swapping
+two frames inside `runApngExport`'s mux loop made only those two frames'
+`differingBytes` non-zero, everything else in the file still matched.
+
+**`fcTL` delays are parsed independently, in Node**, by a small
+from-scratch chunk walker (not a re-import of `apngEncode.ts`'s own parser)
+— the same "an independent check can't agree with a bug by construction"
+reasoning `apngEncode.test.ts`'s `fakePng` fixture follows. Every `fcTL`
+must show `delay_num=1`, `delay_den=<the requested fps>`, `dispose_op=0`,
+`blend_op=0`, `x_offset=y_offset=0`.
+
+**One measured Chromium quirk affects the duration check only, not the
+gating fcTL check.** `ImageDecoder`'s reported `VideoFrame.duration`
+quantizes an APNG frame's delay to the nearest whole millisecond — at
+30fps, the ideal `33333.33µs` decodes as exactly `33000µs` on every frame,
+a uniform `-333.33µs` difference, not per-frame jitter. This script
+compares against that millisecond-rounded value, not the un-quantized
+ideal, so the check stays tight (≤1µs) without permanently flagging every
+correct frame — the un-quantized `fcTL` bytes themselves are checked
+exactly, separately, by the Node-side parse above.
+
+Exit code is non-zero if: either cold run failed; the seam reported a
+sampled frame it never rasterized (`missingReferenceFrames`); decode
+failed, or decoded frame count does not match the seam's own reported
+frame count; ANY decoded frame differs from its reference by so much as
+one byte; any decoded frame's quantization-adjusted `duration` is off by
+more than 1µs; any parsed `fcTL` is wrong; the two cold runs' APNG bytes
+(sha256) disagree; or either run recorded a page error. Never on how the
+PNGs look, and never on a byte-for-byte comparison of the two cold runs'
+raw reference captures against each other (deliberately not computed —
+see the memory-limit note above). **Under `--size-only`**, only the
+`fcTL`/byte-hash/page-error checks apply — there is no reference and no
+decode step to gate on.
+
+**Look at the PNGs.** `scene.png` is a real, valid APNG — open it in a
+modern browser and it animates natively, no JavaScript required. Also read
+`decoded_0000.png`, a mid-export frame, and the last decoded frame with the
+Read tool before trusting a run's numbers.
+
+## Forcing a device-limit refusal
+
+`videoContract.ts`'s `deviceLimitDiagnostic` refuses a coded size larger than
+the device's `MAX_TEXTURE_SIZE`/`MAX_RENDERBUFFER_SIZE` (spec §2.3). It is
+unit-tested directly as a pure function, but `videoPipeline.ts`'s one-line
+integration of it — reading the export `Application`'s own GL limits and
+throwing if it refuses — is exercised by nothing headless, and no real
+device this project runs on has limits small enough for any shipped scene to
+trigger it naturally (Phase 5C Task 1 fix round 1, mutation (c): deleting
+that one `if` line left `npx vitest run` green at 946/946).
+
+`device-limit-check.mjs` closes that gap without touching production code:
+Playwright's `page.addInitScript` patches
+`WebGL2RenderingContext.prototype.getParameter` to force
+`MAX_TEXTURE_SIZE`/`MAX_RENDERBUFFER_SIZE` to a small value *before any of
+the app's own scripts run*, then calls `window.__mareyExportVideo` (purely
+as a convenient entry point into the shipped `runVideoExport`, same
+reasoning as every other dev-seam-based script here) and checks that it
+throws `VIDEO_EXCEEDS_DEVICE_LIMITS`. The patch lives entirely in the
+harness's init script — no dev-only global, no production hook, and nothing
+in `src/` changes; the shipped pipeline's own `gl.getParameter` calls are
+what get exercised, against a browser API this script has temporarily lied
+to. Every other WebGL parameter name passes through to the real
+implementation, so PixiJS's own context setup is unaffected.
+
+```bash
+node tools/visual-check/device-limit-check.mjs \
+  --scene tools/visual-check/scenes/linear-motion.marey \
+  --limit 100
+```
+
+| Flag | Meaning |
+|---|---|
+| `--scene <path>` | A `.marey` file. Required — no `default` fallback. Its coded size (2x the scene's own declared size) must exceed `--limit` in at least one dimension, or there is nothing for the refusal to fire on |
+| `--container <name>` | `mp4` or `webm` (default `mp4`) — the refusal fires before either container's own codec-level check |
+| `--fps <n>` | Export frame rate (default 30) |
+| `--duration <s>` | Export bound in seconds, overriding the scene's own `duration:` |
+| `--limit <n>` | The forced `MAX_TEXTURE_SIZE`/`MAX_RENDERBUFFER_SIZE`, in pixels (default 100) |
+| `--url <origin>` | Dev server origin (default `http://localhost:5199`). Same `--strictPort` trap as `check.mjs` |
+| `--headed` | Show the browser window |
+
+Exit code is non-zero unless the export throws exactly
+`VIDEO_EXCEEDS_DEVICE_LIMITS` — a scene whose coded size fits under `--limit`
+(the control case) or any other refusal both count as failures, so a
+weakened or deleted device-limit check cannot pass silently.
 
 ## Environment
 
@@ -452,7 +721,7 @@ local copy in `node_modules` instead (`page.route`), so `--renderer
 dotlottie-web` does not depend on outbound network access either, even
 though Playwright's Chromium here happens to have it.
 
-`video-check.mjs` additionally needs `mediabunny`, loaded the same way —
+`video-check.mjs` and `quality-check.mjs` additionally need `mediabunny`, loaded the same way —
 its self-contained ESM bundle
 (`node_modules/mediabunny/dist/bundles/mediabunny.mjs`) is injected into the
 page inline, with no network access. Unlike every other package named on this

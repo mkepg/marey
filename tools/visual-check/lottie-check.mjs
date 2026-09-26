@@ -22,16 +22,53 @@
  * The returned Lottie document is written to disk, optionally patched with
  * `--set`/`--unset` (used by the §11.4 version-field question to swap `v`
  * for `ver` without a second export), then handed to a REAL lottie-web
- * player (`lottie-web/build/player/lottie.min.js`, loaded via
- * `page.addScriptTag({ path })` — confirmed working against a page already
- * navigated to the dev server's own origin, not just `about:blank`) using
- * the `canvas` renderer. The canvas renderer is a plain 2D context, so
- * unlike PixiJS's WebGL canvas there is no `preserveDrawingBuffer` trap:
- * `ctx.getImageData` reads real pixels back exactly, with no screenshot
- * re-encoding in between. Both a full PNG capture (for a human to look at
- * with the Read tool) and precise in-page `getImageData` samples at named
- * coordinates are recorded — a screenshot alone is an "impression"; the
- * numeric samples are the actual evidence.
+ * player using the `canvas` renderer. The canvas renderer is a plain 2D
+ * context, so unlike PixiJS's WebGL canvas there is no
+ * `preserveDrawingBuffer` trap: `ctx.getImageData` reads real pixels back
+ * exactly, with no screenshot re-encoding in between. Both a full PNG
+ * capture (for a human to look at with the Read tool) and precise in-page
+ * `getImageData` samples at named coordinates are recorded — a screenshot
+ * alone is an "impression"; the numeric samples are the actual evidence.
+ *
+ * **Two processes, not one page or two (Phase 5C Task 3, ruling T3-R1, as
+ * MEASURED — corrects the ruling's own "a fresh page or context" text).**
+ * Export happens in THIS process, on a page navigated to the real Marey app
+ * (`window.__mareyExportLottie`/`window.__mareyExportPng`). The
+ * lottie-web/dotlottie-web player renders in a SEPARATE OS process, spawned
+ * as a child (`lottie-render-worker.mjs`), on a page that never navigates to
+ * the Marey app at all (`about:blank`) and therefore never constructs any
+ * pixi WebGL `Application`.
+ *
+ * This is not a style choice — it is the fix for a real, independently
+ * confirmed artifact, and the process boundary is load-bearing, not
+ * incidental. `task-2-verify.md`'s 2×2 found that lottie-web's own stroke
+ * join/cap geometry renders WRONG only when a page that ran the export
+ * seam's pixi `Application` and a page rendering under
+ * `--disable-accelerated-2d-canvas` are both present; the brief's own
+ * proposed fix ("export on one page, render in a fresh page or context")
+ * was written from that finding but not itself measured against this
+ * script. It was measured here, and disproven: a SECOND `browser.newPage()`
+ * (a fresh page, a fresh `BrowserContext` — Playwright gives every
+ * `browser.newPage()` call its own context implicitly) still reproduced the
+ * broken join, and so did a SECOND, fully separate `chromium.launch()` (a
+ * fresh OS-level Chromium process), each time the export and the render
+ * happened inside THE SAME Node.js process. Splitting the identical two
+ * steps across two separate `node` invocations — export in one process,
+ * exit, a second process reads the exported document back from disk and
+ * renders it — reproduced the correct geometry every time, including with a
+ * 3-second delay inserted between closing the first browser and launching
+ * the second (ruling out a teardown race). So the actual boundary the
+ * defect needs crossed is the Node.js/Playwright-driver process, not the
+ * page, the `BrowserContext`, or even the Chromium OS process. `--compare-
+ * png`'s PNG export (`window.__mareyExportPng`) stays in THIS process (on
+ * the same page the Lottie export ran on), per the ruling's remaining
+ * intent: that call reads back bytes this process's own page already
+ * produced, not a second live render by the child, so it carries none of
+ * the risk — only lottie-web/dotlottie-web's OWN rendering, which happens
+ * exclusively inside the worker process, was ever implicated. See
+ * `README.md`'s "Exporting Lottie" section for the same explanation kept in
+ * sync with this one, and `lottie-render-worker.mjs`'s own header comment
+ * for the worker's side of this split.
  *
  * **`--compare-png` (Task 5, design §8.3's pixel half / exit criterion 2).**
  * Also calls `window.__mareyExportPng` (the same seam `export-check.mjs`
@@ -50,8 +87,10 @@
  * for this comparison, recorded as `{ skipped: "..." }` rather than silently
  * dropped.
  *
- * The comparison itself runs entirely inside the page via `page.evaluate`:
- * the PNG frame (already base64-encoded bytes from `__mareyExportPng`, no
+ * The comparison itself runs entirely inside the render worker process via
+ * a `page.evaluate` there (the PNG bytes travel to it as plain JSON, not a
+ * second live render in this process): the PNG frame (already
+ * base64-encoded bytes from `__mareyExportPng`, no
  * Node-side decoding needed) is drawn into an off-screen `<canvas>` through
  * a plain `Image` element, and its `getImageData` is diffed byte-for-byte
  * against the live lottie-web canvas's own `getImageData` — no screenshot
@@ -101,6 +140,10 @@
  *                        requested frame against Marey's own PNG render of
  *                        the same frame. See the header comment above for
  *                        the full methodology.
+ *   --ink-region <x0,y0,x1,y1>  with --compare-png, restrict the ink
+ *                        bounding box (see below) to these inclusive pixel
+ *                        bounds, for a scene whose text shares the frame
+ *                        with other objects. Default: the whole frame.
  *   --out <dir>          where doc.json, frame_<label>.png and report.json go
  *   --url <origin>       dev server origin (default http://localhost:5199)
  *   --lottie-path <path> path to the lottie-web UMD build (default
@@ -120,6 +163,14 @@
  *                        the bundle's own jsdelivr/unpkg CDN default (default
  *                        node_modules/@lottiefiles/dotlottie-web/dist/dotlottie-player.wasm)
  *   --headed             show the browser window
+ *
+ * With `--compare-png`, every compared frame also reports `inkBBox`, the
+ * ink bounding boxes of Marey's PNG and of the player's canvas measured
+ * against the scene's opaque background colour, each with its largest
+ * per-edge disagreement (`maxEdgeDelta`, px; null unless both boxes exist):
+ * `halfCoverage` (pixels at least half the text's own contrast in that
+ * frame; the binding position check in `text-check.mjs`, Phase 5C Task 8
+ * ruling T8-R3) and `anyInk` (any difference at all; recorded only).
  *
  * Writes `<out>/doc.json` (the document actually handed to the player, i.e.
  * post-patch), `<out>/frame_<label>.png` per requested frame (label is the
@@ -155,8 +206,10 @@
  */
 import { chromium } from "playwright";
 import LZString from "lz-string";
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, mkdirSync, writeFileSync, unlinkSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 
 function argAll(name) {
   const out = [];
@@ -193,6 +246,13 @@ const setFields = argAll("set").map((s) => {
   return { field: s.slice(0, i), value: JSON.parse(s.slice(i + 1)) };
 });
 const unsetFields = argAll("unset");
+const inkRegionArg = arg("ink-region", null);
+const inkRegion = inkRegionArg
+  ? (() => {
+      const [x0, y0, x1, y1] = inkRegionArg.split(",").map(Number);
+      return { x0, y0, x1, y1 };
+    })()
+  : null;
 const lottiePath = resolve(arg("lottie-path", "node_modules/lottie-web/build/player/lottie.min.js"));
 // Task 5, design §10's "second renderer, evaluated not promised": swaps
 // which player renders the document. Both branches end by exposing the
@@ -259,35 +319,26 @@ const pad = (label) => String(label).replace(/\./g, "p").replace(/-/g, "neg");
 mkdirSync(outDir, { recursive: true });
 
 const browser = await chromium.launch({ headless: !has("headed"), args: LAUNCH_ARGS });
-const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+
+// `pageExport`: the ONLY page in THIS process, which navigates to the real
+// Marey app and constructs the export seam's pixi WebGL `Application`. See
+// the header comment ("Two processes, not one page or two") for why
+// lottie-web/dotlottie-web must render in a wholly separate `node`
+// invocation, not merely a separate page or browser here.
+const pageExport = await browser.newPage({ viewport: { width: 1400, height: 900 } });
 const consoleErrors = [];
 const pageErrors = [];
-page.on("console", (m) => m.type() === "error" && consoleErrors.push(m.text()));
-page.on("pageerror", (e) => pageErrors.push(String(e)));
+pageExport.on("console", (m) => m.type() === "error" && consoleErrors.push(m.text()));
+pageExport.on("pageerror", (e) => pageErrors.push(String(e)));
 
-// dotlottie-web's default build fetches its WASM binary from jsdelivr/unpkg
-// at `https://.../@lottiefiles/dotlottie-web@<version>/dist/dotlottie-player.wasm`
-// (measured directly by reading its bundle: `dist/index.js` contains that
-// literal URL template). Playwright's headless Chromium DOES have outbound
-// network access here (confirmed directly: a `fetch(...)` to that same
-// jsdelivr URL returned `200`) — unlike this repository's Bash tool, whose
-// `curl` returns `000` — so the CDN fetch would actually succeed. Routing it
-// to the LOCAL copy already sitting in `node_modules` anyway, rather than
-// depending on that network access, matches how lottie-web is already loaded
-// (`addScriptTag({ path })`, no network) and keeps this harness reproducible
-// somewhere that outbound access is unavailable. Registered unconditionally
-// and harmlessly no-ops under `--renderer lottie-web`, since nothing ever
-// requests that URL in that mode.
-await page.route(/dotlottie-player\.wasm/, (route) => route.fulfill({ path: dotlottieWasmPath }));
+await pageExport.goto(sceneUrl, { waitUntil: "load" });
 
-await page.goto(sceneUrl, { waitUntil: "load" });
-
-await page.waitForFunction(() => typeof window.__mareyExportLottie === "function", null, {
+await pageExport.waitForFunction(() => typeof window.__mareyExportLottie === "function", null, {
   timeout: 20_000,
   polling: 200,
 });
 
-const exportResult = await page.evaluate(
+const exportResult = await pageExport.evaluate(
   async ({ source, fps, durationSeconds }) => {
     try {
       const r = await window.__mareyExportLottie(source, { fps, durationSeconds });
@@ -307,14 +358,20 @@ if (!exportResult.ok) {
 }
 
 // `--compare-png`: fetch Marey's own PNG export of the identical scene at the
-// identical fps/duration, on the SAME page (so `window.__mareyExportPng` is
-// already installed — both dev seams load together, see main.tsx). This is a
-// hard failure if requested and it does not succeed: a caller who asked for a
-// pixel comparison and silently got none is worse than one who is told to
-// look elsewhere.
+// identical fps/duration, on the SAME page the Lottie export ran on
+// (`window.__mareyExportPng` is already installed there -- both dev seams
+// load together, see main.tsx). Staying on `pageExport`, in this process, is
+// deliberate and safe (ruling T3-R1): this call reads back bytes `pageExport`
+// itself produced, not a second live render by the separate render-worker
+// process -- only lottie-web/dotlottie-web's OWN rendering was ever
+// implicated in the join/cap artifact, and that happens exclusively inside
+// `lottie-render-worker.mjs`'s own process, below. This is a hard failure if
+// requested and it does not succeed: a caller who asked for a pixel
+// comparison and silently got none is worse than one who is told to look
+// elsewhere.
 let pngExport = null;
 if (has("compare-png")) {
-  const pngExportResult = await page.evaluate(
+  const pngExportResult = await pageExport.evaluate(
     async ({ source, fps, durationSeconds }) => {
       try {
         const r = await window.__mareyExportPng(source, { fps, durationSeconds });
@@ -362,346 +419,111 @@ if (has("strip-easing")) {
 }
 writeFileSync(`${outDir}/doc.json`, JSON.stringify(doc, null, 2));
 
-if (renderer === "lottie-web") {
-  // `addScriptTag({ path })` reads the file locally and injects its contents
-  // as an inline <script>, rather than requesting it through the page's own
-  // origin — confirmed working here against the real dev-server page (not
-  // just `about:blank`), so a bare `import "lottie-web"` for Vite to resolve
-  // is unnecessary. `lottie.min.js` is a UMD build; it attaches `window.lottie`
-  // because `document`/`navigator` both exist on this page.
-  await page.addScriptTag({ path: lottiePath });
-  const lottieGlobalOk = await page.evaluate(() => typeof window.lottie === "object" && window.lottie !== null);
-  if (!lottieGlobalOk) {
-    const error = `lottie-web did not attach window.lottie after addScriptTag({ path: '${lottiePath}' })`;
-    console.error(error);
-    writeFileSync(`${outDir}/report.json`, JSON.stringify({ scene: scenePath, lottiePath, error }, null, 2));
-    await browser.close();
-    process.exit(1);
-  }
-} else {
-  // dotlottie-web ships as a plain ESM bundle ending `export{be as
-  // DotLottie,...}`. An ESM `export` clause does NOT create a `DotLottie`
-  // binding inside the module's OWN scope, only in its external interface —
-  // so `addScriptTag({ path })`'s inline-script trick (which works for
-  // lottie-web's UMD build because UMD assigns to `window` itself) needs one
-  // extra step here: read the bundle, find the actual local name the export
-  // statement aliases, and assign THAT to a window global once the script
-  // runs. Measured directly against 0.80.0, not assumed: this regex is a
-  // real dependency on the bundler's output shape, named here so a future
-  // dotlottie-web upgrade that changes it fails loudly rather than silently.
-  const dotlottieJs = readFileSync(dotlottiePath, "utf8");
-  const exportMatch = dotlottieJs.match(/export\{(\w+) as DotLottie/);
-  if (!exportMatch) {
-    const error = `could not find DotLottie's internal export alias in '${dotlottiePath}' -- bundle shape may have changed since this was written against 0.80.0`;
-    console.error(error);
-    writeFileSync(`${outDir}/report.json`, JSON.stringify({ scene: scenePath, dotlottiePath, error }, null, 2));
-    await browser.close();
-    process.exit(1);
-  }
-  await page.addScriptTag({ content: `${dotlottieJs}\nwindow.__DotLottie = ${exportMatch[1]};`, type: "module" });
-  const dotlottieGlobalOk = await page.evaluate(() => typeof window.__DotLottie === "function");
-  if (!dotlottieGlobalOk) {
-    const error = `dotlottie-web did not attach window.__DotLottie after addScriptTag({ path: '${dotlottiePath}' })`;
-    console.error(error);
-    writeFileSync(`${outDir}/report.json`, JSON.stringify({ scene: scenePath, dotlottiePath, error }, null, 2));
-    await browser.close();
-    process.exit(1);
-  }
-}
 
-// A container sized in CSS pixels to EXACTLY the document's own w/h, so the
-// canvas backing store is `doc.w x doc.h` physical pixels with no
-// letterboxing and no devicePixelRatio scale — coordinates a caller passes
-// to `--at` are then Lottie-space coordinates directly, with no conversion.
-// Both renderer branches below end by setting `window.__lottieCheckAnim` to
-// something exposing `goToAndStop(frame, isFrame)` and leaving a canvas
-// reachable via `#__lottieCheck canvas` — the shim that lets every later
-// section of this script (frame loop, `--at`, `--compare-png`) stay
-// renderer-agnostic. `dpr: 1` (lottie-web's `rendererSettings`) achieves the
-// same "no devicePixelRatio scale" property lottie-web's branch needs;
-// dotlottie-web has no equivalent setting because a caller-provided canvas's
-// pixel dimensions ARE its backing store, with no separate DPR concept.
-const loadResult = await page.evaluate(
-  ({ doc, renderer }) =>
-    new Promise((resolvePromise) => {
-      // Collected for the whole run, not just the load phase: a render
-      // error can also fire later, during frame sampling below (e.g. a
-      // document deliberately malformed via --strip-easing), and that is
-      // exactly the kind of thing this harness exists to surface rather
-      // than crash on. Read back after the frame-sampling loop finishes.
-      window.__lottieCheckErrors = [];
-      const container = document.createElement("div");
-      container.id = "__lottieCheck";
-      // `position: fixed` at a high z-index, ABOVE the app's own fixed
-      // header/corner UI: Playwright's element screenshot composites the
-      // real rendered page, so without this the app's chrome visibly
-      // overlaps the lottie canvas in the PNG even though it never touches
-      // the canvas's own backing bitmap (getImageData below is unaffected
-      // either way — this only matters for the PNG a human looks at).
-      container.style.position = "fixed";
-      container.style.left = "0";
-      container.style.top = "0";
-      container.style.zIndex = "2147483647";
-      container.style.width = `${doc.w}px`;
-      container.style.height = `${doc.h}px`;
-      document.body.appendChild(container);
+// `pageExport` has done its whole job (the export, and `--compare-png`'s PNG
+// export). It stays open no longer than necessary: this process's OWN pixi
+// `Application` must not be given any chance to matter to the render
+// worker, and closing it here (before spawning that worker) is the
+// clearest statement of that, even though the actual isolation comes from
+// the process boundary below, not from this close.
+await pageExport.close();
+await browser.close();
 
-      // Settles the promise once, on whichever of load-success/load-failure
-      // happens first. Only meaningful during the load phase — later calls
-      // (an error after the promise already resolved `ok: true`) are no-ops
-      // here and rely on `window.__lottieCheckErrors` instead.
-      let settled = false;
-      const settle = (r) => {
-        if (settled) return;
-        settled = true;
-        resolvePromise(r);
-      };
-
-      if (renderer === "lottie-web") {
-        // The real failure path a document without a `path` can hit:
-        // `loadAnimation` itself throws synchronously (e.g. a document with
-        // no `layers` at all) rather than returning a live AnimationItem.
-        // Previously uncaught, this crashed the whole node process with a raw
-        // stack and no report.json (review finding 12). `data_failed` is NOT
-        // listened for here: it fires only from `onSetupError` (path loads,
-        // `lottie.js:1517`) and segment loads (`:1624`), never for inline
-        // `animationData`, so it is unreachable in this harness's own
-        // configuration — a guard that cannot fire, per Global Constraint 10.
-        let anim;
-        try {
-          anim = window.lottie.loadAnimation({
-            container,
-            renderer: "canvas",
-            loop: false,
-            autoplay: false,
-            animationData: doc,
-            rendererSettings: { dpr: 1, clearCanvas: true },
-          });
-        } catch (e) {
-          settle({ ok: false, stage: "loadAnimation", error: String(e && e.message ? e.message : e) });
-          return;
-        }
-        window.__lottieCheckAnim = anim;
-
-        // The path that DOES fire for a malformed inline document:
-        // `triggerConfigError`/`triggerRenderFrameError` both call
-        // `triggerEvent('error', ...)` on the AnimationItem. Registered
-        // before yielding control back to the event loop, so it is in place
-        // whether `checkLoaded` resolves synchronously or asynchronously.
-        anim.addEventListener("error", (e) => {
-          const msg = e && e.nativeError && e.nativeError.message ? e.nativeError.message : String(e);
-          window.__lottieCheckErrors.push(msg);
-          settle({ ok: false, stage: "error-event", error: msg });
-        });
-
-        if (anim.isLoaded) {
-          settle({ ok: true });
-        } else {
-          anim.addEventListener("DOMLoaded", () => settle({ ok: true }));
-        }
-      } else {
-        // dotlottie-web takes a caller-owned canvas directly rather than a
-        // container it builds its own canvas inside, so this branch creates
-        // one, sized identically to the lottie-web branch's container, and
-        // appends it as `#__lottieCheck`'s only child -- satisfying the same
-        // `#__lottieCheck canvas` selector every later section already uses.
-        const canvas = document.createElement("canvas");
-        canvas.width = doc.w;
-        canvas.height = doc.h;
-        container.appendChild(canvas);
-
-        let player;
-        try {
-          player = new window.__DotLottie({ canvas, data: JSON.stringify(doc), autoplay: false, loop: false });
-        } catch (e) {
-          settle({ ok: false, stage: "construct", error: String(e && e.message ? e.message : e) });
-          return;
-        }
-        // Same shim shape as lottie-web's `AnimationItem.goToAndStop(frame,
-        // isFrame)`: the second argument is accepted and ignored, since
-        // dotlottie-web's `setFrame` only ever takes a frame number, never a
-        // time value.
-        window.__lottieCheckAnim = { goToAndStop: (frame) => player.setFrame(frame) };
-
-        player.addEventListener("loadError", (e) => {
-          const msg = e && e.error && e.error.message ? e.error.message : String(e);
-          settle({ ok: false, stage: "loadError", error: msg });
-        });
-        // Post-load render errors, the dotlottie-web analogue of
-        // lottie-web's post-load 'error' events above: collected into the
-        // same `window.__lottieCheckErrors` array so this harness's later
-        // reporting does not need to know which renderer produced them.
-        player.addEventListener("renderError", (e) => {
-          const msg = e && e.error && e.error.message ? e.error.message : String(e);
-          window.__lottieCheckErrors.push(msg);
-          settle({ ok: false, stage: "renderError", error: msg });
-        });
-        player.addEventListener("load", () => settle({ ok: true }));
-      }
-    }),
-  { doc, renderer },
+// The render half of this script's job — load the document into a real
+// lottie-web/dotlottie-web player, sample frames, run `--compare-png`'s
+// pixel diff — runs in a SEPARATE Node.js process (`lottie-render-worker.mjs`,
+// this file's sibling), spawned synchronously below. See the header
+// comment ("Two processes, not one page or two") for the measurement this
+// is the fix for: a second page, and even a second `chromium.launch()`,
+// were both measured to still carry the join/cap defect as long as the
+// export and the render happened in this SAME Node.js process; only a
+// separate `node` invocation reproduced the correct geometry.
+const workerPath = resolve(dirname(fileURLToPath(import.meta.url)), "lottie-render-worker.mjs");
+const renderInputPath = `${outDir}/_render-input.json`;
+const renderOutputPath = `${outDir}/_render-output.json`;
+writeFileSync(
+  renderInputPath,
+  JSON.stringify({
+    doc,
+    renderer,
+    requestedFrames,
+    atPoints,
+    pngExport,
+    lottiePath,
+    dotlottiePath,
+    dotlottieWasmPath,
+    headed: has("headed"),
+    outDir,
+    inkRegion,
+  }),
 );
 
-if (!loadResult.ok) {
-  console.error(`${renderer} failed to load the document (${loadResult.stage}): ${loadResult.error}`);
+const worker = spawnSync(process.execPath, [workerPath, "--input", renderInputPath, "--output", renderOutputPath], {
+  encoding: "utf8",
+  cwd: process.cwd(),
+});
+if (worker.error) {
+  console.error(`failed to spawn lottie-render-worker.mjs: ${worker.error.message}`);
+  writeFileSync(`${outDir}/report.json`, JSON.stringify({ scene: scenePath, exportResult: { ok: true }, workerSpawnError: worker.error.message }, null, 2));
+  process.exit(1);
+}
+// The worker writes its own result file on every exit path (mirroring this
+// script's "report.json written on every exit path" rule), including a
+// crash inside the page-side code -- but not a crash BEFORE it reaches its
+// own top-level try, or a Node-level failure (e.g. the file path itself
+// being wrong), so this existence check is the fallback for that residual
+// gap, printing the worker's own stdout/stderr rather than a bare ENOENT.
+let renderResult;
+try {
+  renderResult = JSON.parse(readFileSync(renderOutputPath, "utf8"));
+} catch (e) {
+  console.error(`lottie-render-worker.mjs produced no readable output (exit ${worker.status}): ${e.message}`);
+  console.error(`worker stdout: ${worker.stdout}`);
+  console.error(`worker stderr: ${worker.stderr}`);
   writeFileSync(
     `${outDir}/report.json`,
-    JSON.stringify({ scene: scenePath, renderer, exportMeta: { fps: exportResult.fps, frameCount: exportResult.frameCount }, loadResult }, null, 2),
+    JSON.stringify(
+      { scene: scenePath, exportResult: { ok: true }, workerExitCode: worker.status, workerStdout: worker.stdout, workerStderr: worker.stderr },
+      null,
+      2,
+    ),
   );
-  await browser.close();
+  process.exit(1);
+}
+try {
+  unlinkSync(renderInputPath);
+  unlinkSync(renderOutputPath);
+} catch {
+  // Best-effort cleanup only; a leftover IPC file under the gitignored
+  // `.visual-check/` output directory is harmless and not worth failing a
+  // whole run over.
+}
+
+consoleErrors.push(...renderResult.consoleErrors);
+pageErrors.push(...renderResult.pageErrors);
+
+if (!renderResult.ok) {
+  console.error(`${renderer} failed to load the document (${renderResult.stage}): ${renderResult.error}`);
+  writeFileSync(
+    `${outDir}/report.json`,
+    JSON.stringify(
+      {
+        scene: scenePath,
+        renderer,
+        exportMeta: { fps: exportResult.fps, frameCount: exportResult.frameCount },
+        loadResult: { ok: false, stage: renderResult.stage, error: renderResult.error },
+        consoleErrors,
+        pageErrors,
+      },
+      null,
+      2,
+    ),
+  );
   process.exit(1);
 }
 
-const frameSamples = [];
-for (const frame of requestedFrames) {
-  await page.evaluate((f) => window.__lottieCheckAnim.goToAndStop(f, true), frame);
-
-  const pngPath = `${outDir}/frame_${pad(frame)}.png`;
-  await page.locator("#__lottieCheck canvas").screenshot({ path: pngPath });
-
-  const pixels = [];
-  for (const { x, y } of atPoints) {
-    const rgba = await page.evaluate(
-      ({ x, y }) => {
-        const canvas = document.querySelector("#__lottieCheck canvas");
-        const ctx = canvas.getContext("2d");
-        const d = ctx.getImageData(x, y, 1, 1).data;
-        return [d[0], d[1], d[2], d[3]];
-      },
-      { x, y },
-    );
-    pixels.push({ x, y, rgba });
-  }
-
-  // `--compare-png`: only whole-number frames have a PNG-export counterpart
-  // (`__mareyExportPng` produces one raster per sampled tick, not a
-  // continuous timeline), so a fractional frame requested for sub-frame
-  // easing checks elsewhere in this file is recorded as skipped rather than
-  // silently compared against the wrong integer frame or dropped with no
-  // trace.
-  let pngCompare = null;
-  if (pngExport) {
-    if (!Number.isInteger(frame)) {
-      pngCompare = { skipped: `frame ${frame} is fractional; PNG export has no sub-frame counterpart` };
-    } else if (frame < 0 || frame >= pngExport.frameCount) {
-      pngCompare = { skipped: `frame ${frame} outside PNG export range [0, ${pngExport.frameCount})` };
-    } else {
-      const pngBase64 = pngExport.frames[frame];
-      const pngFramePath = `${outDir}/frame_${pad(frame)}_pngexport.png`;
-      writeFileSync(pngFramePath, Buffer.from(pngBase64, "base64"));
-      pngCompare = await page.evaluate(
-        async ({ pngBase64 }) => {
-          const img = new Image();
-          const loaded = new Promise((res, rej) => {
-            img.onload = () => res();
-            img.onerror = () => rej(new Error("PNG export frame failed to decode as an <img>"));
-          });
-          img.src = `data:image/png;base64,${pngBase64}`;
-          await loaded;
-
-          const off = document.createElement("canvas");
-          off.width = img.naturalWidth;
-          off.height = img.naturalHeight;
-          const octx = off.getContext("2d");
-          octx.drawImage(img, 0, 0);
-          const pngData = octx.getImageData(0, 0, off.width, off.height).data;
-
-          const lottieCanvas = document.querySelector("#__lottieCheck canvas");
-          const lottieData = lottieCanvas
-            .getContext("2d")
-            .getImageData(0, 0, lottieCanvas.width, lottieCanvas.height).data;
-
-          if (off.width !== lottieCanvas.width || off.height !== lottieCanvas.height) {
-            return {
-              error: `size mismatch: png export ${off.width}x${off.height} vs lottie canvas ${lottieCanvas.width}x${lottieCanvas.height}`,
-            };
-          }
-
-          // Per pixel, per-channel (R,G,B,A) absolute delta, reduced to that
-          // pixel's max channel delta. `maxDelta` is the single largest value
-          // found anywhere in the frame; `share` is the fraction of pixels
-          // whose max-channel delta is greater than zero, i.e. not
-          // byte-identical between the two renderers. Neither is a chosen
-          // tolerance — both are what this specific comparison measured.
-          // A diff-visualization canvas alongside the numbers: black where
-          // the two renders agree, opaque red where any channel differs at
-          // all — so a human can SEE whether mismatches sit at shape edges
-          // (antialiasing, expected) or inside flat fills (a real defect,
-          // per the brief). This is not optional evidence; report.json's
-          // numbers alone cannot distinguish those two cases.
-          const diffCanvas = document.createElement("canvas");
-          diffCanvas.width = off.width;
-          diffCanvas.height = off.height;
-          const dctx = diffCanvas.getContext("2d");
-          const diffImageData = dctx.createImageData(off.width, off.height);
-          const diffData = diffImageData.data;
-
-          let maxDelta = 0;
-          let maxDeltaAtIndex = -1;
-          let mismatchCount = 0;
-          const totalPixels = pngData.length / 4;
-          for (let i = 0; i < pngData.length; i += 4) {
-            let pixelMax = 0;
-            for (let c = 0; c < 4; c++) {
-              const d = Math.abs(pngData[i + c] - lottieData[i + c]);
-              if (d > pixelMax) pixelMax = d;
-            }
-            if (pixelMax > 0) {
-              mismatchCount++;
-              diffData[i] = 255;
-              diffData[i + 1] = 0;
-              diffData[i + 2] = 0;
-              diffData[i + 3] = 255;
-            } else {
-              diffData[i] = 0;
-              diffData[i + 1] = 0;
-              diffData[i + 2] = 0;
-              diffData[i + 3] = 255;
-            }
-            if (pixelMax > maxDelta) {
-              maxDelta = pixelMax;
-              maxDeltaAtIndex = i / 4;
-            }
-          }
-          dctx.putImageData(diffImageData, 0, 0);
-          const diffPngBase64 = diffCanvas.toDataURL("image/png").split(",")[1];
-
-          return {
-            maxDelta,
-            maxDeltaAt:
-              maxDeltaAtIndex === -1
-                ? null
-                : { x: maxDeltaAtIndex % off.width, y: Math.floor(maxDeltaAtIndex / off.width) },
-            mismatchCount,
-            totalPixels,
-            share: mismatchCount / totalPixels,
-            width: off.width,
-            height: off.height,
-            diffPngBase64,
-          };
-        },
-        { pngBase64 },
-      );
-      pngCompare.pngExportPng = pngFramePath;
-      if (pngCompare.diffPngBase64) {
-        const diffPath = `${outDir}/frame_${pad(frame)}_diff.png`;
-        writeFileSync(diffPath, Buffer.from(pngCompare.diffPngBase64, "base64"));
-        delete pngCompare.diffPngBase64;
-        pngCompare.diffPng = diffPath;
-      }
-    }
-  }
-
-  frameSamples.push({ frame, png: pngPath, pixels, ...(pngExport ? { pngCompare } : {}) });
-}
-
-// Errors lottie-web raised AFTER load succeeded — a render/config error
-// during frame sampling (e.g. under --strip-easing) does not abort the run
-// above (`settle` is a no-op post-load), but it is real evidence and belongs
-// in the report rather than being silently dropped.
-const lottieErrors = await page.evaluate(() => window.__lottieCheckErrors ?? []);
-
-await browser.close();
+const frameSamples = renderResult.frameSamples;
+const lottieErrors = renderResult.lottieErrors;
 
 const report = {
   scene: scenePath,
@@ -709,6 +531,13 @@ const report = {
   requestedDurationSeconds: durationSeconds ?? null,
   url,
   lottiePath,
+  // Ruling T3-R1: recorded explicitly so a report on disk states, without
+  // needing this script's source open, that the player never shared a
+  // Node.js process with the export seam's pixi Application.
+  processes: {
+    export: `this process (${sceneUrl})`,
+    render: "lottie-render-worker.mjs, a separate node invocation; about:blank, never navigated to the Marey app",
+  },
   patched: { set: setFields, unset: unsetFields, stripEasing: has("strip-easing") },
   exportMeta: { fps: exportResult.fps, frameCount: exportResult.frameCount, hash: exportResult.hash },
   pngExportMeta: pngExport
@@ -747,6 +576,14 @@ for (const fs_ of frameSamples) {
           `mismatching pixels=${c.mismatchCount}/${c.totalPixels} (share=${(c.share * 100).toFixed(4)}%)`,
       );
       console.log(`    pngExportPng: ${c.pngExportPng}`);
+      if (c.inkBBox) {
+        const box = (b) => (b ? `(${b.minX},${b.minY})-(${b.maxX},${b.maxY})` : "none");
+        const { halfCoverage: h, anyInk: a } = c.inkBBox;
+        console.log(
+          `    ink bbox, half coverage (d >= ${h.threshold}): png ${box(h.png)}, player ${box(h.lottie)}, maxEdgeDelta=${h.maxEdgeDelta}`,
+        );
+        console.log(`    ink bbox, any ink: png ${box(a.png)}, player ${box(a.lottie)}, maxEdgeDelta=${a.maxEdgeDelta}`);
+      }
     }
   }
 }

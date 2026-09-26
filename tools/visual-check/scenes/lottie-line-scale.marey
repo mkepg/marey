@@ -1,0 +1,42 @@
+// Phase 5C Task 2, design §3.4.2: stroke width under non-uniform scale.
+// A horizontal-path line and a vertical-path line, both thickness 10, both
+// `scale: (0.35, 0.5)` -- the brief's exact values. `origin: (0.5, 0.5)`
+// puts each line's pivot at (0, 0) in its own local space (both point lists
+// are symmetric about the origin), so `position` names the world point the
+// scale is applied about, and the local-to-world map for any local point
+// L is exactly `position + scale * L` -- no rotation, no pivot offset left
+// over.
+//
+// A line's stroke geometry is built in LOCAL, pre-scale space (pixi's
+// `buildLine`, called before the container's scale matrix is applied): a
+// horizontal-path line's cross-section runs along local Y, so its rendered
+// thickness scales by `scale.y`; a vertical-path line's cross-section runs
+// along local X, so its rendered thickness scales by `scale.x`. With
+// `scale: (0.35, 0.5)` that predicts the HORIZONTAL line's rendered
+// thickness as 10*0.5=5px and the VERTICAL line's as 10*0.35=3.5px --
+// which pairs the opposite way from the brief's prose ("vertical 5px,
+// horizontal 3.5px"); see the task report for the measured numbers this
+// predicts against.
+scene {
+  size: (300, 220)
+  duration: 0.0333333333
+  background: #000000
+
+  line horiz {
+    position: (100, 100)
+    origin: (0.5, 0.5)
+    points: [(-40, 0), (40, 0)]
+    thickness: 10
+    scale: (0.35, 0.5)
+    color: #ffffff
+  }
+
+  line vert {
+    position: (200, 100)
+    origin: (0.5, 0.5)
+    points: [(0, -40), (0, 40)]
+    thickness: 10
+    scale: (0.35, 0.5)
+    color: #ffffff
+  }
+}

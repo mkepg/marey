@@ -180,8 +180,14 @@ explicitly rather than quietly deviating.
   frame rate, and physics baked to keyframes — the emitted file carries no
   Marey or Matter.js dependency at playback. Unsupported input is refused
   outright rather than degraded: `LOTTIE_UNSUPPORTED_TEXT` and
-  `LOTTIE_UNSUPPORTED_LINE` are the whole refusal surface, and both are pinned
-  by delete-and-run. Two structural rules carry the independence claim and are
+  `LOTTIE_UNSUPPORTED_LINE` were the whole refusal surface at the time, and
+  both were pinned by delete-and-run. **Superseded in Phase 5C** (T8 review
+  Minor 1): both codes are gone. `line` is no longer refused — Phase 5C
+  Task 2 maps it to Lottie stroke geometry. `LOTTIE_UNSUPPORTED_TEXT` was
+  removed in Task 8; the text refusal is now `LOTTIE_TEXT_MISSING_GLYPH`,
+  which names the object and the specific character's code point, because
+  HarfBuzz-shaped text is now supported and only a glyph the font truly
+  lacks is refused. Two structural rules carry the independence claim and are
   grep-checkable: neither `lottieGeometry.ts` nor `lottieEncode.ts` imports
   `pixi.js`, and `lottieEncode.ts` does not import `sceneIR` — it sees
   `FrameSnapshot`s only. The encoder boundary and the **opacity asymmetry**
@@ -233,6 +239,18 @@ explicitly rather than quietly deviating.
   `docs/research/2026-09-24-export-quality-findings-and-options.md`, with
   the primary-source note `2026-09-24-video-export-quality-options.md`.
   Which options to take is decided in this phase's design, not here.
+  - **Status (2026-09-26): done on branch `phase-5c-lottie-video-quality`,
+    not yet merged.** The owner chose 2× video (option C) and APNG (option
+    B). The phase shipped both, plus Lottie `line`, Lottie `text` as
+    HarfBuzz-shaped outlines, and the Lottie button. MP4 specks stay deferred
+    to the `marey export` CLI. Evidence is in `eval/RESULTS-PHASE-5C.md`.
+    Design: `docs/specs/2026-09-24-marey-phase-5c-lottie-completion-and-video-quality-design.md`.
+    Plan and execution notes: `docs/plans/2026-09-24-phase-5c-lottie-video-quality.md`.
+  - **Review coverage.** Each of nine tasks had its own review. An
+    independent whole-branch review found no Critical and five Important
+    issues. One fix wave closed them, and a scoped re-review confirmed it.
+    Two commits had no independent review: the three doc-only residuals
+    that re-review named, applied afterwards, and this status edit.
 - **Phase 6 — packaging and legibility.** Public package, `LICENSE`, a root
   README, `marey check`/`marey export`, and a written account of the
   determinism work. Replaces the old Phase 5B (Distribution); acquisition work
