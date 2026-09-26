@@ -353,7 +353,7 @@ wired in `main.tsx` behind `import.meta.env.DEV`) rather than clicking the
 shipped export button. Since the Phase 5B fix wave that seam is **not** a copy
 of the export pipeline: it calls the shipped `runVideoExport`
 (`src/compiler/export/videoPipeline.ts`), the same function a click reaches
-through `useExportVideo.ts`, with observers that capture each canvas the
+through `src/hooks/useExport.ts`, with observers that capture each canvas the
 encoder is handed, the sampler's hash and the resolved encoder config. So a
 run of this script measures the product's orchestration. What still differs
 from a click is the entry point (a `window` global versus the button's
@@ -370,7 +370,7 @@ against equally wrong references.
 **A limitation of the shipped button this script's own `--duration` flag can
 mask if you are not watching for it.** `--duration` overrides a scene's own
 `duration:` field, so this script can export any scene, bounded or not. The
-shipped button has no such override — `useExportVideo.ts` never passes
+shipped button has no such override — `useExport.ts` never passes
 `durationSeconds` to `runVideoExport` — so a real click always falls through
 to the scene's own top-level `duration:` field, and **no scene lacking one can
 be exported from the UI at all**. The shipped default scene declares

@@ -218,8 +218,13 @@ a 2x export has to avoid on the `Text` side: PixiJS rasterizes a `Text`'s own
 texture at the *renderer's* resolution, so an export `Application`
 initialised at `resolution: 1` and extracted at `resolution: 2` would
 upscale already-blurry 1x text while every vector shape came out sharp.
-`videoPipeline.ts` avoids it by initialising the export `Application` itself
-at `resolution: video.plan.scale`, not just extracting at that scale.
+`rasterExport.ts`'s `withRasterExport` avoids it by initialising the export
+`Application` itself at `resolution: scale`, the same scale frames are
+extracted at. For video, `runVideoExport` passes `VideoPlan.scale`.
+`videoPipeline.test.ts` pins this: it spies on `Application.prototype.init`
+and requires the `resolution` it receives to equal the plan's scale.
+Nothing else catches it. The output is still the right size, so
+`video-check.mjs` cannot see blurry text.
 
 ## The Lottie encoder boundary (Phase 5A)
 
@@ -316,7 +321,7 @@ constant, because the assertions themselves never distinguished which file
 produced a clean answer.
 
 A second, related pair of tests in the same file guards a boundary this phase
-added on top of Phase 5A's shape: `videoPipeline.ts`, `useExportVideo.ts` and
+added on top of Phase 5A's shape: `videoPipeline.ts`, `useExport.ts` and
 `TopBar.tsx` — the production path a real export click takes — may not import
 `src/lib/devVideoSeam.ts` in any form, and their code may not reach
 `window.__mareyExportVideo` (the dev-only global that seam installs) either.
@@ -327,16 +332,21 @@ that documentation as the violation it exists to prevent.
 
 `frameRaster.ts` is the single rasterization seam the PNG-sequence and video
 exporters both replay frames through — measured, not assumed:
-`pngSequence.ts` and `videoPipeline.ts` import `createFrameRasterizer` from
-it, not from one another. One seam means the two
+`pngSequence.ts` and `rasterExport.ts` import `createFrameRasterizer` from
+it, not from one another. `rasterExport.ts` is the shared prefix that video,
+APNG and the PNG seam rasterize through. One seam means the two
 export paths cannot silently diverge on how a sampled frame gets rasterized
 back onto the scene tree — the same size, background and frame-identity
 guarantee the paragraph above already states for it.
 
 **One video orchestration, observed by the harness (Phase 5B fix wave,
-R45).** `videoPipeline.ts`'s `runVideoExport` is the only copy of compile →
-plan → probe → build → sample → rasterize → encode. The export button calls it
-through `useExportVideo.ts`'s dynamic `import()`; the dev seam
+R45).** `videoPipeline.ts`'s `runVideoExport` is the only copy of the video
+export path. Since Phase 5C its compile → plan → build → sample prefix and the
+teardown around it are `rasterExport.ts`'s `withRasterExport`, which the APNG,
+Lottie and PNG exports share. `runVideoExport` adds only the probe (in
+`beforeBuild`), the device-limit check (in `afterInit`) and the lazy
+rasterize → encode loop. The export button calls it
+through `useExport.ts`'s dynamic `import()`; the dev seam
 `src/lib/devVideoSeam.ts` calls the same function with an optional observer
 (`onPlanned`, `onSampled`, `onFrame`, `onEncoderConfig`) to collect the
 reference PNGs, snapshot hash and encoder config `video-check.mjs` needs. Do
@@ -432,17 +442,31 @@ one that never rendered the live preview first — measures and draws text
 with the fallback font, and the export silently disagrees with what the
 user saw in the preview.
 
-**A second, non-obvious hazard sits beneath that fix.** PixiJS's
-`CanvasTextMetrics._measurementCache` is a global LRU keyed by
-`` `${text}-${style.styleKey}-wordWrap-…` ``, and the key carries no
-font-load state, so a measurement taken once while the fallback font was
-still active is served stale to every later measurement of the same text
-and style — including a **fresh** `TextStyle` with identical properties,
-since the key does not distinguish object identity. `exportFonts.ts`
-clears that cache after the font load resolves and before the tree is
-built, for exactly this reason. A cold-page check (measure once with the
-fallback font active, load the font, export, and require the layout to
-match a warm export) pins it.
+**A second, non-obvious hazard sits beneath that fix: pixi's font-metrics
+cache.** `CanvasTextMetrics.measureFont` caches ascent, descent and
+`fontSize` in the static `_fonts` map, keyed by the CSS font string alone
+(pixi.js 8.16.0, `CanvasTextMetrics.mjs`). Nothing in that key records
+whether the face had loaded. So if the live preview measured this scene's
+text on a cold page, before the font arrived, every later `TextStyle` with
+the same font properties is served the fallback font's metrics. That
+includes the fresh ones `buildNode` makes for the export.
+- **Measured** (`docs/research/2026-09-24-export-quality-probes/text-plumbing/cache-run.mjs`,
+  a fresh page): after one fallback measurement, the export built a 60 px
+  two-line text at 504 × 126 (lineHeight 63, ascent 51). A warm page builds
+  it at 504 × 142 (lineHeight 71, ascent 60).
+- **Why the width was right either way.** The per-text
+  `_measurementCache` is not the hazard. Its key includes the style's
+  `styleKey`, which is `` `${uid}-${tick}` `` (`TextStyle.mjs`). That key
+  carries the object's own id, so a new `TextStyle` never hits an entry an
+  older one wrote.
+- **The clear is in `rasterExport.ts`**, not `exportFonts.ts`. Right after
+  `ensureExportFonts` resolves and before anything is built,
+  `withRasterExport` calls `CanvasTextMetrics.clearMetrics()` with no
+  argument. That is pixi's public way to empty `_fonts`. It costs one
+  re-measure per font string, for the preview too, which then picks up the
+  loaded font's real metrics as well. The code comment above that call is
+  the primary record. `exportFonts.test.ts` ("empties the cache before
+  building") pins the clear.
 
 ## Text layout from pixi, glyphs from HarfBuzz (Phase 5C)
 

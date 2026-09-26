@@ -74,8 +74,8 @@ export interface RunVideoExportOptions {
  *   `frames.map(rasterize)` held every frame's canvas at once (PixiJS's
  *   `extract.canvas()` allocates a new one per call), about 1.9 MB per
  *   800x600 frame, and blocked the page until all of them existed.
- * - The loop yields to the event loop about once per display frame, so the
- *   progress label repaints. `sampleFrames` itself is synchronous and frozen
+ * - The loop yields to the event loop at least every `YIELD_EVERY_MS`
+ *   (100 ms) of work (`rasterExport.ts`), so the progress label repaints. `sampleFrames` itself is synchronous and frozen
  *   by GC7; its share of the freeze remains (recorded in
  *   `eval/RESULTS-PHASE-5B.md`).
  *

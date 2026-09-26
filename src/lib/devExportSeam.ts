@@ -46,11 +46,11 @@ function toBase64(bytes: Uint8Array): string {
 /**
  * Compile, plan, build, sample, encode — the whole export path, with no UI.
  *
- * No product UI ships this phase (an export button belongs with `marey export`
- * in Phase 6), so a browser harness has nothing to click. A narrow named seam
- * is better than driving a button that does not exist, and better than the
- * harness re-implementing the pipeline in page script where it could silently
- * diverge from the one the app actually runs.
+ * The top bar ships MP4, WebM, APNG and Lottie buttons, but no PNG-sequence
+ * button, so a browser harness has nothing to click for PNG frames. A narrow
+ * named seam is better than driving a button that does not exist, and better
+ * than the harness re-implementing the pipeline in page script, where it
+ * could silently diverge from the one the app actually runs.
  *
  * The compile -> plan -> build -> sample prefix and the teardown around it
  * are `rasterExport.ts`'s `withRasterExport` (Phase 5C Task 4) — the same
