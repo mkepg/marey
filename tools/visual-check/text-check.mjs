@@ -103,7 +103,8 @@ const ADVANCE_TOLERANCE_PX = 0.01;
  *
  * For a mark string the ink wins, and pixi's width is Chromium's
  * `actualBoundingBoxLeft + actualBoundingBoxRight`. For this fixture
- * Chromium reports both edges in whole pixels: left 4, right 206, width 202
+ * Chromium reports both edges in whole pixels: `actualBoundingBoxLeft` -4,
+ * `actualBoundingBoxRight` 206, width 202
  * (text-check runs of 2026-09-26). HarfBuzz's glyph-extent ink width is not
  * quantised: 200.1 at 60 px.
  *

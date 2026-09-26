@@ -472,8 +472,8 @@ gains:
   > **2026-09-26 follow-up (final review M-8).** 1.9 px was the single
   > observed delta, so it was fitted, not derived. The tolerance is now a
   > bound: **strictly under 2 px**.
-  > - Chromium reports this string's ink edges in whole pixels (left 4,
-  >   right 206).
+  > - Chromium reports this string's ink edges in whole pixels
+  >   (`actualBoundingBoxLeft` −4, `actualBoundingBoxRight` 206).
   > - Rounding each edge outward adds less than 1 px per side.
   > - A delta of 2 px or more is therefore more than quantisation can
   >   explain.
