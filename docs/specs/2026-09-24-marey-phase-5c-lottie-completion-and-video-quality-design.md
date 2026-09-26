@@ -109,6 +109,32 @@ shape edges at 2×. The measure is the width of the antialiased edge band
 across a glyph stem in the 2× frame, compared with the 1× frame. A 1×-then-
 upscaled text shows about a 2 px band where native 2× shows about 1.
 
+> **2026-09-26 amendment (ruling F-R2).**
+>
+> **What was measured.** The comparison is text against text, not text
+> against shapes. The edge band across the stem of a 60 px "H", in the 2×
+> reference frame, was measured in two conditions:
+> - native 2× (the shipped code): median **2 px**, mean 1.69 px;
+> - a mutated control, with the export `Application` initialised at
+>   `resolution: 1` and extraction still at 2×: median **3 px**, mean
+>   3.31 px.
+>
+> That result was measured on 2026-09-25 and re-run on 2026-09-26 with the
+> same numbers.
+>
+> **What was not measured.** No shape edge was measured, so "as sharp as
+> shape edges at 2×" is not claimed. What the evidence supports is
+> narrower: native-2× text is measurably sharper than the 1×-app
+> regression this section names. That does not reach the 1 px the
+> prediction above gives for native 2×.
+>
+> **Where the pieces live.**
+> - The probe and its fixture: `docs/research/2026-09-24-export-quality-probes/edge-band/`.
+> - The numbers: `eval/RESULTS-PHASE-5C.md`, "Text sharpness".
+> - The standing guard is headless and does not depend on the probe:
+>   `videoPipeline.test.ts` requires `Application.init`'s `resolution` to
+>   equal `VideoPlan.scale`. Mutating it to 1 turns that test red.
+
 ### 2.3 Refusals
 
 - `VIDEO_EXCEEDS_CODEC_LEVELS` fires on the coded size. Its message is

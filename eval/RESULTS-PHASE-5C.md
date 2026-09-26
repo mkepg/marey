@@ -301,10 +301,12 @@ measures.
 
 ### Text sharpness (spec §2.2)
 
-Fixture: `.visual-check/probe5c/text-stem.marey` (400x200 scene, single
+Fixture: `docs/research/2026-09-24-export-quality-probes/edge-band/text-stem.marey`
+(400x200 scene, single
 `text` node, `content: "H"`, `fontSize: 60`, white on black — an isolated
 vertical stem to measure without other shapes in the way). Measurement
-script: `.visual-check/probe5c/edge-band.mjs <png>` — scans every row of the
+script: `docs/research/2026-09-24-export-quality-probes/edge-band/edge-band.mjs <png>`
+— scans every row of the
 image, finds every maximal run of pixels whose luminance sits strictly
 between 10% and 90% of that row's max (the antialiased transition zone
 around an edge), and reports the median/mean band width across the whole
@@ -313,7 +315,7 @@ row happens to cross a serif or the crossbar).
 
 | Condition | Command | Median band width | Mean |
 |---|---|---|---|
-| Native 2x (current code) | `node tools/visual-check/video-check.mjs --scene .visual-check/probe5c/text-stem.marey --container mp4 --fps 30 --frames 0 --out .visual-check/video/text-stem-2x` then `node .visual-check/probe5c/edge-band.mjs .visual-check/video/text-stem-2x/reference_0000.png` | **2 px** | 1.69 px |
+| Native 2x (current code) | `node tools/visual-check/video-check.mjs --scene docs/research/2026-09-24-export-quality-probes/edge-band/text-stem.marey --container mp4 --fps 30 --frames 0 --out .visual-check/video/text-stem-2x` then `node docs/research/2026-09-24-export-quality-probes/edge-band/edge-band.mjs .visual-check/video/text-stem-2x/reference_0000.png` | **2 px** | 1.69 px |
 | 1x-then-extracted-at-2x (mutated: `videoPipeline.ts`'s app `resolution` set to `1`, extraction still at `resolution: 2`) | same commands, run against `.visual-check/video/text-stem-1x-app/reference_0000.png` | **3 px** | 3.31 px |
 
 Both runs' band-width distributions exclude two outlier bands (28-30 px)
@@ -328,6 +330,33 @@ shows about a 2px band where native 2x shows about 1") in direction and
 rough magnitude. The mutation was reverted immediately after both
 measurements (`git diff --stat -- src/compiler/export/videoPipeline.ts`
 empty).
+
+**2026-09-26: moved and re-run (final review I-2).** Both files were
+first measured from gitignored `.visual-check/probe5c/`. They now live in
+`docs/research/2026-09-24-export-quality-probes/edge-band/`, byte-identical
+except for the script's header, which now carries its own re-run
+commands. Re-run from there, with the same commands as the table above
+(output directories `text-stem-2x-final` and `text-stem-1x-app-final`):
+
+| Condition | `video-check.mjs` exit | Median | Mean | Bands |
+|---|---|---|---|---|
+| Native 2x (HEAD) | 0 | **2 px** | 1.69 px | 332 |
+| Control: `rasterExport.ts:242` `resolution: scale ?? 1` → `resolution: 1`, applied, run and reverted in one command | 0 | **3 px** | 3.31 px | 340 |
+
+Both reproduce the table above exactly. `git diff --stat --
+src/compiler/export/rasterExport.ts` was empty after the revert. The
+control's `video-check.mjs` exit 0 is itself the finding: the output is
+still 2x in size, so no frame-level gate sees the regression. Since
+2026-09-26 the standing guard for it is headless:
+`videoPipeline.test.ts`, "the export Application inits at the plan's
+scale". It spies on `Application.prototype.init` and requires its
+`resolution` to equal `VideoPlan.scale`. The same mutation turns it red:
+`AssertionError: expected 1 to be 2`, 1 failed / 1049 passed.
+
+**What this measures, and what it does not.** It compares native-2x text
+with a mutated 1x-app control. It does not compare text edges with shape
+edges, which is what §2.2's wording asks for. No shape-edge row was
+measured. Spec §2.2 carries a dated amendment saying so (ruling F-R2).
 
 ### Mutations (GC10), each applied/run/reverted in one shell command per row, `git diff --stat` empty after every revert
 
