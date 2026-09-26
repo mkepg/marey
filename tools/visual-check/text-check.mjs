@@ -11,8 +11,8 @@
  *    width within 0.01 px. For the mark fixture, pixi's width is
  *    `max(advance, ink)` and the ink wins, so it is compared against
  *    max(HarfBuzz advance sum, HarfBuzz ink width from glyph extents), within
- *    MARK_TOLERANCE_PX, a number measured on this fixture and stated in
- *    `eval/RESULTS-PHASE-5C.md`, not chosen.
+ *    MARK_TOLERANCE_PX: under 2 px, derived from Chromium's whole-pixel ink
+ *    edges (see the constant).
  *
  *    **What it cannot see.** It shapes with `textOutline.ts`'s `shapeLine`,
  *    not `outline()`, and compares advance widths, so it says nothing about
@@ -98,15 +98,29 @@ const lottieCheck = resolve(here, "lottie-check.mjs");
 /** Advance-sum tolerance for strings where the advance wins (spec §6.6). */
 const ADVANCE_TOLERANCE_PX = 0.01;
 /**
- * The mark fixture's tolerance, |pixi width - max(advance, ink)|. MEASURED,
- * not chosen (Task 8, `eval/RESULTS-PHASE-5C.md` Piece 5): pixi's width is
- * Chromium's `actualBoundingBoxLeft + actualBoundingBoxRight`, 202 (whole
- * pixels), against HarfBuzz's glyph-extent ink width of 200.1 at 60 px, so
- * the two ink measures differ by 1.9 px. The 1 px ink-bbox check below is
- * the binding guard on placement; this one guards the width pixi reports.
+ * The mark fixture's tolerance, |pixi width - max(advance, ink)|. DERIVED,
+ * not fitted (final review M-8; it was 1.9, exactly the one observed delta).
+ *
+ * For a mark string the ink wins, and pixi's width is Chromium's
+ * `actualBoundingBoxLeft + actualBoundingBoxRight`. For this fixture
+ * Chromium reports both edges in whole pixels: left 4, right 206, width 202
+ * (text-check runs of 2026-09-26). HarfBuzz's glyph-extent ink width is not
+ * quantised: 200.1 at 60 px.
+ *
+ * If each edge is rounded outward to a whole pixel, each side adds at least
+ * 0 and less than 1 px. The two widths can therefore differ by less than
+ * 2 px, and never by 2 px or more. Rounding to the nearest pixel would bound
+ * them by 1 px; the measured 1.9 rules that out, so outward rounding is the
+ * reading that fits. Where Chromium does not quantise (the multiline
+ * fixture's right edge reads 55.39999…), the difference is smaller still, so
+ * 2 px bounds both cases. Any delta of 2 px or more means the ink boxes
+ * disagree by more than quantisation can explain.
+ *
+ * The 1 px ink-bbox check below is the binding guard on placement; this one
+ * guards the width pixi reports.
  */
-const MARK_TOLERANCE_PX = 1.9;
-/** Floating-point slack on a measured tolerance: 1.9 arrives as 1.9000000000000057. */
+const MARK_TOLERANCE_PX = 2;
+/** Floating-point slack on the inclusive advance bound. */
 const EPSILON = 1e-9;
 /** Ink-bbox tolerance per edge (spec §6.6). */
 const INK_EDGE_TOLERANCE_PX = 1;
@@ -187,9 +201,12 @@ for (const f of FIXTURES) {
         `  "${l.line}": pixi ${l.pixiLineWidth} | hb advance ${l.hbAdvanceSum.toFixed(4)} | hb ink ${l.hbInkWidth.toFixed(4)} ` +
           `| canvas ${l.canvasWidth.toFixed(4)} ink ${(l.canvasInkLeft + l.canvasInkRight).toFixed(4)} | delta ${delta.toFixed(6)}`,
       );
-      const tolerance = f.layout === "ink" ? MARK_TOLERANCE_PX : ADVANCE_TOLERANCE_PX;
-      if (!(delta <= tolerance + EPSILON)) {
-        fail(`${f.name}: layout "${l.line}" delta ${delta} > ${tolerance}`);
+      // The ink bound is strict (< 2 px, see MARK_TOLERANCE_PX); the advance
+      // bound is inclusive, with float slack.
+      const within = f.layout === "ink" ? delta < MARK_TOLERANCE_PX : delta <= ADVANCE_TOLERANCE_PX + EPSILON;
+      if (!within) {
+        const bound = f.layout === "ink" ? `< ${MARK_TOLERANCE_PX}` : `<= ${ADVANCE_TOLERANCE_PX}`;
+        fail(`${f.name}: layout "${l.line}" delta ${delta}, needs ${bound}`);
       }
     }
   }

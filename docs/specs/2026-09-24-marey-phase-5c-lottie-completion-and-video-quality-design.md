@@ -468,6 +468,18 @@ gains:
   > advance sum 180, HarfBuzz ink width 200.1). Every other measured
   > string (ASCII, ligature, multiline, scaled) still compares the
   > advance sum within 0.01 px, because advance wins for them.
+  >
+  > **2026-09-26 follow-up (final review M-8).** 1.9 px was the single
+  > observed delta, so it was fitted, not derived. The tolerance is now a
+  > bound: **strictly under 2 px**.
+  > - Chromium reports this string's ink edges in whole pixels (left 4,
+  >   right 206).
+  > - Rounding each edge outward adds less than 1 px per side.
+  > - A delta of 2 px or more is therefore more than quantisation can
+  >   explain.
+  >
+  > The mark fixture still passes, at 1.9 px. The derivation is in
+  > `tools/visual-check/text-check.mjs`, beside `MARK_TOLERANCE_PX`.
 - **Criterion 2 on a text fixture**, with its own measured tolerance. Canvas-
   rasterized text against a vector fill will differ more at edges than
   shapes do. The number is measured and stated, not chosen.
