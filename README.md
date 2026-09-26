@@ -192,4 +192,4 @@ The CLI currently exposes one command, `check`. `export` is not implemented yet.
 
 The web app bundles third-party code and fonts under their own licences. A
 build generates `third-party-licenses.txt` listing each one; the app serves it
-and links to it from the top bar ("licenses").
+and links to it from the bottom of the top bar's export menu.

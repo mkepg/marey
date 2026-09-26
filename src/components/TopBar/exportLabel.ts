@@ -1,10 +1,10 @@
 import type { ExportKind, ExportProgress } from "../../hooks/useExport";
 
 /**
- * The one button currently mid-export shows a percent (or "starting…")
- * rather than static text, so a several-second export does not read as a
- * hung tab; the other export buttons just go disabled, same as the
- * New/Example buttons' own confirm-state label swap. **Lottie is the one
+ * While an export runs, the top bar's export menu button shows the running
+ * kind with a percent (or "starting…") rather than static text, so a
+ * several-second export does not read as a hung tab; the button stays
+ * disabled until the export ends. **Lottie is the one
  * exception**: `runLottieExport` has no per-frame encode progress at all
  * (`useExport.ts`'s own docstring), so `progress.total` never leaves 0 for
  * it and its running label is always "…" rather than "starting…" or a

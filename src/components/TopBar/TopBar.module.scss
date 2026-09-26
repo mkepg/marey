@@ -17,7 +17,8 @@
 .left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 16px;
+  min-width: 0;
 }
 
 .logo {
@@ -32,6 +33,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .statusDot {
@@ -55,8 +63,8 @@
   font-size: 11px;
   color: var(--text-secondary);
   letter-spacing: 0.06em;
-  min-width: 60px;
   font-family: var(--font-mono);
+  white-space: nowrap;
 }
 
 .divider {
@@ -67,8 +75,6 @@
   flex-shrink: 0;
 }
 
-// ─── Auto-Run Switch Improvement ──────────────────────────────────────────
-
 .autoRunControl {
   display: flex;
   align-items: center;
@@ -77,11 +83,11 @@
 }
 
 .autoRunLabel {
-  font-size: 10px;
-  color: var(--text-muted);
-  text-transform: uppercase;
+  font-size: 11px;
+  color: var(--text-secondary);
   letter-spacing: 0.05em;
   font-family: var(--font-mono);
+  white-space: nowrap;
 }
 
 .switch {
@@ -122,8 +128,6 @@
   transition: transform $transition, background $transition;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
 .btnIcon {
   display: flex;
   align-items: center;
@@ -159,9 +163,13 @@
   }
 }
 
-// A link that looks like the icon buttons beside it.
-.btnLink {
-  text-decoration: none;
+// Below this width the new/example/share buttons drop their text and show
+// only their icons (their aria-labels and titles still name them), so the
+// bar fits without pushing RUN off the edge.
+@media (max-width: 900px) {
+  .btnText {
+    display: none;
+  }
 }
 
 .btnRun {
@@ -181,6 +189,7 @@
   letter-spacing: 0.08em;
   transition: all $transition;
   white-space: nowrap;
+  flex-shrink: 0;
 
   &:hover  { opacity: 0.85; }
   &:active { transform: scale(0.97); }
@@ -201,6 +210,13 @@
   // from nudging neighbouring buttons sideways as the export runs.
   font-variant-numeric: tabular-nums;
   min-width: 52px;
+
+  // The running export's button is disabled too, but it is the one place
+  // the progress shows, so it keeps full opacity.
+  &:disabled {
+    opacity: 1;
+    cursor: progress;
+  }
 }
 
 .tooltipWrap {
@@ -230,4 +246,77 @@
   transition: opacity $transition, transform $transition;
   pointer-events: none;
   z-index: 200;
+}
+
+// ─── Export menu ─────────────────────────────────────────────────────────────
+
+.menuWrap {
+  position: relative;
+  display: flex;
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 240px;
+  padding: 4px;
+  background: var(--bg-pane);
+  border: 1px solid var(--border);
+  border-radius: $radius;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  background: transparent;
+  border: none;
+  border-radius: $radius;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-align: left;
+  white-space: nowrap;
+  outline: none;
+
+  &:hover,
+  &:focus-visible,
+  &:focus {
+    background: var(--bg-handle);
+    color: var(--text-primary);
+  }
+
+  svg {
+    flex-shrink: 0;
+  }
+}
+
+.menuLabel {
+  flex: 1;
+}
+
+.menuDetail {
+  color: var(--text-secondary);
+  opacity: 0.7;
+  font-size: 10px;
+  padding-left: 12px;
+}
+
+.menuLink {
+  text-decoration: none;
+}
+
+.menuSeparator {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--border);
 }

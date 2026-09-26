@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { FunctionComponent } from "preact";
 import { useAppStore } from "../../store";
 import { useShare } from "../../hooks/useShare";
@@ -80,6 +80,37 @@ const LottieIcon: FunctionComponent = () => (
   </svg>
 );
 
+const ExportIcon: FunctionComponent = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
+
+const ChevronIcon: FunctionComponent = () => (
+  <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="2 3.5 5 6.5 8 3.5" />
+  </svg>
+);
+
+interface ExportOption {
+  readonly kind: ExportKind;
+  readonly label: string;
+  readonly detail: string;
+  readonly Icon: FunctionComponent;
+}
+
+/** The export menu's entries, in the order the menu lists them. */
+const EXPORT_OPTIONS: readonly ExportOption[] = [
+  { kind: "mp4",    label: "MP4 video",  detail: "H.264 · 2×",        Icon: VideoIcon },
+  { kind: "webm",   label: "WebM video", detail: "VP9 · 2×",          Icon: VideoIcon },
+  { kind: "apng",   label: "APNG image", detail: "animated PNG · 1×", Icon: ApngIcon },
+  { kind: "lottie", label: "Lottie",     detail: "vector JSON",       Icon: LottieIcon },
+];
+
+const MENU_ITEM = '[role="menuitem"]';
+
 interface TopBarProps {
   onRun: () => void;
 }
@@ -100,6 +131,10 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
 
   const [confirmingNew, setConfirmingNew] = useState(false);
   const [confirmingExample, setConfirmingExample] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuWrapRef = useRef<HTMLDivElement>(null);
+  const menuRef     = useRef<HTMLDivElement>(null);
+  const triggerRef  = useRef<HTMLButtonElement>(null);
 
   // An empty editor has nothing to lose, so skip the confirmation there —
   // that is the case a first-timer who cleared the editor is most likely in.
@@ -136,33 +171,72 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
     setTimeout(() => setConfirmingExample(false), 150);
   };
 
-  // See `exportLabelFor`'s own docstring above (module level) for what this
-  // shows and why APNG is not treated like Lottie.
-  const exportLabel = (kind: ExportKind): string => exportLabelFor(kind, progress);
+  // Opening the menu focuses its first entry; a press anywhere outside the
+  // menu or its trigger closes it.
+  useEffect(() => {
+    if (!menuOpen) return;
+    menuRef.current?.querySelector<HTMLElement>(MENU_ITEM)?.focus();
+    const onPointerDown = (e: PointerEvent): void => {
+      if (!menuWrapRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [menuOpen]);
+
+  const closeMenu = (): void => {
+    setMenuOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  const handleMenuKeyDown = (e: KeyboardEvent): void => {
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLElement>(MENU_ITEM) ?? []);
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const focusAt = (i: number): void => items[(i + items.length) % items.length]?.focus();
+    switch (e.key) {
+      case "Escape":    e.preventDefault(); closeMenu(); break;
+      case "Tab":       setMenuOpen(false); break;
+      case "ArrowDown": e.preventDefault(); focusAt(at + 1); break;
+      case "ArrowUp":   e.preventDefault(); focusAt(at - 1); break;
+      case "Home":      e.preventDefault(); focusAt(0); break;
+      case "End":       e.preventDefault(); focusAt(items.length - 1); break;
+    }
+  };
+
+  const handleTriggerKeyDown = (e: KeyboardEvent): void => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setMenuOpen(true);
+    }
+  };
 
   const handleExportClick = (kind: ExportKind): void => {
+    closeMenu();
     void exportScene(kind);
   };
+
+  // While an export runs, the menu's trigger names the kind that is running
+  // and shows `exportLabelFor`'s progress label for it.
+  const running = progress ? EXPORT_OPTIONS.find((o) => o.kind === progress.kind) : undefined;
+  const runningLabel = progress ? exportLabelFor(progress.kind, progress) : "";
 
   return (
     <header className={styles.topBar}>
       <div className={styles.left}>
         <span className={styles.logo}>Marey</span>
+        <div className={styles.status} role="status">
+          <div className={`${styles.statusDot} ${dotMod}`} />
+          <span className={styles.statusLabel}>{statusText}</span>
+        </div>
       </div>
 
       <div className={styles.right}>
-        <div className={`${styles.statusDot} ${dotMod}`} />
-        <span className={styles.statusLabel}>{statusText}</span>
-        
-        <div className={styles.divider} />
-
-        {/* Improved Auto-Run Toggle Switch */}
         <div className={styles.autoRunControl} title="Compile automatically as you type">
-          <span className={styles.autoRunLabel}>Auto-Run</span>
-          <button 
+          <span className={styles.autoRunLabel}>auto-run</span>
+          <button
             className={`${styles.switch} ${autoRun ? styles.active : ""}`}
             onClick={() => setAutoRun(!autoRun)}
             aria-pressed={autoRun}
+            aria-label="Auto-run"
             role="switch"
           >
             <div className={styles.knob} />
@@ -179,7 +253,7 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
           title={confirmingNew ? "Click again to confirm — clears editor" : "New file"}
         >
           <NewFileIcon />
-          {confirmingNew ? "confirm?" : "new"}
+          {confirmingNew ? "confirm?" : <span className={styles.btnText}>new</span>}
         </button>
 
         <button
@@ -198,7 +272,7 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
           }
         >
           <ExampleIcon />
-          {confirmingExample ? "replace?" : "example"}
+          {confirmingExample ? "replace?" : <span className={styles.btnText}>example</span>}
         </button>
 
         <div className={styles.tooltipWrap}>
@@ -208,9 +282,10 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
             disabled={isTooLarge}
             aria-label={isTooLarge ? "Code too large to share via URL" : "Share — copy link to clipboard"}
             aria-disabled={isTooLarge}
+            title={isTooLarge ? undefined : "Share — copy link to clipboard"}
           >
             <ShareIcon />
-            share
+            <span className={styles.btnText}>share</span>
           </button>
           {isTooLarge && (
             <span className={styles.tooltip} role="tooltip">
@@ -219,81 +294,69 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
           )}
         </div>
 
+        <div className={styles.menuWrap} ref={menuWrapRef}>
+          <button
+            ref={triggerRef}
+            className={`${styles.btnIcon}${running ? ` ${styles.btnExporting}` : ""}`}
+            onClick={() => setMenuOpen(!menuOpen)}
+            onKeyDown={handleTriggerKeyDown}
+            disabled={isExporting}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label={
+              running
+                ? running.kind === "lottie"
+                  ? "Exporting Lottie animation"
+                  : `Exporting ${running.label}, ${runningLabel}`
+                : "Export scene"
+            }
+            title="Export as video, APNG or Lottie"
+          >
+            <ExportIcon />
+            {running ? `${running.kind} ${runningLabel}` : "export"}
+            {!running && <ChevronIcon />}
+          </button>
+
+          {menuOpen && (
+            <div
+              ref={menuRef}
+              className={styles.menu}
+              role="menu"
+              aria-label="Export format"
+              onKeyDown={handleMenuKeyDown}
+            >
+              {EXPORT_OPTIONS.map((option) => (
+                <button
+                  key={option.kind}
+                  className={styles.menuItem}
+                  role="menuitem"
+                  tabIndex={-1}
+                  onClick={() => handleExportClick(option.kind)}
+                >
+                  <option.Icon />
+                  <span className={styles.menuLabel}>{option.label}</span>
+                  <span className={styles.menuDetail}>{option.detail}</span>
+                </button>
+              ))}
+              <div className={styles.menuSeparator} role="separator" />
+              {/* Generated at build time by vite-plugins/thirdPartyLicenses.ts. */}
+              <a
+                className={`${styles.menuItem} ${styles.menuLink}`}
+                role="menuitem"
+                tabIndex={-1}
+                href={`${import.meta.env.BASE_URL}third-party-licenses.txt`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setMenuOpen(false)}
+                aria-label="Third-party licenses (opens in a new tab)"
+              >
+                <span className={styles.menuLabel}>Third-party licenses</span>
+              </a>
+            </div>
+          )}
+        </div>
+
         <div className={styles.divider} />
-
-        <button
-          className={`${styles.btnIcon}${progress?.kind === "mp4" ? ` ${styles.btnExporting}` : ""}`}
-          onClick={() => handleExportClick("mp4")}
-          disabled={isExporting}
-          aria-label={
-            progress?.kind === "mp4"
-              ? `Exporting MP4 video, ${exportLabel("mp4")}`
-              : "Export scene as MP4 video"
-          }
-          title="Export MP4 video"
-        >
-          <VideoIcon />
-          {exportLabel("mp4")}
-        </button>
-
-        <button
-          className={`${styles.btnIcon}${progress?.kind === "webm" ? ` ${styles.btnExporting}` : ""}`}
-          onClick={() => handleExportClick("webm")}
-          disabled={isExporting}
-          aria-label={
-            progress?.kind === "webm"
-              ? `Exporting WebM video, ${exportLabel("webm")}`
-              : "Export scene as WebM video"
-          }
-          title="Export WebM video"
-        >
-          <VideoIcon />
-          {exportLabel("webm")}
-        </button>
-
-        <button
-          className={`${styles.btnIcon}${progress?.kind === "apng" ? ` ${styles.btnExporting}` : ""}`}
-          onClick={() => handleExportClick("apng")}
-          disabled={isExporting}
-          aria-label={
-            progress?.kind === "apng"
-              ? `Exporting APNG image, ${exportLabel("apng")}`
-              : "Export scene as APNG image"
-          }
-          title="Export APNG image"
-        >
-          <ApngIcon />
-          {exportLabel("apng")}
-        </button>
-
-        <button
-          className={`${styles.btnIcon}${progress?.kind === "lottie" ? ` ${styles.btnExporting}` : ""}`}
-          onClick={() => handleExportClick("lottie")}
-          disabled={isExporting}
-          aria-label={
-            progress?.kind === "lottie"
-              ? "Exporting Lottie animation"
-              : "Export scene as Lottie animation (JSON)"
-          }
-          title="Export Lottie animation (JSON)"
-        >
-          <LottieIcon />
-          {exportLabel("lottie")}
-        </button>
-
-        <div className={styles.divider} />
-
-        {/* Generated at build time by vite-plugins/thirdPartyLicenses.ts. */}
-        <a
-          className={`${styles.btnIcon} ${styles.btnLink}`}
-          href={`${import.meta.env.BASE_URL}third-party-licenses.txt`}
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Third-party licenses"
-          aria-label="Third-party licenses (opens in a new tab)"
-        >
-          licenses
-        </a>
 
         <button
           className={styles.btnIcon}

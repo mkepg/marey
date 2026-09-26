@@ -615,8 +615,9 @@ describe("export boundary — R3 shared pipelines and their production entry poi
   it("TopBar.tsx does not import any dev seam, and does not reach a dev export global", () => {
     const code = stripComments(topBarSource);
     expect(code).toContain("export const TopBar");
-    expect(code).toContain('handleExportClick("webm")');
-    expect(code).toContain('handleExportClick("apng")');
+    expect(code).toContain("handleExportClick(option.kind)");
+    expect(code).toContain('kind: "webm"');
+    expect(code).toContain('kind: "apng"');
     expect(importsModule(code, "devVideoSeam")).toBe(false);
     expect(importsModule(code, "devLottieSeam")).toBe(false);
     expect(importsModule(code, "devApngSeam")).toBe(false);
