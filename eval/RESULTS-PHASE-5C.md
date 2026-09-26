@@ -1084,6 +1084,18 @@ exactly with each other, this is not a regression introduced by this
 task's changes — the cause of the drift from 5A is not established, and is
 recorded here as open, per this task's own instruction not to assert one.
 
+**2026-09-26 (final review M-3): explained.** This is the scorer-flag
+effect ruling T1-R2 isolated, seen here in the Lottie harness.
+- `lottie-check.mjs` renders lottie-web with
+  `--disable-accelerated-2d-canvas` and measures 78/83.
+- `lottie-click-check.mjs` omits the flag. On this same scene it measures
+  **61 / 0.0777% and 61 / 0.0819%** at frames 0 and 48 ("Piece 5",
+  scenario A, below). That is 5A's 61/61 exactly.
+
+The two harnesses also differ in process: the click check renders on the
+app's page, while `lottie-check.mjs` uses a separate worker. No 2×2 separates
+those two factors here.
+
 ### Real-click check ("Piece 3" evidence, Step 6)
 
 Harness: `lottie-click-check.mjs` (new — no committed Phase 5B Task 6b

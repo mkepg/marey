@@ -1201,8 +1201,11 @@ commits, which is expected since this task touches no file under `src/`,
 4. **Lottie button.** Criterion 2 on the shipped path reproduces
    `compound-logo`'s **maxDelta 81, 569/480,000 (0.1185%)** at frames
    180/239 exactly; frames 0/48/75 also match main-vs-HEAD exactly
-   (T3-R2's A/B), though they read higher than 5A's own recorded 61/61 at
-   frames 0/48 — open, unattributed to this phase's changes (below). A
+   (T3-R2's A/B). At frames 0/48 they read 78/83 against 5A's recorded
+   61/61. That gap is the canvas-flag effect T1-R2 isolated, not a file
+   difference: the real-click check, which launches without
+   `--disable-accelerated-2d-canvas`, measures **61/61** on the same frames
+   (deferral 6, below). A
    real click (`lottie-click-check.mjs`) downloads `scene.json` and renders
    it in lottie-web. At Task 3 (before Piece 5 landed), the default
    scene's own click produced the interim `LOTTIE_UNSUPPORTED_TEXT` toast,
@@ -1376,11 +1379,23 @@ not repeated here; see the task-9 report for their commits.
    null` guard, unreachable but inconsistent in style.** *Harmless today:*
    the branch is unreachable given the surrounding control flow, so the
    assertion cannot mask a real `null` at runtime.
-6. **Open, carried: `compound-logo` frames 0/48 read maxDelta 78/83 against
-   5A's recorded 61/61.** *Harmless today:* main and HEAD measure this
-   identically (T3-R2's same-machine A/B), so whatever produced the drift
-   from 5A's numbers predates this phase's changes; the regression gate
-   that actually matters does not depend on the stale 5A table.
+6. **Explained (2026-09-26, final review M-3): `compound-logo` frames 0/48
+   read maxDelta 78/83 against 5A's recorded 61/61.** The gap is a property
+   of the harness's launch configuration, the same scorer-flag effect T1-R2
+   isolated for video, not of the exported file.
+   - `lottie-check.mjs` renders lottie-web under
+     `--disable-accelerated-2d-canvas` and measures 78/83.
+   - `lottie-click-check.mjs` deliberately omits that flag. It measures
+     **61 / 0.0777% and 61 / 0.0819%** at frames 0 and 48 of the same scene
+     (`eval/RESULTS-PHASE-5C.md`, "Piece 5", scenario A). That is 5A's
+     numbers exactly.
+
+   The two scripts also differ in process. The click check renders on the
+   app's own page, while `lottie-check.mjs` uses a separate render worker.
+   No 2×2 separates those two factors for Lottie as T1-R2's did for video.
+   *Harmless today:* main and HEAD measure 78/83 identically (T3-R2's
+   same-machine A/B), and the regression gate does not depend on 5A's
+   table.
 7. **`devLottieSeam.ts` is 67 lines, not the brief's estimated "about 30"**
    (types and a `declare global` block retained). *Harmless today:* a size
    estimate in the plan text being wrong is not a behavioural claim; the
