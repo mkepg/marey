@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { Application } from "pixi.js";
+import { Application, RendererType } from "pixi.js";
 import { runVideoExport, type RunVideoExportOptions } from "./videoPipeline";
 import type { VideoPlan } from "./videoContract";
 
@@ -273,5 +273,68 @@ describe("runVideoExport · the export Application inits at the plan's scale", (
     expect(init).toHaveBeenCalledTimes(1);
     const options = init.mock.calls[0][0];
     expect(options?.resolution).toBe(planned!.scale);
+  });
+});
+
+/**
+ * Final review M-7. pixi.js falls back from WebGL to WebGPU and then canvas,
+ * and the device-limit check reads a WebGL context. On a fallback renderer
+ * `gl` is undefined, and without a guard the export died with a TypeError
+ * instead of a named refusal.
+ *
+ * `init` is replaced with one that installs a stand-in renderer, so the
+ * pipeline's own `afterInit` runs in Node. `destroy` is stubbed because the
+ * `finally` teardown calls it on that stand-in. The two WebGL controls prove
+ * the stand-in really reaches `afterInit`. One reads a tiny limit and gets
+ * the device-limit refusal; the other gets past it.
+ */
+describe("runVideoExport · a non-WebGL renderer is refused by name", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function withRenderer(renderer: object) {
+    vi.stubGlobal("VideoEncoder", {
+      isConfigSupported: async () => ({ supported: true }),
+    });
+    vi.spyOn(Application.prototype, "init").mockImplementation(async function (this: Application) {
+      (this as unknown as { renderer: object }).renderer = renderer;
+    });
+    vi.spyOn(Application.prototype, "destroy").mockImplementation(() => {});
+  }
+
+  const SCENE = "scene { size: (100, 100) duration: 1 }";
+
+  it.each([
+    [RendererType.WEBGPU, "webgpu"],
+    [RendererType.CANVAS, "canvas"],
+  ])("refuses renderer type %i ('%s') with VIDEO_NO_WEBGL, naming it", async (type, name) => {
+    withRenderer({ type, name });
+    const message = await refusalMessage({ ...BASE, source: SCENE });
+    expect(message.startsWith("[VIDEO_NO_WEBGL] ")).toBe(true);
+    expect(message).toContain(`gave Marey a '${name}' renderer`);
+  });
+
+  function fakeGl(limit: number) {
+    return {
+      MAX_TEXTURE_SIZE: 0x0d33,
+      MAX_RENDERBUFFER_SIZE: 0x84e8,
+      getParameter: () => limit,
+    };
+  }
+
+  it("lets a WebGL renderer through to the device-limit check (control: a 100 px limit refuses)", async () => {
+    withRenderer({ type: RendererType.WEBGL, name: "webgl", gl: fakeGl(100) });
+    const message = await refusalMessage({ ...BASE, source: SCENE });
+    // 100x100 codes to 200x200, over a 100 px limit.
+    expect(message.startsWith("[VIDEO_EXCEEDS_DEVICE_LIMITS] ")).toBe(true);
+  });
+
+  it("lets a WebGL renderer with room to spare past both refusals", async () => {
+    withRenderer({ type: RendererType.WEBGL, name: "webgl", gl: fakeGl(8192) });
+    const message = await refusalMessage({ ...BASE, source: SCENE });
+    expect(message).not.toContain("[VIDEO_NO_WEBGL]");
+    expect(message).not.toContain("[VIDEO_EXCEEDS_DEVICE_LIMITS]");
   });
 });

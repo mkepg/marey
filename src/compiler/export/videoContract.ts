@@ -14,7 +14,8 @@ export type VideoDiagnosticCode =
   | "VIDEO_UNSUPPORTED_CODEC"
   | "VIDEO_ODD_DIMENSIONS"
   | "VIDEO_EXCEEDS_CODEC_LEVELS"
-  | "VIDEO_EXCEEDS_DEVICE_LIMITS";
+  | "VIDEO_EXCEEDS_DEVICE_LIMITS"
+  | "VIDEO_NO_WEBGL";
 
 export interface VideoDiagnostic {
   readonly code: VideoDiagnosticCode;
@@ -396,6 +397,24 @@ export function exceedsCodecLevelsDiagnostic(
   return {
     code: "VIDEO_EXCEEDS_CODEC_LEVELS",
     message: `[VIDEO_EXCEEDS_CODEC_LEVELS] Video exports at ${VIDEO_SCALE}x the scene's size, so a ${sceneWidth}x${sceneHeight} scene becomes a ${width}x${height} video; at ${fps}fps and ${bitrate / 1_000_000} Mbit/s that is too large or too fast for ${container.toUpperCase()} export, whose highest supported codec level is ${top}. ${advice}`,
+  };
+}
+
+/**
+ * The export `Application` did not get a WebGL renderer.
+ *
+ * pixi.js 8.16 falls back from WebGL to WebGPU and then to canvas
+ * (`autoDetectRenderer.mjs`). The device-limit check below reads
+ * `MAX_TEXTURE_SIZE` and `MAX_RENDERBUFFER_SIZE` from a WebGL context, and
+ * neither fallback has one. Without this refusal, `gl` is undefined there
+ * and the export dies with a bare TypeError instead of a message a person
+ * can act on (final review M-7). `rendererName` is pixi's own
+ * `renderer.name` ("webgpu", "canvas").
+ */
+export function noWebGLDiagnostic(rendererName: string): VideoDiagnostic {
+  return {
+    code: "VIDEO_NO_WEBGL",
+    message: `[VIDEO_NO_WEBGL] Video export needs WebGL to check this device's size limits, but the browser gave Marey a '${rendererName}' renderer instead. Turn on hardware acceleration or WebGL in this browser's settings, or export APNG or Lottie, which do not need it.`,
   };
 }
 

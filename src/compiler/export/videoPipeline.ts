@@ -1,5 +1,11 @@
-import type { Application } from "pixi.js";
-import { deviceLimitDiagnostic, planVideo, type VideoContainer, type VideoPlan } from "./videoContract";
+import { RendererType, type Application, type WebGLRenderer } from "pixi.js";
+import {
+  deviceLimitDiagnostic,
+  noWebGLDiagnostic,
+  planVideo,
+  type VideoContainer,
+  type VideoPlan,
+} from "./videoContract";
 import { assertVideoEncodable, encodeVideo } from "./videoEncode";
 import type { FrameSnapshot } from "../renderer/frameSampler";
 import { withRasterExport, YIELD_EVERY_MS, yieldToEventLoop } from "./rasterExport";
@@ -118,7 +124,13 @@ export async function runVideoExport(opts: RunVideoExportOptions): Promise<Uint8
       // headlessly tested); this is the one line that reads the device's
       // actual limits.
       afterInit: (app: Application) => {
-        const gl = (app.renderer as unknown as { gl: WebGL2RenderingContext }).gl;
+        // The limits below exist only on a WebGL context. pixi falls back to
+        // WebGPU and then canvas when WebGL is unavailable, and neither has
+        // `gl`, so refuse by name first (`noWebGLDiagnostic`).
+        if (app.renderer.type !== RendererType.WEBGL) {
+          throw new Error(noWebGLDiagnostic(app.renderer.name).message);
+        }
+        const gl = (app.renderer as WebGLRenderer).gl;
         const limitRefusal = deviceLimitDiagnostic(
           videoPlan!,
           gl.getParameter(gl.MAX_TEXTURE_SIZE),
