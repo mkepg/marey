@@ -142,15 +142,9 @@ export async function runVideoExport(opts: RunVideoExportOptions): Promise<Uint8
     async ({ frames, rasterize }) => {
       observer.onSampled?.(frames);
       const plan = videoPlan!;
-      // `withRasterExport` only omits `rasterize` when its caller supplies
-      // no `scale`; this pipeline always does, so this is unreachable. Bound
-      // to its own name (rather than narrowing `rasterize` itself) because a
-      // nested `function*` does not retain the outer narrowing.
-      if (!rasterize) {
-        throw new Error("[export] runVideoExport requested no raster scale, so there is nothing to encode.");
-      }
-      const rasterizeFrame = rasterize;
-
+      // Always present: this pipeline supplies `scale`, and
+      // `withRasterExport`'s first overload types `rasterize` as required
+      // whenever it does.
       async function* rasterized(): AsyncGenerator<HTMLCanvasElement> {
         let lastYield = performance.now();
         for (const frame of frames) {
@@ -161,7 +155,7 @@ export async function runVideoExport(opts: RunVideoExportOptions): Promise<Uint8
           // `document.createElement("canvas")` (`BrowserAdapter.mjs`), so this
           // cast states what the value is; it belongs here, the one place that
           // holds both types.
-          const canvas = rasterizeFrame(frame) as unknown as HTMLCanvasElement;
+          const canvas = rasterize(frame) as unknown as HTMLCanvasElement;
           await observer.onFrame?.(canvas, frame);
           yield canvas;
           // Resumed only when the encoder asks for the next frame, by which

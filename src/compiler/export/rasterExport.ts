@@ -142,6 +142,11 @@ export interface PreparedRasterExport {
   readonly rasterize?: (frame: FrameSnapshot) => ICanvas;
 }
 
+/** What a caller that supplied `scale` receives: `rasterize` is always there. */
+export type RasterizingExport = PreparedRasterExport & {
+  readonly rasterize: (frame: FrameSnapshot) => ICanvas;
+};
+
 /**
  * Compile, plan, init, build, sample; call `use`; always tear down.
  *
@@ -149,10 +154,23 @@ export interface PreparedRasterExport {
  * (ruling R45 / global constraint 7). `runVideoExport`, `runLottieExport`
  * and `devExportSeam.ts`'s `exportPng` are all built on this, and none of
  * them holds a second copy of any step below.
+ *
+ * The first overload makes T4-R1's rule a type: a caller that supplies
+ * `scale` gets a `rasterize` that is always present. So a rasterizing
+ * pipeline needs neither a runtime "no rasterizer" guard nor a non-null
+ * assertion.
  */
-export async function withRasterExport<T>(
+export function withRasterExport<T>(
+  opts: RasterExportOptions & { readonly scale: NonNullable<RasterExportOptions["scale"]> },
+  use: (prepared: RasterizingExport) => Promise<T>,
+): Promise<T>;
+export function withRasterExport<T>(
   opts: RasterExportOptions,
   use: (prepared: PreparedRasterExport) => Promise<T>,
+): Promise<T>;
+export async function withRasterExport<T>(
+  opts: RasterExportOptions,
+  use: (prepared: RasterizingExport) => Promise<T>,
 ): Promise<T> {
   const outcome = compileSource(opts.source);
   if (!outcome.ok || !outcome.ir) {
@@ -268,7 +286,10 @@ export async function withRasterExport<T>(
     const rasterize =
       scale !== undefined ? createFrameRasterizer(app, root, frames, scale) : undefined;
 
-    return await use({ ir, plan, app, root, frames, rasterize });
+    // `rasterize` is undefined exactly when `scale` is. Only the second
+    // overload allows that, and its callback declares `rasterize` optional,
+    // so this cast is sound for both overloads.
+    return await use({ ir, plan, app, root, frames, rasterize } as RasterizingExport);
   } finally {
     runtime?.destroy();
     root?.destroy({ children: true, texture: true });

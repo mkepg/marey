@@ -178,7 +178,9 @@ async function exportVideo(
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    throw new Error(`[export] ${message}`);
+    // The observer's own errors above already carry the prefix; adding it
+    // again produced "[export] [export] ...".
+    throw new Error(message.startsWith("[export] ") ? message : `[export] ${message}`);
   }
   if (!plan) throw new Error("[export] runVideoExport returned without reporting a plan");
 

@@ -436,7 +436,7 @@ function shapeItemsFor(shape: LottieShapeSpec, color: LayerSpec["color"], name: 
       // for its shape items.
       throw new Error(`[export] shapeItemsFor was called for group '${name}', which draws nothing.`);
   }
-  if (shape.kind === "line") {
+  if (shape.kind === "line" && color !== null) {
     // A line gets a STROKE, never a fill — an open path has no interior to
     // fill. AFTER the path, for the same backward-`searchShapes` reason the
     // fill below is (see that branch's comment for the citation): a stroke
@@ -452,7 +452,7 @@ function shapeItemsFor(shape: LottieShapeSpec, color: LayerSpec["color"], name: 
     items.push({
       ty: "st",
       nm: `${name} stroke`,
-      c: { a: 0, k: [...color!] },
+      c: { a: 0, k: [...color] },
       o: staticScalar(100),
       w: staticScalar(shape.thickness),
       lc: 1,

@@ -320,7 +320,7 @@ describe("export boundary", () => {
   it("textOutline.ts does not import pixi.js or sceneIR in any form", () => {
     expect(textOutlineSource).toContain("export async function createTextOutliner");
     expect(importsModule(textOutlineSource, "harfbuzzjs")).toBe(true);
-    expect(importsModule(textOutlineSource, "pixi\.js")).toBe(false);
+    expect(importsModule(textOutlineSource, "pixi\\.js")).toBe(false);
     expect(importsModule(textOutlineSource, "sceneIR")).toBe(false);
   });
 
@@ -569,7 +569,7 @@ describe("export boundary — R3 shared pipelines and their production entry poi
     ["videoPipeline.ts", videoPipelineSource, "return await encodeVideo(plan, rasterized(), {"],
     ["lottiePipeline.ts", lottiePipelineSource, "const doc: LottieDoc = encodeLottie(layers, frames, plan, {"],
     ["apngPipeline.ts", apngPipelineSource, "return encodeApng(pngs, { fps: plan.fps });"],
-    ["rasterExport.ts", rasterExportSource, "return await use({ ir, plan, app, root, frames, rasterize });"],
+    ["rasterExport.ts", rasterExportSource, "return await use({ ir, plan, app, root, frames, rasterize } as RasterizingExport);"],
   ])("%s imports none of the four dev seams and reaches none of their globals", (_name, source, landmark) => {
     const code = stripComments(source);
     expect(code).toContain(landmark);
