@@ -1848,6 +1848,42 @@ Both texts are WebFetch transcriptions; the caveat is recorded in each file.
 | mediabunny | only in `videoPipeline-*.js` |
 | files in `dist/` containing `__mareyExport` | 0 |
 
+**2026-09-26 correction (final review M-4): the −232,197 B is mostly
+re-chunking, not a smaller first load.** At HEAD, three chunks are split out
+of `index-*.js`, but the entry still imports all three statically:
+- `languageContract-*.js`, 152,801 B;
+- `FilterSystem-*.js`, 36,019 B;
+- `monaco.contribution-*.js`, 5,015 B.
+
+The browser downloads them on first load either way. The honest figure is
+the entry plus everything it imports statically, transitively. That
+excludes dynamic `import()`, which is how the four export pipelines load.
+This sum was computed by walking each chunk's static
+`import … from "./x.js"`. The result matches `index.html`'s own
+`modulepreload` list exactly, at both commits.
+
+| JavaScript on first load | Base | HEAD | Change |
+|---|---|---|---|
+| entry `index-*.js` | 1,398,885 B | 1,166,688 B | −232,197 B |
+| **total, entry + static imports** (11 files at base, 14 at HEAD) | **4,253,285 B** | **4,214,923 B** | **−38,362 B (−0.9 %)** |
+
+The −38,362 B is exactly 232,197 − 152,801 − 36,019 − 5,015. CSS on first
+load is unchanged: 154,592 B at both commits.
+
+**How the base was built.** Base is `8207e42`, which is `aad331d` after
+the branch's 2026-09-26 history rewrite: the Phase 5C spec commit, with no
+code changes on top of `main`.
+- It was built in a temporary `git worktree` whose `node_modules` was a
+  junction to this checkout's.
+- Its `package.json` differs from HEAD's only by `harfbuzzjs`, which the
+  base never imports.
+- The junction was removed first and the worktree afterwards (`git
+  worktree list` shows only the main checkout).
+
+The base's entry chunk measures 1,398,885 B, the same as the row above. HEAD
+was measured from this checkout's `npm run build` at `e2202ba`, which has
+the same `src/` as the tip of this branch.
+
 Commands: `node tools/visual-check/text-check.mjs --out .visual-check/t8/full2`;
 `node tools/visual-check/lottie-click-check.mjs --scene eval/scenes-3b/compound-logo.marey [--url http://localhost:4173]`.
 

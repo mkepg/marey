@@ -1160,7 +1160,7 @@ round was needed.)
 | Unit suite | `npx vitest run` | **43 files / 1049 tests**, all passing |
 | Typecheck | `npx tsc -b --noEmit` | exit 0 |
 | Baseline (for comparison) | same commands at `4a23e1d` | 37 files / 937 tests, exit 0 |
-| Production build (Task 8's own measurement) | `npm run build` | exit 0; entry chunk **1,166,688 B** (was 1,398,885 B at `aad331d`, **−232,197 B**) |
+| Production build (Task 8's own measurement, corrected 2026-09-26, final review M-4) | `npm run build` | exit 0. Entry chunk **1,166,688 B**, against 1,398,885 B at `aad331d` (now `8207e42`). That −232,197 B is mostly re-chunking: `languageContract-*.js` (152,801 B), `FilterSystem-*.js` (36,019 B) and `monaco.contribution-*.js` (5,015 B) were split out, but the entry still imports them statically. **First-load JavaScript, entry plus its static imports: 4,253,285 B → 4,214,923 B, −38,362 B (−0.9 %).** See `eval/RESULTS-PHASE-5C.md`, "Build" |
 | harfbuzzjs confinement | `grep -c harfbuzz dist/assets/index-*.js` → 0; only `lottiePipeline-*.js` (41,864 B) and `harfbuzz-9Zbs1aEM.wasm` (433,766 B) mention it | confined to the lazy Lottie chunk, as required |
 | mediabunny confinement | grep `dist/` | only in `videoPipeline-*.js` |
 | Dev seams absent from `dist/` | grep for `__mareyExport` | 0 files |
