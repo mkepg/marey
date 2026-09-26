@@ -129,13 +129,16 @@ for a **complete, provable engineering artifact with a declarable finish
 line**, and acquisition work moved past that line. Read its §1 before
 proposing anything the old roadmap justified by adoption.
 
-Current phase: **5C — Lottie completion and video quality, next** (added by
-the project owner on 2026-09-24). It covers:
-- Lottie `line` and `text`;
-- a Lottie export button;
-- fixes for the video quality the 5B smoke test reported.
-Start from `docs/research/2026-09-24-export-quality-findings-and-options.md`,
-and from the Phase 5B plan's execution notes.
+Current phase: **5C — Lottie completion and video quality, done on branch
+`phase-5c-lottie-video-quality`, reviewed, not yet merged** (added by the
+project owner on 2026-09-24). It delivered:
+- 2× MP4/WebM video;
+- APNG export;
+- Lottie `line` and `text` (HarfBuzz-shaped glyph outlines);
+- a Lottie export button.
+Evidence is in `eval/RESULTS-PHASE-5C.md`, and the plan's execution notes list
+every ruling and deferral. `roadmap-and-process.md`'s 5C bullet states the
+review coverage.
 **5B — video is done and merged** (WebM and MP4 via WebCodecs and mediabunny;
 evidence in `eval/RESULTS-PHASE-5B.md`). Its last four changes came after the
 independent review: the default scene, the licences file, the export-teardown

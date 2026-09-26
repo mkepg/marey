@@ -239,6 +239,18 @@ explicitly rather than quietly deviating.
   `docs/research/2026-09-24-export-quality-findings-and-options.md`, with
   the primary-source note `2026-09-24-video-export-quality-options.md`.
   Which options to take is decided in this phase's design, not here.
+  - **Status (2026-09-26): done on branch `phase-5c-lottie-video-quality`,
+    not yet merged.** The owner chose 2× video (option C) and APNG (option
+    B). The phase shipped both, plus Lottie `line`, Lottie `text` as
+    HarfBuzz-shaped outlines, and the Lottie button. MP4 specks stay deferred
+    to the `marey export` CLI. Evidence is in `eval/RESULTS-PHASE-5C.md`.
+    Design: `docs/specs/2026-09-24-marey-phase-5c-lottie-completion-and-video-quality-design.md`.
+    Plan and execution notes: `docs/plans/2026-09-24-phase-5c-lottie-video-quality.md`.
+  - **Review coverage.** Each of nine tasks had its own review. An
+    independent whole-branch review found no Critical and five Important
+    issues. One fix wave closed them, and a scoped re-review confirmed it.
+    Two commits had no independent review: the three doc-only residuals
+    that re-review named, applied afterwards, and this status edit.
 - **Phase 6 — packaging and legibility.** Public package, `LICENSE`, a root
   README, `marey check`/`marey export`, and a written account of the
   determinism work. Replaces the old Phase 5B (Distribution); acquisition work
