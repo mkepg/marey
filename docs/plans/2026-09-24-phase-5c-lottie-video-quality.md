@@ -1356,6 +1356,9 @@ not repeated here; see the task-9 report for their commits.
    today:* both numbers are recorded, each explicitly labelled by the
    configuration that produced it (spec §9's dated amendment), so nobody
    reading the evidence file can mistake one for the other.
+   *Closed 2026-09-26 (final review I-3):* `quality-check.mjs --scorer
+   gpu|software` defaults to `gpu`. Its default run measures 42.02 / 42.16
+   dB, inside both §9.1 windows.
 2. **The MP4 masked-byte comparison is reported only as a boolean.** *Harmless
    today:* it answers a yes/no question (does masking change the encoded
    bytes) that the quantitative PSNR/specks numbers already gate on
@@ -1368,7 +1371,10 @@ not repeated here; see the task-9 report for their commits.
    every number these probes produced is transcribed as prose, with the
    exact command line, into `eval/RESULTS-PHASE-5C.md`; only the
    mechanical one-command re-run is currently blocked, not the evidence
-   itself.
+   itself. *Closed 2026-09-26 (final review I-2, I-3):* both probes, and
+   `edge-band.mjs`'s fixture, now live under
+   `docs/research/2026-09-24-export-quality-probes/`. Both were re-run from
+   there with the recorded numbers.
 4. **`ml: 10`'s judgment-call flip was never run.** Spec §8 lists `ml` among
    the flips to test; Task 2 flip-tested stroke order and the path's `c`
    flag, not `ml`. *Harmless today:* `ml: 10` is still pinned by an exact
@@ -1378,7 +1384,8 @@ not repeated here; see the task-9 report for their commits.
 5. **`lottieEncode.ts:745`'s `color!` sits beside an adjacent `color !==
    null` guard, unreachable but inconsistent in style.** *Harmless today:*
    the branch is unreachable given the surrounding control flow, so the
-   assertion cannot mask a real `null` at runtime.
+   assertion cannot mask a real `null` at runtime. *Closed 2026-09-26:* the
+   stroke branch now tests `color !== null` like the fill branch.
 6. **Explained (2026-09-26, final review M-3): `compound-logo` frames 0/48
    read maxDelta 78/83 against 5A's recorded 61/61.** The gap is a property
    of the harness's launch configuration, the same scorer-flag effect T1-R2
@@ -1410,11 +1417,15 @@ not repeated here; see the task-9 report for their commits.
    unreachable because every video export always supplies a `scale`, so it
    can never fire wrongly; the re-prefixing was verified against the only
    two throw shapes reachable at that call site today, so it is fragile to
-   a *future* message-wording change, not wrong today.
+   a *future* message-wording change, not wrong today. *The dead guard is
+   closed (2026-09-26):* `withRasterExport` has an overload that types
+   `rasterize` as present whenever `scale` is supplied. The other two
+   minors stand as written.
 9. **`devVideoSeam.ts`'s outer catch double-prefixes an error as
    `"[export] [export]"`** (pre-existing, before this phase).  *Harmless
    today:* cosmetic — an extra repeated token in an already-clearly-labelled
-   string — and does not change which diagnostic fired.
+   string — and does not change which diagnostic fired. *Closed
+   2026-09-26:* the outer catch no longer re-prefixes.
 10. **Four Task 7 minors.** `exportBoundary.test.ts:284`'s regex escaping is
     inconsistent in style with the file's own quoting; `rasterExport.ts:196`
     calls `clearMetrics()` unconditionally, even for text-free scenes;
@@ -1428,18 +1439,65 @@ not repeated here; see the task-9 report for their commits.
     simple traversal, not two copies of a judgment call that could drift
     into disagreement; and the browser-only numbers are disclosed as such in
     this task's own execution notes and in `renderer.md`, not silently
-    assumed to be CI-covered.
+    assumed to be CI-covered. *The regex escaping is closed (2026-09-26);*
+    the other three stand as written.
 11. **Parked to the final fix wave (ruling T8-R7), not this task:**
     `lottiePipeline.test.ts`'s path-3 test pins the exact V8/pixi error
     string `"document.createElement is not a function"`. *Harmless today,*
     per the ruling: it fails loudly on any pixi/V8 wording change and can
     never falsely pass, and the real guard is the adjacent init spy, not
-    this string.
+    this string. *Closed 2026-09-26 (final review M-13):* the test now
+    requires the rejection to be the very error `init` threw, with no
+    `[LOTTIE_`/`[EXPORT_` prefix, and pins no wording.
 12. **`text-check.html`'s null-out comment slightly overstates what the
     code does** (Task 8 review Minor 7, closed in fix round 1 for the code
     itself; the comment wording was not separately revisited). *Harmless
     today:* it is a comment, not code that anything downstream reads as
     fact.
+13. **Emoji-presentation sequences may pass the missing-glyph refusal
+    (final review M-9, unverified risk).** In the final review's Node
+    probe with harfbuzzjs (not re-run here), `™️`, `↔️` and
+    `©️` (base + U+FE0F) shape to real JetBrains Mono glyphs (967, 752 and
+    965, with 680 for the selector), so no refusal fires. `❤️` and `✔️` do
+    refuse, because they shape to glyph 0. If Chromium's preview honours
+    VS16 with a colour emoji for the first three, the Lottie export
+    silently draws the text glyph instead. *Harmless today:* none of the
+    77 first-party `.marey` files, and not `DEFAULT_CODE`, contains U+FE0F
+    (checked 2026-09-26). Marey has no third-party scenes, so no existing
+    input can reach this. One browser probe settles it: render the three
+    sequences in the preview and compare.
+14. **`EXPORT_FONT_UNAVAILABLE` has only been proven against fakes (final
+    review M-10).** No run has aborted the font request (Playwright's
+    `page.route`) to confirm that Chromium's `document.fonts.check` really
+    goes false after a failed load. The refusal depends on that. If it
+    stayed true, the export would build with a fallback font and silently
+    differ from the preview. *Harmless today:* the font is a same-origin
+    static file shipped with the app (`/fonts/JetBrainsMono-Regular.ttf`,
+    `EXPORT_FONT_URL`). No measured run has seen it fail to load. The
+    cold-page path, where the font has not loaded yet, is exercised by Task
+    7's mutation, and there the load resolves and the export waits for it.
+    Only a genuinely failed request is unproven. One `page.route` abort
+    settles it.
+15. **A text-free Lottie export still loads the HarfBuzz wasm (final
+    review M-11).** `lottiePipeline.ts` imports `textOutline.ts`
+    statically, and `textOutline.ts` imports harfbuzzjs statically, whose
+    entry uses a top-level `await`. So every Lottie export downloads and
+    instantiates the 433,766 B wasm, even when the scene has no text. If
+    the wasm fails to load, the export fails with a generic dynamic-import
+    error, not a named one. *Harmless today:* all of it sits inside the
+    lazy `lottiePipeline` chunk, loaded only by a Lottie click (the
+    `useExport.ts` dynamic-import guard in `exportBoundary.test.ts`). No
+    other visitor or export pays for it. A wasm failure fails loudly and
+    never produces a wrong file. The fix, when wanted, is a dynamic
+    `import("./textOutline")` inside `collectTextLayouts` when
+    `texts.length > 0`.
+
+**A note on the clip mask (final review M-14).** Under Task 8's mutation
+(a), the baseline shifted by the descent, the clip mask cuts the shifted
+glyphs at the box's bottom edge. So only the top edge of the ink box moves
+(11 px ascii, 6 px multiline). The position check still catches it, so this
+is an observation, not a defect. But anyone reading an ink-box delta under
+a mask should expect a placement bug to show on one edge only.
 
 ### The process record
 
