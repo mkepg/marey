@@ -1,4 +1,5 @@
 import { runCheck, CHECK_USAGE } from "./check";
+import { EXPORT_USAGE } from "./exportArgs";
 import packageJson from "../../package.json";
 
 /**
@@ -16,19 +17,16 @@ export const COMMANDS: Readonly<Record<string, (rest: readonly string[]) => Prom
 /**
  * Lists every command's synopsis (spec Phase 6 §3), so `--help` and the
  * no-argument case both name every command instead of just the one that was
- * typed wrong. `check`'s synopsis is composed from `CHECK_USAGE` — the one
- * copy that `check.ts`'s own error messages also use — rather than retyped
- * here. `export` is not in `COMMANDS` yet (Task 7 adds it), so its synopsis
- * is a literal for now; Task 6 replaces this line with an `EXPORT_USAGE`
- * constant `check.ts`-style.
+ * typed wrong. `check` and `export`'s lines are composed from `CHECK_USAGE`
+ * and `EXPORT_USAGE` — the one copy of each that `check.ts` and
+ * `exportArgs.ts`'s own error messages also use (PF-R4) — under a single
+ * "Usage:" heading, rather than each command labelling its own line: spec
+ * §3's synopsis is one block with one heading, and `check`/`export`'s
+ * bracketed arguments share a column (`marey check  ` and `marey export `
+ * are both 13 characters) precisely because neither constant carries its own
+ * "Usage: " prefix. `export` is not in `COMMANDS` yet (Task 7 adds it).
  */
-const USAGE = [
-  CHECK_USAGE,
-  "marey export <file> --format <png|apng|webm|mp4|lottie>",
-  "             [--fps <n>] [--duration <s>] [--out <path>]",
-  "marey --help",
-  "marey --version",
-].join("\n");
+const USAGE = ["Usage:", CHECK_USAGE, EXPORT_USAGE, "marey --help", "marey --version"].join("\n");
 
 /** The bundle entry `bin/marey.mjs` calls with `process.argv.slice(2)`. */
 export async function main(argv: readonly string[]): Promise<number> {

@@ -32,9 +32,14 @@ const RATE_DEPENDENT_CODES: ReadonlySet<ExportDiagnosticCode> = new Set([
 
 /**
  * `main.ts`'s overall usage text composes this rather than retyping the
- * synopsis, so there is exactly one copy of it.
+ * synopsis, so there is exactly one copy of it (PF-R4). It holds only the
+ * synopsis line, with the two-space gap spec §3 lays out after `check` so
+ * its arguments line up with `export`'s in `--help`'s combined listing; this
+ * file's own error messages below supply their own "Usage: " label, since
+ * `main.ts`'s combined listing supplies just one heading for every command
+ * instead.
  */
-export const CHECK_USAGE = "Usage: marey check [--export-ready] [--fps <n>] <file...>";
+export const CHECK_USAGE = "marey check  [--export-ready] [--fps <n>] <file...>";
 
 /** Pure. Never touches argv beyond what is passed in. */
 export function parseArgs(argv: readonly string[]): CheckArgs {
@@ -69,7 +74,7 @@ export function parseArgs(argv: readonly string[]): CheckArgs {
     // file" for what was actually a flag-syntax mistake.
     if (arg.startsWith("--")) {
       if (error === null) {
-        error = `Unrecognized option '${arg}'. ${CHECK_USAGE}`;
+        error = `Unrecognized option '${arg}'. Usage: ${CHECK_USAGE}`;
       }
       continue;
     }
@@ -82,11 +87,11 @@ export function parseArgs(argv: readonly string[]): CheckArgs {
   // scene that would actually fail an export check — a false pass from a
   // tool whose entire job is to not produce one.
   if (error === null && fps !== null && !exportReady) {
-    error = `--fps has no effect without --export-ready. ${CHECK_USAGE}`;
+    error = `--fps has no effect without --export-ready. Usage: ${CHECK_USAGE}`;
   }
 
   if (error === null && files.length === 0) {
-    error = `no files given. ${CHECK_USAGE}`;
+    error = `no files given. Usage: ${CHECK_USAGE}`;
   }
 
   return { files, exportReady, fps, error };
