@@ -1,0 +1,125 @@
+// The link-preview image: public/og-image.png is one frame of this scene.
+// It is the playground's default scene at the 1200x630 size link previews
+// use, with the name and tagline beside it.
+//
+// To regenerate, with the dev server running on 5199:
+//
+//   node tools/visual-check/export-check.mjs \
+//     --scene tools/share-image/share-image.marey \
+//     --fps 10 --duration 2 --out .visual-check/share-image
+//
+// then copy frame_0016.png (t = 1.6s, confetti mid-air) to public/og-image.png.
+
+let sun    = #facc15
+let rim    = #f59e0b
+let ink    = #3b2410
+let blush  = #fb7185
+let party  = [#f472b6, #38bdf8, #a78bfa, #34d399, #fb923c]
+
+let cx = 920
+let cy = 330
+
+template Eye() {
+  group lid {
+    circle pupil     { position: (0, 0),  radius: 19, color: ink }
+    circle highlight { position: (6, -7), radius: 6,  color: #ffffff }
+  }
+}
+
+scene {
+  size: (1200, 630)
+  background: #0a0e1a
+  duration: 2
+
+  text name {
+    position: (80, 150)
+    origin: (0, 0)
+    content: "Marey"
+    fontSize: 112
+    color: #ffffff
+  }
+
+  text tagline {
+    position: (84, 310)
+    origin: (0, 0)
+    content: "Deterministic 2D motion\ngraphics, written as code."
+    fontSize: 30
+    color: #94a3b8
+  }
+
+  text url {
+    position: (84, 500)
+    origin: (0, 0)
+    content: "marey.netlify.app"
+    fontSize: 24
+    color: #a78bfa
+  }
+
+  generate k in 0 to 5 {
+    let angle = k * 60 - 30
+    polygon sparkle {
+      position: (cx + 230 * cos(angle), cy + 180 * sin(angle))
+      points: [(0, -14), (4, -4), (14, 0), (4, 4), (0, 14), (-4, 4), (-14, 0), (-4, -4)]
+      color: #fde68a
+      alpha: 0.35 + k * 0.1
+    }
+  }
+
+  // Confetti bursts from behind the face and hands off to physics, so the
+  // frame catches it scattering under gravity rather than frozen in a ring.
+  generate i in 0 to 23 {
+    let angle = -165 + i * 150 / 23
+    let reach = 170 + (i % 3) * 30
+    rectangle bit {
+      position: (cx + 8 * cos(angle), cy + 8 * sin(angle))
+      size: (14, 8)
+      rotation: i * 37
+      color: party[i % 5]
+      layer: -1
+      animate {
+        property: position
+        to: (cx + reach * cos(angle), cy + reach * sin(angle))
+        duration: 0.55
+        delay: 0.5
+        easing: easeOut
+        handoff: true
+      }
+      physics {
+        gravity: (0, 520)
+        airDrag: 0.02
+        bounce: 0.3
+        collideBounds: true
+        duration: indefinitely
+      }
+    }
+  }
+
+  group face {
+    position: (cx, cy)
+    rotation: -4
+
+    circle edge { position: (0, 0), radius: 158, color: rim }
+    circle head { position: (0, 0), radius: 150, color: sun }
+    circle cheekL { position: (-92, 34), radius: 26, color: blush, alpha: 0.55 }
+    circle cheekR { position: (92, 34),  radius: 26, color: blush, alpha: 0.55 }
+
+    use Eye() eyeL { position: (-52, -38) }
+    use Eye() eyeR { position: (52, -38) }
+
+    // An arc on a circle of radius 78, from 25 to 155 degrees.
+    line smile {
+      position: (0, 48)
+      points: [
+        (78 * cos(25),  78 * sin(25)),  (78 * cos(35),  78 * sin(35)),
+        (78 * cos(45),  78 * sin(45)),  (78 * cos(56),  78 * sin(56)),
+        (78 * cos(67),  78 * sin(67)),  (78 * cos(78),  78 * sin(78)),
+        (78 * cos(90),  78 * sin(90)),
+        (78 * cos(102), 78 * sin(102)), (78 * cos(113), 78 * sin(113)),
+        (78 * cos(124), 78 * sin(124)), (78 * cos(135), 78 * sin(135)),
+        (78 * cos(145), 78 * sin(145)), (78 * cos(155), 78 * sin(155))
+      ]
+      thickness: 12
+      color: ink
+    }
+  }
+}

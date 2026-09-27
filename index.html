@@ -3,10 +3,48 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Marey</title>
+    <title>Marey — deterministic 2D motion graphics, written as code</title>
+    <meta
+      name="description"
+      content="Marey is a text-first compiler for generative, deterministic 2D motion graphics. Write a scene as code, watch it play, and export it as MP4, WebM, APNG or Lottie."
+    />
+    <link rel="canonical" href="https://marey.netlify.app/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#111114" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+
+    <!-- Link previews (LinkedIn, Slack, X, Discord…). The image is a frame
+         of tools/share-image/share-image.marey, rendered by Marey itself. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Marey" />
+    <meta property="og:url" content="https://marey.netlify.app/" />
+    <meta property="og:title" content="Marey — deterministic 2D motion graphics, written as code" />
+    <meta
+      property="og:description"
+      content="A text-first compiler for generative, deterministic 2D motion graphics. Write a scene as code, watch it play, and export it as MP4, WebM, APNG or Lottie."
+    />
+    <meta property="og:image" content="https://marey.netlify.app/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="The Marey logotype beside a smiling yellow face with confetti bursting around it." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Marey — deterministic 2D motion graphics, written as code" />
+    <meta
+      name="twitter:description"
+      content="A text-first compiler for generative, deterministic 2D motion graphics. Write a scene as code, watch it play, and export it as MP4, WebM, APNG or Lottie."
+    />
+    <meta name="twitter:image" content="https://marey.netlify.app/og-image.png" />
   </head>
   <body>
     <div id="app"></div>
+    <noscript>
+      <h1>Marey</h1>
+      <p>
+        A text-first compiler for generative, deterministic 2D motion graphics.
+        The playground needs JavaScript. The source is on
+        <a href="https://github.com/mkepg/marey">GitHub</a>.
+      </p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
