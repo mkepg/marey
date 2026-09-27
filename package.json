@@ -22,7 +22,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run build:cli && node bin/marey.mjs check"
+    "check": "npm run build:cli && node bin/marey.mjs check",
+    "check:export": "node tools/cli-check/export-matrix.mjs"
   },
   "dependencies": {
     "harfbuzzjs": "1.6.2",
