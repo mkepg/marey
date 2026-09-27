@@ -148,7 +148,3 @@ export interface IRSceneNode {
   readonly children: ReadonlyArray<IRObjectNode>;
   readonly registry: Readonly<Record<IRObjectId, IRObjectNode>>;
 }
-
-export interface IRendererAdapter {
-  render(scene: IRSceneNode, host: HTMLDivElement, isDark: boolean): Promise<() => void>;
-}

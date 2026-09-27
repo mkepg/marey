@@ -17,6 +17,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:cli": "vite build --config vite.cli.config.ts",
+    "build:lib": "vite build --config vite.lib.config.ts && tsc -p tsconfig.lib.json && node tools/build/fix-dts-extensions.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

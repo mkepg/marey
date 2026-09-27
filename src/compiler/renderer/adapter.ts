@@ -1,9 +1,13 @@
 import { Application, Container, Graphics, Ticker } from "pixi.js";
-import type { IRSceneNode, IRendererAdapter } from "../sceneIR";
+import type { IRSceneNode } from "../sceneIR";
 import { buildNode } from "./builder";
 import { LiveDriver } from "./clock";
 import { MatterWorld } from "./physicsWorld";
 import { SceneRuntime } from "./sceneRuntime";
+
+export interface IRendererAdapter {
+  render(scene: IRSceneNode, host: HTMLDivElement, isDark: boolean): Promise<() => void>;
+}
 
 let sharedApp: Application | null = null;
 let activeTickerCallback: ((ticker: Ticker) => void) | null = null;
