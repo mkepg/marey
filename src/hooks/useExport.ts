@@ -1,8 +1,6 @@
 import { useCallback, useState } from "preact/hooks";
 import { useAppStore } from "../store";
-
-/** The frame rate every export uses. Matches `video-check.mjs`'s own default. */
-const EXPORT_FPS = 30;
+import { EXPORT_FPS } from "../compiler/export/exportDefaults";
 
 /** Every kind the top bar's export buttons can produce. */
 export type ExportKind = "mp4" | "webm" | "apng" | "lottie";

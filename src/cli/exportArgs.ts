@@ -1,4 +1,5 @@
 import type { CliExportFormat } from "../exportPage/protocol";
+import { EXPORT_FPS } from "../compiler/export/exportDefaults";
 
 export interface ExportArgs {
   readonly file: string;
@@ -15,13 +16,6 @@ export interface ExportArgs {
  * into three separate hand-typed lists (engineering-lessons §5).
  */
 const FORMATS = ["png", "apng", "webm", "mp4", "lottie"] as const satisfies readonly CliExportFormat[];
-
-/**
- * 30 fps (`EXPORT_FPS` in `useExport.ts`) — the export button's default, so a
- * plain `marey export a.marey --format webm` reproduces what the button
- * would produce (global constraint 6).
- */
-const DEFAULT_FPS = 30;
 
 /**
  * `main.ts`'s overall usage text composes this rather than retyping the
@@ -83,7 +77,7 @@ export function frameFileName(index: number, frameCount: number): string {
 export function parseExportArgs(argv: readonly string[]): ExportArgs {
   const files: string[] = [];
   let format: CliExportFormat | null = null;
-  let fps = DEFAULT_FPS;
+  let fps = EXPORT_FPS;
   let durationSeconds: number | null = null;
   let out: string | null = null;
   let error: string | null = null;
@@ -98,7 +92,7 @@ export function parseExportArgs(argv: readonly string[]): ExportArgs {
         if (raw !== undefined && (FORMATS as readonly string[]).includes(raw)) {
           format = raw as CliExportFormat;
         } else {
-          error = `Unrecognized format '${raw ?? "nothing"}'. ${EXPORT_USAGE}`;
+          error = `Unrecognized format '${raw ?? "nothing"}'. Usage: ${EXPORT_USAGE}`;
         }
       }
       continue;
@@ -110,7 +104,7 @@ export function parseExportArgs(argv: readonly string[]): ExportArgs {
       const parsed = raw === undefined ? NaN : Number(raw);
       if (error === null) {
         if (!Number.isFinite(parsed)) {
-          error = `--fps requires a numeric value, got ${raw ?? "nothing"}. ${EXPORT_USAGE}`;
+          error = `--fps requires a numeric value, got ${raw ?? "nothing"}. Usage: ${EXPORT_USAGE}`;
         } else {
           fps = parsed;
         }
@@ -124,7 +118,7 @@ export function parseExportArgs(argv: readonly string[]): ExportArgs {
       const parsed = raw === undefined ? NaN : Number(raw);
       if (error === null) {
         if (!Number.isFinite(parsed) || parsed <= 0) {
-          error = `--duration requires a positive number of seconds, got ${raw ?? "nothing"}. ${EXPORT_USAGE}`;
+          error = `--duration requires a positive number of seconds, got ${raw ?? "nothing"}. Usage: ${EXPORT_USAGE}`;
         } else {
           durationSeconds = parsed;
         }
@@ -137,7 +131,7 @@ export function parseExportArgs(argv: readonly string[]): ExportArgs {
       i++;
       if (error === null) {
         if (raw === undefined) {
-          error = `--out requires a path. ${EXPORT_USAGE}`;
+          error = `--out requires a path. Usage: ${EXPORT_USAGE}`;
         } else {
           out = raw;
         }
@@ -151,7 +145,7 @@ export function parseExportArgs(argv: readonly string[]): ExportArgs {
     // file later.
     if (arg.startsWith("--")) {
       if (error === null) {
-        error = `Unrecognized option '${arg}'. ${EXPORT_USAGE}`;
+        error = `Unrecognized option '${arg}'. Usage: ${EXPORT_USAGE}`;
       }
       continue;
     }
@@ -160,13 +154,13 @@ export function parseExportArgs(argv: readonly string[]): ExportArgs {
   }
 
   if (error === null && files.length === 0) {
-    error = `no file given. ${EXPORT_USAGE}`;
+    error = `no file given. Usage: ${EXPORT_USAGE}`;
   } else if (error === null && files.length > 1) {
-    error = `marey export takes exactly one file, got ${files.length}. ${EXPORT_USAGE}`;
+    error = `marey export takes exactly one file, got ${files.length}. Usage: ${EXPORT_USAGE}`;
   }
 
   if (error === null && format === null) {
-    error = `--format is required. ${EXPORT_USAGE}`;
+    error = `--format is required. Usage: ${EXPORT_USAGE}`;
   }
 
   const file = files[0] ?? "";
