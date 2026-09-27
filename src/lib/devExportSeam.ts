@@ -1,6 +1,5 @@
-import { encodePngSequence } from "../compiler/export/pngSequence";
+import { runPngExport } from "../compiler/export/pngPipeline";
 import { hashFrames } from "../compiler/export/frameHash";
-import { withRasterExport } from "../compiler/export/rasterExport";
 
 /** What `window.__mareyExportPng` resolves to. */
 export interface ExportPngResult {
@@ -52,36 +51,50 @@ function toBase64(bytes: Uint8Array): string {
  * than the harness re-implementing the pipeline in page script, where it
  * could silently diverge from the one the app actually runs.
  *
- * The compile -> plan -> build -> sample prefix and the teardown around it
- * are `rasterExport.ts`'s `withRasterExport` (Phase 5C Task 4) — the same
- * helper `videoPipeline.ts` and `lottiePipeline.ts` are built on, so this
- * seam observes exactly the pipeline they run rather than holding a second
- * copy of it (global constraint 7). It passes `scale: 1`: the `Application`
- * is initialised at the scene's **logical** size with the scene's own
- * background, `autoStart: false` (nothing here may advance on a wall clock)
- * and `resolution: 1`. The preview's `Application` carries
- * `devicePixelRatio` and whatever `fit` scaling the pane needs; the exported
- * artifact is the scene, not the preview.
+ * Since Phase 6 Task 4 this seam calls `pngPipeline.ts`'s `runPngExport` —
+ * the same move Phase 5B made for video and Phase 5C Task 5 made for APNG —
+ * rather than holding its own copy of the compile -> plan -> build -> sample
+ * prefix (`rasterExport.ts`'s `withRasterExport`, global constraint 7). It
+ * passes no `durationSeconds` override beyond what the caller supplies: the
+ * `Application` `runPngExport` builds is initialised at the scene's
+ * **logical** size with the scene's own background, `autoStart: false`
+ * (nothing here may advance on a wall clock) and `resolution: 1` (`scale: 1`,
+ * spec §2.1/O3 — a plain PNG sequence is never upscaled). The preview's
+ * `Application` carries `devicePixelRatio` and whatever `fit` scaling the
+ * pane needs; the exported artifact is the scene, not the preview.
+ *
+ * This seam only *observes* `runPngExport`: `observer.onSampled` supplies
+ * the sampler's own frames for `hashFrames` (the simulation-state hash, not
+ * a pixel hash) and sizes the base64 array up front, and `onPng` places each
+ * frame's base64 PNG at `frame.index` — never at arrival order (Task 4
+ * ruling T4-R2, carried into every export seam) — as frames are produced.
  */
 async function exportPng(source: string, opts: ExportPngOptions): Promise<ExportPngResult> {
   try {
-    return await withRasterExport(
-      { source, fps: opts.fps, durationSeconds: opts.durationSeconds, scale: 1 },
-      async ({ ir, plan, app, root, frames }) => {
-        // Sample the whole scene first, then encode. `encodePngSequence`
-        // never sees the runtime, so the two phases cannot interleave even
-        // by mistake.
-        const pngs = await encodePngSequence(app, root, frames);
-        return {
-          frames: pngs.map(toBase64),
-          hash: hashFrames(frames),
-          fps: plan.fps,
-          frameCount: plan.frameCount,
-          width: ir.width,
-          height: ir.height,
-        };
+    let hash = "";
+    let pngs: string[] = [];
+    const result = await runPngExport({
+      source,
+      fps: opts.fps,
+      durationSeconds: opts.durationSeconds,
+      onPng: (frame, png) => {
+        pngs[frame.index] = toBase64(png);
       },
-    );
+      observer: {
+        onSampled: (frames) => {
+          pngs = new Array(frames.length);
+          hash = hashFrames(frames);
+        },
+      },
+    });
+    return {
+      frames: pngs,
+      hash,
+      fps: result.fps,
+      frameCount: result.frameCount,
+      width: result.width,
+      height: result.height,
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     // Only the refusals `withRasterExport` can throw before any

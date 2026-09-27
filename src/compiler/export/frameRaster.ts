@@ -147,7 +147,9 @@ export function assertFrameSetMatchesTree(
  * `app` besides `renderer`, so what gets exported cannot be a function of
  * when it was exported. This is roadmap §6.2's "encoders never advance the
  * simulation and never see a wall clock", for the wall-clock half;
- * `encodePngSequence`'s own docstring covers the simulation half.
+ * `withRasterExport`'s own comment (`rasterExport.ts`) covers the simulation
+ * half: `use` never sees the runtime, so a pipeline's own encode step cannot
+ * interleave with sampling even by mistake.
  */
 export function createFrameRasterizer(
   app: Application,

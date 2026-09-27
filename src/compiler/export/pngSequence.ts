@@ -1,14 +1,15 @@
-import type { Application, Container, ICanvas } from "pixi.js";
-import type { FrameSnapshot } from "../renderer/frameSampler";
-import { createFrameRasterizer } from "./frameRaster";
+import type { ICanvas } from "pixi.js";
 
 /**
  * PNG bytes off an extracted canvas, whichever blob API the host provides.
  *
- * Exported since Phase 5C Task 5 so `apngPipeline.ts`'s `runApngExport` can
- * read the same lossless per-frame PNG bytes this module already produces
+ * Exported since Phase 5C Task 5 so `apngPipeline.ts`'s `runApngExport` could
+ * read the same lossless per-frame PNG bytes this module already produced
  * for `encodePngSequence`, rather than a second copy of the `toBlob`/
- * `convertToBlob` branch.
+ * `convertToBlob` branch. Task 4 of Phase 6 moved `encodePngSequence` itself
+ * into `pngPipeline.ts`'s `runPngExport` (the PNG sequence's own lazy
+ * rasterize loop, built on `rasterExport.ts`'s shared prefix), leaving this
+ * function as the one thing both pipelines still share.
  */
 export function pngBytesOf(canvas: ICanvas): Promise<Uint8Array> {
   const toBytes = async (blob: Blob): Promise<Uint8Array> =>
@@ -32,35 +33,4 @@ export function pngBytesOf(canvas: ICanvas): Promise<Uint8Array> {
   throw new Error(
     "[export] This canvas implementation offers neither toBlob nor convertToBlob, so PNG bytes cannot be read from it.",
   );
-}
-
-/**
- * Encode a sampled sequence to PNG bytes, one buffer per frame.
- *
- * **It receives `FrameSnapshot[]` and no runtime, no world and no driver**, so
- * it cannot advance the simulation even by accident. That is roadmap §6.2's
- * "encoders never advance the simulation and never see a wall clock" made
- * structural rather than conventional.
- *
- * Since Phase 5B the per-frame replay-and-extract lives in `frameRaster.ts`,
- * shared with the video exporter, so the two cannot disagree about the
- * exported size or background. See that module for why each extraction
- * argument is what it is, and for the wall-clock half of the claim above —
- * this function never reads `app` at all besides handing it to
- * `createFrameRasterizer`.
- */
-export async function encodePngSequence(
-  app: Application,
-  root: Container,
-  frames: ReadonlyArray<FrameSnapshot>,
-): Promise<Uint8Array[]> {
-  if (frames.length === 0) return [];
-  // PNG export is not scaled (spec §2.1, O3: "2x" is a video-only decision;
-  // APNG stays at 1x too) -- always the scene's own declared pixel size.
-  const rasterize = createFrameRasterizer(app, root, frames, 1);
-  const out: Uint8Array[] = [];
-  for (const frame of frames) {
-    out.push(await pngBytesOf(rasterize(frame)));
-  }
-  return out;
 }

@@ -17,7 +17,9 @@ import videoContractSource from "./videoContract.ts?raw";
 import videoPipelineSource from "./videoPipeline.ts?raw";
 import lottiePipelineSource from "./lottiePipeline.ts?raw";
 import apngPipelineSource from "./apngPipeline.ts?raw";
+import pngPipelineSource from "./pngPipeline.ts?raw";
 import rasterExportSource from "./rasterExport.ts?raw";
+import devExportSeamSource from "../../lib/devExportSeam.ts?raw";
 import useExportSource from "../../hooks/useExport.ts?raw";
 import topBarSource from "../../components/TopBar/TopBar.tsx?raw";
 import lottieEncodeSource from "./lottieEncode.ts?raw";
@@ -528,6 +530,44 @@ describe("export boundary — R3 shared pipelines and their production entry poi
     expect(code).toContain("return encodeApng(pngs, { fps: plan.fps });");
     expect(importsModule(code, "devApngSeam")).toBe(false);
     expect(code).not.toContain("__mareyExportApng");
+  });
+
+  /**
+   * Task 4: `pngPipeline.ts` is the newest of the four pipelines built on
+   * `withRasterExport`, and the PNG sequence's own dev seam is
+   * `devExportSeam.ts` rather than a `devPngSeam.ts` -- so "does not import
+   * any dev seam" is checked against all four names here, the same breadth
+   * the shared it.each table below gives the other three pipelines, rather
+   * than against just one seam's name the way the apng/video/lottie checks
+   * above are (each of those has its own differently-named seam file).
+   */
+  it("pngPipeline.ts does not import any dev seam, and does not reach a dev export global", () => {
+    const code = stripComments(pngPipelineSource);
+    expect(code).toContain("export async function runPngExport");
+    for (const seam of ["devVideoSeam", "devLottieSeam", "devApngSeam", "devExportSeam"]) {
+      expect(importsModule(code, seam), seam).toBe(false);
+    }
+    for (const global of ["__mareyExportVideo", "__mareyExportLottie", "__mareyExportApng", "__mareyExportPng"]) {
+      expect(code, global).not.toContain(global);
+    }
+  });
+
+  /**
+   * Task 4's other half of the same property: `devExportSeam.ts` is the one
+   * dev seam that is ALLOWED to know about its pipeline -- it is the harness
+   * entry point, not a production module -- but it must *observe*
+   * `runPngExport` rather than hold a second copy of the compile -> plan ->
+   * build -> sample prefix `runPngExport` already runs. Before this task the
+   * seam imported `rasterExport` directly and called `withRasterExport`
+   * itself; this pins that it no longer does, the same "one orchestration
+   * per export" property (global constraint 7) the pipelines' own tests
+   * guard from the other side.
+   */
+  it("devExportSeam.ts imports pngPipeline and does not import rasterExport", () => {
+    const code = stripComments(devExportSeamSource);
+    expect(code).toContain("export function installExportSeam");
+    expect(importsModule(code, "pngPipeline")).toBe(true);
+    expect(importsModule(code, "rasterExport")).toBe(false);
   });
 
   /**
