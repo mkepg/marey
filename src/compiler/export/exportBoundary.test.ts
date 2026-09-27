@@ -26,6 +26,11 @@ import lottieEncodeSource from "./lottieEncode.ts?raw";
 import lottieGeometrySource from "./lottieGeometry.ts?raw";
 import apngEncodeSource from "./apngEncode.ts?raw";
 import textOutlineSource from "./textOutline.ts?raw";
+import exportPageMainSource from "../../exportPage/main.ts?raw";
+import exportPageProtocolSource from "../../exportPage/protocol.ts?raw";
+
+/** `src/exportPage/main.ts`'s last line, after its last comment. */
+const EXPORT_PAGE_LANDMARK = "window.__mareyCliExport = cliExport;";
 
 /**
  * True if `source` imports a module whose specifier contains `moduleFragment`,
@@ -610,6 +615,9 @@ describe("export boundary — R3 shared pipelines and their production entry poi
     ["lottiePipeline.ts", lottiePipelineSource, "const doc: LottieDoc = encodeLottie(layers, frames, plan, {"],
     ["apngPipeline.ts", apngPipelineSource, "return encodeApng(pngs, { fps: plan.fps });"],
     ["rasterExport.ts", rasterExportSource, "return await use({ ir, plan, app, root, frames, rasterize } as RasterizingExport);"],
+    // Not a pipeline: the CLI's export page (spec §4.2), which calls the
+    // four pipelines above and must reach no dev seam for the same reason.
+    ["exportPage/main.ts", exportPageMainSource, EXPORT_PAGE_LANDMARK],
   ])("%s imports none of the four dev seams and reaches none of their globals", (_name, source, landmark) => {
     const code = stripComments(source);
     expect(code).toContain(landmark);
@@ -664,5 +672,177 @@ describe("export boundary — R3 shared pipelines and their production entry poi
     expect(code).not.toContain("__mareyExportVideo");
     expect(code).not.toContain("__mareyExportLottie");
     expect(code).not.toContain("__mareyExportApng");
+  });
+});
+
+/**
+ * Every module specifier `code` names, in each form `importsModule` matches:
+ * `import ... from "X"`, `import type ... from "X"`, `export ... from "X"`,
+ * a bare `import "X"`, and a dynamic `import("X")`. Run it on
+ * `stripComments` output, so prose naming a module is not read as an import.
+ */
+function importSpecifiers(code: string): string[] {
+  const pattern = /(?:\bfrom\s+|\bimport\s+|\bimport\s*\(\s*)["']([^"']+)["']/g;
+  return [...code.matchAll(pattern)].map((match) => match[1]);
+}
+
+/** A `/`-separated path with its `.` and `..` segments folded away. */
+function normalizePath(path: string): string {
+  const out: string[] = [];
+  for (const part of path.split("/")) {
+    if (part === "" || part === ".") continue;
+    if (part === ".." && out.length > 0 && out[out.length - 1] !== "..") out.pop();
+    else out.push(part);
+  }
+  return out.join("/");
+}
+
+/**
+ * Every `.ts`/`.tsx` file under `src/`, keyed by its path from the repository
+ * root (`src/exportPage/main.ts`). `import.meta.glob` keys paths relative to
+ * this file, so a sibling is `./x.ts` and the export page is
+ * `../../exportPage/main.ts`; re-rooting them gives one spelling per file,
+ * which is what resolving an import against them needs.
+ */
+function sourcesByPath(): Map<string, string> {
+  const sources = import.meta.glob<string>("../../**/*.{ts,tsx}", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  });
+  return new Map(
+    Object.entries(sources).map(([key, source]) => [normalizePath(`src/compiler/export/${key}`), source]),
+  );
+}
+
+/**
+ * Every path `entry` reaches through relative imports, followed transitively
+ * and in every import form (a dynamic `import()` loads its module too),
+ * including `entry` itself. A relative specifier resolves the way this
+ * repository writes them: extensionless, `.ts`, `.tsx`, or a directory's
+ * `index`. One that names no source file (a stylesheet, say) is still
+ * returned, as its resolved path, so a check on *where* a path lives sees it;
+ * it is just not walked. Package specifiers (`pixi.js`) are not paths under
+ * `src/` and are skipped.
+ */
+function reachableFrom(entry: string, sources: ReadonlyMap<string, string>): Set<string> {
+  const reached = new Set<string>();
+  const pending = [entry];
+  while (pending.length > 0) {
+    const path = pending.pop()!;
+    if (reached.has(path)) continue;
+    reached.add(path);
+    const source = sources.get(path);
+    if (source === undefined) continue;
+    const dir = path.slice(0, path.lastIndexOf("/"));
+    for (const specifier of importSpecifiers(stripComments(source))) {
+      if (!specifier.startsWith(".")) continue;
+      const base = normalizePath(`${dir}/${specifier.split("?")[0]}`);
+      const candidates = [base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`, `${base}/index.tsx`];
+      pending.push(candidates.find((candidate) => sources.has(candidate)) ?? base);
+    }
+  }
+  return reached;
+}
+
+/**
+ * Phase 6's export page (spec §4.2, §11): the page `marey export` loads in
+ * headless Chromium to run the shipped pipelines with no UI. The website
+ * redesign must not be able to break it, so nothing it loads may come from
+ * the app's UI, and nothing it loads may be a dev seam, which production
+ * builds drop. It calls the pipelines and holds no orchestration of its own
+ * (ruling R45), and the Node CLI imports its request/result protocol too, so
+ * the protocol module must stay free of imports and of the DOM.
+ */
+describe("export boundary — the CLI export page", () => {
+  /**
+   * Transitive, not just `main.ts`'s own import lines: a UI module reached
+   * through a pipeline would put the UI in the page's bundle just as surely
+   * as a direct import would, and "a UI change can't reach it" is a claim
+   * about the whole graph. The expected modules are checked first, so a walk
+   * that stopped early (a resolver that misread the specifiers) fails here
+   * rather than reporting an empty, clean graph.
+   */
+  it("nothing main.ts loads, directly or transitively, is a dev seam or lives under src/components/, src/hooks/ or src/store/", () => {
+    const sources = sourcesByPath();
+    expect(sources.get("src/exportPage/main.ts")).toBe(exportPageMainSource);
+    const reached = reachableFrom("src/exportPage/main.ts", sources);
+    for (const expected of [
+      "src/exportPage/protocol.ts",
+      "src/compiler/export/pngPipeline.ts",
+      "src/compiler/export/apngPipeline.ts",
+      "src/compiler/export/videoPipeline.ts",
+      "src/compiler/export/lottiePipeline.ts",
+      "src/compiler/export/rasterExport.ts",
+      "src/compiler/export/textOutline.ts",
+      "src/compiler/renderer/frameSampler.ts",
+    ]) {
+      expect(reached, expected).toContain(expected);
+    }
+    const offending = [...reached].filter(
+      (path) => /^src\/(components|hooks|store)\//.test(path) || /^src\/lib\/dev\w*Seam(\.tsx?)?$/.test(path),
+    );
+    expect(offending).toEqual([]);
+  });
+
+  /**
+   * An allowlist rather than a denylist: the page may import the four
+   * pipelines' entry points, `hashFrames`, and its own protocol, and nothing
+   * else. So `rasterExport.ts` (whose `withRasterExport` would let the page
+   * hold a second copy of the orchestration, R45), a pipeline's other exports
+   * (`lottiePipeline.ts`'s `collectTextLayouts`), and any module not listed
+   * here all fail, each by name.
+   */
+  it("main.ts reaches the pipelines only through runPngExport, runApngExport, runVideoExport and runLottieExport, and never imports rasterExport", () => {
+    const code = stripComments(exportPageMainSource);
+    expect(code).toContain(EXPORT_PAGE_LANDMARK);
+    expect(importsModule(code, "rasterExport")).toBe(false);
+    const entryPoints: Record<string, string> = {
+      "../compiler/export/pngPipeline": "runPngExport",
+      "../compiler/export/apngPipeline": "runApngExport",
+      "../compiler/export/videoPipeline": "runVideoExport",
+      "../compiler/export/lottiePipeline": "runLottieExport",
+    };
+    expect(importSpecifiers(code).sort()).toEqual(
+      [...Object.keys(entryPoints), "../compiler/export/frameHash", "./protocol"].sort(),
+    );
+    for (const [specifier, entryPoint] of Object.entries(entryPoints)) {
+      const clause = new RegExp(`import\\s*\\{([^}]*)\\}\\s*from\\s*["']${specifier}["']`).exec(code);
+      const names = clause?.[1].split(",").map((name) => name.trim()).filter(Boolean);
+      expect(names, specifier).toEqual([entryPoint]);
+      expect(new RegExp(`\\b${entryPoint}\\(`).test(code), `${entryPoint} is called`).toBe(true);
+    }
+  });
+
+  it("protocol.ts imports nothing, and its code names no DOM global", () => {
+    const code = stripComments(exportPageProtocolSource);
+    expect(code).toContain("return btoa(binary);");
+    expect(code).toContain('export const EXPORT_ORIGIN = "https://marey.export";');
+    expect(importSpecifiers(code)).toEqual([]);
+    expect(/(^|\n)\s*import\b/.test(code)).toBe(false);
+    for (const global of ["document", "window", "fetch", "HTMLCanvasElement"]) {
+      expect(new RegExp(`\\b${global}\\b`).test(code), global).toBe(false);
+    }
+  });
+
+  it("importSpecifiers reads every import form, and reachableFrom follows and resolves them", () => {
+    expect(
+      importSpecifiers(
+        'import { a } from "./a";\nimport type { B } from "../b.ts";\nexport { c } from "./c";\nimport "./d.scss";\nconst e = await import("./e");',
+      ),
+    ).toEqual(["./a", "../b.ts", "./c", "./d.scss", "./e"]);
+    const sources = new Map([
+      ["src/x/entry.ts", 'import { a } from "./a";\nimport "../y/style.scss";\nimport { p } from "pixi.js";'],
+      ["src/x/a.ts", 'const m = await import("../y");'],
+      ["src/y/index.ts", 'export { z } from "./z";'],
+      ["src/y/z.tsx", ""],
+    ]);
+    expect([...reachableFrom("src/x/entry.ts", sources)].sort()).toEqual([
+      "src/x/a.ts",
+      "src/x/entry.ts",
+      "src/y/index.ts",
+      "src/y/style.scss",
+      "src/y/z.tsx",
+    ]);
   });
 });

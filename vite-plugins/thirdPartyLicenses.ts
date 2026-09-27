@@ -335,7 +335,19 @@ export function readFonts(publicDir: string, suppliedDir: string): { notices: Fo
   return { notices: byFamily(notices), problems };
 }
 
-export function thirdPartyLicenses(): Plugin[] {
+export interface ThirdPartyLicensesOptions {
+  /**
+   * The repository root, which holds `vite-plugins/licenses/`. Defaults to
+   * Vite's `root`, which is the repository root for the app build. A build
+   * whose `root` is a subdirectory (the export page's, `src/exportPage`)
+   * must pass it: resolved against that `root`, the supplied licences are
+   * not found, and the embedded-code supplement (harfbuzzjs) is one that is
+   * skipped silently when missing.
+   */
+  readonly projectRoot?: string;
+}
+
+export function thirdPartyLicenses(options: ThirdPartyLicensesOptions = {}): Plugin[] {
   let publicDir = "";
   let suppliedDir = "";
   return [
@@ -346,7 +358,7 @@ export function thirdPartyLicenses(): Plugin[] {
         publicDir = config.publicDir;
         // From the project root, not `import.meta.url`: Vite bundles its
         // config into `node_modules/.vite-temp/` before running it.
-        suppliedDir = join(config.root, "vite-plugins", "licenses");
+        suppliedDir = join(options.projectRoot ?? config.root, "vite-plugins", "licenses");
       },
       generateBundle(_options, bundle) {
         const dirs = new Set<string>();

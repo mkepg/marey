@@ -1,5 +1,6 @@
 import { runPngExport } from "../compiler/export/pngPipeline";
 import { hashFrames } from "../compiler/export/frameHash";
+import { toBase64 } from "../exportPage/protocol";
 
 /** What `window.__mareyExportPng` resolves to. */
 export interface ExportPngResult {
@@ -30,16 +31,6 @@ declare global {
      */
     __mareyExportPng?: (source: string, opts: ExportPngOptions) => Promise<ExportPngResult>;
   }
-}
-
-/** Base64 without a FileReader round trip; chunked to stay under the arg limit. */
-function toBase64(bytes: Uint8Array): string {
-  let binary = "";
-  const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(binary);
 }
 
 /**

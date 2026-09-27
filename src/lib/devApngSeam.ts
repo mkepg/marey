@@ -1,5 +1,6 @@
 import { runApngExport } from "../compiler/export/apngPipeline";
 import type { FrameSnapshot } from "../compiler/renderer/frameSampler";
+import { toBase64 } from "../exportPage/protocol";
 
 /** What `window.__mareyExportApng` resolves to. */
 export interface ExportApngResult {
@@ -64,16 +65,6 @@ declare global {
       opts: ExportApngOptions,
     ) => Promise<ExportApngResult>;
   }
-}
-
-/** Base64 without a FileReader round trip; chunked to stay under the arg limit. */
-function toBase64(bytes: Uint8Array): string {
-  let binary = "";
-  const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(binary);
 }
 
 function rgbaToBase64(data: Uint8ClampedArray): string {
