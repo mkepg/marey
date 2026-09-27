@@ -10,9 +10,14 @@ export default defineConfig({
     outDir: "dist/cli",
     // The app build (`vite build`, dist/) must not be wiped by this one.
     emptyOutDir: false,
+    // Vite otherwise copies the project's public/ directory (favicon,
+    // fonts/, og-image.png, ...) into every build's outDir, including a
+    // library build with nothing to do with the web app. dist/cli is a
+    // single Node script; it must hold only marey.mjs.
+    copyPublicDir: false,
     target: "node22",
     lib: {
-      entry: "src/cli/check.ts",
+      entry: "src/cli/main.ts",
       formats: ["es"],
       // A literal name, not a base name to extend: for a `"type": "module"`
       // package, Vite's default extension resolution maps the "es" format
@@ -23,8 +28,11 @@ export default defineConfig({
       fileName: () => "marey.mjs",
     },
     rollupOptions: {
-      // Keep every Node builtin external; this bundles the compiler, not Node.
-      external: [/^node:/],
+      // Keep every Node builtin external; this bundles the compiler, not
+      // Node. playwright-core (used by `marey export`'s browser launch) is
+      // also kept external: it ships its own native driver binaries that a
+      // bundle cannot inline.
+      external: [/^node:/, "playwright-core"],
     },
   },
 });

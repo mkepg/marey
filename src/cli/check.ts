@@ -30,7 +30,11 @@ const RATE_DEPENDENT_CODES: ReadonlySet<ExportDiagnosticCode> = new Set([
   "EXPORT_FRAME_BUDGET",
 ]);
 
-const USAGE = "Usage: marey check [--export-ready] [--fps <n>] <file...>";
+/**
+ * `main.ts`'s overall usage text composes this rather than retyping the
+ * synopsis, so there is exactly one copy of it.
+ */
+export const CHECK_USAGE = "Usage: marey check [--export-ready] [--fps <n>] <file...>";
 
 /** Pure. Never touches argv beyond what is passed in. */
 export function parseArgs(argv: readonly string[]): CheckArgs {
@@ -65,7 +69,7 @@ export function parseArgs(argv: readonly string[]): CheckArgs {
     // file" for what was actually a flag-syntax mistake.
     if (arg.startsWith("--")) {
       if (error === null) {
-        error = `Unrecognized option '${arg}'. ${USAGE}`;
+        error = `Unrecognized option '${arg}'. ${CHECK_USAGE}`;
       }
       continue;
     }
@@ -78,11 +82,11 @@ export function parseArgs(argv: readonly string[]): CheckArgs {
   // scene that would actually fail an export check — a false pass from a
   // tool whose entire job is to not produce one.
   if (error === null && fps !== null && !exportReady) {
-    error = `--fps has no effect without --export-ready. ${USAGE}`;
+    error = `--fps has no effect without --export-ready. ${CHECK_USAGE}`;
   }
 
   if (error === null && files.length === 0) {
-    error = `no files given. ${USAGE}`;
+    error = `no files given. ${CHECK_USAGE}`;
   }
 
   return { files, exportReady, fps, error };
@@ -146,27 +150,10 @@ export function checkOne(
 /**
  * The only impure part: reads files, prints, and reports an exit code.
  *
- * `argv` is `process.argv.slice(2)` from `bin/marey.mjs`, i.e. it still
- * carries the `check` subcommand token (`marey check <files>`). `check` is
- * the only command today, so this only strips that one token rather than
- * building out a subcommand table for a single entry.
+ * `rest` is the arguments after the `check` command name — `main.ts`'s
+ * dispatcher has already looked up the command and stripped that token.
  */
-export async function main(argv: readonly string[]): Promise<number> {
-  // A bare `marey` (empty argv) is a request for guidance, not a typo'd
-  // command name — printing `Unknown command ''.` reads as a bug report
-  // about the empty quotes, and buries USAGE (below) under a confusing
-  // message instead of showing it.
-  if (argv.length === 0) {
-    console.error(USAGE);
-    return 1;
-  }
-
-  const [command, ...rest] = argv;
-  if (command !== "check") {
-    console.error(`Unknown command '${command ?? ""}'. The only command is 'check'.`);
-    return 1;
-  }
-
+export async function runCheck(rest: readonly string[]): Promise<number> {
   const args = parseArgs(rest);
   if (args.error !== null) {
     console.error(args.error);
