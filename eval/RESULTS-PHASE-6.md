@@ -220,3 +220,110 @@ which gated mp4 on SHA-256. The mp4 row of the `VIDEO_SCALE` mutation failed
 on its size in that version as well as on its SHA-256. The last three rows ran
 against the current version. Gating mp4 on SHA-256 again is the first run in
 "Default mode" above: exit 1.
+
+---
+
+## Exit criterion 1: the package builds and installs
+
+Spec §2.1-2.4 makes the package publishable: version `0.4.0`, `private`
+removed, `engines: { "node": ">=22" }`, an `exports` map to the library
+bundle and its declarations, a `files` allowlist (`bin/`, `dist/cli/marey.mjs`,
+`dist/lib/`, `dist/export-page/`), and exactly one runtime dependency
+(`playwright-core@1.62.1`); harfbuzzjs, lz-string, matter-js, mediabunny,
+monaco-editor, pixi.js, preact and zustand move to `devDependencies`, each
+version string unchanged. `npm run check:pack`
+(`tools/cli-check/pack-check.mjs`, spec §9.2) is exit criterion 1 (§9.4) as a
+command: it builds the package, packs it, installs the tarball into an empty
+directory with `npm install --offline`, and runs the CLI and the library from
+there.
+
+### The manifest move: `npm install --offline`
+
+```
+npm install --offline
+```
+
+Exit 0, offline, no network access needed: every moved package was already in
+`node_modules` from the last `dependencies` install. `git diff --stat --
+package-lock.json` reports 37 insertions and 12 deletions; `git diff --
+package-lock.json` shows exactly three kinds of change: the root package's
+`version` field (twice, top and nested), its `dependencies` map shrinking to
+`{ "playwright-core": "1.62.1" }` with the other eight moving into
+`dependencies` → `devDependencies`, and `"dev": true` appearing on 22 packages
+already in the tree — the eight moved packages themselves and 14
+transitive-only dependencies of theirs (`@pixi/colord`,
+`@types/dom-mediacapture-transform`, `@types/dom-webcodecs`, `@types/earcut`,
+`@types/trusted-types`, `@webgpu/types`, `@xmldom/xmldom`, `earcut`,
+`eventemitter3`, `gifuct-js`, `ismobilejs`, `js-binary-schema-parser`,
+`parse-svg-path`, `tiny-lru`). Confirmed by loading both revisions of the
+lockfile as JSON and diffing every `packages` entry field by field (not just
+scanning the text diff): no package was added or removed, no `dev` flag went
+the other way, and no field other than `dev` and the root package's own
+`version`/`dependencies`/`devDependencies`/`engines` changed on any entry.
+
+### `npm run check:pack`: 11 of 11 checks pass
+
+```
+npm run build:package && npm run check:pack
+```
+
+Measured at `C:\Users\gomez\repos\PROGRAMMING_LANGUAGE\marey`, Windows 11,
+right after the four AGENTS.md checks (`npm run build` had just emptied
+`dist/`, per requirement 1: `build:package` runs after it, never before).
+Exit 0, **15.6 s** total (`real 0m15.628s`, `build:package` plus
+`check:pack`); `check:pack` alone measured **12.3 s** in an earlier run.
+
+| # | Check | Result | Time (s) | Detail |
+|---|---|---|---|---|
+| 1 | `build:package` | ok | 3.2 | built dist/lib, dist/export-page, dist/cli |
+| 2 | `npm pack --json` | ok | 0.9 | 57 files, 578,129 B packed, 1,786,581 B unpacked |
+| 3 | `npm init -y` | ok | 0.7 | package.json created |
+| 4 | `npm install --offline <tarball>` | ok | 1.3 | installed |
+| 5 | `npx marey --version` | ok | 1.7 | `0.4.0` |
+| 6 | `npx marey check <copy of radial-dots.marey>` | ok | 1.1 | `...\radial-dots.marey: ok` |
+| 7 | `npx marey export <copy> --format lottie` | ok | 2.1 | `wrote radial-dots.json  30 frames @ 30 fps  800x600  5848 B  sha256 5aba4b1aff965c8f6ab927fa83757ca18c8b2f911d3214cd8d60c2bf9e0d13c6  frames 94d15a5d` |
+| 8 | `node -e "import { compile } from 'marey'"` | ok | 0.0 | compiled a 10x10 scene |
+| 9 | consumer typecheck, esnext / bundler | ok | 0.4 | 0 errors |
+| 10 | consumer typecheck, nodenext / nodenext | ok | 0.4 | 0 errors |
+| 11 | `grep -c pixi` on the installed library bundle | ok | 0.0 | `grep -c pixi: 0` |
+
+Check 7 runs against the machine's already-installed Chromium (the pinned
+`playwright-core` build); no environment variable is set. Every size in the
+`npm pack` line came from `npm pack --json`'s own report, cross-checked
+against `git ls-files` never appearing in the list: none of the 57 packed
+paths starts with `docs/`, `eval/`, `tools/`, `src/` or `public/`.
+
+**One deviation from a literal reading of the check's `--types ""`.** tsc's
+own command-line parser rejects a literal empty-string argument to any
+list-type option (`--types`, here) before the list parser — which turns `""`
+into `[]` without complaint — ever runs: `parseOptionValue` raises
+`Compiler option 'types' expects an argument` (TS6044) whenever `!args[i]`,
+independent of the option's own handling. Confirmed by reading
+`node_modules/typescript/lib/typescript.js`'s `parseOptionValue` and
+`parseListTypeOption`, and by reproducing the failure with `spawnSync` calling
+`tsc` directly (bypassing the shell, so it is not a quoting artifact).
+`pack-check.mjs` instead passes `--types` with no following value, immediately
+before the next `--` flag: with nothing to consume, it resolves to an explicit
+`types: []`, the same "no ambient `@types`" result the literal `""` was meant
+to produce, confirmed by running both variants directly against
+`node_modules/typescript/bin/tsc`. The install directory has no `@types/*`
+package either way, since only `marey` and `playwright-core` are installed
+there, so this only guards against one appearing later.
+
+### Mutations: each assertion made to fail, then restored
+
+Both were run as the full `npm run check:pack`, which stops at the first
+failing check.
+
+| Mutation | Result | Restored |
+|---|---|---|
+| `node tools/build/fix-dts-extensions.mjs` dropped from `build:lib` | Checks 1-9 pass (including the esnext/bundler typecheck); check "consumer typecheck: nodenext / nodenext" fails: `TS2460` (`IRSceneNode`/`CompilerError` re-export identity, itself a symptom) plus four `TS2834` "Relative import paths need explicit file extensions ... when `--moduleResolution` is `node16` or `nodenext`" pointing at `node_modules/marey/dist/lib/types/package/index.d.ts`. The script stops there; the `pixi` check never runs. | `git diff --stat -- package.json` empty after restoring the `build:lib` line |
+| `dist/export-page/` removed from `files` | Checks 1-6 pass (the tarball packs to 33 files, 66,594 B, missing the whole export page); check "npx marey export <copy> --format lottie" fails: `[export] The export page is not built: ...\node_modules\marey\dist\export-page\index.html is missing.` | `git diff --stat -- package.json` empty after restoring the `files` array |
+
+### Four AGENTS.md checks, same session
+
+All four ran clean before the `build:package && check:pack` run above:
+`npm test` (53 files, 1142 tests), `npx vitest run --config
+eval/vitest.config.ts` (1 file, 5 tests), `npm run build` (typecheck plus the
+app's `vite build`), and `npm run build:cli && node bin/marey.mjs check
+$(git ls-files '*.marey')` (every first-party `.marey` scene, `ok`).

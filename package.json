@@ -1,40 +1,48 @@
 {
   "name": "marey",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "A text-first compiler for generative, deterministic 2D motion graphics.",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mkepg/marey.git"
   },
-  "//private": "Stays true until the package surface lands: publishing needs `exports` and `files` first, or npm publish would ship eval/ and the docs tree. See roadmap §9.1.",
-  "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "bin": {
     "marey": "bin/marey.mjs"
   },
+  "exports": {
+    ".": {
+      "types": "./dist/lib/types/package/index.d.ts",
+      "import": "./dist/lib/marey.mjs"
+    }
+  },
+  "files": [
+    "bin/",
+    "dist/cli/marey.mjs",
+    "dist/lib/",
+    "dist/export-page/"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:cli": "vite build --config vite.cli.config.ts",
-    "build:lib": "vite build --config vite.lib.config.ts && tsc -p tsconfig.lib.json && node tools/build/fix-dts-extensions.mjs",
+    "build:lib": "node -e \"require('node:fs').rmSync('dist/lib',{recursive:true,force:true})\" && vite build --config vite.lib.config.ts && tsc -p tsconfig.lib.json && node tools/build/fix-dts-extensions.mjs",
     "build:export-page": "vite build --config vite.exportpage.config.ts",
+    "build:package": "npm run build:lib && npm run build:export-page && npm run build:cli",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run build:cli && node bin/marey.mjs check",
-    "check:export": "node tools/cli-check/export-matrix.mjs"
+    "check:export": "node tools/cli-check/export-matrix.mjs",
+    "check:pack": "node tools/cli-check/pack-check.mjs",
+    "prepublishOnly": "npm test && npm run build && npm run build:package && npm run check:pack"
   },
   "dependencies": {
-    "harfbuzzjs": "1.6.2",
-    "lz-string": "^1.5.0",
-    "matter-js": "0.20.0",
-    "mediabunny": "1.58.0",
-    "monaco-editor": "^0.53.0",
-    "pixi.js": "^8.16.0",
-    "playwright-core": "1.62.1",
-    "preact": "^10.27.2",
-    "zustand": "^5.0.11"
+    "playwright-core": "1.62.1"
   },
   "devDependencies": {
     "@lottiefiles/dotlottie-web": "^0.80.0",
@@ -42,12 +50,20 @@
     "@types/lz-string": "^1.3.34",
     "@types/matter-js": "^0.20.2",
     "@types/node": "^24.10.1",
+    "harfbuzzjs": "1.6.2",
     "lottie-web": "^5.13.0",
+    "lz-string": "^1.5.0",
+    "matter-js": "0.20.0",
+    "mediabunny": "1.58.0",
+    "monaco-editor": "^0.53.0",
+    "pixi.js": "^8.16.0",
     "playwright": "1.62.1",
+    "preact": "^10.27.2",
     "sass": "^1.97.3",
     "typescript": "~5.9.3",
     "vite": "^8.0.0-beta.13",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "zustand": "^5.0.11"
   },
   "overrides": {
     "vite": "^8.0.0-beta.13"
