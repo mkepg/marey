@@ -19,10 +19,13 @@ trust a paraphrase. One section per piece of the phase.
 - **Default** (CI). Each of the four canonical scenes in `eval/scenes-3b/`, in
   each of `png apng webm mp4 lottie`, is exported twice at 30 fps and the
   scene's own duration, each export in its own browser. It asserts that the
-  two SHA-256s of the output are equal (for png, over the frames in index
-  order, as `marey export` hashes what it writes), that the two `hash`es
-  (`hashFrames` over the sampled snapshots) are equal, and for png that the
-  frames received number `frameCount`. It checks each size against the bytes:
+  two `hash`es (`hashFrames` over the sampled snapshots) are equal; that the
+  two SHA-256s of the output are equal for png, apng, webm and lottie (for
+  png, over the frames in index order, as `marey export` hashes what it
+  writes); and for png that the frames received number `frameCount`. For mp4
+  the SHA-256 identity is reported on the case's line and not gated, under
+  R47, while MP4 is encoded through WebCodecs (see "The mp4 bytes" below). It
+  checks each size against the bytes:
   png frames and the APNG by their IHDR, the Lottie document by `w`/`h`, all at
   the scene's declared 800x600; webm and mp4 by the coded size mediabunny's
   demuxer reads from the container, at exactly 1600x1200 (`VIDEO_SCALE` 2).
@@ -38,19 +41,62 @@ trust a paraphrase. One section per piece of the phase.
   `__mareyExportApng` reports no `hash`, so for apng the file bytes are the
   whole comparison.
 
-Measured at `a861a37` plus this change, from
+Measured at `a861a37` plus the script (`13c5348`, and the mp4 change on top of it), from
 `C:\Users\gomez\repos\PROGRAMMING_LANGUAGE\marey`, Windows 11, Chromium
 151.0.7922.34 (the headless shell of `playwright-core` 1.62.1; `playwright`
 1.62.1 launches the same build).
 
-### Default mode: 17 of 21 cases pass; every mp4 case fails
+### Default mode: 21 of 21 pass, mp4 bytes reported
 
 ```
 npm run build:export-page && npm run build:cli && npm run check:export
 ```
 
-Exit 1. Total **233.3 s** as the script reports it (`real 3m54.9s` under
+Exit 0. Total **100.5 s** as the script reports it (`real 1m41.4s` under
 `time`, including npm's start-up). Each time covers both exports of the case.
+
+| Scene | Format | Result | Time (s) | Frames | Size | sha256 (first 16) | `hash` |
+|---|---|---|---|---|---|---|---|
+| bar-chart | png | ok | 3.4 | 30 | 800x600 | `ee2b6ddadd11e709` | `0adcc9f9` |
+| bar-chart | apng | ok | 2.7 | 30 | 800x600 | `c6e51569220cf225` | `0adcc9f9` |
+| bar-chart | webm | ok | 4.2 | 30 | 1600x1200 | `19bf665bb55445f6` | `0adcc9f9` |
+| bar-chart | mp4 | ok | 3.9 | 30 | 1600x1200 | differs, reported: `3ae2c46972547e2b` vs `da9493307490a711` | `0adcc9f9` |
+| bar-chart | lottie | ok | 1.0 | 30 | 800x600 | `79aa2ffc7216b022` | `0adcc9f9` |
+| radial-dots | png | ok | 3.1 | 30 | 800x600 | `d6a1fb2fdcd8d9f7` | `94d15a5d` |
+| radial-dots | apng | ok | 3.2 | 30 | 800x600 | `9d9234324f1709ee` | `94d15a5d` |
+| radial-dots | webm | ok | 3.8 | 30 | 1600x1200 | `81f81ac2c5a10961` | `94d15a5d` |
+| radial-dots | mp4 | ok | 3.8 | 30 | 1600x1200 | differs, reported: `e9fa408b7e0491c7` vs `4aff63546779c845` | `94d15a5d` |
+| radial-dots | lottie | ok | 1.1 | 30 | 800x600 | `5aba4b1aff965c8f` | `94d15a5d` |
+| compound-logo | png | ok | 10.0 | 240 | 800x600 | `79f3f2947d9c4407` | `26cca4e9` |
+| compound-logo | apng | ok | 10.6 | 240 | 800x600 | `df3988b9223c6f87` | `26cca4e9` |
+| compound-logo | webm | ok | 16.5 | 240 | 1600x1200 | `89b23932748ef09d` | `26cca4e9` |
+| compound-logo | mp4 | ok | 16.6 | 240 | 1600x1200 | differs, reported: `603043209070641b` vs `a36ce97c8c7971b3` | `26cca4e9` |
+| compound-logo | lottie | ok | 1.1 | 240 | 800x600 | `e80dffee8bba7f3c` | `26cca4e9` |
+| timeline-ticks | png | ok | 3.2 | 30 | 800x600 | `3443dd4a85e13b0a` | `93ac7785` |
+| timeline-ticks | apng | ok | 3.2 | 30 | 800x600 | `c7ccaafa0f3c7b53` | `93ac7785` |
+| timeline-ticks | webm | ok | 3.8 | 30 | 1600x1200 | `dd5d14a7365ce0b5` | `93ac7785` |
+| timeline-ticks | mp4 | ok | 3.8 | 30 | 1600x1200 | differs, reported: `5c393a38e232fbcc` vs `7f7758e5c3f72019` | `93ac7785` |
+| timeline-ticks | lottie | ok | 1.0 | 30 | 800x600 | `38c44cdd8fff0b15` | `93ac7785` |
+| bar-chart | png, font aborted | ok | 0.4 | | | | |
+
+Each mp4 line reads, for example,
+`sha256 differs: 3ae2c46972547e2b vs da9493307490a711 (reported, not gated: R47)`.
+Every non-mp4 sha256 is the same as in the first run below. After the
+unreadable-file handling in the last mutation row was added, the command was
+run again with the committed script: exit 0, 21 of 21, **101.8 s**
+(`real 1m42.7s`). Every non-mp4 sha256 and every `hash` was unchanged. All
+four mp4 cases again differed and were reported, e.g. bar-chart
+`a6fc21eb86a570fc` vs `3aafd07931938a61`.
+
+The wall time is not stable on this machine: the first run below, with the
+same 42 exports, took 233.3 s. Both are under spec §9.3's ten-minute CI
+budget; the time on a CI runner is not measured here.
+
+#### First run, with mp4 bytes gated: 17 of 21 pass
+
+The first version of the check gated every format on SHA-256, as spec §9.2
+words it. The same command then exited 1 after **233.3 s**
+(`real 3m54.9s`), with every mp4 case failing on its SHA-256 alone:
 
 | Scene | Format | Result | Time (s) | Frames | Size | sha256 (first 16) | `hash` |
 |---|---|---|---|---|---|---|---|
@@ -76,17 +122,17 @@ Exit 1. Total **233.3 s** as the script reports it (`real 3m54.9s` under
 | timeline-ticks | lottie | ok | 3.0 | 30 | 800x600 | `38c44cdd8fff0b15` | `93ac7785` |
 | bar-chart | png, font aborted | ok | 0.8 | | | | |
 
+#### Across all three runs
+
 The font-abort case's full message:
 `[EXPORT_FONT_UNAVAILABLE] The export font 'JetBrains Mono' did not load at 20px, so this scene's text cannot be exported to match the preview. Check the connection and export again.`
 
-compound-logo's `hash` is `26cca4e9` in every format, the value
-`export-check.mjs` records for its png at 30 fps. Every size assertion passed:
-in the 16 passing format cases, both runs' bytes and reported sizes are
-800x600 for png (every frame's IHDR), apng and lottie, and 1600x1200 for webm;
-the four mp4 cases fail on the SHA-256 only, and their coded size read from
-the bytes is 1600x1200 too.
+In every run compound-logo's `hash` is `26cca4e9` in every format, the value
+`export-check.mjs` records for its png at 30 fps, and every size assertion
+passed: each export's bytes and reported sizes are 800x600 for png (every frame's
+IHDR), apng and lottie, and 1600x1200 for webm and mp4.
 
-**The mp4 failures.** `marey export --format mp4` currently goes through the
+**The mp4 bytes.** `marey export --format mp4` currently goes through the
 page's WebCodecs path, the one the export button uses (spec §5 moves it to
 ffmpeg later). The simulation is identical in both runs (`hash` equal); the
 file is not. Two bar-chart exports, compared outside the matrix (two
@@ -105,8 +151,13 @@ This is the MP4 property `docs/architecture/renderer.md` already documents
 ("The container determinism asymmetry") and `eval/RESULTS-PHASE-5B.md`
 measured under criterion 2: MP4 through WebCodecs is not byte-identical
 between runs, and `video-check.mjs` reports MP4 bytes without gating on them
-(R47). The matrix keeps the brief's assertion as written, so `check:export`
-exits 1 while mp4 goes through WebCodecs.
+(R47). The matrix follows the same rule while MP4 is encoded through
+WebCodecs. mp4 is gated on its two runs' `hash` and on its size, read from the
+bytes. Its SHA-256 identity is reported on its line and not gated. The
+formats whose bytes gate are one constant, `BYTE_GATED_FORMATS` in
+`export-matrix.mjs`, so an MP4 encoder that is byte-identical becomes a gate by
+adding `"mp4"` to it. The first run above is what gating it on WebCodecs
+gives: exit 1.
 
 ### `--compare-seams`: 16 of 16 equal, WebM included
 
@@ -160,3 +211,12 @@ restore. Except the first, they ran through a copy of the script restricted to
 | `VIDEO_SCALE = 1`, with the page still reporting twice the plan's size | default, webm and mp4 | `run 1: bytes 800x600, expected 1600x1200` for both (reported 1600x1200 passed) |
 | The aborted path is `/fonts/Missing.ttf` instead of the font | default, font case | `resolved; expected a rejection starting [EXPORT_FONT_UNAVAILABLE]` |
 | Page's Lottie text gains `nm: "mutated"`; the APNG's last byte flipped; the webm `hash` gains `x` | `--compare-seams`, bar-chart | lottie: `Lottie text differs: CLI 15301 B, seam 15305 B, first difference at byte 66`; apng: `file differs: ... first difference at byte 421650`; webm: `hash CLI 0adcc9f9x, seam 0adcc9f9`. png stayed equal |
+| The script makes run 2's mp4 `hash` differ (appends `x`) | default, mp4 | `FAIL bar-chart mp4 ... sha256 differs: 49b6d606ef55196c vs 83c72fe7dcd6483e (reported, not gated: R47) \| hash differs: 0adcc9f9 vs 0adcc9f9x`: the reported SHA-256 does not fail the case, the `hash` does |
+| The script changes run 2's Lottie `nm` (valid JSON) | default, lottie | `sha256 differs: 79aa2ffc7216b022 vs e6e2241234128599`: lottie's bytes still gate |
+| The script makes run 2's Lottie file invalid JSON | default, lottie | `run 2: w/h unreadable, expected 800x600; sha256 differs: ...`: a FAIL line, and the run goes on |
+
+The rows above the last three ran against the first version of the script,
+which gated mp4 on SHA-256. The mp4 row of the `VIDEO_SCALE` mutation failed
+on its size in that version as well as on its SHA-256. The last three rows ran
+against the current version. Gating mp4 on SHA-256 again is the first run in
+"Default mode" above: exit 1.

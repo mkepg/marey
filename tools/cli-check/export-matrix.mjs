@@ -6,9 +6,11 @@
  * Chromium, but no dev server):
  * - every scene in `SCENES`, in every format in `FORMATS`, is exported twice
  *   through `exportScene`, each call launching its own browser. The two runs
- *   must give the same SHA-256 of the output and the same `hash` (the
- *   sampler's `hashFrames`, simulation state rather than pixels); for png the
- *   number of frames received must equal `frameCount`;
+ *   must give the same `hash` (the sampler's `hashFrames`, simulation state
+ *   rather than pixels) and, for every format in `BYTE_GATED_FORMATS`, the
+ *   same SHA-256 of the output; mp4's SHA-256 identity is reported, not
+ *   gated (see that constant). For png the number of frames received must
+ *   equal `frameCount`;
  * - the size is checked against the bytes, not only against what the page
  *   reports: png frames and the APNG by their IHDR, the Lottie document by its
  *   `w`/`h`, all at the scene's size; webm and mp4 by the coded size
@@ -56,6 +58,19 @@ const SCENES = [
 
 const FORMATS = ["png", "apng", "webm", "mp4", "lottie"];
 
+/**
+ * The formats whose two runs must give byte-identical output. mp4 is not one
+ * of them while it is encoded through WebCodecs: that H.264 path is not
+ * byte-identical between runs (the compressed bitstream differs, and the
+ * muxer writes each export's wall-clock time into `mvhd`, `tkhd` and `mdhd`),
+ * which is the standing rule R47 in `docs/architecture/renderer.md`, "The
+ * container determinism asymmetry". Like `video-check.mjs`, this check
+ * reports mp4's byte identity on its line and gates mp4 on its frame `hash`
+ * and its size instead. An mp4 encoder that is byte-identical belongs in this
+ * set.
+ */
+const BYTE_GATED_FORMATS = new Set(["png", "apng", "webm", "lottie"]);
+
 /** The button's rate and the CLI's default (`EXPORT_FPS`, `src/compiler/export/exportDefaults.ts`). */
 const FPS = 30;
 
@@ -98,7 +113,11 @@ async function videoSize(bytes) {
 const sizeText = (s) => (s === null ? "unreadable" : `${s.width}x${s.height}`);
 const sameSize = (a, b) => a !== null && b !== null && a.width === b.width && a.height === b.height;
 
-/** Each size the bytes say, for one result. */
+/**
+ * Each size the bytes say, for one result. Bytes that cannot be read at all
+ * give `null`, reported as "unreadable" on the case's line, so one malformed
+ * file fails its case without stopping the rest of the matrix.
+ */
 async function sizesInBytes(format, result) {
   switch (format) {
     case "png":
@@ -106,12 +125,16 @@ async function sizesInBytes(format, result) {
     case "apng":
       return [pngSize(result.file)];
     case "lottie": {
-      const doc = JSON.parse(Buffer.from(result.file).toString("utf8"));
-      return [{ width: doc.w, height: doc.h }];
+      try {
+        const doc = JSON.parse(Buffer.from(result.file).toString("utf8"));
+        return [{ width: doc.w, height: doc.h }];
+      } catch {
+        return [null];
+      }
     }
     case "webm":
     case "mp4":
-      return [await videoSize(result.file)];
+      return [await videoSize(result.file).catch(() => null)];
   }
 }
 
@@ -161,11 +184,17 @@ async function runCase(scene, format) {
     ...(await checkOne(format, scene, a, "run 1")),
     ...(await checkOne(format, scene, b, "run 2")),
   ];
-  if (shaA !== shaB) problems.push(`sha256 differs: ${shaA.slice(0, 16)} vs ${shaB.slice(0, 16)}`);
+  const bytes = shaA === shaB ? "sha256 identical" : `sha256 differs: ${shaA.slice(0, 16)} vs ${shaB.slice(0, 16)}`;
+  let note = "";
+  if (BYTE_GATED_FORMATS.has(format)) {
+    if (shaA !== shaB) problems.push(bytes);
+  } else {
+    note = `  ${bytes} (reported, not gated: R47)`;
+  }
   if (a.hash !== b.hash) problems.push(`hash differs: ${a.hash} vs ${b.hash}`);
 
   const detail =
-    `${a.frameCount} frames  ${sizeText(a)}  sha256 ${shaA.slice(0, 16)}  frames ${a.hash}` +
+    `${a.frameCount} frames  ${sizeText(a)}  sha256 ${shaA.slice(0, 16)}  frames ${a.hash}${note}` +
     (problems.length > 0 ? `  | ${problems.join("; ")}` : "");
   return { ok: problems.length === 0, ms, detail };
 }
