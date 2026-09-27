@@ -1,5 +1,6 @@
 import { runCheck, CHECK_USAGE } from "./check";
 import { EXPORT_USAGE } from "./exportArgs";
+import { runExport } from "./exportDriver";
 import packageJson from "../../package.json";
 
 /**
@@ -7,12 +8,17 @@ import packageJson from "../../package.json";
  * `vi.spyOn(COMMANDS, "check")` to replace a command with a mock. `main`
  * below looks a command up as `COMMANDS[name]` at call time rather than
  * destructuring this at module load, so that replacement is actually seen.
- *
- * Task 7 adds `export: runExport` here.
  */
 export const COMMANDS: Readonly<Record<string, (rest: readonly string[]) => Promise<number>>> = {
   check: runCheck,
+  export: runExport,
 };
+
+/**
+ * Re-exported so the bundle (`dist/cli/marey.mjs`) carries them: the export
+ * checks drive `exportScene` directly and launch with the same flags.
+ */
+export { exportScene, EXPORT_LAUNCH_ARGS } from "./exportDriver";
 
 /**
  * Lists every command's synopsis (spec Phase 6 §3), so `--help` and the
@@ -24,7 +30,7 @@ export const COMMANDS: Readonly<Record<string, (rest: readonly string[]) => Prom
  * §3's synopsis is one block with one heading, and `check`/`export`'s
  * bracketed arguments share a column (`marey check  ` and `marey export `
  * are both 13 characters) precisely because neither constant carries its own
- * "Usage: " prefix. `export` is not in `COMMANDS` yet (Task 7 adds it).
+ * "Usage: " prefix.
  */
 const USAGE = ["Usage:", CHECK_USAGE, EXPORT_USAGE, "marey --help", "marey --version"].join("\n");
 

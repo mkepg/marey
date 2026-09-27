@@ -37,4 +37,10 @@ describe("main", () => {
     await main(["check", "--export-ready", "a.marey"]);
     expect(spy).toHaveBeenCalledWith(["--export-ready", "a.marey"]);
   });
+
+  it("dispatches export with the arguments after the command name", async () => {
+    const spy = vi.spyOn(COMMANDS, "export").mockResolvedValue(0);
+    await main(["export", "a.marey", "--format", "png"]);
+    expect(spy).toHaveBeenCalledWith(["a.marey", "--format", "png"]);
+  });
 });

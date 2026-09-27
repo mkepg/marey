@@ -2,12 +2,13 @@
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.cli.tsbuildinfo",
     "target": "ES2023",
-    // DOM is kept for `marey export`'s `page.evaluate` callbacks: their
-    // bodies run inside the headless browser page, not in Node, and name
-    // browser globals that must type-check. The compiler graph the CLI
-    // imports does not need it (the renderer adapter, which names
-    // `HTMLDivElement`, lives in `renderer/adapter.ts`, not `sceneIR.ts`),
-    // and the library build (`tsconfig.lib.json`, no DOM) holds that line.
+    // DOM is kept for `marey export`'s `page.waitForFunction` and
+    // `page.evaluate` callbacks in `exportDriver.ts`: their bodies run inside
+    // the headless browser page, not in Node, and name `window`, which must
+    // type-check. The compiler graph the CLI imports does not need it (the
+    // renderer adapter, which names `HTMLDivElement`, lives in
+    // `renderer/adapter.ts`, not `sceneIR.ts`), and the library build
+    // (`tsconfig.lib.json`, no DOM) holds that line.
     // No CLI code outside those callbacks uses a DOM global.
     "lib": ["ES2023", "DOM"],
     "module": "ESNext",
