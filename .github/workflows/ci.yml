@@ -2,25 +2,32 @@
 # other people's pipelines — roadmap §9.2 puts that past the finish line, and
 # nothing here is meant to be consumed from outside.
 #
-# Three gates, in increasing order of what they prove:
+# Five gates, in increasing order of what they prove:
 #
 #   1. `npm test`  — the headless suite. Fast, and the bulk of the coverage.
 #   2. `npm run build` — `tsc -b && vite build`, so a type error fails CI even
 #      when no test covers the line. The suite alone would not catch it.
 #   3. every first-party `.marey` file still compiles, through the real CLI.
+#   4. the package builds, packs, and installs into an empty directory, then
+#      the CLI and the library both run from that install.
+#   5. `marey export`, every canonical scene and format, twice, checked byte
+#      for byte against itself.
 #
 # The third gate is the one the suite cannot replace: the scene corpora are the
 # closest thing this project has to users, and a language change that breaks
 # them should be loud. The file list comes from `git ls-files`, not from a
 # literal list in this file — a hand-maintained copy would drift from the
-# corpora exactly the way AGENT-LESSONS §5 records hand-synced lists drifting,
-# and a new scene would silently go unchecked.
+# corpora exactly the way docs/engineering-lessons.md §5 records hand-synced
+# lists drifting, and a new scene would silently go unchecked.
 #
 # What is *not* here: the browser harness in `tools/visual-check/`.
 # It needs a real Chromium and a running dev server, it is a deliberate manual
 # procedure, and its determinism checks need a human reading the captures. CI
 # reporting green on checks it did not really perform is worse than not running
-# them — see AGENT-LESSONS §2.
+# them — see docs/engineering-lessons.md §2. Gates 4 and 5 also launch a real
+# browser, but what they check is numbers and bytes compared against each
+# other, not pixels a person has to look at, so a captureless CI run of them
+# still proves what it claims.
 
 name: CI
 
@@ -62,3 +69,14 @@ jobs:
         run: |
           npm run build:cli
           node bin/marey.mjs check $(git ls-files '*.marey')
+
+      - name: Install ffmpeg and the pinned browser
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+          npx playwright install --with-deps chromium-headless-shell
+
+      - name: Package builds, packs and installs
+        run: npm run check:pack
+
+      - name: marey export, every canonical scene and format, twice
+        run: npm run build:export-page && npm run build:cli && npm run check:export

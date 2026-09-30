@@ -327,3 +327,24 @@ All four ran clean before the `build:package && check:pack` run above:
 eval/vitest.config.ts` (1 file, 5 tests), `npm run build` (typecheck plus the
 app's `vite build`), and `npm run build:cli && node bin/marey.mjs check
 $(git ls-files '*.marey')` (every first-party `.marey` scene, `ok`).
+
+---
+
+## CI (O8)
+
+Spec §9.3: after the existing three gates, CI installs ffmpeg and the pinned
+browser, then runs `check:pack` and `check:export`. The export step builds
+what it reads (`build:export-page`, `build:cli`) before calling
+`check:export`, so it does not depend on the pack step having run first.
+
+This machine cannot run GitHub Actions, so the run time is measured on the
+first run after the owner pushes this change, not here. The local numbers
+above are the baseline it is measured against: `check:pack` including its own
+`build:package` at **15.6 s**, and `check:export`'s default mode at **100.5 s**
+to **233.3 s** across three runs, all 21 of 21 cases passing (mp4 reported,
+not gated, per R47). Both are well under spec §9.3's ten-minute budget on this
+machine; an `ubuntu-latest` runner's numbers, and the added `apt-get install`
+and `playwright install` time, are not. If the CI run's total exceeds ten
+minutes, spec §9.3's fallback applies: `check:export` gains a `--ci` mode that
+runs one scene per format instead of the full four-scene, five-format matrix,
+and the full matrix stays a before-merge check.
