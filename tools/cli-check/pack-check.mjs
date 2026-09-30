@@ -46,7 +46,7 @@
  *   npm run check:pack
  */
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -56,8 +56,44 @@ const PACKAGE_VERSION = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "
 const SCENE_PATH = resolve(ROOT, "eval/scenes-3b/radial-dots.marey");
 const TSC = resolve(ROOT, "node_modules/typescript/bin/tsc");
 
-const NPM = process.platform === "win32" ? "npm.cmd" : "npm";
-const NPX = process.platform === "win32" ? "npx.cmd" : "npx";
+/**
+ * `npm-cli.js` / `npx-cli.js`, run directly through this process's own
+ * `node` rather than through the `npm`/`npx` launcher (`npm.cmd`/`npx.cmd`
+ * on Windows). Spawning a `.cmd` file needs `shell: true` on Windows since
+ * Node's argument-injection fix (GHSA-hjrf-2m68-5959), and `shell: true`
+ * joins an args array with plain spaces and does no quoting of its own — so
+ * any argument containing a space (a tarball or scene path under
+ * `os.tmpdir()`, which has one for a Windows user like `C:\Users\Jane
+ * Doe\...`) silently splits into two arguments. Invoking the CLI's own JS
+ * entry point through `process.execPath` sidesteps both problems: it is a
+ * plain executable, not a shell built-in, so Node quotes each array element
+ * itself (as it already does for the `tsc`/`node` calls below), on every
+ * platform.
+ *
+ * `npm_execpath` is `npm-cli.js`'s own path, set by npm whenever a script
+ * runs the way `check:pack` is meant to run, through `npm run`; `npx-cli.js`
+ * is always its sibling in the same `bin/` directory. The fallback (checked
+ * near the running `node` binary, where a Node install that bundles npm
+ * keeps it) only matters for a bare `node tools/cli-check/pack-check.mjs`.
+ */
+function resolveNpmCli(name) {
+  const npmExecPath = process.env.npm_execpath;
+  const bin =
+    npmExecPath !== undefined
+      ? dirname(npmExecPath)
+      : [
+          resolve(dirname(process.execPath), "node_modules/npm/bin"),
+          resolve(dirname(process.execPath), "../lib/node_modules/npm/bin"),
+        ].find(existsSync);
+  const file = bin && join(bin, `${name}-cli.js`);
+  if (file === undefined || !existsSync(file)) {
+    throw new Error(`cannot locate ${name}-cli.js; run this script through \`npm run check:pack\``);
+  }
+  return file;
+}
+
+const NPM_CLI = resolveNpmCli("npm");
+const NPX_CLI = resolveNpmCli("npx");
 
 /** A files-allowlist leak: nothing packed may come from these directories. */
 const FORBIDDEN_PREFIXES = ["docs/", "eval/", "tools/", "src/", "public/"];
@@ -65,17 +101,21 @@ const FORBIDDEN_PREFIXES = ["docs/", "eval/", "tools/", "src/", "public/"];
 /** `--noEmit --strict`, common to both resolution modes (see step 5 above for the bare `--types`). */
 const TSC_BASE_ARGS = ["--noEmit", "--strict", "--skipLibCheck", "false", "--lib", "ES2022", "--types"];
 
-/**
- * Runs `cmd` with `args`; never throws on a non-zero exit so the caller can
- * report it. `npm.cmd`/`npx.cmd` need `shell: true` on Windows: Node refuses
- * to spawn a `.cmd`/`.bat` file directly (EINVAL) since the Windows
- * argument-injection fix in Node 18.20.2/20.12.2/22 (GHSA-hjrf-2m68-5959).
- */
+/** Runs `cmd` with `args`; never throws on a non-zero exit so the caller can report it. */
 function run(cmd, args, options = {}) {
-  const result = spawnSync(cmd, args, { encoding: "utf8", shell: cmd.endsWith(".cmd"), ...options });
+  const result = spawnSync(cmd, args, { encoding: "utf8", ...options });
   if (result.error) throw result.error;
   return result;
 }
+
+/** `npm <args>`, through `npm-cli.js` (see `resolveNpmCli` above). */
+const runNpm = (args, options) => run(process.execPath, [NPM_CLI, ...args], options);
+
+/**
+ * `npx <args>`, through `npx-cli.js`: still npx, still the check that the
+ * installed package's bin link actually works, just invoked without a shell.
+ */
+const runNpx = (args, options) => run(process.execPath, [NPX_CLI, ...args], options);
 
 const describe = (r) => `exit ${r.status}\n${r.stdout}${r.stderr}`.trim();
 
@@ -105,7 +145,7 @@ let installDir = null;
 
 try {
   check("build:package", () => {
-    const r = run(NPM, ["run", "build:package"], { cwd: ROOT });
+    const r = runNpm(["run", "build:package"], { cwd: ROOT });
     if (r.status !== 0) throw new Error(describe(r));
     return "built dist/lib, dist/export-page, dist/cli";
   });
@@ -113,7 +153,7 @@ try {
   let tarballPath;
   packDir = mkdtempSync(join(tmpdir(), "marey-pack-"));
   check("npm pack --json", () => {
-    const r = run(NPM, ["pack", "--json", "--pack-destination", packDir], { cwd: ROOT });
+    const r = runNpm(["pack", "--json", "--pack-destination", packDir], { cwd: ROOT });
     if (r.status !== 0) throw new Error(describe(r));
     const [info] = JSON.parse(r.stdout);
     tarballPath = join(packDir, info.filename);
@@ -126,19 +166,19 @@ try {
 
   installDir = mkdtempSync(join(tmpdir(), "marey-install-"));
   check("npm init -y", () => {
-    const r = run(NPM, ["init", "-y"], { cwd: installDir });
+    const r = runNpm(["init", "-y"], { cwd: installDir });
     if (r.status !== 0) throw new Error(describe(r));
     return "package.json created";
   });
 
   check("npm install --offline <tarball>", () => {
-    const r = run(NPM, ["install", "--offline", tarballPath], { cwd: installDir });
+    const r = runNpm(["install", "--offline", tarballPath], { cwd: installDir });
     if (r.status !== 0) throw new Error(describe(r));
     return "installed";
   });
 
   check("npx marey --version", () => {
-    const r = run(NPX, ["marey", "--version"], { cwd: installDir });
+    const r = runNpx(["marey", "--version"], { cwd: installDir });
     const version = r.stdout.trim();
     if (r.status !== 0 || version !== PACKAGE_VERSION) {
       throw new Error(`printed '${version}', expected '${PACKAGE_VERSION}' (${describe(r)})`);
@@ -149,13 +189,13 @@ try {
   const sceneCopy = join(installDir, "radial-dots.marey");
   check("npx marey check <copy of radial-dots.marey>", () => {
     cpSync(SCENE_PATH, sceneCopy);
-    const r = run(NPX, ["marey", "check", sceneCopy], { cwd: installDir });
+    const r = runNpx(["marey", "check", sceneCopy], { cwd: installDir });
     if (r.status !== 0) throw new Error(describe(r));
     return r.stdout.trim().split(/\r?\n/).at(-1) ?? "";
   });
 
   check("npx marey export <copy> --format lottie", () => {
-    const r = run(NPX, ["marey", "export", sceneCopy, "--format", "lottie"], { cwd: installDir });
+    const r = runNpx(["marey", "export", sceneCopy, "--format", "lottie"], { cwd: installDir });
     const line = r.stdout.trim().split(/\r?\n/).at(-1) ?? "";
     if (r.status !== 0 || !line.startsWith("wrote ")) throw new Error(describe(r));
     return line;
