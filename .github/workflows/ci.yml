@@ -11,7 +11,8 @@
 #   4. the package builds, packs, and installs into an empty directory, then
 #      the CLI and the library both run from that install.
 #   5. `marey export`, every canonical scene and format, twice, checked byte
-#      for byte against itself.
+#      for byte against itself — except mp4, gated on its frame hash and
+#      size instead, with its bytes only reported (R47).
 #
 # The third gate is the one the suite cannot replace: the scene corpora are the
 # closest thing this project has to users, and a language change that breaks
