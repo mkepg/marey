@@ -513,6 +513,89 @@ for instance — extends past that box. The encoder adds a mask to
 `(0,0)-(w,h)` on exactly those text layers, never on the rest: of the six
 fixtures measured, only the one carrying a combining mark needed it.
 
+## The export page and the CLI (Phase 6)
+
+`marey export` is two halves joined by one small protocol module,
+`src/exportPage/protocol.ts`, which both sides import and which imports
+nothing. The Node half is `src/cli/exportDriver.ts`. The page half is
+`src/exportPage/`, built by `vite.exportpage.config.ts` into
+`dist/export-page/`. The page has no UI, so the app's UI can change without
+touching it. The page only calls pipelines. The Node half never samples or
+rasterizes (R45).
+
+**What runs in Node.**
+- *The preflight.* `compileSource` and `planExport` run on the source before
+  any browser starts, so a scene that does not compile, has no bounded
+  duration, or asks for an fps that does not divide 120 is refused without
+  one. This compile only produces diagnostics and a planned frame
+  count. `assertSameFrameCount` then requires the page's frame count to equal
+  it.
+- *The launch.* Chromium from `playwright-core`, pinned at `1.62.1`, launched
+  with `EXPORT_LAUNCH_ARGS` (below). A missing browser becomes
+  `[EXPORT_BROWSER_MISSING]` with the pinned install command
+  (`exportReport.ts`'s `mapLaunchError`).
+- *The output.* The driver writes the file, or the numbered PNGs, and prints
+  one line: `wrote <out>  <n> frames @ <fps> fps  <w>x<h>  <bytes> B  sha256
+  <hex>  frames <hash>`. `sha256` is over the bytes written, in frame order for
+  png. `frames` is `hashFrames` over the sampled simulation state, as the page
+  reported it.
+
+**What runs in the page.** Everything that produces output. `window.__mareyCliExport`
+compiles the source again, inside Chromium, so the IR is the one the export
+button computes in the same engine. That matters because `sin`/`cos` fold to
+literals at compile time and Node's V8 and Chromium's disagree in the last bit
+(`eval/RESULTS-GATE-B.md`). The page then calls the button's own pipeline for
+the format (`runPngExport`, `runApngExport`, `runVideoExport`,
+`runLottieExport`), so the encoders are the button's encoders. The page's
+only addition is an `onSampled` observer that hashes the sampled frames.
+
+**Why `page.route` on `https://marey.export`.** The probes in
+`docs/research/2026-09-27-phase-6-export-probes/README.md` settled it. A page
+on a plain `http://` custom origin is not a secure context and has no
+`VideoEncoder`, and a `fetch` from it to a `127.0.0.1` server is blocked
+(`insecure-origin.mjs`). An `https://` origin fulfilled by `page.route` is a
+secure context, and it opens no socket, so there is no port to collide with.
+The driver serves the built page's files and receives frames through the
+same route handler. `routeAction` decides which, and it is pure and tested
+in `exportDriver.test.ts`.
+
+**How output comes back.**
+- *Whole files* come back as the `page.evaluate` return value. APNG, WebM and
+  MP4 come back base64-encoded. Lottie comes back as the JSON string the
+  button downloads.
+- *Frames* (`--format png`) come back one lossless PNG per `POST` to
+  `/frame/<index>`. Node places each by that index through `FrameAssembler`,
+  never by arrival order, and refuses a duplicate, an out-of-range index or a
+  missing frame (5C ruling T4-R2).
+
+**Why frames travel as PNG.** A raw RGBA frame at the 2× video size
+(1600×1200) is 7,680,000 B. Raw frames moved at 8 and 27 MB/s to a local
+`http` sink and 22 to 68 MB/s as an `evaluate` return value, and two raw
+frames through `page.route` took 1,071 to 3,523 ms (`secure-origins.mjs`,
+`evaluate-and-png.mjs`, two runs each). A flat
+synthetic 1600×1200 frame encoded to 52,946 B of PNG in 4.7 to 21.5 ms. PNG
+is lossless, so the frames Node receives are byte-exact. The probes' README
+has the per-run table.
+
+**The launch arguments.** `EXPORT_LAUNCH_ARGS` is
+`["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--use-gl=angle"]`,
+the flags `tools/visual-check/quality-check.mjs` already used. They force
+SwiftShader, a CPU rasterizer, so a machine whose headless mode would pick a
+GPU still rasterizes the same way. `tools/cli-check/export-matrix.mjs`
+imports this constant for its seam comparison rather than restating the
+flags. The browser is the
+pinned build, not the user's installed Chrome, so the engine version does
+not vary per user.
+
+**MP4.** Today `--format mp4` goes through `runVideoExport` and WebCodecs,
+the same pipeline as the button. So its bytes differ between runs while its
+`frames` hash does not; see "The container determinism asymmetry" above.
+Whether a separate x264 encoder replaces it depends on the gate measured
+under Phase 6 design §5.
+
+The determinism claims this boundary serves, and the commands that check
+them, are collected in `docs/determinism.md`.
+
 ## Non-obvious gotchas
 
 - **`physics` inside a group is only legal under a *static* group.** D17: the

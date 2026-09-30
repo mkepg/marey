@@ -2295,9 +2295,11 @@ on the page load — reproducible with a *single box and no contacts at all*, fr
 fall. `syncWorldToContainers` skips pinned bodies and freezing pins, so a frozen object kept
 the position it was last *painted* at, and that paint used the driver's wall-clock `alpha`.
 It therefore settled up to one tick of motion away from where the simulation actually
-stopped it, varying per run. Fixed in `f9de4a9` by snapping the container to the body's
+stopped it, varying per run. Fixed in `1ce8307` by snapping the container to the body's
 tick-aligned state at the moment of the freeze; the probe scene is now byte-identical across
 six independent page loads.
+
+(Corrected 2026-09-30: the 2026-09-26 history rewrite renamed this commit to 1ce8307.)
 
 None of the 94 headless tests could have caught this: it lives entirely in the relationship
 between the tick phase, the paint phase, and a real wall clock.

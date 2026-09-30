@@ -13,10 +13,9 @@ of them can see a canvas.
 This harness covers the gap. It drives the real app in Chromium, captures PNGs
 you can look at, and measures three things the suite cannot.
 
-**It has already earned its keep.** The first run found a determinism bug that
-all 94 headless tests missed: a body frozen by `duration` expiry kept its
-alpha-interpolated painted position, so it landed up to one tick of motion from
-where the simulation stopped it, differently on each page load. Fixed in `f9de4a9`.
+**It has already earned its keep.** Its first run found a determinism bug that
+all 94 headless tests then in the suite missed, fixed in `1ce8307`. The story,
+and what now guards it, is in [`docs/determinism.md`](../../docs/determinism.md).
 
 ## Running it
 
@@ -85,7 +84,7 @@ even if the trajectory diverged, so at-rest equality can hide real
 non-determinism. To test a *trajectory*, use a scene that freezes mid-motion —
 `physics { duration: 0.5 }` on a falling object — so the capture lands on a
 transient state. `scenes/freeze.marey` does exactly this, which is how the
-`f9de4a9` bug surfaced.
+`1ce8307` bug surfaced.
 
 A scene with `loop: true` animations never comes to rest at all, so
 `deterministic` and `frozen at rest` are meaningless for it — including for
@@ -103,7 +102,7 @@ renders and the handoff arcs, not for determinism.
 | `ghost.marey` | A ball falls **through** a ledge that has no `physics` block (decision D13) |
 | `tumble.marey` | A polygon rotates on impact, and its drawn shape stays on its collision shape (D15) |
 | `freeze.marey` | `duration` expiry freezes a settling pile mid-motion, reproducibly |
-| `freeze-midair.marey` | Minimal repro of the `f9de4a9` bug: one box, no contacts, frozen in free fall. The tightest determinism check here — nothing else can absorb a divergence. |
+| `freeze-midair.marey` | Minimal repro of the `1ce8307` bug: one box, no contacts, frozen in free fall. The tightest determinism check here — nothing else can absorb a divergence. |
 | `logo.marey` | A three-bar group welds into one compound body and tumbles rigidly, settling on its own arms (Phase 2, D16). If the bars ever separate, the welding has stopped happening. |
 | `logo-freeze.marey` | The same idea frozen mid-tumble in free air — determinism on a transient state rather than at rest. |
 | `fit-contain.marey` | `fit: contain` — letterboxed, aspect preserved, all four corner markers visible (Phase 3A, `sceneFit → fit` rename). |

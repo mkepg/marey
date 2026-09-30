@@ -3584,7 +3584,7 @@ Create `tools/visual-check/scenes/logo-freeze.marey`:
 // Phase 2 determinism, checked mid-tumble rather than at rest.
 // A settled pile converges on the same fixed point even when the trajectory
 // diverged, so at-rest equality hides real non-determinism — that is how the
-// f9de4a9 bug survived four clean settling scenes in Phase 1.
+// 1ce8307 bug survived four clean settling scenes in Phase 1.
 // `duration: 0.9` freezes this logo in mid-air, part-way through a rotation.
 scene {
   size: (800, 600)
@@ -3606,6 +3606,8 @@ scene {
   }
 }
 ```
+
+(Corrected 2026-09-30: the 2026-09-26 history rewrite renamed this commit to 1ce8307.)
 
 - [ ] **Step 3: Run the checks**
 

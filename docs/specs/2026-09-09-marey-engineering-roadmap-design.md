@@ -277,6 +277,9 @@ GIF and SVG/SMIL remain out of scope.
 the parts that demonstrate engineering judgment and drops the parts that only
 serve acquisition.
 
+> **Amended 2026-09-30:** the owner added a website redesign to this phase,
+> designed separately as Phase 6B.
+
 ### 9.1 In scope
 
 - A public compiler package with an explicit open-source license. Marey has
@@ -291,6 +294,9 @@ serve acquisition.
   determinism means here, and how it is verified. The `visual-check` harness
   found a determinism bug that all 94 headless tests missed — that story is
   currently a paragraph inside a skill file, where no reader will find it.
+
+> **Corrected 2026-09-30:** `LICENSE`, the licence field, a root README,
+> `bin/marey.mjs` and `marey check` exist; see Phase 6 design §1.1.
 
 ### 9.2 Out of scope, deliberately
 

@@ -87,7 +87,7 @@ frozen by `duration` expiry kept its alpha-interpolated *painted* position, so i
 came to rest up to one tick of motion away from where the simulation actually
 stopped it — differently on each page load. All 94 headless tests passed. It was
 caught by a browser harness that loads the same scene twice from cold and
-compares the at-rest frames byte-for-byte, and fixed in `f9de4a9`.
+compares the at-rest frames byte-for-byte, and fixed in `1ce8307`.
 
 The harness lives in [`tools/visual-check/`](tools/visual-check/).
 Its notes record the trap underneath the trap: a scene that *settles* is a weak
