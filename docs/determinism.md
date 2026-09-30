@@ -47,9 +47,12 @@ Section 4 shows the output.
 
   ```bash
   node -e "console.log(Math.sin(240*Math.PI/180).toPrecision(20))"
-  # -0.86602540378443848557   Node 22.13.1
-  # -0.86602540378443837454   Chromium 151.0.7922.34, the same expression in page.evaluate
+  # -0.86602540378443848557   (Node 22.13.1)
   ```
+
+  The same expression evaluated in a Chromium page gives
+  `-0.86602540378443837454`; the command and the versions are in
+  `eval/RESULTS-GATE-B.md`.
 
   So `radial-dots.marey` hashes differently when compiled in Node and in
   Chromium, while `compound-logo.marey`, which has no trig, matches
@@ -70,11 +73,13 @@ Section 4 shows the output.
   for one ffmpeg build.
 - **That paint cadence cannot matter for a scene with a `sequence`.** The
   sampler paints after every tick. Painting once per frame instead was tried
-  in Phase 4, and every test still passed, because no test fixture had
-  anything left for paint cadence to affect. None of those fixtures had a
-  `sequence` block, so that case is untested (Phase 4 plan, execution notes;
-  `frameSampler.ts`'s docstring). Painting every tick is kept as the safe
-  choice.
+  in Phase 4, and the 30-vs-60 fps coincident-frame test still passed. The
+  recorded reason: a completing animation's value is already snapped to its
+  tick in the tick phase, so nothing in that test's fixture was left for
+  paint cadence to affect. That fixture has no `sequence` block, and whether
+  a `sequence` step could observe paint-phase state some other way is
+  untested (Phase 4 plan, execution notes; `frameSampler.ts`'s docstring).
+  Painting every tick is kept as the conservative choice.
 
 ## 3. The mechanism
 
@@ -200,7 +205,8 @@ a paint at a wall-clock `alpha`. The count was measured, not copied:
 
 ```bash
 git worktree add ../marey-at-fix 1ce8307
-# link node_modules into it, then:
+# link ../marey-at-fix/node_modules to ./node_modules
+# (Windows: cmd /c mklink /J <link> <target>; elsewhere: ln -s), then:
 git -C ../marey-at-fix checkout -q 1ce8307^
 (cd ../marey-at-fix && npx vitest run)     # Tests  94 passed (94)
 git -C ../marey-at-fix checkout -q 1ce8307
@@ -211,11 +217,12 @@ When done, remove the `node_modules` link first, then the worktree.
 
 **What the fix's own tests guarded.** `1ce8307` added three tests, all of
 `snapContainerToBody` itself. Copied back to the parent, they fail with a
-`TypeError`, only because the function does not exist there yet. Deleting the one line that calls it on freeze, at `1ce8307`,
-left all 97 tests passing. So the fix shipped with nothing to catch its
-removal. A mutation pass the next day found that and added a test at the
-call site (`68863c5`). Today the freeze code is in `sceneRuntime.ts`, and
-deleting that call fails two tests:
+`TypeError`, only because the function does not exist there yet. Deleting
+the one line that calls it on freeze, at `1ce8307`, left all 97 tests
+passing. So the fix shipped with nothing to catch its removal. A mutation
+pass the next day found that and added a test at the call site (`68863c5`).
+Today the freeze code is in `sceneRuntime.ts`, and deleting that call fails
+two tests:
 
 ```bash
 # with the snapContainerToBody(...) call in sceneRuntime.ts's freeze loop deleted:
@@ -224,11 +231,13 @@ npx vitest run src/compiler/renderer
 #   FAIL  ... frame pacing must not reach the world > freezes a growing bottom-origin object at the same place at every pacing
 ```
 
-**Why a settling scene hides this.** Before the box, four scenes that settle
-had all passed the same reload comparison. A pile that settles reaches the
-same resting state even if its path there differed, so equal
-frames at rest say little about the path. A scene that freezes in motion
-keeps whatever error the path had. That is why `freeze-midair.marey`
-exists: one object, no contacts, frozen in free fall, so nothing can absorb
-a difference. `logo-freeze.marey` does the same for a compound body
+**Why a settling scene hides this.** Four scenes that settle had all passed
+the same reload comparison before a scene that freezes mid-motion showed the
+bug (Phase 1 plan, execution notes). A pile that settles reaches the same
+resting state even if its path there differed, so equal frames at rest say
+little about the path. A scene that freezes in motion keeps whatever error
+the path had. The records disagree on which frozen scene showed it first,
+but they agree it reproduces with a single box and no contacts, and that is
+`freeze-midair.marey`: one object, frozen in free fall, so nothing can
+absorb a difference. `logo-freeze.marey` does the same for a compound body
 mid-tumble.

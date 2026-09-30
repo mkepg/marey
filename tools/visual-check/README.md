@@ -83,8 +83,10 @@ pile converging on a stable resting configuration reaches the same fixed point
 even if the trajectory diverged, so at-rest equality can hide real
 non-determinism. To test a *trajectory*, use a scene that freezes mid-motion —
 `physics { duration: 0.5 }` on a falling object — so the capture lands on a
-transient state. `scenes/freeze.marey` does exactly this, which is how the
-`1ce8307` bug surfaced.
+transient state. `scenes/freeze.marey` (a pile) and `scenes/freeze-midair.marey`
+(one box) both do this. A scene of this kind is how the `1ce8307` bug
+surfaced, after four settling scenes had passed; it reproduces with the
+single box.
 
 A scene with `loop: true` animations never comes to rest at all, so
 `deterministic` and `frozen at rest` are meaningless for it — including for

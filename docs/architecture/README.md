@@ -49,9 +49,10 @@ Use `--strictPort`: without it Vite walks forward to the next free port when
 5199 is taken, while `check.mjs` still defaults to 5199. A stale server from an
 earlier run then absorbs every capture and the check reports a confident pass
 without exercising your code at all. That has happened twice. The check itself
-found a determinism bug the whole headless suite missed (the story, and the
-rest of the determinism account, is `docs/determinism.md`), and that README
-records two traps worth knowing before writing any browser check of your own.
+found a determinism bug the whole headless suite missed (that story and the
+rest of the determinism account are in `docs/determinism.md`), and that
+README records two traps worth knowing before writing any browser check of
+your own.
 
 TypeScript is strict with `noUnusedLocals`, `noUnusedParameters`, and
 `verbatimModuleSyntax` (type-only imports need the `type` keyword).
