@@ -90,10 +90,10 @@ themselves.
 `src/components/Editor/MonacoEditor/themes.ts` are redrawn so that each
 theme's editor background, gutter, selection and token colours sit on that
 theme's palette. In light mode keywords are `#2b4fa8` and comments are
-`#687186` italic. In dark mode keywords are `#a99bff` and comments are
-`#7e838e`. Each of these colours measures at least 4.5:1 on its editor
-background. Other token colours are the implementer's choice, held to §9's
-contrast rule.
+`#646d82` italic. In dark mode keywords are `#a99bff` and comments are
+`#80858f`. Each comment colour measures at least 4.5:1 on its editor
+background and on the current-line highlight. Other token colours are the
+implementer's choice, held to §9's contrast rule.
 
 ---
 

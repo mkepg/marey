@@ -1,13 +1,15 @@
 // Monaco takes literal hex strings, so this file is the one place outside
-// global.scss that holds colour. Every value here is drawn from the same two
-// palettes as the --bg-editor, --text-* and --accent tokens: keep them in step.
+// global.scss that holds colour. Values follow the same two palettes as the
+// --bg-editor, --text-* and --accent tokens, except comments: --text-muted is a
+// muted UI token exempt from the text-contrast rule, while editor comments must
+// reach 4.5:1 on the line highlight too, so they deliberately differ from it.
 export function defineThemes(monaco: typeof import("monaco-editor")): void {
   // Quiet mat: editor #16171a, gutter on the same ground.
   monaco.editor.defineTheme("Marey-dark", {
     base: "vs-dark",
     inherit: true,
     rules: [
-      { token: "comment",     foreground: "7e838e", fontStyle: "italic" },
+      { token: "comment",     foreground: "80858f", fontStyle: "italic" },
       { token: "keyword",     foreground: "a99bff", fontStyle: "bold" },
       { token: "keyword.let", foreground: "d0a8ff", fontStyle: "bold" },
       { token: "color",       foreground: "f0a27a" },
@@ -27,7 +29,7 @@ export function defineThemes(monaco: typeof import("monaco-editor")): void {
       "editorCursor.foreground":            "#a99bff",
       "editor.selectionBackground":         "#6b58f055",
       "editor.inactiveSelectionBackground": "#6b58f02e",
-      "editorLineNumber.foreground":        "#7e838e",
+      "editorLineNumber.foreground":        "#80858f",
       "editorLineNumber.activeForeground":  "#d9dbe1",
       "editorIndentGuide.background1":      "#26282e",
       "editorIndentGuide.activeBackground1": "#3a3d46",
@@ -41,7 +43,7 @@ export function defineThemes(monaco: typeof import("monaco-editor")): void {
     base: "vs",
     inherit: true,
     rules: [
-      { token: "comment",     foreground: "687186", fontStyle: "italic" },
+      { token: "comment",     foreground: "646d82", fontStyle: "italic" },
       { token: "keyword",     foreground: "2b4fa8", fontStyle: "bold" },
       { token: "keyword.let", foreground: "7a3a9a", fontStyle: "bold" },
       { token: "color",       foreground: "a14a12" },
@@ -61,7 +63,7 @@ export function defineThemes(monaco: typeof import("monaco-editor")): void {
       "editorCursor.foreground":            "#1d2a44",
       "editor.selectionBackground":         "#1d2a4426",
       "editor.inactiveSelectionBackground": "#1d2a4414",
-      "editorLineNumber.foreground":        "#687186",
+      "editorLineNumber.foreground":        "#646d82",
       "editorLineNumber.activeForeground":  "#1d2a44",
       "editorIndentGuide.background1":      "#e6ebf1",
       "editorIndentGuide.activeBackground1": "#cdd8e4",
