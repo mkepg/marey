@@ -25,8 +25,12 @@
  * must equal, byte for byte, what the app's dev seams produce in a Chromium
  * launched with the same `EXPORT_LAUNCH_ARGS`, and every `hash` a seam
  * reports must equal the CLI's. The APNG seam reports no `hash`, so for apng
- * the file bytes are the whole comparison. mp4 is left out: spec §9.2 checks
- * it through its lossless frames and §5's scoring instead.
+ * the file bytes are the whole comparison. mp4 is compared with
+ * `__mareyExportVideo({ container: "mp4" })` on the frame `hash`, the coded
+ * width and height and the frame count, not on bytes: WebCodecs' H.264 is not
+ * byte-identical between runs (R47), so a byte gate would fail by
+ * construction. The line reports both SHA-256s and whether they happen to be
+ * equal, without gating on them.
  *
  * Every case prints one line; the exit code is 1 if any case failed.
  *
@@ -296,6 +300,13 @@ const SEAM_CALLS = {
       return { text: JSON.stringify(r.doc), hash: r.hash, frameCount: r.frameCount };
     },
   },
+  mp4: {
+    seam: "__mareyExportVideo",
+    call: async ({ source, fps }) => {
+      const r = await window.__mareyExportVideo(source, { container: "mp4", fps, withReferenceFrames: false });
+      return { file: r.video, hash: r.hash, frameCount: r.frameCount, width: r.width, height: r.height };
+    },
+  },
   webm: {
     seam: "__mareyExportVideo",
     call: async ({ source, fps }) => {
@@ -330,6 +341,7 @@ async function compareCase(browser, url, scene, format) {
   const ms = Date.now() - started;
 
   const problems = [];
+  let mp4Note = "";
   if (seam.frameCount !== cli.frameCount) problems.push(`frameCount CLI ${cli.frameCount}, seam ${seam.frameCount}`);
   if (seam.hash !== undefined && seam.hash !== cli.hash) problems.push(`hash CLI ${cli.hash}, seam ${seam.hash}`);
   if (seam.width !== undefined && !sameSize(cli, seam)) problems.push(`size CLI ${sizeText(cli)}, seam ${sizeText(seam)}`);
@@ -348,6 +360,10 @@ async function compareCase(browser, url, scene, format) {
   } else if (format === "lottie") {
     const diff = compareBytes(cli.file, Buffer.from(seam.text, "utf8"));
     if (diff !== null) problems.push(`Lottie text differs: ${diff}`);
+  } else if (format === "mp4") {
+    // Gated on hash, size and frame count above; the bytes are reported only.
+    const seamSha = createHash("sha256").update(base64Bytes(seam.file)).digest("hex");
+    mp4Note = `  seam sha256 ${seamSha.slice(0, 16)}  bytes ${seamSha === sha256Of(cli) ? "equal" : "differ"} (reported, not gated)`;
   } else {
     const diff = compareBytes(cli.file, base64Bytes(seam.file));
     if (diff !== null) problems.push(`file differs: ${diff}`);
@@ -360,7 +376,7 @@ async function compareCase(browser, url, scene, format) {
   const bytes = format === "png" ? cli.frames.reduce((n, f) => n + f.byteLength, 0) : cli.file.byteLength;
   const hash = seam.hash === undefined ? "seam reports no hash" : `frames ${cli.hash}`;
   const detail =
-    `${cli.frameCount} frames  ${bytes} B  sha256 ${sha256Of(cli).slice(0, 16)}  ${hash}` +
+    `${cli.frameCount} frames  ${bytes} B  sha256 ${sha256Of(cli).slice(0, 16)}  ${hash}${mp4Note}` +
     (problems.length > 0 ? `  | ${problems.join("; ")}` : "  equal");
   return { ok: problems.length === 0, ms, detail };
 }
@@ -373,7 +389,7 @@ async function compareSeamsMode() {
   let failed = 0;
   try {
     for (const scene of SCENES) {
-      for (const format of ["png", "apng", "lottie", "webm"]) {
+      for (const format of ["png", "apng", "lottie", "webm", "mp4"]) {
         const result = await compareCase(browser, url, scene, format);
         printLine(`${scene.name} ${format}`, result);
         if (!result.ok) failed++;

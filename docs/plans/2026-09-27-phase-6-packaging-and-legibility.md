@@ -1813,3 +1813,14 @@ Each is marked, with the step that produces it. Nothing else is left open.
 ## Execution notes
 
 Written during execution.
+
+**Task 9: MP4.** Task 1's gate failed, so `marey export --format mp4` keeps
+`runVideoExport`, the button's path, and the CLI has no ffmpeg dependency.
+`[EXPORT_FFMPEG_MISSING]` and `[EXPORT_FFMPEG_FAILED]` (Global Constraint 10)
+were therefore not built: they exist only to report a missing or failing
+ffmpeg, and nothing spawns one. No code or test references either name; the
+only mentions are in this plan and the design spec. `check:export
+--compare-seams` gained mp4: it gates on the frame `hash`, the coded size and
+the frame count against `__mareyExportVideo({ container: "mp4" })` and reports
+both SHA-256s without gating on them, since WebCodecs' H.264 is not
+byte-identical between runs (R47).

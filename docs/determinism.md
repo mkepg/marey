@@ -68,9 +68,8 @@ Section 4 shows the output.
   `frames` hash and different file bytes. The lossless frames fed to the
   encoder are identical, so the difference is inside the encoder. See
   "The container determinism asymmetry" in `docs/architecture/renderer.md`.
-  Whether a separate x264 encoder replaces this path depends on a measured
-  gate (Phase 6 design §5). If it does, byte identity would be claimed only
-  for one ffmpeg build.
+  A separate x264 encoder was measured and failed the gate, so this path
+  stays; see `eval/RESULTS-PHASE-6.md`, "Task 1: x264 gate".
 - **That paint cadence cannot matter for a scene with a `sequence`.** The
   sampler paints after every tick. Painting once per frame instead was tried
   in Phase 4, and the 30-vs-60 fps coincident-frame test still passed. The

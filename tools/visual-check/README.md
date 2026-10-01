@@ -521,6 +521,31 @@ line that produced it (`commandLine`), alongside per-container `width`/
 `height` (coded) and `sceneWidth`/`sceneHeight`, so a number in this report
 is always paired with the invocation that produced it.
 
+## The x264 gate
+
+`x264-gate.mjs` measures x264, run through the ffmpeg on PATH, against the
+button's WebCodecs H.264 on the same lossless 2x frames (spec Phase 6 §5).
+It exports the scene once through `window.__mareyExportVideo`, pipes the
+reference PNGs the pipeline handed its encoder into libx264 for each
+configuration in the script's matrix, scores every file with the same scorer,
+and applies the gate to the results. It reports the verdict and exits 0
+whatever it is; it exits 1 only if the measurement could not be completed.
+The recorded verdict and numbers are in `eval/RESULTS-PHASE-6.md`.
+
+```bash
+node tools/visual-check/x264-gate.mjs   --scene <path> --fps 30 --out .visual-check/phase6/gate
+```
+
+It needs `ffmpeg` with libx264 on PATH and the dev server on 5199
+(`npx vite --port 5199 --strictPort`, same trap as above), and takes about
+15 minutes. `--mediabunny-path`, `--url` and `--headed` behave as in
+`quality-check.mjs`.
+
+`lib/scoreVideo.mjs` is the decode-and-score step, shared by
+`quality-check.mjs` and the gate so both measure with one scorer. It injects
+mediabunny into the page and exports `scoreInPage`, which decodes a file with
+a real `VideoDecoder` and scores frame k against reference PNG k.
+
 ## Exporting APNG
 
 `apng-check.mjs` exports a scene to APNG, decodes it back with a real

@@ -399,6 +399,20 @@ The gate, with `wc` the WebCodecs file exported in the same run:
 It compares the scorer's own outputs, which are rounded: PSNR to two decimals,
 specks to one.
 
+**Where the premise came from.** Spec §5 assumed x264 removes the specks. That
+came from the 5C findings, which attributed them to Chromium's software H.264
+encoder (OpenH264); see spec §5 and
+`docs/research/2026-09-24-export-quality-findings-and-options.md`. This
+measurement does not support it. On identical decoded YUV planes, the colour
+tags alone moved x264's specks from 19.6 to 70.2 per frame, a factor of 3.6,
+so the speck metric is sensitive to how the decoder reads the tags and not
+only to the encoder.
+
+**Consequence for the CLI.** `marey export --format mp4` is the button's path,
+`runVideoExport`. `check:export --compare-seams` compares it with
+`__mareyExportVideo({ container: "mp4" })` on frame hash, coded size and frame
+count, and reports the SHA-256s without gating on them (R47).
+
 ### The run of record: x264 tagged BT.601 limited range, like the WebCodecs file
 
 The x264 argument list (`x264Args` in `tools/visual-check/x264-gate.mjs`),

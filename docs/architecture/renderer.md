@@ -590,8 +590,9 @@ not vary per user.
 **MP4.** Today `--format mp4` goes through `runVideoExport` and WebCodecs,
 the same pipeline as the button. So its bytes differ between runs while its
 `frames` hash does not; see "The container determinism asymmetry" above.
-Whether a separate x264 encoder replaces it depends on the gate measured
-under Phase 6 design §5.
+A separate x264 encoder was measured as a replacement and did not pass
+the gate, so the CLI keeps this path and has no ffmpeg dependency; the
+numbers are in `eval/RESULTS-PHASE-6.md`, "Task 1: x264 gate".
 
 The determinism claims this boundary serves, and the commands that check
 them, are collected in `docs/determinism.md`.
