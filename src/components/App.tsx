@@ -9,7 +9,6 @@ import { TopBar }       from "./TopBar/TopBar";
 import { MonacoEditor } from "./Editor/MonacoEditor";
 import { Terminal }     from "./Terminal/Terminal";
 import { Preview }      from "./Preview/Preview";
-import { PaneLabel }    from "./Layout/PaneLabel";
 import { Handle }       from "./Layout/Handle";
 import { Toast }        from "./Toast/Toast";
 import styles from "./App.module.scss";
@@ -77,10 +76,7 @@ export const App: FunctionComponent = () => {
             className={styles.editorWrap}
             style={{ height: editorH, display: vRatio === 0 ? 'none' : 'block', pointerEvents: isDragging ? "none" : "auto" }}
           >
-            <PaneLabel>code editor</PaneLabel>
-            <div style={{ height: "calc(100% - 32px)" }}>
-              <MonacoEditor onReady={(editor) => { editorRef.current = editor; }} />
-            </div>
+            <MonacoEditor onReady={(editor) => { editorRef.current = editor; }} />
           </div>
           <Handle axis="vertical" onPointerDown={onVPointerDown} />
           {}
@@ -88,7 +84,6 @@ export const App: FunctionComponent = () => {
             className={styles.terminal}
             style={{ height: terminalH, display: vRatio === 1 ? 'none' : 'flex' }}
           >
-            <PaneLabel>output</PaneLabel>
             <Terminal />
           </div>
         </div>
@@ -98,7 +93,6 @@ export const App: FunctionComponent = () => {
           className={styles.rightPane}
           style={{ width: rightW, display: hRatio === 1 ? 'none' : 'flex', pointerEvents: isDragging ? "none" : "auto" }}
         >
-          <PaneLabel>scene preview</PaneLabel>
           <Preview hostRef={hostRef} />
         </div>
       </div>

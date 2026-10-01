@@ -1,4 +1,8 @@
+// The preview is a surface: graph paper in light mode, a dot grid in dark
+// mode. The scene sits on it as a framed plate.
 .wrap {
+  --plate-margin: 24px;
+
   flex: 1;
   display: flex;
   align-items: center;
@@ -6,19 +10,97 @@
   min-height: 0;
   overflow: hidden;
   position: relative;
-  background: var(--bg-preview);
+  background-color: var(--bg-preview);
+  background-image: radial-gradient(var(--surface-dot) 1px, transparent 1.2px);
+  background-size: 12px 12px;
+
+  [data-theme="light"] & {
+    background-image:
+      linear-gradient(var(--surface-grid-major) 1px, transparent 1px),
+      linear-gradient(90deg, var(--surface-grid-major) 1px, transparent 1px),
+      linear-gradient(var(--surface-grid-minor) 1px, transparent 1px),
+      linear-gradient(90deg, var(--surface-grid-minor) 1px, transparent 1px);
+    background-size: 35px 35px, 35px 35px, 7px 7px, 7px 7px;
+  }
+
+  @media (max-width: 759px) {
+    --plate-margin: 12px;
+  }
 }
 
 .host {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  
+  inset: var(--plate-margin);
+
   canvas {
     display: block;
     width: 100% !important;
     height: 100% !important;
+  }
+}
+
+// Same box as the host, so the frame's coordinates are the host's.
+.plateLayer {
+  position: absolute;
+  inset: var(--plate-margin);
+  pointer-events: none;
+}
+
+.frame {
+  position: absolute;
+  pointer-events: none;
+  // Drawn outside the rectangle, so it never covers the scene.
+  outline: 1px solid var(--plate-outline);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+
+  [data-theme="light"] & {
+    box-shadow: none;
+
+    // Crop marks: two 9 px strokes per corner, 4 px outside the rectangle.
+    &::before {
+      content: "";
+      position: absolute;
+      inset: -13px;
+      background-repeat: no-repeat;
+      background-image:
+        linear-gradient(var(--plate-outline), var(--plate-outline)),
+        linear-gradient(var(--plate-outline), var(--plate-outline)),
+        linear-gradient(var(--plate-outline), var(--plate-outline)),
+        linear-gradient(var(--plate-outline), var(--plate-outline)),
+        linear-gradient(var(--plate-outline), var(--plate-outline)),
+        linear-gradient(var(--plate-outline), var(--plate-outline)),
+        linear-gradient(var(--plate-outline), var(--plate-outline)),
+        linear-gradient(var(--plate-outline), var(--plate-outline));
+      background-size:
+        9px 1px, 1px 9px,
+        9px 1px, 1px 9px,
+        9px 1px, 1px 9px,
+        9px 1px, 1px 9px;
+      background-position:
+        left 0 top 12px,     left 12px top 0,
+        right 0 top 12px,    right 12px top 0,
+        left 0 bottom 12px,  left 12px bottom 0,
+        right 0 bottom 12px, right 12px bottom 0;
+    }
+  }
+}
+
+.caption {
+  position: absolute;
+  margin-top: 6px;
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  box-sizing: border-box;
+
+  // Keeps the text clear of the bottom crop marks.
+  [data-theme="light"] & {
+    padding: 0 6px;
   }
 }
 
@@ -36,24 +118,23 @@
 }
 
 .emptyText {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  font-family: var(--font-mono);
+  font-size: 13px;
+  font-family: var(--font-ui);
+  color: var(--text-secondary);
 }
 
 .loadingOverlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: color-mix(in srgb, var(--bg-preview) 60%, transparent);
   backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 50;
   color: var(--text-primary);
-  font-size: 12px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-family: var(--font-ui);
+  font-size: 13px;
   opacity: 0;
   animation: fade-in 200ms ease forwards;
 }

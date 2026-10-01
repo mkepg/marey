@@ -21,6 +21,13 @@ export interface ActiveToast extends ToastState {
   id: number;
 }
 
+export interface SceneInfo {
+  readonly width: number;
+  readonly height: number;
+  readonly duration: number | null;
+  readonly fit: "contain" | "cover" | "fill" | "none";
+}
+
 export interface AppState {
   code: string;
   theme: Theme;
@@ -33,6 +40,7 @@ export interface AppState {
   isCompiling: boolean;
   isExporting: boolean;
   fileId: number;
+  sceneInfo: SceneInfo | null;
   setCode: (code: string) => void;
   toggleTheme: () => void;
   setLogs: (logs: LogEntry[]) => void;
@@ -45,6 +53,7 @@ export interface AppState {
   setAutoRun: (val: boolean) => void;
   setIsCompiling: (val: boolean) => void;
   setIsExporting: (val: boolean) => void;
+  setSceneInfo: (info: SceneInfo | null) => void;
 }
 
 const THEME_STORAGE_KEY = "marey_theme";
@@ -81,6 +90,7 @@ export const useAppStore = create<AppState>((set) => ({
   isCompiling: false,
   isExporting: false,
   fileId: 0,
+  sceneInfo: null,
   setCode: (code) =>
     set({ code, isTooLargeToShare: computeIsTooLarge(code) }),
   toggleTheme: () =>
@@ -130,4 +140,5 @@ export const useAppStore = create<AppState>((set) => ({
   setAutoRun:     (val) => set({ autoRun: val }),
   setIsCompiling: (val) => set({ isCompiling: val }),
   setIsExporting: (val) => set({ isExporting: val }),
+  setSceneInfo:   (sceneInfo) => set({ sceneInfo }),
 }));

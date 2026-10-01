@@ -11,6 +11,7 @@ export function useCompile(hostRef: RefObject<HTMLDivElement>): () => void {
   const setErrors        = useAppStore((s) => s.setErrors);
   const setCompileStatus = useAppStore((s) => s.setCompileStatus);
   const setIsCompiling   = useAppStore((s) => s.setIsCompiling);
+  const setSceneInfo      = useAppStore((s) => s.setSceneInfo);
 
   const codeRef   = useRef(code);
   const themeRef  = useRef(theme);
@@ -40,7 +41,7 @@ export function useCompile(hostRef: RefObject<HTMLDivElement>): () => void {
     const currentId = compileIdRef.current;
     const timestamp = new Date().toLocaleTimeString();
 
-    compile(source, host, () => themeRef.current === "dark").then(({ logs, errors, success, cleanup }) => {
+    compile(source, host, () => themeRef.current === "dark").then(({ logs, errors, success, cleanup, _irPayload }) => {
       // Race condition check: Only apply results if this is still the latest compile job
       if (currentId !== compileIdRef.current) {
         if (cleanup) cleanup();
@@ -54,9 +55,19 @@ export function useCompile(hostRef: RefObject<HTMLDivElement>): () => void {
       ]);
       setErrors(errors);
       setCompileStatus(success ? "ok" : "error");
+      setSceneInfo(
+        success && _irPayload
+          ? {
+              width: _irPayload.width,
+              height: _irPayload.height,
+              duration: _irPayload.duration,
+              fit: _irPayload.fit,
+            }
+          : null,
+      );
       setIsCompiling(false);
     });
-  }, [hostRef, setLogs, setErrors, setCompileStatus, setIsCompiling]);
+  }, [hostRef, setLogs, setErrors, setCompileStatus, setIsCompiling, setSceneInfo]);
 
   // Handle Manual Execution (Ctrl+Enter)
   useEffect(() => {
