@@ -9,16 +9,16 @@
 }
 
 @font-face {
-  font-family: 'Syne';
-  src: url('/fonts/Syne-Regular.ttf') format('truetype');
+  font-family: 'Bricolage Grotesque';
+  src: url('/fonts/BricolageGrotesque-Regular.ttf') format('truetype');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'Syne';
-  src: url('/fonts/Syne-Bold.ttf') format('truetype');
+  font-family: 'Bricolage Grotesque';
+  src: url('/fonts/BricolageGrotesque-Bold.ttf') format('truetype');
   font-weight: 700;
   font-style: normal;
   font-display: swap;
@@ -33,64 +33,78 @@
 }
 
 :root {
+  --bg-app:             #16171a;
+  --bg-bar:             #16171a;
+  --bg-pane:            #16171a;
+  --bg-editor:          #16171a;
+  --bg-terminal:        #131417;
+  --bg-preview:         #1b1c20;
+  --bg-handle:          #222429;
+  --bg-handle-h:        #2f3138;
+
+  --border:             #26282e;
+  --border-soft:        #1f2025;
+
+  --text-primary:       #d9dbe1;
+  --text-secondary:     #9aa0ab;
+  --text-muted:         #5d626d;
+  --text-ok:            #6fcf97;
+  --text-error:         #f87171;
+  --text-info:          #8ab4f8;
+
+  --accent:             #6b58f0;
+  --accent-dim:         #2a2550;
+  --accent-text:        #ffffff;
+
+  --surface-grid-minor: #1b1c20;
+  --surface-grid-major: #1b1c20;
+  --surface-dot:        #2c2e35;
+  --plate-outline:      #2f3138;
+
+  --dot-ok:             #6fcf97;
+  --dot-error:          #f87171;
+  --dot-idle:           #5d626d;
+
+  // Non-colour tokens come last: the contrast test reads colours up to the
+  // first closing brace, and the interpolations below contain one.
   --font-mono: #{$font-mono};
   --font-ui:   #{$font-ui};
   --radius:    #{$radius};
   --transition: #{$transition};
-
-  --bg-app:      #0c0c0e;
-  --bg-bar:      #111114;
-  --bg-pane:     #0f0f12;
-  --bg-editor:   #0c0c0e;
-  --bg-terminal: #0a0a0c;
-  --bg-preview:  #111114;
-  --bg-handle:   #1e1e24;
-  --bg-handle-h: #2a2a35;
-
-  --border:      #1e1e28;
-  --border-soft: #16161e;
-
-  --text-primary:   #e8e8f0;
-  --text-secondary: #6e6e88;
-  --text-muted:     #3a3a50;
-  --text-ok:        #4ade80;
-  --text-error:     #f87171;
-  --text-info:      #60a5fa;
-
-  --accent:     #7c6af7;
-  --accent-dim: #2d2858;
-
-  --dot-ok:    #4ade80;
-  --dot-error: #f87171;
-  --dot-idle:  #3a3a50;
 }
 
 [data-theme="light"] {
-  --bg-app:      #f5f5f7;
-  --bg-bar:      #ffffff;
-  --bg-pane:     #f9f9fb;
-  --bg-editor:   #ffffff;
-  --bg-terminal: #f2f2f5;
-  --bg-preview:  #fafafc;
-  --bg-handle:   #e2e2e8;
-  --bg-handle-h: #d0d0da;
+  --bg-app:             #fbfcfa;
+  --bg-bar:             #fbfcfa;
+  --bg-pane:            #fbfcfa;
+  --bg-editor:          #fbfcfa;
+  --bg-terminal:        #f1f3f0;
+  --bg-preview:         #fbfcfa;
+  --bg-handle:          #e2e6ea;
+  --bg-handle-h:        #cdd8e4;
 
-  --border:      #e2e2e8;
-  --border-soft: #ebebf0;
+  --border:             #d9dee4;
+  --border-soft:        #e8ecef;
 
-  --text-primary:   #111118;
-  --text-secondary: #6b6b80;
-  --text-muted:     #b0b0c0;
-  --text-ok:        #16a34a;
-  --text-error:     #dc2626;
-  --text-info:      #2563eb;
+  --text-primary:       #1d2a44;
+  --text-secondary:     #5a6478;
+  --text-muted:         #8a93a6;
+  --text-ok:            #2f7a4a;
+  --text-error:         #b4322a;
+  --text-info:          #2b4fa8;
 
-  --accent:     #6355e8;
-  --accent-dim: #ede9fd;
+  --accent:             #1d2a44;
+  --accent-dim:         #dfe5ee;
+  --accent-text:        #fbfcfa;
 
-  --dot-ok:    #16a34a;
-  --dot-error: #dc2626;
-  --dot-idle:  #c0c0cc;
+  --surface-grid-minor: #e6ebf1;
+  --surface-grid-major: #cdd8e4;
+  --surface-dot:        #fbfcfa;
+  --plate-outline:      #1d2a44;
+
+  --dot-ok:             #2f7a4a;
+  --dot-error:          #b4322a;
+  --dot-idle:           #8a93a6;
 }
 
 html,

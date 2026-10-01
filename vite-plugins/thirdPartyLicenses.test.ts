@@ -158,7 +158,7 @@ describe("font licence text", () => {
     const { notices, problems } = readFonts("public", SUPPLIED);
     expect(problems).toEqual([]);
     // Both families under public/fonts, so dropping one entirely fails too.
-    expect(notices.map((n) => n.family)).toEqual(["JetBrains Mono", "Syne"]);
+    expect(notices.map((n) => n.family)).toEqual(["Bricolage Grotesque", "JetBrains Mono"]);
     const out = renderNotices([], notices);
     // Judged per font block, not over the whole file: with two OFL fonts, a
     // whole-file search still passes when one font's copy is missing
