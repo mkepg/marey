@@ -352,3 +352,215 @@ total exceeds ten
 minutes, spec §9.3's fallback applies: `check:export` gains a `--ci` mode that
 runs one scene per format instead of the full four-scene, five-format matrix,
 and the full matrix stays a before-merge check.
+
+---
+
+## Task 1: x264 gate
+
+Spec §5. On the default scene's lossless 2× frames, does x264, run through the
+user's ffmpeg, clearly beat the button's WebCodecs H.264? If no configuration
+meets all three thresholds, `marey export --format mp4` keeps `runVideoExport`
+(Task 9).
+
+**Verdict: gate failed.**
+
+- The run of record has a colour description matching the WebCodecs file's.
+  In it, no x264 configuration passes.
+- Six of the eight clear the PSNR threshold, and every one clears the size
+  threshold.
+- **Every one fails the specks threshold**, and not narrowly: x264 leaves
+  70–110 specks per frame against WebCodecs' 63.6, where 6.36 is allowed.
+- So in this measurement x264 does not remove the specks. It leaves more of
+  them than WebCodecs does.
+- There is no chosen configuration, so Task 9 has no `X264_SETTINGS` to adopt
+  and no repeat-encode comparison runs (spec §5 re-encodes only a chosen
+  configuration).
+
+Measured from `C:\Users\gomez\repos\PROGRAMMING_LANGUAGE\marey` on Windows 11
+with `playwright` 1.62.1's Chromium, the scorer's default GPU configuration
+(`--use-angle=swiftshader --enable-unsafe-swiftshader --use-gl=angle`), and
+the dev server (`npx vite --port 5199 --strictPort`) warmed by one page load
+before each run. The scene is `DEFAULT_CODE` from `src/store/defaultScene.ts`,
+written to `.visual-check/phase6/default.marey` by the brief's `node -e`
+one-liner. ffmpeg's version line:
+
+```
+ffmpeg version 9.0.2-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers
+```
+
+The command, run twice (the two runs follow):
+
+```
+node tools/visual-check/x264-gate.mjs --scene .visual-check/phase6/default.marey --fps 30 --out .visual-check/phase6/gate
+```
+
+The gate, with `wc` the WebCodecs file exported in the same run:
+`psnr >= wc.psnr + 1.0 && specksPerFrame <= wc.specksPerFrame / 10 && bytes <= 3 * wc.bytes`.
+It compares the scorer's own outputs, which are rounded: PSNR to two decimals,
+specks to one.
+
+### The run of record: x264 tagged BT.601 limited range, like the WebCodecs file
+
+The x264 argument list (`x264Args` in `tools/visual-check/x264-gate.mjs`),
+with `<crf>`, `<preset>` and the optional `-tune animation` filled in per row:
+
+```
+-hide_banner -loglevel error -f image2pipe -framerate 30 -c:v png -i -
+-c:v libx264 -preset <preset> -crf <crf> [-tune animation]
+-vf scale=out_color_matrix=bt601:out_range=tv,setparams=range=tv:colorspace=smpte170m:color_primaries=smpte170m:color_trc=smpte170m
+-color_range tv -colorspace smpte170m -color_primaries smpte170m -color_trc smpte170m
+-pix_fmt yuv420p -movflags +faststart -map_metadata -1 -fflags +bitexact -flags:v +bitexact -an -y <out>
+```
+
+- Exit 0, 14 m 31 s.
+- 180 frames at 30 fps, coded at 1600x1200.
+- The WebCodecs encoder config the seam reported: `avc1.420028`,
+  8,000,000 bit/s constant, `prefer-software`.
+- `ffprobe` reads every x264 output as `color_range=tv`, with `color_space`,
+  `color_primaries` and `color_transfer` all `smpte170m`, at 180 frames.
+- Thresholds: PSNR at least **43.03 dB**, specks per frame at most **6.36**,
+  size at most **9,884,082 B**.
+
+| Encoder | CRF | Preset | Tune | PSNR (dB) | Specks/frame | Total specks | Bytes | PSNR | Specks | Size | Gate |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| WebCodecs | - | - | - | 42.03 | 63.6 | 11446 | 3,294,694 | | | | baseline |
+| x264 | 14 | medium | - | 43.55 | 85 | 15301 | 1,053,107 | ok | fail | ok | fail |
+| x264 | 14 | medium | animation | 43.78 | 72.6 | 13061 | 1,109,145 | ok | fail | ok | fail |
+| x264 | 14 | slow | - | 43.58 | 79.3 | 14266 | 1,020,633 | ok | fail | ok | fail |
+| x264 | 14 | slow | animation | 43.81 | 70.2 | 12636 | 1,018,644 | ok | fail | ok | fail |
+| x264 | 18 | medium | - | 42.91 | 105.9 | 19061 | 709,449 | fail | fail | ok | fail |
+| x264 | 18 | medium | animation | 43.29 | 90.6 | 16316 | 761,223 | ok | fail | ok | fail |
+| x264 | 18 | slow | - | 42.96 | 110.4 | 19864 | 694,090 | fail | fail | ok | fail |
+| x264 | 18 | slow | animation | 43.36 | 86.4 | 15560 | 710,409 | ok | fail | ok | fail |
+
+Every file decoded to 180 frames against 180 references.
+
+- The best configuration is CRF 14, slow, `-tune animation`:
+  - 43.81 dB, 1.78 dB above WebCodecs;
+  - 70.2 specks per frame, 6.6 more than WebCodecs;
+  - 1,018,644 B, under a third of the WebCodecs file's size.
+- The WebCodecs numbers agree with 5C's recorded 42.03 dB and about 65 specks
+  per frame.
+
+**Repeatability, observed but not the gate's step.** With no chosen
+configuration, Step 6's two repeat encodes did not run. Still, CRF 14 slow
+animation was encoded twice by separate ffmpeg processes: once for the
+diagnostic below, from reference PNGs saved to disk by an earlier seam export,
+and once by this run, from the run's own seam export. Both files have SHA-256
+`facdaa1bfd15e7de8f97e9355e663ae26c35f4c385af3aa84cc853becd5456b3`.
+
+### The first run, superseded: x264 untagged
+
+The first run used the argument list as the plan first wrote it: the list
+above without the `-vf` filter or the four colour options, so with
+`-pix_fmt yuv420p` alone. Exit 0, 5 m 58 s. Thresholds: 43.03 dB,
+6.43 specks per frame, 9,897,414 B.
+
+| Encoder | CRF | Preset | Tune | PSNR (dB) | Specks/frame | Total specks | Bytes | Gate |
+|---|---|---|---|---|---|---|---|---|
+| WebCodecs | - | - | - | 42.03 | 64.3 | 11572 | 3,299,138 | baseline |
+| x264 | 14 | medium | - | 38.62 | 26.3 | 4729 | 1,053,085 | fail |
+| x264 | 14 | medium | animation | 38.68 | 22.4 | 4030 | 1,109,123 | fail |
+| x264 | 14 | slow | - | 38.62 | 26.4 | 4757 | 1,020,611 | fail |
+| x264 | 14 | slow | animation | 38.69 | 19.6 | 3531 | 1,018,621 | fail |
+| x264 | 18 | medium | - | 38.43 | 45 | 8100 | 709,427 | fail |
+| x264 | 18 | medium | animation | 38.54 | 34.8 | 6256 | 761,201 | fail |
+| x264 | 18 | slow | - | 38.44 | 46 | 8286 | 694,068 | fail |
+| x264 | 18 | slow | animation | 38.56 | 31.5 | 5673 | 710,386 | fail |
+
+Every x264 configuration scored about 3.4 dB *below* WebCodecs, and PSNR
+barely moved with CRF. That points to a systematic colour error, not to
+quantisation, and the measurements below confirm it.
+
+**Why it was superseded.**
+
+- **The colour tags differ.** `ffprobe` reads the WebCodecs file as
+  `color_range=tv` with `color_space`, `color_primaries` and `color_transfer`
+  all `smpte170m` (BT.601, limited range). It reads every untagged x264 file
+  as `unknown` on all four fields.
+- **The browser decodes them differently.** The first frame of each file was
+  decoded through mediabunny in the same Chromium, and its
+  `VideoFrame.colorSpace` was read:
+  - WebCodecs: `{ matrix: "smpte170m", primaries: "smpte170m", transfer: "smpte170m", fullRange: false }`.
+  - Untagged x264, CRF 14 slow animation: `{ matrix: "bt709", primaries: "bt709", transfer: "bt709", fullRange: false }`.
+
+  ffmpeg converts RGB to YUV with BT.601 by default. So the scorer read the
+  untagged stream back through a different matrix from the one it was
+  encoded with.
+- **One configuration, re-encoded with the tags.** CRF 14, slow,
+  `-tune animation` was encoded again with the tagged argument list above.
+  - The first attempt had only `-vf scale=out_color_matrix=bt601:out_range=tv`
+    and the four encoder-level colour options. `ffprobe` showed range and
+    matrix set, but primaries and transfer still `unknown`, so it was not
+    scored.
+  - Adding `setparams` to the filter set all four tags, confirmed by `ffprobe`
+    before scoring.
+  - The tagged and untagged files' decoded YUV planes are identical: ffmpeg's
+    `framemd5` over all 180 frames gives the same digest for both. Only the
+    tags differ.
+  - All three files were scored in one page through `scoreInPage`, against
+    the same 180 reference PNGs. Those were saved from a seam export whose
+    frame hash, `2bacabcb`, equals the untagged run's. The scores:
+
+    | File | PSNR (dB) | Specks/frame | Bytes |
+    |---|---|---|---|
+    | x264 untagged | 38.69 | 19.6 | 1,018,621 |
+    | x264 tagged BT.601 tv | **43.81** | 70.2 | 1,018,644 |
+    | WebCodecs, from the untagged run | 42.03 | 64.3 | 3,299,138 |
+
+    The untagged file and the WebCodecs file reproduce the untagged run's
+    numbers exactly.
+
+PSNR moved by **+5.12 dB** on identical YUV data. That is more than the
+0.5 dB set beforehand as the threshold for a material change, so the tagged
+argument list became the gate's `x264Args`, and the full matrix was re-run
+as the run of record above. The untagged run measured how Chromium decodes
+an untagged stream, not x264, and would have shipped shifted colours in any
+player that assumes BT.709 for untagged HD video.
+
+Under correct colour, the speck count rose: 19.6 untagged against 70.2
+tagged, for the same YUV planes. The untagged run's low speck counts were an
+artefact of the matrix mismatch, not a property of x264.
+
+### The shared scorer: `quality-check.mjs` before and after the extraction
+
+`installMediabunny` and the decode-and-score function moved out of
+`quality-check.mjs`, unchanged, into `tools/visual-check/lib/scoreVideo.mjs`
+(`scoreInPage`), and `x264-gate.mjs` scores with the same code. The moved
+lines are textually identical to HEAD's: a `diff` of HEAD's lines 158–177 and
+208–317 against the new module shows no change.
+
+```
+node tools/visual-check/quality-check.mjs --scene .visual-check/phase6/default.marey --containers mp4,webm --fps 30 --out .visual-check/phase6/quality-before   # HEAD's quality-check.mjs
+node tools/visual-check/quality-check.mjs --scene .visual-check/phase6/default.marey --containers mp4,webm --fps 30 --out .visual-check/phase6/quality-after    # after the extraction
+```
+
+| Container | Run | PSNR (dB) | Specks/frame | Total specks | File bytes |
+|---|---|---|---|---|---|
+| mp4 | before | 42.03 | 64 | 11526 | 3,300,478 |
+| mp4 | after | 42.03 | 63.5 | 11423 | 3,295,458 |
+| webm | before | 42.16 | 61.7 | 11101 | 4,386,180 |
+| webm | after | 42.16 | 61.7 | 11101 | 4,386,180 |
+
+**Exact MP4 equality across two runs is not the test.** Each run re-encodes
+through WebCodecs, whose H.264 output is not byte-repeatable (R47,
+`docs/architecture/renderer.md`, "The container determinism asymmetry"). The
+two MP4 files above differ in size, so the scorer was given different input.
+The extraction is shown to change nothing in two ways:
+
+1. **WebM is exactly equal.** Its bytes are repeatable: the file size is the
+   same, and all 180 per-frame PSNR and speck entries are identical (compared
+   as JSON).
+2. **The same MP4 bytes score identically under both scorers.** One export
+   (3,295,111 B, SHA-256
+   `5c383ca76590506b198a15a2776adb58169bf4c142c49429c920901746994b2d`) was
+   scored in one page by HEAD's scoring function, inlined verbatim from
+   `git show HEAD:tools/visual-check/quality-check.mjs`, and by
+   `scoreInPage`. Both gave 42.03 dB, 64.2 specks per frame and 11564 in
+   total, and the two whole results, per-frame entries included, are equal as
+   JSON.
+
+Every run on this page (both quality checks, both gate runs and the
+diagnostic) logs one console warning, "Mediabunny was loaded twice". It comes
+from injecting the mediabunny bundle into a page whose app already bundles
+mediabunny, and HEAD's `quality-check.mjs` logs it too.
