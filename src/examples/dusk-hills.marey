@@ -4,22 +4,26 @@
 let R      = 115         // the sun's radius; its face is measured in fractions of R
 let stroke = 0.052 * R   // brow and smile thickness
 let ink    = #232323
-let sink   = 165         // deep enough to hide the sun behind the hills
+let sink   = 185         // deep enough to hide the sun behind the hills
 
 // Sky bands, top to bottom, by their top edges. Night fades in over day.
 let edges  = [0, 80, 140, 200, 260, 320, 600]
 let day    = [#2b2d5c, #4a3f78, #7a4f8a, #b8608a, #e8846f, #f5b36b]
-let night  = [#0d0f2b, #131536, #1a1b41, #22214b, #2c2654, #382b5c]
+let night  = [#0d0f2b, #131536, #1a1b41, #23224d, #2f2858, #3d2f66]
 let starAt = [(42, 38), (196, 26), (446, 32), (658, 46), (770, 22), (118, 94),
               (250, 112), (318, 64), (532, 86), (734, 110), (60, 150), (384, 128),
               (596, 156), (700, 176), (210, 170), (140, 226), (300, 206), (470, 198),
               (640, 236), (780, 200)]
 
-// Ridges, back to front: a base height, then two waves of
-// (amplitude, degrees per px, phase).
-let ridges = [[303, 20, 0.3, -60, 9, 0.55, -185], [384, 20, 0.35, 217, 7, 0.5, 60],
-              [446, 18, 0.4, 10, 7, 0.55, 120], [516, 16, 0.3, 234, 6, 0.6, 100]]
+// Ridges, back to front: 13 samples centred on x, w apart, at heights b plus two
+// waves of (amplitude, degrees per sample, phase). Straight segments make the peaks;
+// farther ridges have more, smaller ones. Each has a darker night copy.
+let ridges = [[500, 84, 324, 24, 155, 90, 12, 97, 0],
+              [470, 108, 392, 26, 137, 250, 9, 71, 40],
+              [535, 132, 455, 26, 121, 10, 8, 53, 200],
+              [440, 160, 522, 24, 109, 290, 6, 47, 120]]
 let hills  = [#6b4a7a, #4a3560, #2f2444, #1c1630]
+let shades = [#201a40, #171333, #100d25, #090716]
 
 // The smile: 13 points on a circular arc 0.354 R wide and 0.068 R deep.
 let half = 0.177 * R  let sag = 0.068 * R
@@ -38,16 +42,16 @@ template Sun() {
       circle eye {
         position: (s * 0.281 * R, -0.385 * R), radius: 0.094 * R, color: ink
         animate {
-          property: scale, to: (1, 0.15), duration: 6, easing: easeIn, loop: true, yoyo: true
+          property: scale, to: (1, 0.15), duration: 6, easing: easeOut, loop: true, yoyo: true
         }
       }
-      // A brow is a bar with a round cap at each end. It lowers, and levels
-      // out of its 8.84-degree tilt, atan(0.021 / 0.135).
+      // A brow is a bar with a round cap at each end. As the sun falls asleep
+      // it lowers, and its outer end droops another 10 degrees.
       let bx = s * 0.3075 * R  let ex = s * 0.0675 * R  let ey = 0.0105 * R
       group brow {
         position: (bx, -0.5315 * R)
         animate { property: position, to: (bx, -0.47 * R), duration: 6, loop: true, yoyo: true }
-        animate { property: rotation, to: -s * 8.84, duration: 6, loop: true, yoyo: true }
+        animate { property: rotation, to: s * 10, duration: 6, loop: true, yoyo: true }
         line bar {
           position: (0, 0), points: [(-ex, -ey), (ex, ey)], thickness: stroke, color: ink
         }
@@ -140,22 +144,21 @@ scene {
   // ── Hills ── origin (0, 1) pins each ridge's bottom-left corner to `position`,
   // so its points read as scene coordinates.
   generate r, i in ridges {
-    let b = r[0]  let a = r[1]  let f = r[2]  let p = r[3]
-    let c = r[4]  let g = r[5]  let q = r[6]
-    polygon ridge {
-      position: (-50, 620), origin: (0, 1), color: hills[i]
-      points: [
-        (-50, b + a*sin(-50*f+p) + c*sin(-50*g+q)), (0, b + a*sin(p) + c*sin(q)),
-        (50, b + a*sin(50*f+p) + c*sin(50*g+q)), (100, b + a*sin(100*f+p) + c*sin(100*g+q)),
-        (150, b + a*sin(150*f+p) + c*sin(150*g+q)), (200, b + a*sin(200*f+p) + c*sin(200*g+q)),
-        (250, b + a*sin(250*f+p) + c*sin(250*g+q)), (300, b + a*sin(300*f+p) + c*sin(300*g+q)),
-        (350, b + a*sin(350*f+p) + c*sin(350*g+q)), (400, b + a*sin(400*f+p) + c*sin(400*g+q)),
-        (450, b + a*sin(450*f+p) + c*sin(450*g+q)), (500, b + a*sin(500*f+p) + c*sin(500*g+q)),
-        (550, b + a*sin(550*f+p) + c*sin(550*g+q)), (600, b + a*sin(600*f+p) + c*sin(600*g+q)),
-        (650, b + a*sin(650*f+p) + c*sin(650*g+q)), (700, b + a*sin(700*f+p) + c*sin(700*g+q)),
-        (750, b + a*sin(750*f+p) + c*sin(750*g+q)), (800, b + a*sin(800*f+p) + c*sin(800*g+q)),
-        (850, b + a*sin(850*f+p) + c*sin(850*g+q)), (850, 620), (-50, 620)
-      ]
+    let x = r[0]  let w = r[1]  let b = r[2]  let a = r[3]  let f = r[4]
+    let p = r[5]  let c = r[6]  let g = r[7]  let q = r[8]
+    let edge = [
+      (x-6*w, b + a*sin(p-6*f) + c*sin(q-6*g)), (x-5*w, b + a*sin(p-5*f) + c*sin(q-5*g)),
+      (x-4*w, b + a*sin(p-4*f) + c*sin(q-4*g)), (x-3*w, b + a*sin(p-3*f) + c*sin(q-3*g)),
+      (x-2*w, b + a*sin(p-2*f) + c*sin(q-2*g)), (x-w, b + a*sin(p-f) + c*sin(q-g)),
+      (x, b + a*sin(p) + c*sin(q)), (x+w, b + a*sin(p+f) + c*sin(q+g)),
+      (x+2*w, b + a*sin(p+2*f) + c*sin(q+2*g)), (x+3*w, b + a*sin(p+3*f) + c*sin(q+3*g)),
+      (x+4*w, b + a*sin(p+4*f) + c*sin(q+4*g)), (x+5*w, b + a*sin(p+5*f) + c*sin(q+5*g)),
+      (x+6*w, b + a*sin(p+6*f) + c*sin(q+6*g)), (x+6*w, 620), (x-6*w, 620)
+    ]
+    polygon ridge { position: (x-6*w, 620), origin: (0, 1), points: edge, color: hills[i] }
+    polygon shade {
+      position: (x-6*w, 620), origin: (0, 1), points: edge, color: shades[i], alpha: 0
+      animate { property: alpha, to: 1, duration: 6, loop: true, yoyo: true }
     }
   }
 

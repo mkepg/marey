@@ -20,6 +20,12 @@ Authors are fresh subagents with no access to this conversation.
 - `src/components/Editor/MonacoEditor/constants.ts` — IDE hover documentation
 - `docs/LANGUAGE.md` — the formal language reference
 
+*Changed 2026-10-02:* the worked example is now `src/examples/dusk-hills.marey`.
+Runs recorded before that date read whatever `src/store/defaultScene.ts` held
+at the time: the motion test card (now `tools/visual-check/scenes/test-card.marey`)
+until Phase 5B, then the smiling face with confetti (now
+`tools/visual-check/scenes/hello-face.marey`).
+
 **They may not read** the compiler (`lexer/`, `parser/`, `typeChecker/`), the
 spec, the plans, or `AGENTS.md`. Those are internal. An external author would
 not have them, and `AGENTS.md` in particular documents the known gotchas, which

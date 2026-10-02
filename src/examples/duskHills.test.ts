@@ -247,8 +247,12 @@ describe("placement helpers", () => {
   //           50 + 2 * (30 - 10) = 90; left edge 100 + 2 * (20 - 20) = 100.
   //   corner: origin (0, 1), pivot = (0, 20). Top edge 50 + 2 * (30 - 20) = 70;
   //           left edge 100 + 2 * (20 - 0) = 140.
-  //   turned: rotation 90 about pivot (20, 10): (0, 0) - pivot = (-20, -10)
-  //           turns to (10, -20), so the top edge is 50 + 2 * (30 - 20) = 70.
+  //   turned: rotation 30 about pivot (20, 10). y grows downward, so a
+  //           positive angle turns clockwise on screen: (0, 0) - pivot =
+  //           (-20, -10) turns to (-20cos30 + 10sin30, -20sin30 - 10cos30) =
+  //           (-12.32, -18.66), the topmost corner. Scene point
+  //           (100 + 2 * (20 - 12.32), 50 + 2 * (30 - 18.66)) = (115.36, 72.68).
+  //           Turned the other way, the top corner would be (40, 0) at x 164.64.
   //   dot:    radius 10 at (-30, 0): top 50 + 2 * (0 - 10) = 30.
   const fixture = compileSource(`
 scene {
@@ -258,7 +262,7 @@ scene {
     scale: (2, 2)
     polygon flat   { position: (20, 30), points: [(0, 0), (40, 0), (40, 20), (0, 20)] }
     polygon corner { position: (20, 30), points: [(0, 0), (40, 0), (40, 20), (0, 20)], origin: (0, 1) }
-    polygon turned { position: (20, 30), points: [(0, 0), (40, 0), (40, 20), (0, 20)], rotation: 90 }
+    polygon turned { position: (20, 30), points: [(0, 0), (40, 0), (40, 20), (0, 20)], rotation: 30 }
     circle dot     { position: (-30, 0), radius: 10 }
   }
 }`);
@@ -273,9 +277,41 @@ scene {
     expect(left("flat")).toBeCloseTo(100, 9);
     expect(top("corner")).toBeCloseTo(70, 9);
     expect(left("corner")).toBeCloseTo(140, 9);
-    expect(top("turned")).toBeCloseTo(70, 9);
+    const turned = polygonInScene(scene, pose, byId(scene, "g.turned"));
+    const peak = turned.reduce((a, b) => (b.y < a.y ? b : a));
+    const c30 = Math.cos(Math.PI / 6);
+    expect(peak.x).toBeCloseTo(100 + 2 * (20 - (20 * c30 - 5)), 9);
+    expect(peak.y).toBeCloseTo(50 + 2 * (30 - (10 + 10 * c30)), 9);
+    expect(peak.x).toBeCloseTo(115.36, 2);
+    expect(peak.y).toBeCloseTo(72.68, 2);
     const dotTop = Math.min(...circleOutline(scene, pose, byId(scene, "g.dot")).map((p) => p.y));
     expect(dotTop).toBeCloseTo(30, 9);
+  });
+
+  it("agrees with the built Pixi tree's own toGlobal", () => {
+    const root = buildRoot(scene);
+    const pose = new Map(snapshotFor(root).map((s) => [s.id, s]));
+    const find = (c: Container, id: string): Container | null => {
+      if (c.__mareyId === id) return c;
+      for (const child of c.children) {
+        const hit = find(child as Container, id);
+        if (hit) return hit;
+      }
+      return null;
+    };
+    for (const name of ["flat", "corner", "turned"]) {
+      const node = byId(scene, `g.${name}`);
+      const built = find(root, node.id)!;
+      for (const p of [{ x: 0, y: 0 }, { x: 40, y: 0 }, { x: 13, y: 17 }]) {
+        const ours = toScene(scene, pose, node, p);
+        const pixi = built.toGlobal(p);
+        expect(ours.x, `${name} x`).toBeCloseTo(pixi.x, 9);
+        expect(ours.y, `${name} y`).toBeCloseTo(pixi.y, 9);
+      }
+    }
+    const dot = byId(scene, "g.dot");
+    const centre = find(root, dot.id)!.toGlobal({ x: 10, y: 10 });
+    expect(toScene(scene, pose, dot, { x: 10, y: 10 }).y).toBeCloseTo(centre.y, 9);
   });
 
   it("reads a polygon's top edge between its vertices", () => {
@@ -290,12 +326,20 @@ describe("dusk-hills.marey placement (spec §6)", () => {
   const ridges = () => [0, 1, 2, 3].map((i) => byId(ir, `ridge_${i}`));
   const sun = () => byId(ir, "sun");
 
-  it("draws the backmost ridge first", () => {
+  it("draws the backmost ridge first, each night copy just above its ridge", () => {
     expect(ridges().map((r) => (r.props.kind === "polygon" ? r.props.color : null))).toEqual([
       "#6b4a7a", "#4a3560", "#2f2444", "#1c1630",
     ]);
     const order = ir.children.map((n) => n.id);
     expect(order.indexOf("scene.ridge_0")).toBeGreaterThan(order.indexOf("scene.sun"));
+    for (let i = 0; i < 4; i++) {
+      const ridge = byId(ir, `ridge_${i}`);
+      const shade = byId(ir, `shade_${i}`);
+      expect(order.indexOf(shade.id), `shade_${i} draws right after ridge_${i}`).toBe(order.indexOf(ridge.id) + 1);
+      expect(shade.props.kind === "polygon" && shade.props.points).toEqual(ridge.props.kind === "polygon" && ridge.props.points);
+      expect(shade.props.alpha).toBe(0);
+      expect(shade.props.animations.map((a) => [a.property, a.to])).toEqual([["alpha", 1]]);
+    }
   });
 
   let at0: Pose;

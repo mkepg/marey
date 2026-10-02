@@ -375,7 +375,7 @@ const report = { url, scene: scenePath, fps };
     pageErrors,
   };
   console.log(
-    `scenario B (default scene): filename=${filename} parseOk=${parsed !== null} ` +
+    `scenario B (hello-face): filename=${filename} parseOk=${parsed !== null} ` +
       `hello layer: ${hello ? `${kinds.length - 1} contours, fill r=${hello.shapes.at(-1).r}, anchor ${JSON.stringify(hello.ks.a.k)}` : "MISSING"}`,
   );
   if (!(report.scenarioB.filenameOk && textLayerOk && pageErrors.length === 0)) console.error("scenario B FAILED");

@@ -227,11 +227,13 @@ colour animation.
   (60), `#b8608a` (60), `#e8846f` (60), `#f5b36b` (the rest).
 - **The night set** has the same band heights, with a deeper palette the
   implementer chooses and the owner reviews. Night falls by fading the night
-  set's alpha.
+  set's alpha. The night set also covers the ridges: each ridge has a darker
+  copy, drawn just above it, that fades in with the sky.
 
-**Ridges.** There are four polygons whose top edges are sums of `sin()` terms,
-paler as they recede. From back to front they are `#6b4a7a`, `#4a3560`,
-`#2f2444` and `#1c1630`. They do not move.
+**Ridges.** There are four polygons whose top edges are sums of `sin()` terms
+sampled sparsely, so the straight segments between samples form peaks and
+valleys. They are paler as they recede. From back to front they are
+`#6b4a7a`, `#4a3560`, `#2f2444` and `#1c1630`. They do not move.
 
 **The sun.**
 - **Rest position:** centre `(500, 304)`, outer radius R = 115.
@@ -243,7 +245,7 @@ paler as they recede. From back to front they are `#6b4a7a`, `#4a3560`,
 
   | Feature | Position and size |
   |---|---|
-  | Brows | Each brow is a bar 0.135 R long and 0.052 R thick, with rounded ends. Its outer end sits at x ±0.375 R, y −0.521 R, and its inner end at x ±0.24 R, y −0.542 R. |
+  | Brows | Each brow is a bar 0.137 R long and 0.052 R thick, with rounded ends. Its outer end sits at x ±0.375 R, y −0.521 R, and its inner end at x ±0.24 R, y −0.542 R. |
   | Eyes | Circles of radius 0.094 R, at (±0.281 R, −0.385 R). |
   | Smile | A line 0.052 R thick, through **13 points evenly spaced on a circular arc** from (−0.177 R, −0.167 R) to (+0.177 R, −0.167 R). Its lowest point is (0, −0.099 R), and it has a round dot at each end. The points are computed with `sin()` and `cos()`. |
 

@@ -2,7 +2,7 @@
  * Phase 5C Task 8: the browser evidence for Lottie `text` (spec §6.6).
  *
  * Three checks per fixture (`scenes/lottie-text-*.marey`, one text object
- * each), then the default scene:
+ * each), then the former default scene (scenes/hello-face.marey):
  *
  * 1. **Layout agreement** (ruling T8-R2). In a page served by the dev server
  *    (`text-check.html`), the scene is built through the real export prefix
@@ -404,7 +404,7 @@ if (!has("skip-default") && !only) {
   const positionFrames = (frame) => frame >= 150;
   const entry = { scene: scenePath, frames, inkRegion: region, positionJudgedAtFrames: frames.filter(positionFrames), criterion2: [], dotlottie: null };
   summary.helloFace = entry;
-  console.log(`\ndefault scene: frames ${frames.join(",")}, ink region ${region}`);
+  console.log(`\nhello-face: frames ${frames.join(",")}, ink region ${region}`);
   const lwDir = `${outDir}/default/lottie-web`;
   const lw = runLottieCheck(scenePath, frames, lwDir, ["--ink-region", region]);
   judgeRun("lottie-web", lw, { inkFrames: positionFrames, entry: entry.criterion2, gate: CRITERION2_GATES.default });
