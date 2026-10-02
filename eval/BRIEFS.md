@@ -15,7 +15,7 @@ Authors are fresh subagents with no access to this conversation.
 
 **They may read only these, because these are the entire user-facing surface:**
 
-- `src/store/defaultScene.ts` — the worked example every user sees on first load
+- `src/examples/dusk-hills.marey` — the worked example every user sees on first load
 - `src/components/Editor/MonacoEditor/language.ts` — IDE completions and snippets
 - `src/components/Editor/MonacoEditor/constants.ts` — IDE hover documentation
 - `docs/LANGUAGE.md` — the formal language reference

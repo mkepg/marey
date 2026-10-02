@@ -170,7 +170,7 @@ const FIXTURES = [
 const LAUNCH_ARGS = ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--use-gl=angle", "--disable-accelerated-2d-canvas"];
 
 mkdirSync(outDir, { recursive: true });
-const summary = { url, fixtures: {}, defaultScene: null, failures: [] };
+const summary = { url, fixtures: {}, helloFace: null, failures: [] };
 const fail = (what) => {
   summary.failures.push(what);
   console.log(`  FAIL ${what}`);
@@ -389,15 +389,11 @@ for (const f of FIXTURES) {
   }
 }
 
-// ─── 4. The default scene ──────────────────────────────────────────────────
-// `src/store/defaultScene.ts`'s DEFAULT_CODE, extracted the way
-// `lottie-click-check.mjs` does (anchored on `DEFAULT_CODE = \``).
+// ─── 4. The former default scene ───────────────────────────────────────────
+// `scenes/hello-face.marey`: the playground's default until it became a
+// scene with no `text`. This check was written and measured against it.
 if (!has("skip-default") && !only) {
-  const src = readFileSync(resolve("src/store/defaultScene.ts"), "utf8");
-  const marker = "DEFAULT_CODE = `";
-  const code = src.slice(src.indexOf(marker) + marker.length, src.lastIndexOf("`"));
-  const scenePath = `${outDir}/default-scene.marey`;
-  writeFileSync(scenePath, code);
+  const scenePath = resolve("tools/visual-check/scenes/hello-face.marey");
   // 6 s at 30 fps is 180 frames. `hello!` pops in at 2.3 s (frame 69).
   const frames = [0, 75, 90, 120, 150, 179];
   // The text's band: `wave` sits at (400, 78). Above y = 118 nothing else
@@ -407,7 +403,7 @@ if (!has("skip-default") && !only) {
   const region = "150,0,650,118";
   const positionFrames = (frame) => frame >= 150;
   const entry = { scene: scenePath, frames, inkRegion: region, positionJudgedAtFrames: frames.filter(positionFrames), criterion2: [], dotlottie: null };
-  summary.defaultScene = entry;
+  summary.helloFace = entry;
   console.log(`\ndefault scene: frames ${frames.join(",")}, ink region ${region}`);
   const lwDir = `${outDir}/default/lottie-web`;
   const lw = runLottieCheck(scenePath, frames, lwDir, ["--ink-region", region]);

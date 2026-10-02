@@ -1,5 +1,5 @@
-// Phase 5C Task 8 text fixture (text-check.mjs): the default scene's
-// `hello!` group (src/store/defaultScene.ts), with its structure, colours,
+// Phase 5C Task 8 text fixture (text-check.mjs): the former default scene's
+// `hello!` group (scenes/hello-face.marey), with its structure, colours,
 // rotation sway and scale pop kept. Only the timing is compressed (the pop
 // starts at 0.3 s rather than 2.3 s, the sway at 0.8 s rather than 2.8 s)
 // so a 2-second export exercises both, and the scene is cut to the band the

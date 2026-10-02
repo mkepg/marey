@@ -1,20 +1,7 @@
-/**
- * The scene loaded when there is no saved or shared document.
- *
- * It is the first thing a visitor sees, so it shows off what Marey is for —
- * choreographed animation handing off into a shared physics world — in one
- * friendly picture, and it declares a `duration` so the export buttons work
- * on it as loaded. `defaultScene.test.ts` checks that it compiles, fits in a
- * share link, and can be exported.
- *
- * The motion test card that used to live here, which exercises every
- * timeline path for eyeballing renderer changes, is now
- * `tools/visual-check/scenes/test-card.marey`.
- *
- * Kept in its own module so it can be imported without pulling in the store,
- * which touches `window.localStorage` at module load.
- */
-export const DEFAULT_CODE = `// ══ HELLO FROM MAREY ═══════════════════════════════════════
+// The playground's default scene until 2026-10-02, kept as a fixture: text-check.mjs and
+// lottie-click-check.mjs were measured on it, and it is a real scene with `text` in it.
+//
+// ══ HELLO FROM MAREY ═══════════════════════════════════════
 //
 // What you should see, in about six seconds:
 //
@@ -185,4 +172,3 @@ scene {
     }
   }
 }
-`;

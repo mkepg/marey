@@ -1,0 +1,170 @@
+// Dusk over layered hills: the sun sets, falls asleep and rises again.
+// Every animation loops on a period that divides 12 s, so the loop is seamless.
+
+let R      = 115         // the sun's radius; its face is measured in fractions of R
+let stroke = 0.052 * R   // brow and smile thickness
+let ink    = #232323
+let sink   = 165         // deep enough to hide the sun behind the hills
+
+// Sky bands, top to bottom, by their top edges. Night fades in over day.
+let edges  = [0, 80, 140, 200, 260, 320, 600]
+let day    = [#2b2d5c, #4a3f78, #7a4f8a, #b8608a, #e8846f, #f5b36b]
+let night  = [#0d0f2b, #131536, #1a1b41, #22214b, #2c2654, #382b5c]
+let starAt = [(42, 38), (196, 26), (446, 32), (658, 46), (770, 22), (118, 94),
+              (250, 112), (318, 64), (532, 86), (734, 110), (60, 150), (384, 128),
+              (596, 156), (700, 176), (210, 170), (140, 226), (300, 206), (470, 198),
+              (640, 236), (780, 200)]
+
+// Ridges, back to front: a base height, then two waves of
+// (amplitude, degrees per px, phase).
+let ridges = [[303, 20, 0.3, -60, 9, 0.55, -185], [384, 20, 0.35, 217, 7, 0.5, 60],
+              [446, 18, 0.4, 10, 7, 0.55, 120], [516, 16, 0.3, 234, 6, 0.6, 100]]
+let hills  = [#6b4a7a, #4a3560, #2f2444, #1c1630]
+
+// The smile: 13 points on a circular arc 0.354 R wide and 0.068 R deep.
+let half = 0.177 * R  let sag = 0.068 * R
+let rho  = (half * half + sag * sag) / (2 * sag)
+let st   = 7.0053        // a sixth of the arc's half-angle, asin(half / rho)
+
+template Sun() {
+  group body {
+    animate {
+      property: position, to: (0, sink), duration: 6, easing: easeInOut, loop: true, yoyo: true
+    }
+    circle rim  { position: (0, 0), radius: R, color: #feb93e }
+    circle disc { position: (0, -0.083 * R), radius: 0.958 * R, color: #fecd5e }
+
+    generate s in [-1, 1] {
+      circle eye {
+        position: (s * 0.281 * R, -0.385 * R), radius: 0.094 * R, color: ink
+        animate {
+          property: scale, to: (1, 0.15), duration: 6, easing: easeIn, loop: true, yoyo: true
+        }
+      }
+      // A brow is a bar with a round cap at each end. It lowers, and levels
+      // out of its 8.84-degree tilt, atan(0.021 / 0.135).
+      let bx = s * 0.3075 * R  let ex = s * 0.0675 * R  let ey = 0.0105 * R
+      group brow {
+        position: (bx, -0.5315 * R)
+        animate { property: position, to: (bx, -0.47 * R), duration: 6, loop: true, yoyo: true }
+        animate { property: rotation, to: -s * 8.84, duration: 6, loop: true, yoyo: true }
+        line bar {
+          position: (0, 0), points: [(-ex, -ey), (ex, ey)], thickness: stroke, color: ink
+        }
+        circle inner { position: (-ex, -ey), radius: stroke / 2, color: ink }
+        circle outer { position: (ex, ey), radius: stroke / 2, color: ink }
+      }
+    }
+
+    // The mouth pivots on the smile's lowest point, and softens towards it.
+    // origin (0.5, 1) puts the arc's lowest point, (0, rho), on that pivot.
+    group mouth {
+      position: (0, -0.099 * R)
+      animate { property: scale, to: (0.7, 0.7), duration: 6, loop: true, yoyo: true }
+      line smile {
+        position: (0, 0), origin: (0.5, 1), thickness: stroke, color: ink
+        points: [
+          (rho * sin(-6 * st), rho * cos(-6 * st)), (rho * sin(-5 * st), rho * cos(-5 * st)),
+          (rho * sin(-4 * st), rho * cos(-4 * st)), (rho * sin(-3 * st), rho * cos(-3 * st)),
+          (rho * sin(-2 * st), rho * cos(-2 * st)), (rho * sin(-st), rho * cos(-st)), (0, rho),
+          (rho * sin(st), rho * cos(st)), (rho * sin(2 * st), rho * cos(2 * st)),
+          (rho * sin(3 * st), rho * cos(3 * st)), (rho * sin(4 * st), rho * cos(4 * st)),
+          (rho * sin(5 * st), rho * cos(5 * st)), (rho * sin(6 * st), rho * cos(6 * st))
+        ]
+      }
+      generate s in [-1, 1] {
+        circle end {
+          position: (s * rho * sin(6 * st), rho * cos(6 * st) - rho)
+          radius: stroke / 2, color: ink
+        }
+      }
+    }
+  }
+}
+
+// A star twinkles on its own period, so stars drift in and out of step.
+template Star(size, beat) {
+  polygon spark {
+    position: (0, 0), color: #fff4d6
+    points: [(0, -size), (size / 4, -size / 4), (size, 0), (size / 4, size / 4),
+             (0, size), (-size / 4, size / 4), (-size, 0), (-size / 4, -size / 4)]
+    animate { property: alpha, to: 0.3, duration: beat, loop: true, yoyo: true }
+  }
+}
+
+// A bird is two gull wings flapping between the angles `up` and `down`.
+template Bird(up, down) {
+  circle body { position: (0, 0), radius: 2, color: #241b38 }
+  generate s in [-1, 1] {
+    group wing {
+      rotation: s * up
+      animate { property: rotation, to: s * down, duration: 0.25, loop: true, yoyo: true }
+      line arm {
+        position: (s * 7, -2.5), points: [(0, 0), (s * 6, -5), (s * 14, -3)]
+        thickness: 2.5, color: #241b38
+      }
+    }
+  }
+}
+
+scene {
+  size: (800, 600)
+  duration: 12
+  background: #2b2d5c
+
+  // ── Sky ──
+  generate c, i in day {
+    rectangle band {
+      position: (400, edges[i]), origin: (0.5, 0), color: c
+      size: (800, edges[i + 1] - edges[i])
+    }
+  }
+  group nightfall {
+    alpha: 0
+    animate { property: alpha, to: 1, duration: 6, loop: true, yoyo: true }
+    generate c, i in night {
+      rectangle dark {
+        position: (400, edges[i]), origin: (0.5, 0), color: c
+        size: (800, edges[i + 1] - edges[i])
+      }
+    }
+    // ── Stars ──
+    generate p, i in starAt {
+      use Star([3, 4.5, 3.5, 6, 2.5][i % 5], [0.5, 0.75, 1, 1.5][i % 4]) star { position: p }
+    }
+  }
+
+  // ── Sun ──
+  use Sun() sun { position: (500, 304) }
+
+  // ── Hills ── origin (0, 1) pins each ridge's bottom-left corner to `position`,
+  // so its points read as scene coordinates.
+  generate r, i in ridges {
+    let b = r[0]  let a = r[1]  let f = r[2]  let p = r[3]
+    let c = r[4]  let g = r[5]  let q = r[6]
+    polygon ridge {
+      position: (-50, 620), origin: (0, 1), color: hills[i]
+      points: [
+        (-50, b + a*sin(-50*f+p) + c*sin(-50*g+q)), (0, b + a*sin(p) + c*sin(q)),
+        (50, b + a*sin(50*f+p) + c*sin(50*g+q)), (100, b + a*sin(100*f+p) + c*sin(100*g+q)),
+        (150, b + a*sin(150*f+p) + c*sin(150*g+q)), (200, b + a*sin(200*f+p) + c*sin(200*g+q)),
+        (250, b + a*sin(250*f+p) + c*sin(250*g+q)), (300, b + a*sin(300*f+p) + c*sin(300*g+q)),
+        (350, b + a*sin(350*f+p) + c*sin(350*g+q)), (400, b + a*sin(400*f+p) + c*sin(400*g+q)),
+        (450, b + a*sin(450*f+p) + c*sin(450*g+q)), (500, b + a*sin(500*f+p) + c*sin(500*g+q)),
+        (550, b + a*sin(550*f+p) + c*sin(550*g+q)), (600, b + a*sin(600*f+p) + c*sin(600*g+q)),
+        (650, b + a*sin(650*f+p) + c*sin(650*g+q)), (700, b + a*sin(700*f+p) + c*sin(700*g+q)),
+        (750, b + a*sin(750*f+p) + c*sin(750*g+q)), (800, b + a*sin(800*f+p) + c*sin(800*g+q)),
+        (850, b + a*sin(850*f+p) + c*sin(850*g+q)), (850, 620), (-50, 620)
+      ]
+    }
+  }
+
+  // ── Birds ── the flock crosses every 6 s, off screen at both ends.
+  group flock {
+    position: (-130, 0)
+    animate { property: position, to: (930, 0), duration: 6, easing: linear, loop: true }
+    use Bird(0, 40) lead { position: (100, 150) }
+    use Bird(40, 0) left { position: (70, 168), scale: 0.85 }
+    use Bird(0, 40) last { position: (40, 140), scale: 0.75 }
+  }
+}

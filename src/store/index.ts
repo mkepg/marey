@@ -5,9 +5,10 @@ import {
   saveToStorage,
   encodeCode,
 } from "../lib/share";
-import { DEFAULT_CODE } from "./defaultScene";
+import duskHills from "../examples/dusk-hills.marey?raw";
 
-export { DEFAULT_CODE };
+/** The scene loaded when there is no saved or shared document. */
+export const DEFAULT_CODE: string = duskHills;
 
 export type Theme = "dark" | "light";
 export type CompileStatus = "idle" | "ok" | "error";

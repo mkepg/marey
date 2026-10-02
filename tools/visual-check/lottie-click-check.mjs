@@ -63,7 +63,7 @@
  *
  * Exit code is non-zero on a hard failure of any scenario (compound-logo
  * success path: download missing/wrong filename/unparseable JSON, or a
- * page/console error; default scene: no download, or a document without the
+ * page/console error; former default scene: no download, or a document without the
  * `hello` text layer as glyph paths under a nonzero fill; missing-glyph
  * scene: no toast, or a toast not starting with
  * "[LOTTIE_TEXT_MISSING_GLYPH]") — never on the pixel-compare numbers, which
@@ -110,36 +110,12 @@ mkdirSync(outDir, { recursive: true });
 const sceneSource = readFileSync(resolve(scenePath), "utf8");
 
 /**
- * `src/store/defaultScene.ts`'s `DEFAULT_CODE` is a plain `export const
- * DEFAULT_CODE = \`...\`;` template literal with no `${...}` interpolation
- * (grepped: zero matches). Measured directly, not assumed: the file's own
- * JSDoc header ALSO contains several markdown-style backtick pairs (e.g.
- * `` `defaultScene.test.ts` ``), ten backticks total in the whole file — so
- * "between the first and the last backtick anywhere in the file" (this
- * function's first version) silently captured from the header comment's
- * OWN first backtick instead, and fed the compiler a string starting
- * mid-JSDoc, which surfaced immediately as a real `LEX` error in scenario
- * B's own toast rather than passing silently. Anchoring on the literal text
- * `DEFAULT_CODE = \`` finds the true opening delimiter unambiguously; the
- * LAST backtick in the file is still the correct closing one, since nothing
- * follows the template literal (confirmed: the file's last line is exactly
- * `` `; ``).
+ * Scenario B's scene is the playground's former default, kept as the fixture
+ * `scenes/hello-face.marey` when the default became a scene with no `text`.
+ * It is the scene this check was written and measured against, and its
+ * `hello!` group is what scenario B looks for.
  */
-function extractDefaultCode() {
-  const src = readFileSync(resolve("src/store/defaultScene.ts"), "utf8");
-  const marker = "DEFAULT_CODE = `";
-  const markerIndex = src.indexOf(marker);
-  const last = src.lastIndexOf("`");
-  if (markerIndex === -1 || last === -1) {
-    throw new Error("could not find DEFAULT_CODE's template literal in src/store/defaultScene.ts");
-  }
-  const first = markerIndex + marker.length - 1;
-  if (last <= first) {
-    throw new Error("DEFAULT_CODE's closing backtick was not after its opening one -- file shape changed");
-  }
-  return src.slice(first + 1, last);
-}
-const defaultCode = extractDefaultCode();
+const defaultCode = readFileSync(resolve("tools/visual-check/scenes/hello-face.marey"), "utf8");
 
 const LOTTIE_BUTTON_SELECTOR = '[title="Export Lottie animation (JSON)"]';
 
@@ -352,7 +328,7 @@ const report = { url, scene: scenePath, fps };
   await page.close();
 }
 
-// ─── Scenario B: the default scene (declares `text`), now exported ─────────
+// ─── Scenario B: the former default scene (declares `text`), exported ─────
 {
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   const consoleErrors = [];
@@ -363,7 +339,7 @@ const report = { url, scene: scenePath, fps };
   await page.goto(codeUrl(defaultCode), { waitUntil: "load" });
   await page.locator(LOTTIE_BUTTON_SELECTOR).waitFor({ state: "visible", timeout: 20_000 });
 
-  // The default scene's 6 s export fetches the font and outlines `hello!`
+  // The former default scene's 6 s export fetches the font and outlines `hello!`
   // before sampling 180 frames, so this allows longer than scenario A.
   const [download] = await Promise.all([
     page.waitForEvent("download", { timeout: 60_000 }),
