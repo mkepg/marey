@@ -4,8 +4,11 @@
  * never more than 60% of the viewport height.
  */
 
-/** The preview's `--plate-margin` on phones (Preview.module.scss). */
-export const PHONE_PLATE_MARGIN = 12;
+/**
+ * The preview's `--plate-margin` on phones (Preview.module.scss): the inset on
+ * the top and sides. The bottom inset is this plus the caption's room.
+ */
+export const PHONE_PLATE_MARGIN = 14;
 
 /** The caption's room under the frame: a 6 px gap and a 16 px line. */
 export const CAPTION_ROOM = 22;

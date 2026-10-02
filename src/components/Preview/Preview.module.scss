@@ -23,8 +23,10 @@
     background-size: 35px 35px, 35px 35px, 7px 7px, 7px 7px;
   }
 
+  // 14 px on phones: the light theme's crop marks reach 13 px outside the
+  // frame, so they stay on screen when the plate spans the full width.
   @media (max-width: 759px) {
-    --plate-margin: 12px;
+    --plate-margin: 14px;
   }
 }
 
@@ -46,10 +48,11 @@
   pointer-events: none;
 }
 
-// The phone margin (12 px) is narrower than the caption (a 6 px gap and a
+// The phone margin (14 px) is narrower than the caption (a 6 px gap and a
 // 16 px line), so on phones the host also keeps the caption's room clear
-// below it. Otherwise a plate that fills the host's height, as it does when
-// the phone preview reaches its 60vh cap, would push the caption out of view.
+// below it, for a 36 px bottom inset. Otherwise a plate that fills the
+// host's height, as it does when the phone preview reaches its 60vh cap,
+// would push the caption out of view.
 @media (max-width: 759px) {
   .host,
   .plateLayer {

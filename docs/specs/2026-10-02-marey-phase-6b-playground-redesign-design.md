@@ -104,7 +104,8 @@ scene laid on it as a **plate**.
 
 **Where the plate sits.** The preview's host element (the element the
 renderer draws into) is inset from the pane's edges by a margin: 24 px on
-desktop and 12 px on phones. The renderer's existing `fit` logic
+desktop. On phones it is 14 px on the top and sides and 36 px at the bottom
+(14 px plus the caption's 22 px). The renderer's existing `fit` logic
 (`src/compiler/renderer/adapter.ts`, `updateLayout`) maps the scene into that
 inset box, unchanged. The canvas background stays transparent, so the surface
 shows wherever the scene is not.

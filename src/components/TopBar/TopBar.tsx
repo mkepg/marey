@@ -246,8 +246,11 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
     return true;
   };
 
+  // Leaving New cancels its confirmation, after a short grace period so a
+  // second click that moves focus still counts.
   const handleNewBlur = (): void => {
-    window.setTimeout(() => setConfirmingNew(false), 150);
+    window.clearTimeout(newTimer.current);
+    newTimer.current = window.setTimeout(() => setConfirmingNew(false), 150);
   };
 
   const handleExampleChoice = (id: ExampleId): void => {
@@ -274,10 +277,11 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
   // and shows `exportLabelFor`'s progress label for it.
   const running = progress ? EXPORT_OPTIONS.find((o) => o.kind === progress.kind) : undefined;
   const runningLabel = progress ? exportLabelFor(progress.kind, progress) : "";
-  const runningName = running
+  // The running export, as a phrase: "MP4 video, 42%" or "Lottie animation".
+  const runningWhat = running
     ? running.kind === "lottie"
-      ? "exporting Lottie animation"
-      : `exporting ${running.label}, ${runningLabel}`
+      ? "Lottie animation"
+      : `${running.label}, ${runningLabel}`
     : "";
   const fraction = progress && progress.total > 0 ? progress.done / progress.total : null;
 
@@ -389,7 +393,7 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
               onKeyDown={moreMenu.onTriggerKeyDown}
               aria-haspopup="menu"
               aria-expanded={moreMenu.open}
-              aria-label={running ? `More, ${runningName}` : "More"}
+              aria-label={running ? `More, exporting ${runningWhat}` : "More"}
               title="More"
             >
               <MoreIcon />
@@ -527,7 +531,7 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
               disabled={isExporting}
               aria-haspopup="menu"
               aria-expanded={exportMenu.open}
-              aria-label={running ? `E${runningName.slice(1)}` : "Export scene"}
+              aria-label={running ? `Exporting ${runningWhat}` : "Export scene"}
               title="Export as video, APNG or Lottie"
             >
               {running ? `${SHORT_NAME[running.kind]} ${runningLabel}` : "Export"}

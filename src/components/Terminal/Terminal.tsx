@@ -92,7 +92,7 @@ export const Terminal: FunctionComponent = () => {
         className={styles.toggle}
         data-log-toggle
         aria-expanded={open}
-        aria-controls={BODY_ID}
+        aria-controls={open ? BODY_ID : undefined}
         onClick={() => setOpen(!open)}
       >
         <span className={`${styles.dot} ${dotMod}`} aria-hidden="true" />
