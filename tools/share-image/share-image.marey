@@ -1,125 +1,153 @@
-// The link-preview image: public/og-image.png is one frame of this scene.
-// It is the playground's default scene at the 1200x630 size link previews
-// use, with the name and tagline beside it.
+// The link-preview image: public/og-image.png is this scene's only frame.
+// The playground's default scene, "Dusk over layered hills", sits as a framed
+// plate beside the name and tagline, at the 1200x630 size link previews use.
+// Its geometry and colours are copied from src/examples/dusk-hills.marey: the
+// sun awake, as at t = 0, and the three birds stopped in mid-flight.
 //
-// To regenerate, with the dev server running on 5199:
+// To regenerate:
 //
-//   node tools/visual-check/export-check.mjs \
-//     --scene tools/share-image/share-image.marey \
-//     --fps 10 --duration 2 --out .visual-check/share-image
+//   npm run build:export-page && npm run build:cli
+//   node bin/marey.mjs export tools/share-image/share-image.marey \
+//     --format png --fps 1 --out .visual-check/share-image
 //
-// then copy frame_0016.png (t = 1.6s, confetti mid-air) to public/og-image.png.
+// then copy .visual-check/share-image/frame_0000.png to public/og-image.png.
 
-let sun    = #facc15
-let rim    = #f59e0b
-let ink    = #3b2410
-let blush  = #fb7185
-let party  = [#f472b6, #38bdf8, #a78bfa, #34d399, #fb923c]
+let mat    = #16171a
+let hair   = #26282e
+let R      = 115
+let stroke = 0.052 * R
+let ink    = #232323
 
-let cx = 920
-let cy = 330
+// The plate: the 800x600 scene at 0.8, its top-left corner at (px, py).
+let k  = 0.8
+let px = 500
+let py = 75
 
-template Eye() {
-  group lid {
-    circle pupil     { position: (0, 0),  radius: 19, color: ink }
-    circle highlight { position: (6, -7), radius: 6,  color: #ffffff }
+let edges  = [0, 80, 140, 200, 260, 320, 600]
+let day    = [#2b2d5c, #4a3f78, #7a4f8a, #b8608a, #e8846f, #f5b36b]
+let ridges = [[500, 84, 324, 24, 155, 90, 12, 97, 0],
+              [470, 108, 392, 26, 137, 250, 9, 71, 40],
+              [535, 132, 455, 26, 121, 10, 8, 53, 200],
+              [440, 160, 522, 24, 109, 290, 6, 47, 120]]
+let hills  = [#6b4a7a, #4a3560, #2f2444, #1c1630]
+
+let half = 0.177 * R  let sag = 0.068 * R
+let rho  = (half * half + sag * sag) / (2 * sag)
+let st   = 7.0053
+
+template Sun() {
+  circle rim  { position: (0, 0), radius: R, color: #feb93e }
+  circle disc { position: (0, -0.083 * R), radius: 0.958 * R, color: #fecd5e }
+  generate s in [-1, 1] {
+    circle eye { position: (s * 0.281 * R, -0.385 * R), radius: 0.094 * R, color: ink }
+    let ex = s * 0.0675 * R  let ey = 0.0105 * R
+    group brow {
+      position: (s * 0.3075 * R, -0.5315 * R)
+      line bar { position: (0, 0), points: [(-ex, -ey), (ex, ey)], thickness: stroke, color: ink }
+      circle inner { position: (-ex, -ey), radius: stroke / 2, color: ink }
+      circle outer { position: (ex, ey), radius: stroke / 2, color: ink }
+    }
+  }
+  group mouth {
+    position: (0, -0.099 * R)
+    line smile {
+      position: (0, 0), origin: (0.5, 1), thickness: stroke, color: ink
+      points: [
+        (rho * sin(-6 * st), rho * cos(-6 * st)), (rho * sin(-5 * st), rho * cos(-5 * st)),
+        (rho * sin(-4 * st), rho * cos(-4 * st)), (rho * sin(-3 * st), rho * cos(-3 * st)),
+        (rho * sin(-2 * st), rho * cos(-2 * st)), (rho * sin(-st), rho * cos(-st)), (0, rho),
+        (rho * sin(st), rho * cos(st)), (rho * sin(2 * st), rho * cos(2 * st)),
+        (rho * sin(3 * st), rho * cos(3 * st)), (rho * sin(4 * st), rho * cos(4 * st)),
+        (rho * sin(5 * st), rho * cos(5 * st)), (rho * sin(6 * st), rho * cos(6 * st))
+      ]
+    }
+    generate s in [-1, 1] {
+      circle end {
+        position: (s * rho * sin(6 * st), rho * cos(6 * st) - rho)
+        radius: stroke / 2, color: ink
+      }
+    }
+  }
+}
+
+template Bird(up) {
+  circle body { position: (0, 0), radius: 2, color: #241b38 }
+  generate s in [-1, 1] {
+    group wing {
+      rotation: s * up
+      line arm {
+        position: (s * 7, -2.5), points: [(0, 0), (s * 6, -5), (s * 14, -3)]
+        thickness: 2.5, color: #241b38
+      }
+    }
   }
 }
 
 scene {
   size: (1200, 630)
-  background: #0a0e1a
-  duration: 2
+  background: mat
+  duration: 1
 
+  // ── The plate ── the scene in its own coordinates, scaled into place.
+  group plate {
+    position: (px, py)
+    scale: (k, k)
+
+    generate c, i in day {
+      rectangle band {
+        position: (400, edges[i]), origin: (0.5, 0), color: c
+        size: (800, edges[i + 1] - edges[i])
+      }
+    }
+
+    group flock {
+      position: (110, 0)
+      use Bird(0) lead { position: (100, 150) }
+      use Bird(40) left { position: (70, 168), scale: 0.85 }
+      use Bird(0) last { position: (40, 140), scale: 0.75 }
+    }
+
+    use Sun() sun { position: (500, 304) }
+
+    generate r, i in ridges {
+      let x = r[0]  let w = r[1]  let b = r[2]  let a = r[3]  let f = r[4]
+      let p = r[5]  let c = r[6]  let g = r[7]  let q = r[8]
+      polygon ridge {
+        position: (x-6*w, 620), origin: (0, 1), color: hills[i]
+        points: [
+          (x-6*w, b + a*sin(p-6*f) + c*sin(q-6*g)), (x-5*w, b + a*sin(p-5*f) + c*sin(q-5*g)),
+          (x-4*w, b + a*sin(p-4*f) + c*sin(q-4*g)), (x-3*w, b + a*sin(p-3*f) + c*sin(q-3*g)),
+          (x-2*w, b + a*sin(p-2*f) + c*sin(q-2*g)), (x-w, b + a*sin(p-f) + c*sin(q-g)),
+          (x, b + a*sin(p) + c*sin(q)), (x+w, b + a*sin(p+f) + c*sin(q+g)),
+          (x+2*w, b + a*sin(p+2*f) + c*sin(q+2*g)), (x+3*w, b + a*sin(p+3*f) + c*sin(q+3*g)),
+          (x+4*w, b + a*sin(p+4*f) + c*sin(q+4*g)), (x+5*w, b + a*sin(p+5*f) + c*sin(q+5*g)),
+          (x+6*w, b + a*sin(p+6*f) + c*sin(q+6*g)), (x+6*w, 620), (x-6*w, 620)
+        ]
+      }
+    }
+  }
+
+  // ── The mat ── covers whatever of the ridges reaches past the plate's edges,
+  // then a hairline frames it, as the playground frames its preview.
+  let pw = 800 * k  let ph = 600 * k
+  rectangle matL { position: (0, 0), origin: (0, 0), size: (px, 630), color: mat }
+  rectangle matR { position: (px + pw, 0), origin: (0, 0), size: (1200 - px - pw, 630), color: mat }
+  rectangle matT { position: (0, 0), origin: (0, 0), size: (1200, py), color: mat }
+  rectangle matB { position: (0, py + ph), origin: (0, 0), size: (1200, 630 - py - ph), color: mat }
+  rectangle frameT { position: (px - 1, py - 1), origin: (0, 0), size: (pw + 2, 1), color: hair }
+  rectangle frameB { position: (px - 1, py + ph), origin: (0, 0), size: (pw + 2, 1), color: hair }
+  rectangle frameL { position: (px - 1, py - 1), origin: (0, 0), size: (1, ph + 2), color: hair }
+  rectangle frameR { position: (px + pw, py - 1), origin: (0, 0), size: (1, ph + 2), color: hair }
+
+  // ── The name ──
   text name {
-    position: (80, 150)
-    origin: (0, 0)
-    content: "Marey"
-    fontSize: 112
-    color: #ffffff
+    position: (68, 118), origin: (0, 0), content: "Marey", fontSize: 112, color: #ffffff
   }
-
   text tagline {
-    position: (84, 310)
-    origin: (0, 0)
+    position: (74, 280), origin: (0, 0), fontSize: 24, color: #9aa0ab
     content: "Deterministic 2D motion\ngraphics, written as code."
-    fontSize: 30
-    color: #94a3b8
   }
-
   text url {
-    position: (84, 500)
-    origin: (0, 0)
-    content: "marey.netlify.app"
-    fontSize: 24
-    color: #a78bfa
-  }
-
-  generate k in 0 to 5 {
-    let angle = k * 60 - 30
-    polygon sparkle {
-      position: (cx + 230 * cos(angle), cy + 180 * sin(angle))
-      points: [(0, -14), (4, -4), (14, 0), (4, 4), (0, 14), (-4, 4), (-14, 0), (-4, -4)]
-      color: #fde68a
-      alpha: 0.35 + k * 0.1
-    }
-  }
-
-  // Confetti bursts from behind the face and hands off to physics, so the
-  // frame catches it scattering under gravity rather than frozen in a ring.
-  generate i in 0 to 23 {
-    let angle = -165 + i * 150 / 23
-    let reach = 170 + (i % 3) * 30
-    rectangle bit {
-      position: (cx + 8 * cos(angle), cy + 8 * sin(angle))
-      size: (14, 8)
-      rotation: i * 37
-      color: party[i % 5]
-      layer: -1
-      animate {
-        property: position
-        to: (cx + reach * cos(angle), cy + reach * sin(angle))
-        duration: 0.55
-        delay: 0.5
-        easing: easeOut
-        handoff: true
-      }
-      physics {
-        gravity: (0, 520)
-        airDrag: 0.02
-        bounce: 0.3
-        collideBounds: true
-        duration: indefinitely
-      }
-    }
-  }
-
-  group face {
-    position: (cx, cy)
-    rotation: -4
-
-    circle edge { position: (0, 0), radius: 158, color: rim }
-    circle head { position: (0, 0), radius: 150, color: sun }
-    circle cheekL { position: (-92, 34), radius: 26, color: blush, alpha: 0.55 }
-    circle cheekR { position: (92, 34),  radius: 26, color: blush, alpha: 0.55 }
-
-    use Eye() eyeL { position: (-52, -38) }
-    use Eye() eyeR { position: (52, -38) }
-
-    // An arc on a circle of radius 78, from 25 to 155 degrees.
-    line smile {
-      position: (0, 48)
-      points: [
-        (78 * cos(25),  78 * sin(25)),  (78 * cos(35),  78 * sin(35)),
-        (78 * cos(45),  78 * sin(45)),  (78 * cos(56),  78 * sin(56)),
-        (78 * cos(67),  78 * sin(67)),  (78 * cos(78),  78 * sin(78)),
-        (78 * cos(90),  78 * sin(90)),
-        (78 * cos(102), 78 * sin(102)), (78 * cos(113), 78 * sin(113)),
-        (78 * cos(124), 78 * sin(124)), (78 * cos(135), 78 * sin(135)),
-        (78 * cos(145), 78 * sin(145)), (78 * cos(155), 78 * sin(155))
-      ]
-      thickness: 12
-      color: ink
-    }
+    position: (74, 520), origin: (0, 0), content: "marey.netlify.app", fontSize: 22, color: #a99bff
   }
 }
