@@ -254,7 +254,8 @@ valleys. They are paler as they recede. From back to front they are
 
 **The arc.** One cycle is 12 s.
 - **0–6 s:** the sun sinks until it is completely hidden behind the ridges. On
-  the way down its eyes close (scale y toward 0.15), its brows lower and level,
+  the way down its eyes close (scale y toward 0.15), its brows lower and their
+  outer ends droop by 10°,
   and its smile softens (scales down). The night set fades in, the stars fade
   in and twinkle, and the birds cross the sky with flapping wings.
 - **6–12 s:** every one of those changes plays back, so the cycle ends where
