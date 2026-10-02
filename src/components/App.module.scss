@@ -1,11 +1,13 @@
 .app {
+  --bar-h: 48px;
+
   display: flex;
   flex-direction: column;
   height: 100vh;
   width: 100vw;
   overflow: hidden;
   background: var(--bg-app);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   color: var(--text-primary);
 }
 
@@ -14,11 +16,6 @@
   flex: 1;
   overflow: hidden;
   min-height: 0;
-
-  /* Stack panes vertically on mobile */
-  @media (max-width: 768px) {
-    flex-direction: column;
-  }
 }
 
 .leftPane {
@@ -26,11 +23,6 @@
   flex-direction: column;
   overflow: hidden;
   background: var(--bg-pane);
-
-  @media (max-width: 768px) {
-    width: 100% !important;
-    height: 50% !important;
-  }
 }
 
 .editorWrap {
@@ -43,7 +35,6 @@
   display: flex;
   flex-direction: column;
   background: var(--bg-terminal);
-  border-top: 1px solid var(--border);
   overflow: hidden;
   min-height: 0;
   flex-shrink: 0;
@@ -54,9 +45,48 @@
   flex-direction: column;
   overflow: hidden;
   background: var(--bg-preview);
+}
 
-  @media (max-width: 768px) {
-    width: 100% !important;
-    height: 50% !important;
+// ─── Phones: scene first, then code, then the folded log ────────────────────
+// The page scrolls rather than squeezing three panes into one screen: the
+// preview takes up to 60% of the viewport and the editor at least 45%.
+.phone {
+  height: auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  overflow: visible;
+
+  .split {
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .rightPane {
+    order: -1;
+    flex: none;
+    width: 100%;
+    height: var(--preview-h);
+  }
+
+  .leftPane {
+    flex: 1 0 auto;
+    width: 100%;
+    overflow: visible;
+  }
+
+  .editorWrap {
+    // Fill what the preview and the log line leave of the first screen, and
+    // never less than 45% of the viewport (spec 6B §4). The hairline above
+    // it is added on top, so the editor itself keeps the full 45vh.
+    box-sizing: content-box;
+    height: max(45vh, calc(100vh - var(--bar-h) - var(--preview-h) - 46px));
+    height: max(45vh, calc(100dvh - var(--bar-h) - var(--preview-h) - 46px));
+    border-top: 1px solid var(--border);
+  }
+
+  .terminal {
+    flex: none;
+    overflow: visible;
   }
 }

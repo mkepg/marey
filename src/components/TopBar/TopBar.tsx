@@ -6,6 +6,7 @@ import { useExport, type ExportKind } from "../../hooks/useExport";
 import { EXAMPLES, type ExampleId } from "../../examples";
 import { exportLabelFor } from "./exportLabel";
 import { menuKey } from "./menuKeys";
+import { useIsNarrow } from "../../hooks/useIsNarrow";
 import styles from "./TopBar.module.scss";
 
 const SunIcon: FunctionComponent = () => (
@@ -53,13 +54,6 @@ const NewFileIcon: FunctionComponent = () => (
   </svg>
 );
 
-const ExampleIcon: FunctionComponent = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-  </svg>
-);
-
 const VideoIcon: FunctionComponent = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="2" y="6" width="14" height="12" rx="2" />
@@ -79,14 +73,6 @@ const LottieIcon: FunctionComponent = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 12a9 9 0 1 1 9 9" />
     <circle cx="12" cy="21" r="1.5" fill="currentColor" stroke="none" />
-  </svg>
-);
-
-const ExportIcon: FunctionComponent = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-    <polyline points="7 10 12 15 17 10" />
-    <line x1="12" y1="15" x2="12" y2="3" />
   </svg>
 );
 
@@ -111,7 +97,7 @@ const EXPORT_OPTIONS: readonly ExportOption[] = [
   { kind: "lottie", label: "Lottie",     detail: "vector JSON",       Icon: LottieIcon },
 ];
 
-const MENU_ITEM = '[role="menuitem"]';
+const MENU_ITEM = '[role="menuitem"], [role="menuitemcheckbox"]';
 
 /** How long a "Replace your code?" prompt waits for a second choice. */
 const CONFIRM_MS = 3_000;
@@ -177,11 +163,37 @@ function useMenu(onClose?: () => void) {
   return { open, setOpen, close, wrapRef, menuRef, triggerRef, onMenuKeyDown, onTriggerKeyDown };
 }
 
+const MoreIcon: FunctionComponent = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <circle cx="3"  cy="8" r="1.4" />
+    <circle cx="8"  cy="8" r="1.4" />
+    <circle cx="13" cy="8" r="1.4" />
+  </svg>
+);
+
+/** The short name a running export shows in place of its menu button's label. */
+const SHORT_NAME: Readonly<Record<ExportKind, string>> = {
+  mp4: "MP4",
+  webm: "WebM",
+  apng: "APNG",
+  lottie: "Lottie",
+};
+
+// Generated at build time by vite-plugins/thirdPartyLicenses.ts.
+const LICENSES_HREF = `${import.meta.env.BASE_URL}third-party-licenses.txt`;
+
 interface TopBarProps {
   onRun: () => void;
 }
 
+/**
+ * The top bar (spec 6B §4). On desktop: the wordmark and the compile status
+ * on the left; auto-run, Examples, New, Share, Export, the theme toggle and
+ * Run on the right. On phones it keeps the wordmark, the status dot,
+ * Examples and Run, and folds everything else into the ⋯ (More) menu.
+ */
 export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
+  const narrow      = useIsNarrow();
   const theme       = useAppStore((s) => s.theme);
   const status      = useAppStore((s) => s.compileStatus);
   const autoRun     = useAppStore((s) => s.autoRun);
@@ -196,6 +208,7 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
   const { exportScene, progress } = useExport();
 
   const [confirmingNew, setConfirmingNew] = useState(false);
+  const newTimer = useRef<number | undefined>(undefined);
   const [confirmingId, setConfirmingId] = useState<ExampleId | null>(null);
   const confirmTimer = useRef<number | undefined>(undefined);
 
@@ -204,28 +217,37 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
     setConfirmingId(null);
   };
 
+  const clearNewConfirm = (): void => {
+    window.clearTimeout(newTimer.current);
+    setConfirmingNew(false);
+  };
+
   const exportMenu  = useMenu();
   const exampleMenu = useMenu(clearConfirm);
+  const moreMenu    = useMenu(clearNewConfirm);
 
   // An empty editor has nothing to lose, so skip the confirmation there —
   // that is the case a first-timer who cleared the editor is most likely in.
   const exampleNeedsConfirm = code.trim().length > 0;
 
   const dotMod     = status === "ok" ? styles.ok : status === "error" ? styles.error : "";
-  const statusText = status === "ok" ? "compiled" : status === "error" ? "error" : "ready";
+  const statusText = status === "ok" ? "compiled" : status === "error" ? "error" : "idle";
 
-  const handleNewClick = (): void => {
+  /** New asks once, then clears the editor on a second choice within 3 s. Returns true once it has cleared. */
+  const chooseNew = (): boolean => {
     if (!confirmingNew) {
+      window.clearTimeout(newTimer.current);
       setConfirmingNew(true);
-      setTimeout(() => setConfirmingNew(false), 3_000);
-      return;
+      newTimer.current = window.setTimeout(() => setConfirmingNew(false), CONFIRM_MS);
+      return false;
     }
-    setConfirmingNew(false);
+    clearNewConfirm();
     newFile();
+    return true;
   };
 
   const handleNewBlur = (): void => {
-    setTimeout(() => setConfirmingNew(false), 150);
+    window.setTimeout(() => setConfirmingNew(false), 150);
   };
 
   const handleExampleChoice = (id: ExampleId): void => {
@@ -240,8 +262,11 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
     loadExample(id);
   };
 
+  // Export runs from the Export menu on desktop and from ⋯ on phones; either
+  // way the menu closes and focus goes back to its button first.
   const handleExportClick = (kind: ExportKind): void => {
-    exportMenu.close();
+    if (isExporting) return;
+    (narrow ? moreMenu : exportMenu).close();
     void exportScene(kind);
   };
 
@@ -249,187 +274,295 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
   // and shows `exportLabelFor`'s progress label for it.
   const running = progress ? EXPORT_OPTIONS.find((o) => o.kind === progress.kind) : undefined;
   const runningLabel = progress ? exportLabelFor(progress.kind, progress) : "";
+  const runningName = running
+    ? running.kind === "lottie"
+      ? "exporting Lottie animation"
+      : `exporting ${running.label}, ${runningLabel}`
+    : "";
+  const fraction = progress && progress.total > 0 ? progress.done / progress.total : null;
+
+  const exampleMenuEl = (
+    <div className={styles.menuWrap} ref={exampleMenu.wrapRef}>
+      <button
+        ref={exampleMenu.triggerRef}
+        className={styles.btn}
+        onClick={() => exampleMenu.setOpen(!exampleMenu.open)}
+        onKeyDown={exampleMenu.onTriggerKeyDown}
+        aria-haspopup="menu"
+        aria-expanded={exampleMenu.open}
+        aria-label="Examples"
+        title="Load an example scene"
+      >
+        Examples
+        <ChevronIcon />
+      </button>
+
+      {exampleMenu.open && (
+        <div
+          ref={exampleMenu.menuRef}
+          className={`${styles.menu} ${styles.menuLeft} ${styles.exampleMenu}`}
+          role="menu"
+          aria-label="Examples"
+          onKeyDown={exampleMenu.onMenuKeyDown}
+        >
+          {EXAMPLES.map((example) => {
+            const confirming = confirmingId === example.id;
+            return (
+              <button
+                key={example.id}
+                className={`${styles.menuItem} ${styles.exampleItem}${confirming ? ` ${styles.exampleConfirm}` : ""}`}
+                role="menuitem"
+                tabIndex={-1}
+                onClick={() => handleExampleChoice(example.id)}
+              >
+                <span className={styles.exampleTitle}>
+                  {confirming ? "Replace your code?" : example.title}
+                </span>
+                <span className={styles.exampleDescription}>
+                  {confirming ? `Choose again to load ${example.title}.` : example.description}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
+  const exportItems = EXPORT_OPTIONS.map((option) => (
+    <button
+      key={option.kind}
+      className={styles.menuItem}
+      role="menuitem"
+      tabIndex={-1}
+      aria-disabled={isExporting || undefined}
+      onClick={() => handleExportClick(option.kind)}
+    >
+      <option.Icon />
+      <span className={styles.menuLabel}>{option.label}</span>
+      <span className={styles.menuDetail}>{option.detail}</span>
+    </button>
+  ));
+
+  const licensesItem = (onChoose: () => void) => (
+    <a
+      className={`${styles.menuItem} ${styles.menuLink}`}
+      role="menuitem"
+      tabIndex={-1}
+      href={LICENSES_HREF}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={onChoose}
+      aria-label="Third-party licenses (opens in a new tab)"
+    >
+      <span className={styles.menuIconSpace} aria-hidden="true" />
+      <span className={styles.menuLabel}>Third-party licenses</span>
+    </a>
+  );
+
+  const runButton = (
+    <button className={styles.btnRun} onClick={onRun} aria-label="Run (Ctrl+Enter)" title="Run (Ctrl+Enter)">
+      <RunIcon />
+      Run
+    </button>
+  );
 
   return (
-    <header className={styles.topBar}>
+    <header className={`${styles.topBar}${narrow ? ` ${styles.narrow}` : ""}`} data-topbar>
       <div className={styles.left}>
         <span className={styles.logo}>Marey</span>
-        <div className={styles.status} role="status">
-          <div className={`${styles.statusDot} ${dotMod}`} />
-          <span className={styles.statusLabel}>{statusText}</span>
+        <div className={styles.status} role="status" title={narrow ? statusText : undefined}>
+          <span className={`${styles.statusDot} ${dotMod}`} aria-hidden="true" />
+          <span className={narrow ? styles.visuallyHidden : styles.statusLabel}>{statusText}</span>
         </div>
       </div>
 
-      <div className={styles.right}>
-        <div className={styles.autoRunControl} title="Compile automatically as you type">
-          <span className={styles.autoRunLabel}>auto-run</span>
-          <button
-            className={`${styles.switch} ${autoRun ? styles.active : ""}`}
-            onClick={() => setAutoRun(!autoRun)}
-            aria-pressed={autoRun}
-            aria-label="Auto-run"
-            role="switch"
-          >
-            <div className={styles.knob} />
-          </button>
-        </div>
+      {narrow ? (
+        <div className={styles.right}>
+          {exampleMenuEl}
 
-        <div className={styles.divider} />
-
-        <button
-          className={`${styles.btnIcon}${confirmingNew ? ` ${styles.btnConfirm}` : ""}`}
-          onClick={handleNewClick}
-          onBlur={handleNewBlur}
-          aria-label={confirmingNew ? "Click again to confirm new file" : "New file"}
-          title={confirmingNew ? "Click again to confirm — clears editor" : "New file"}
-        >
-          <NewFileIcon />
-          {confirmingNew ? "confirm?" : <span className={styles.btnText}>new</span>}
-        </button>
-
-        <div className={styles.menuWrap} ref={exampleMenu.wrapRef}>
-          <button
-            ref={exampleMenu.triggerRef}
-            className={styles.btnIcon}
-            onClick={() => exampleMenu.setOpen(!exampleMenu.open)}
-            onKeyDown={exampleMenu.onTriggerKeyDown}
-            aria-haspopup="menu"
-            aria-expanded={exampleMenu.open}
-            aria-label="Examples"
-            title="Load an example scene"
-          >
-            <ExampleIcon />
-            <span className={styles.btnText}>Examples</span>
-            <ChevronIcon />
-          </button>
-
-          {exampleMenu.open && (
-            <div
-              ref={exampleMenu.menuRef}
-              className={`${styles.menu} ${styles.menuLeft} ${styles.exampleMenu}`}
-              role="menu"
-              aria-label="Examples"
-              onKeyDown={exampleMenu.onMenuKeyDown}
+          <div className={styles.menuWrap} ref={moreMenu.wrapRef}>
+            <button
+              ref={moreMenu.triggerRef}
+              className={`${styles.btn} ${styles.btnSquare}${running ? ` ${styles.btnExporting}` : ""}`}
+              onClick={() => moreMenu.setOpen(!moreMenu.open)}
+              onKeyDown={moreMenu.onTriggerKeyDown}
+              aria-haspopup="menu"
+              aria-expanded={moreMenu.open}
+              aria-label={running ? `More, ${runningName}` : "More"}
+              title="More"
             >
-              {EXAMPLES.map((example) => {
-                const confirming = confirmingId === example.id;
-                return (
-                  <button
-                    key={example.id}
-                    className={`${styles.menuItem} ${styles.exampleItem}${confirming ? ` ${styles.exampleConfirm}` : ""}`}
-                    role="menuitem"
-                    tabIndex={-1}
-                    onClick={() => handleExampleChoice(example.id)}
-                  >
-                    <span className={styles.exampleTitle}>
-                      {confirming ? "Replace your code?" : example.title}
-                    </span>
-                    <span className={styles.exampleDescription}>
-                      {confirming ? `Choose again to load ${example.title}.` : example.description}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+              <MoreIcon />
+            </button>
 
-        <div className={styles.tooltipWrap}>
-          <button
-            className={styles.btnIcon}
-            onClick={() => { void handleShare(); }}
-            disabled={isTooLarge}
-            aria-label={isTooLarge ? "Code too large to share via URL" : "Share — copy link to clipboard"}
-            aria-disabled={isTooLarge}
-            title={isTooLarge ? undefined : "Share — copy link to clipboard"}
-          >
-            <ShareIcon />
-            <span className={styles.btnText}>share</span>
-          </button>
-          {isTooLarge && (
-            <span className={styles.tooltip} role="tooltip">
-              Code too large to share via URL
-            </span>
-          )}
-        </div>
-
-        <div className={styles.menuWrap} ref={exportMenu.wrapRef}>
-          <button
-            ref={exportMenu.triggerRef}
-            className={`${styles.btnIcon}${running ? ` ${styles.btnExporting}` : ""}`}
-            onClick={() => exportMenu.setOpen(!exportMenu.open)}
-            onKeyDown={exportMenu.onTriggerKeyDown}
-            disabled={isExporting}
-            aria-haspopup="menu"
-            aria-expanded={exportMenu.open}
-            aria-label={
-              running
-                ? running.kind === "lottie"
-                  ? "Exporting Lottie animation"
-                  : `Exporting ${running.label}, ${runningLabel}`
-                : "Export scene"
-            }
-            title="Export as video, APNG or Lottie"
-          >
-            <ExportIcon />
-            {running ? `${running.kind} ${runningLabel}` : "export"}
-            {!running && <ChevronIcon />}
-          </button>
-
-          {exportMenu.open && (
-            <div
-              ref={exportMenu.menuRef}
-              className={styles.menu}
-              role="menu"
-              aria-label="Export format"
-              onKeyDown={exportMenu.onMenuKeyDown}
-            >
-              {EXPORT_OPTIONS.map((option) => (
+            {moreMenu.open && (
+              <div
+                ref={moreMenu.menuRef}
+                className={`${styles.menu} ${styles.moreMenu}`}
+                role="menu"
+                aria-label="More"
+                onKeyDown={moreMenu.onMenuKeyDown}
+              >
                 <button
-                  key={option.kind}
+                  className={styles.menuItem}
+                  role="menuitemcheckbox"
+                  aria-checked={autoRun}
+                  tabIndex={-1}
+                  onClick={() => setAutoRun(!autoRun)}
+                >
+                  <span className={styles.menuIconSpace} aria-hidden="true" />
+                  <span className={styles.menuLabel}>Auto-run</span>
+                  <span className={`${styles.track}${autoRun ? ` ${styles.on}` : ""}`} aria-hidden="true">
+                    <span className={styles.knob} />
+                  </span>
+                </button>
+                <button
+                  className={`${styles.menuItem}${confirmingNew ? ` ${styles.menuItemConfirm}` : ""}`}
+                  role="menuitem"
+                  tabIndex={-1}
+                  onClick={() => { if (chooseNew()) moreMenu.close(); }}
+                >
+                  <NewFileIcon />
+                  <span className={styles.menuLabel}>{confirmingNew ? "Clear the editor?" : "New file"}</span>
+                  {confirmingNew && <span className={styles.menuDetail}>Choose again</span>}
+                </button>
+                <button
                   className={styles.menuItem}
                   role="menuitem"
                   tabIndex={-1}
-                  onClick={() => handleExportClick(option.kind)}
+                  aria-disabled={isTooLarge || undefined}
+                  onClick={() => {
+                    if (isTooLarge) return;
+                    moreMenu.close();
+                    void handleShare();
+                  }}
                 >
-                  <option.Icon />
-                  <span className={styles.menuLabel}>{option.label}</span>
-                  <span className={styles.menuDetail}>{option.detail}</span>
+                  <ShareIcon />
+                  <span className={styles.menuLabel}>Share link</span>
+                  {isTooLarge && <span className={styles.menuDetail}>Code too large</span>}
                 </button>
-              ))}
-              <div className={styles.menuSeparator} role="separator" />
-              {/* Generated at build time by vite-plugins/thirdPartyLicenses.ts. */}
-              <a
-                className={`${styles.menuItem} ${styles.menuLink}`}
-                role="menuitem"
-                tabIndex={-1}
-                href={`${import.meta.env.BASE_URL}third-party-licenses.txt`}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => exportMenu.setOpen(false)}
-                aria-label="Third-party licenses (opens in a new tab)"
-              >
-                <span className={styles.menuLabel}>Third-party licenses</span>
-              </a>
-            </div>
+
+                <div className={styles.menuSeparator} role="separator" />
+                <div className={styles.menuGroupLabel} aria-hidden="true">Export</div>
+                {exportItems}
+                {licensesItem(() => moreMenu.setOpen(false))}
+
+                <div className={styles.menuSeparator} role="separator" />
+                <button
+                  className={styles.menuItem}
+                  role="menuitem"
+                  tabIndex={-1}
+                  onClick={toggleTheme}
+                >
+                  {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+                  <span className={styles.menuLabel}>{theme === "dark" ? "Light theme" : "Dark theme"}</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {runButton}
+
+          {running && (
+            <div
+              className={`${styles.progress}${fraction === null ? ` ${styles.progressIndeterminate}` : ""}`}
+              style={fraction === null ? undefined : { transform: `scaleX(${fraction})` }}
+              aria-hidden="true"
+            />
           )}
         </div>
+      ) : (
+        <div className={styles.right}>
+          <button
+            className={styles.autoRun}
+            onClick={() => setAutoRun(!autoRun)}
+            role="switch"
+            aria-checked={autoRun}
+            title="Compile automatically as you type"
+          >
+            Auto-run
+            <span className={`${styles.track}${autoRun ? ` ${styles.on}` : ""}`} aria-hidden="true">
+              <span className={styles.knob} />
+            </span>
+          </button>
 
-        <div className={styles.divider} />
+          <div className={styles.divider} />
 
-        <button
-          className={styles.btnIcon}
-          title="Toggle theme"
-          onClick={toggleTheme}
-          aria-label="Toggle theme"
-        >
-          {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-        </button>
+          {exampleMenuEl}
 
-        <button className={styles.btnRun} onClick={onRun} aria-label="Run (Ctrl+Enter)">
-          <RunIcon /> RUN
-        </button>
-      </div>
+          <button
+            className={`${styles.btn}${confirmingNew ? ` ${styles.btnConfirm}` : ""}`}
+            onClick={() => { chooseNew(); }}
+            onBlur={handleNewBlur}
+            aria-label={confirmingNew ? "Clear the editor? Choose New again to confirm" : "New file"}
+            title={confirmingNew ? "Choose again to clear the editor" : "New file"}
+          >
+            {confirmingNew ? "Clear editor?" : "New"}
+          </button>
+
+          <div className={styles.tooltipWrap}>
+            <button
+              className={styles.btn}
+              onClick={() => { void handleShare(); }}
+              disabled={isTooLarge}
+              aria-label={isTooLarge ? "Share: code too large to share via URL" : "Share: copy a link to the clipboard"}
+              aria-disabled={isTooLarge}
+              title={isTooLarge ? undefined : "Copy a link to this scene"}
+            >
+              Share
+            </button>
+            {isTooLarge && (
+              <span className={styles.tooltip} role="tooltip">
+                Code too large to share via URL
+              </span>
+            )}
+          </div>
+
+          <div className={styles.menuWrap} ref={exportMenu.wrapRef}>
+            <button
+              ref={exportMenu.triggerRef}
+              className={`${styles.btn}${running ? ` ${styles.btnExporting}` : ""}`}
+              onClick={() => exportMenu.setOpen(!exportMenu.open)}
+              onKeyDown={exportMenu.onTriggerKeyDown}
+              disabled={isExporting}
+              aria-haspopup="menu"
+              aria-expanded={exportMenu.open}
+              aria-label={running ? `E${runningName.slice(1)}` : "Export scene"}
+              title="Export as video, APNG or Lottie"
+            >
+              {running ? `${SHORT_NAME[running.kind]} ${runningLabel}` : "Export"}
+              {!running && <ChevronIcon />}
+            </button>
+
+            {exportMenu.open && (
+              <div
+                ref={exportMenu.menuRef}
+                className={styles.menu}
+                role="menu"
+                aria-label="Export format"
+                onKeyDown={exportMenu.onMenuKeyDown}
+              >
+                {exportItems}
+                <div className={styles.menuSeparator} role="separator" />
+                {licensesItem(() => exportMenu.setOpen(false))}
+              </div>
+            )}
+          </div>
+
+          <div className={styles.divider} />
+
+          <button
+            className={`${styles.btn} ${styles.btnSquare}`}
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "Switch to the light theme" : "Switch to the dark theme"}
+            title={theme === "dark" ? "Light theme" : "Dark theme"}
+          >
+            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+          </button>
+
+          {runButton}
+        </div>
+      )}
     </header>
   );
 };

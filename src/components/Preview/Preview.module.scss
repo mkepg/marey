@@ -46,6 +46,17 @@
   pointer-events: none;
 }
 
+// The phone margin (12 px) is narrower than the caption (a 6 px gap and a
+// 16 px line), so on phones the host also keeps the caption's room clear
+// below it. Otherwise a plate that fills the host's height, as it does when
+// the phone preview reaches its 60vh cap, would push the caption out of view.
+@media (max-width: 759px) {
+  .host,
+  .plateLayer {
+    bottom: calc(var(--plate-margin) + 22px);
+  }
+}
+
 .frame {
   position: absolute;
   pointer-events: none;

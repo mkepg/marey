@@ -1,118 +1,264 @@
-@use "../../styles/tokens" as *;
+// The top bar is typographic: the wordmark sets the tone, the controls are
+// quiet text buttons in the interface face, and Run is the one filled shape.
+
+%focus-ring {
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
 
 .topBar {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 42px;
-  min-height: 42px;
+  gap: 16px;
+  height: var(--bar-h);
+  min-height: var(--bar-h);
+  padding: 0 12px 0 20px;
   background: var(--bg-bar);
   border-bottom: 1px solid var(--border);
-  padding: 0 16px;
   z-index: 100;
   user-select: none;
   flex-shrink: 0;
+  font-family: var(--font-ui);
+}
+
+// Phones: the bar stays on screen while the stacked panes scroll under it.
+.narrow {
+  position: sticky;
+  top: 0;
+  gap: 8px;
+  padding: 0 10px 0 14px;
 }
 
 .left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   min-width: 0;
 }
 
 .logo {
   font-family: var(--font-ui);
-  font-weight: 800;
-  font-size: 14px;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
-}
-
-.right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+  // Optical: the wordmark's cap height sits a hair low against the dot.
+  padding-bottom: 1px;
 }
 
 .status {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  min-width: 0;
 }
 
 .statusDot {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
+  flex-shrink: 0;
   background: var(--dot-idle);
-  transition: background $transition;
+  transition: background var(--transition);
 
-  &.ok {
-    background: var(--dot-ok);
-    box-shadow: 0 0 6px var(--dot-ok);
-  }
-  &.error {
-    background: var(--dot-error);
-    box-shadow: 0 0 6px var(--dot-error);
-  }
+  &.ok    { background: var(--dot-ok); }
+  &.error { background: var(--dot-error); }
 }
 
 .statusLabel {
-  font-size: 11px;
+  font-size: 13px;
+  line-height: 1;
   color: var(--text-secondary);
-  letter-spacing: 0.06em;
-  font-family: var(--font-mono);
   white-space: nowrap;
+}
+
+// Hidden from sight, still read out: the phone bar shows only the dot.
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+
+  .narrow & {
+    gap: 4px;
+  }
 }
 
 .divider {
   width: 1px;
-  height: 16px;
+  height: 18px;
+  margin: 0 8px;
   background: var(--border);
-  margin: 0 2px;
   flex-shrink: 0;
 }
 
-.autoRunControl {
-  display: flex;
+// ─── Buttons ────────────────────────────────────────────────────────────────
+
+.btn {
+  @extend %focus-ring;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 4px;
-}
-
-.autoRunLabel {
-  font-size: 11px;
-  color: var(--text-secondary);
-  letter-spacing: 0.05em;
-  font-family: var(--font-mono);
-  white-space: nowrap;
-}
-
-.switch {
-  position: relative;
-  width: 28px;
-  height: 16px;
-  background: var(--bg-handle);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
   cursor: pointer;
-  transition: background $transition, border-color $transition;
-  padding: 0;
-  outline: none;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background var(--transition), color var(--transition);
 
-  &:hover {
-    border-color: var(--text-muted);
+  &:hover:not(:disabled),
+  &[aria-expanded="true"] {
+    background: var(--bg-handle);
+    color: var(--text-primary);
   }
 
-  &.active {
-    background: var(--accent-dim);
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  svg {
+    flex-shrink: 0;
+  }
+
+  .narrow & {
+    padding: 0 8px;
+  }
+}
+
+.btnSquare {
+  width: 32px;
+  padding: 0;
+
+  .narrow & {
+    padding: 0;
+  }
+}
+
+.btnRun {
+  @extend %focus-ring;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  margin-left: 8px;
+  padding: 0 14px 0 12px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--accent-text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity var(--transition), transform var(--transition);
+
+  &:hover  { opacity: 0.88; }
+  &:active { transform: translateY(1px); }
+
+  .narrow & {
+    margin-left: 2px;
+    padding: 0 12px 0 11px;
+  }
+}
+
+.btnConfirm {
+  color: var(--text-error);
+  background: color-mix(in srgb, var(--text-error) 10%, transparent);
+
+  &:hover:not(:disabled) {
+    color: var(--text-error);
+    background: color-mix(in srgb, var(--text-error) 16%, transparent);
+  }
+}
+
+.btnExporting,
+.btnExporting:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--accent-dim);
+  // Progress digits change every tick; equal-width figures stop the button
+  // from nudging its neighbours as the percentage climbs.
+  font-variant-numeric: tabular-nums;
+  min-width: 72px;
+
+  // The running export's button is disabled too, but it is the one place
+  // the progress shows, so it keeps full opacity.
+  &:disabled {
+    opacity: 1;
+    cursor: progress;
+  }
+}
+
+.narrow .btnExporting {
+  min-width: 32px;
+}
+
+// ─── Auto-run switch ────────────────────────────────────────────────────────
+
+.autoRun {
+  @extend %focus-ring;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  transition: color var(--transition);
+
+  &:hover {
+    color: var(--text-primary);
+  }
+}
+
+.track {
+  position: relative;
+  flex-shrink: 0;
+  width: 26px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--bg-handle);
+  border: 1px solid var(--border);
+  transition: background var(--transition), border-color var(--transition);
+
+  &.on {
+    background: var(--accent);
     border-color: var(--accent);
 
     .knob {
-      transform: translateX(12px);
-      background: var(--accent);
+      transform: translateX(10px);
+      background: var(--accent-text);
     }
   }
 }
@@ -123,132 +269,52 @@
   left: 2px;
   width: 10px;
   height: 10px;
-  background: var(--text-muted);
   border-radius: 50%;
-  transition: transform $transition, background $transition;
+  background: var(--text-secondary);
+  transition: transform var(--transition), background var(--transition);
 }
 
-.btnIcon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 0 8px;
-  height: 28px;
-  min-width: 28px;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: $radius;
-  cursor: pointer;
-  color: var(--text-secondary);
-  transition: all $transition;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-
-  &:hover:not(:disabled) {
-    background: var(--bg-handle);
-    color: var(--text-primary);
-    border-color: var(--bg-handle-h);
-  }
-
-  &:disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
-  }
-
-  svg {
-    flex-shrink: 0;
+@media (prefers-reduced-motion: reduce) {
+  .track,
+  .knob,
+  .btn,
+  .btnRun {
+    transition: none;
   }
 }
 
-// Below this width the new/example/share buttons drop their text and show
-// only their icons (their aria-labels and titles still name them), so the
-// bar fits without pushing RUN off the edge.
-@media (max-width: 900px) {
-  .btnText {
-    display: none;
-  }
-}
-
-.btnRun {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 12px;
-  height: 28px;
-  background: var(--accent);
-  border: none;
-  border-radius: $radius;
-  cursor: pointer;
-  color: #fff;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  transition: all $transition;
-  white-space: nowrap;
-  flex-shrink: 0;
-
-  &:hover  { opacity: 0.85; }
-  &:active { transform: scale(0.97); }
-}
-
-.btnConfirm {
-  color: var(--text-error) !important;
-  border-color: var(--text-error) !important;
-  background: rgba(248, 113, 113, 0.08) !important;
-}
-
-.btnExporting {
-  color: var(--accent) !important;
-  border-color: var(--accent) !important;
-  background: var(--accent-dim) !important;
-  // Digits change every progress tick; a monospace font already gives every
-  // digit the same advance width, so this just stops "starting…" and "42%"
-  // from nudging neighbouring buttons sideways as the export runs.
-  font-variant-numeric: tabular-nums;
-  min-width: 52px;
-
-  // The running export's button is disabled too, but it is the one place
-  // the progress shows, so it keeps full opacity.
-  &:disabled {
-    opacity: 1;
-    cursor: progress;
-  }
-}
+// ─── Share's too-large tooltip ──────────────────────────────────────────────
 
 .tooltipWrap {
   position: relative;
   display: flex;
+
   &:hover .tooltip {
     opacity: 1;
-    transform: translateY(0);
-    pointer-events: none;
+    transform: translateX(-50%) translateY(0);
   }
 }
 
 .tooltip {
   position: absolute;
-  bottom: calc(100% + 8px);
+  top: calc(100% + 8px);
   left: 50%;
-  transform: translateX(-50%) translateY(4px);
+  transform: translateX(-50%) translateY(-4px);
   background: var(--bg-pane);
   border: 1px solid var(--border);
-  border-radius: $radius;
-  padding: 5px 9px;
-  font-family: var(--font-mono);
-  font-size: 10px;
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  font-family: var(--font-ui);
+  font-size: 12px;
   color: var(--text-secondary);
   white-space: nowrap;
   opacity: 0;
-  transition: opacity $transition, transform $transition;
+  transition: opacity var(--transition), transform var(--transition);
   pointer-events: none;
   z-index: 200;
 }
 
-// ─── Export menu ─────────────────────────────────────────────────────────────
+// ─── Menus ──────────────────────────────────────────────────────────────────
 
 .menuWrap {
   position: relative;
@@ -257,83 +323,25 @@
 
 .menu {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   right: 0;
-  min-width: 240px;
+  min-width: 248px;
   padding: 4px;
   background: var(--bg-pane);
   border: 1px solid var(--border);
-  border-radius: $radius;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  border-radius: var(--radius);
+  // Ink-tinted in light mode; on the dark mat the menu is lifted by its
+  // hairline and a slightly lighter surface instead.
+  box-shadow: 0 14px 32px -14px color-mix(in srgb, var(--text-primary) 40%, transparent);
   z-index: 200;
   display: flex;
   flex-direction: column;
-}
-
-.menuItem {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 7px 8px;
-  background: transparent;
-  border: none;
-  border-radius: $radius;
-  cursor: pointer;
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.03em;
-  text-align: left;
-  white-space: nowrap;
-  outline: none;
-
-  &:hover,
-  &:focus-visible,
-  &:focus {
-    background: var(--bg-handle);
-    color: var(--text-primary);
-  }
-
-  svg {
-    flex-shrink: 0;
-  }
-}
-
-.menuLabel {
-  flex: 1;
-}
-
-.menuDetail {
-  color: var(--text-secondary);
-  opacity: 0.7;
-  font-size: 10px;
-  padding-left: 12px;
-}
-
-.menuLink {
-  text-decoration: none;
-}
-
-.menuSeparator {
-  height: 1px;
-  margin: 4px 2px;
-  background: var(--border);
-}
-
-// ─── Examples menu ───────────────────────────────────────────────────────────
-
-// The export menu hangs from its button's right edge; the examples menu is
-// wider and reads better aligned with the button's left edge.
-.menuLeft {
-  right: auto;
-  left: 0;
-}
-
-.exampleMenu {
-  width: 320px;
-  max-width: calc(100vw - 16px);
   animation: menuIn 120ms ease-out;
+
+  [data-theme="dark"] & {
+    background: var(--bg-preview);
+    box-shadow: 0 14px 32px -10px var(--bg-terminal);
+  }
 
   @media (prefers-reduced-motion: reduce) {
     animation: none;
@@ -345,23 +353,134 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-.exampleItem {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 8px 10px;
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 10px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--text-primary);
   font-family: var(--font-ui);
-  letter-spacing: 0;
-  white-space: normal;
-  // A bar on the focused or hovered item marks where the keyboard is, in the
-  // accent colour, without changing the item's size.
+  font-size: 13px;
+  line-height: 1.3;
+  text-align: left;
+  white-space: nowrap;
+  outline: none;
+  // A bar on the focused or hovered item marks where the keyboard is, in
+  // the accent colour, without changing the item's size.
   box-shadow: inset 2px 0 0 transparent;
 
   &:hover,
   &:focus-visible,
   &:focus {
+    background: var(--bg-handle);
     box-shadow: inset 2px 0 0 var(--accent);
   }
+
+  &[aria-disabled="true"] {
+    color: var(--text-secondary);
+    cursor: not-allowed;
+  }
+
+  svg {
+    flex-shrink: 0;
+    width: 12px;
+    height: 12px;
+    color: var(--text-secondary);
+  }
+
+  // Thumbs need a taller target than a pointer.
+  .narrow & {
+    min-height: 42px;
+  }
+}
+
+.menuItemConfirm {
+  color: var(--text-error);
+
+  svg { color: var(--text-error); }
+}
+
+.menuLabel {
+  flex: 1;
+}
+
+// Keeps a label without an icon aligned with the labels that have one.
+.menuIconSpace {
+  width: 12px;
+  flex-shrink: 0;
+}
+
+.menuDetail {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  padding-left: 12px;
+}
+
+.menuLink {
+  text-decoration: none;
+}
+
+.menuSeparator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+
+.menuGroupLabel {
+  padding: 8px 10px 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+// Phones: menus hang below the bar from the screen edges rather than from
+// their buttons, so they always fit, down to 320 px.
+.narrow .menu {
+  position: fixed;
+  top: calc(var(--bar-h) + 6px);
+  right: 8px;
+  max-height: calc(100vh - var(--bar-h) - 14px);
+  max-height: calc(100dvh - var(--bar-h) - 14px);
+  overflow-y: auto;
+}
+
+.narrow .moreMenu {
+  width: min(300px, calc(100vw - 16px));
+}
+
+// ─── Examples menu ──────────────────────────────────────────────────────────
+
+// The export menu hangs from its button's right edge; the examples menu is
+// wider and reads better aligned with the button's left edge.
+.menuLeft {
+  right: auto;
+  left: 0;
+}
+
+.exampleMenu {
+  width: 320px;
+  max-width: calc(100vw - 16px);
+}
+
+.narrow .exampleMenu {
+  left: 8px;
+  right: 8px;
+  width: auto;
+  max-width: none;
+}
+
+.exampleItem {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  white-space: normal;
 }
 
 .exampleTitle {
@@ -381,8 +500,35 @@
 .exampleConfirm {
   background: var(--accent-dim);
   box-shadow: inset 2px 0 0 var(--accent);
+}
 
-  .exampleTitle {
-    color: var(--text-primary);
+// ─── Export progress on phones ──────────────────────────────────────────────
+// The Export button lives in ⋯ on phones, so a running export draws a thin
+// accent line along the bottom of the bar instead.
+.progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--accent);
+  transform-origin: left center;
+  transition: transform 120ms linear;
+  pointer-events: none;
+}
+
+.progressIndeterminate {
+  transform: scaleX(0.3);
+  animation: progressSlide 1.2s ease-in-out infinite alternate;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    transform: none;
+    opacity: 0.6;
   }
+}
+
+@keyframes progressSlide {
+  from { transform: translateX(0) scaleX(0.3); }
+  to   { transform: translateX(70%) scaleX(0.3); }
 }

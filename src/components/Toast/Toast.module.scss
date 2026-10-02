@@ -5,48 +5,69 @@
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
   z-index: 9999;
   pointer-events: none;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+
+  @media (max-width: 759px) {
+    bottom: 16px;
+  }
 }
 
 .toast {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 18px;
+  padding: 10px 16px;
   background: var(--bg-bar);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.05em;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.4;
   color: var(--text-primary);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  // Ink-tinted in light mode; on the dark mat the hairline and the bar
+  // background carry the edge.
+  box-shadow: 0 10px 28px -10px color-mix(in srgb, var(--text-primary) 35%, transparent);
   pointer-events: auto;
   animation: toast-in 180ms ease both;
-  white-space: nowrap;
+
+  [data-theme="dark"] & {
+    box-shadow: 0 10px 28px -6px var(--bg-terminal);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 }
 
 .toast.exiting {
   animation: toast-out 180ms ease both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    opacity: 0;
+  }
 }
 
 .dot {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
-.dot.success { background: var(--dot-ok);    box-shadow: 0 0 6px var(--dot-ok); }
-.dot.error   { background: var(--dot-error); box-shadow: 0 0 6px var(--dot-error); }
-.dot.info    { background: var(--text-info); box-shadow: 0 0 6px var(--text-info); }
+.dot.success { background: var(--dot-ok); }
+.dot.error   { background: var(--dot-error); }
+.dot.info    { background: var(--text-info); }
 
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -61,6 +82,6 @@
   }
   to {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
 }
