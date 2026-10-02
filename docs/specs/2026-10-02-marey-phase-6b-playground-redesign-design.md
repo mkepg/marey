@@ -83,8 +83,12 @@ wordmark "Marey" uses 700 with tight tracking (−0.02em). JetBrains Mono sets
 code and the log. The plate caption is in the interface face, with tabular
 figures. Interface labels are sentence
 case. The all-caps pane labels ("CODE EDITOR", "OUTPUT", "SCENE PREVIEW") are
-removed: the plate caption names the scene, and the editor and log identify
-themselves.
+removed: the plate caption names the scene, and the editor identifies itself.
+The log does not: in the same face and on a background barely darker than the
+editor's (1.08:1 light, 1.03:1 dark), it read as more code. So on desktop it is
+headed by the status strip that phones fold it into (§4), "compiled, 0 errors"
+with its dot and a Hide log control, 36 px tall. Folding it there leaves the
+strip and gives the editor the pane.
 
 **Editor themes.** The Monaco themes in
 `src/components/Editor/MonacoEditor/themes.ts` are redrawn so that each

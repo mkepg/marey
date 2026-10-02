@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useRef } from "preact/hooks";
 import type { FunctionComponent } from "preact";
 import { useAppStore } from "../../store";
 import type { LogEntry } from "../../compiler";
@@ -71,29 +71,34 @@ const LogBody: FunctionComponent<{ id?: string }> = ({ id }) => {
   );
 };
 
+interface TerminalProps {
+  /** Whether the log is shown under its status strip. */
+  open: boolean;
+  onToggle: () => void;
+}
+
 /**
- * The compiler's log. On desktop it fills its pane. On phones it folds into
- * one status line, which opens the log underneath it (spec 6B §4).
+ * The compiler's log, headed by one status line that folds it away. On
+ * desktop the strip heads the log pane and the log is open by default; on
+ * phones the log starts folded (spec 6B §4). The strip is what tells the log
+ * apart from the editor above it.
  */
-export const Terminal: FunctionComponent = () => {
+export const Terminal: FunctionComponent<TerminalProps> = ({ open, onToggle }) => {
   const narrow = useIsNarrow();
   const status = useAppStore((s) => s.compileStatus);
   const errors = useAppStore((s) => s.errors);
-  const [open, setOpen] = useState(false);
-
-  if (!narrow) return <LogBody />;
 
   const dotMod = status === "ok" ? styles.ok : status === "error" ? styles.error : "";
 
   return (
-    <div className={styles.folded}>
+    <div className={`${styles.folded}${narrow ? "" : ` ${styles.docked}`}`}>
       <button
         type="button"
         className={styles.toggle}
         data-log-toggle
         aria-expanded={open}
         aria-controls={open ? BODY_ID : undefined}
-        onClick={() => setOpen(!open)}
+        onClick={onToggle}
       >
         <span className={`${styles.dot} ${dotMod}`} aria-hidden="true" />
         <span className={styles.summary}>{logSummary(status, errors.length)}</span>

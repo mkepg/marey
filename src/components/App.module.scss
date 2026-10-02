@@ -1,5 +1,6 @@
 .app {
   --bar-h: 48px;
+  --log-strip-h: 36px;   // the desktop log's status strip; phones use a 44px touch target
 
   display: flex;
   flex-direction: column;

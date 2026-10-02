@@ -742,7 +742,10 @@ top-bar controls intersect or leave the viewport, that the plate frame's aspect
 ratio equals the scene's 800/600 within 1 px, that the caption reads `800 × 600`
 and `12 s`, and that each menu (Examples and Export on desktop, Examples and
 More on a phone) opens with Enter, moves with ArrowDown and closes with Escape
-with focus back on its button. At 320 x 640 it repeats the top-bar assertions.
+with focus back on its button. The log sits under its status strip: folded on a
+phone, open on desktop, where the check folds it and asserts that the 36 px
+strip remains and the editor grows. At 320 x 640 it repeats the top-bar
+assertions.
 At 760 x 900, the narrowest desktop layout (the phone breakpoint is 759), it
 runs them in the normal state and again while New shows its "Clear editor?"
 confirmation.

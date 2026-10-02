@@ -58,10 +58,19 @@ export const App: FunctionComponent = () => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
+  // The log is open on desktop and folded on phones until someone opens it.
+  // Each layout keeps its own choice, so resizing across the breakpoint does
+  // not carry one into the other.
+  const [deskLogOpen, setDeskLogOpen]   = useState(true);
+  const [phoneLogOpen, setPhoneLogOpen] = useState(false);
+  const logOpen   = narrow ? phoneLogOpen : deskLogOpen;
+  const toggleLog = (): void => (narrow ? setPhoneLogOpen : setDeskLogOpen)((open) => !open);
+  const logFolded = !narrow && !deskLogOpen;
+
   useEffect(() => {
     const id = setTimeout(() => editorRef.current?.layout(), 0);
     return () => clearTimeout(id);
-  }, [hRatio, vRatio, narrow]);
+  }, [hRatio, vRatio, narrow, logFolded]);
 
   // The phone preview's height depends on the pane's width, the viewport's
   // height and the scene's aspect ratio.
@@ -99,6 +108,15 @@ export const App: FunctionComponent = () => {
 
   const isDragging = isHDragging || isVDragging;
 
+  // A folded log keeps only its status strip, under a hairline of its own in
+  // place of the handle, and the editor takes the rest of the pane.
+  const editorStyle = logFolded
+    ? { height: "calc(100% - var(--log-strip-h) - 1px)", display: "block", pointerEvents: isDragging ? "none" : "auto" }
+    : { height: editorH, display: vRatio === 0 ? "none" : "block", pointerEvents: isDragging ? "none" : "auto" };
+  const terminalStyle = logFolded
+    ? { height: "calc(var(--log-strip-h) + 1px)", display: "flex", borderTop: "1px solid var(--border)" }
+    : { height: terminalH, display: vRatio === 1 ? "none" : "flex" };
+
   // On phones the panes stack as preview, editor, log, with no handles
   // (spec 6B §4). The element tree stays the same in both layouts, so the
   // renderer's host and the editor are never remounted when it switches.
@@ -121,16 +139,16 @@ export const App: FunctionComponent = () => {
         >
           <div
             className={styles.editorWrap}
-            style={narrow ? undefined : { height: editorH, display: vRatio === 0 ? "none" : "block", pointerEvents: isDragging ? "none" : "auto" }}
+            style={narrow ? undefined : editorStyle}
           >
             <MonacoEditor onReady={(editor) => { editorRef.current = editor; }} />
           </div>
-          {!narrow && <Handle axis="vertical" onPointerDown={onVPointerDown} />}
+          {!narrow && !logFolded && <Handle axis="vertical" onPointerDown={onVPointerDown} />}
           <div
             className={styles.terminal}
-            style={narrow ? undefined : { height: terminalH, display: vRatio === 1 ? "none" : "flex" }}
+            style={narrow ? undefined : terminalStyle}
           >
-            <Terminal />
+            <Terminal open={logOpen} onToggle={toggleLog} />
           </div>
         </div>
         {!narrow && <Handle axis="horizontal" onPointerDown={onHPointerDown} />}

@@ -12,7 +12,10 @@
  *   4. every menu opens with Enter, moves with ArrowDown, and closes with
  *      Escape, returning focus to its button (Examples and Export on
  *      desktop; Examples and More on a phone);
- *   5. the page logs no console errors.
+ *   5. the log sits under its status strip: open on desktop, where folding
+ *      it leaves the 36 px strip and gives the editor the pane (assertion 1
+ *      runs again while it is folded), and folded on a phone;
+ *   6. the page logs no console errors.
  * At 320x640 it repeats assertion 1 only. At 760x900, the narrowest desktop
  * layout (the phone breakpoint is 759), it runs assertion 1 in the normal
  * state and again while New shows its "Clear editor?" confirmation.
@@ -171,10 +174,29 @@ for (const [kind, viewport] of [["desktop", { width: 1440, height: 900 }], ["pho
     await checkMenu(page, context, "Examples");
     await checkMenu(page, context, kind === "desktop" ? "Export" : "More");
 
+    const toggle = page.locator("button[data-log-toggle]");
     if (kind === "phone") {
-      const toggle = page.locator("button[data-log-toggle]");
       const present = (await toggle.count()) === 1 && (await toggle.getAttribute("aria-expanded")) === "false";
       record(context, "the log is folded behind its toggle", present);
+    } else {
+      const open = (await toggle.count()) === 1 && (await toggle.getAttribute("aria-expanded")) === "true"
+        && (await page.locator("#marey-log").count()) === 1;
+      record(context, "the log is open under its status strip", open);
+
+      // Folding the log leaves only its strip, and the editor takes the room.
+      const editorBefore = (await page.locator(".monaco-editor").first().boundingBox())?.height ?? 0;
+      await toggle.click();
+      await page.locator("#marey-log").waitFor({ state: "detached", timeout: 2000 }).catch(() => {});
+      await page.waitForTimeout(300);
+      const editorAfter = (await page.locator(".monaco-editor").first().boundingBox())?.height ?? 0;
+      const strip = (await toggle.boundingBox())?.height ?? 0;
+      const folded = (await toggle.getAttribute("aria-expanded")) === "false"
+        && (await page.locator("#marey-log").count()) === 0;
+      record(context, "folding the log gives the editor the pane",
+        folded && editorAfter > editorBefore + 100 && Math.abs(strip - 36) <= 1,
+        `editor ${editorBefore.toFixed(0)} -> ${editorAfter.toFixed(0)} px, strip ${strip.toFixed(1)} px`);
+      await checkOverlap(page, `${context}, log folded`);
+      await toggle.click();
     }
     await ctx.close();
   }

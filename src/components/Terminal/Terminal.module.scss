@@ -35,7 +35,7 @@
   color: var(--text-secondary);
 }
 
-// ─── Phones: the log folded into one status line ────────────────────────────
+// ─── The status strip that heads the log and folds it ───────────────────────
 
 .folded {
   display: flex;
@@ -47,6 +47,24 @@
     flex: none;
     max-height: 40vh;
     border-top: 1px solid var(--border);
+  }
+}
+
+// On desktop the strip heads the log pane and the open log fills the rest of
+// it. The handle above already draws the hairline, so the strip adds none.
+.docked {
+  flex: 1;
+  min-height: 0;
+  border-top: none;
+
+  .toggle {
+    flex-shrink: 0;
+    height: var(--log-strip-h);
+  }
+
+  .body {
+    flex: 1;
+    max-height: none;
   }
 }
 

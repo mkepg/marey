@@ -594,7 +594,7 @@ bar only, and at 760 x 900, the narrowest desktop layout, for the top bar in its
 normal state and while New shows "Clear editor?":
 
 ```
-{"assertions":38,"passed":38,"failed":0,"consoleErrors":0}
+{"assertions":46,"passed":46,"failed":0,"consoleErrors":0}
 ```
 
 Per page it asserts that no two top-bar controls intersect and that none leave
@@ -602,7 +602,10 @@ the viewport; that the plate frame's aspect ratio equals 800/600 within 1 px;
 that the caption reads `800 × 600` and `12 s`; and that each menu (Examples and
 Export on desktop, Examples and More on a phone) opens with Enter, moves with
 ArrowDown, and closes with Escape with focus back on its button. The phone runs
-also assert that the log is folded behind its toggle. The run logged no console
+also assert that the log is folded behind its status strip. The desktop runs
+assert that the log is open under the same strip, and that folding it leaves
+the 36 px strip and grows the editor (639 to 815 px at 1440 x 900), with the
+top-bar assertions repeated while it is folded. The run logged no console
 errors. It passed on four consecutive runs once the menu wait described in the
 plan's execution notes was in place.
 
