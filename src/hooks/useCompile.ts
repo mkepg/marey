@@ -36,6 +36,9 @@ export function useCompile(hostRef: RefObject<HTMLDivElement>): () => void {
       cleanupRef.current();
       cleanupRef.current = null;
     }
+    // The old scene is gone from the host now, so the frame and caption that
+    // describe it go too. The new result sets them again.
+    setSceneInfo(null);
 
     compileIdRef.current += 1;
     const currentId = compileIdRef.current;
