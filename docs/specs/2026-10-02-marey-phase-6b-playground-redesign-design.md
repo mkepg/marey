@@ -203,12 +203,14 @@ the repository already has:
   `eval/scenes-3b/compound-logo.marey`.
 
 Yellow flowers, added after the redesign at the owner's request, is the one
-example that is not adapted: it recreates the popular "yellow flowers" CSS
-animation, and its header comment credits it as that. A scene cannot replay
-its own timeline (`sequence` cannot loop), so it grows once, in about two and a
-half seconds as the original does, and then its hearts, pollen and swaying
-flowers run for good. It is 960 x 600, the shape of the laptop screen the
-original was recorded on.
+example that is not adapted: it follows the popular "yellow flowers" CSS
+animation, and its header comment credits it as that. It keeps the original's
+composition and timing but not its look: every curve is a circle squashed
+into an ellipse, so petals, leaves and hearts stay smooth at any size, and
+every glow is a stack of faint circles. A scene cannot replay its own timeline
+(`sequence` cannot loop), so it grows once, in about two and a half seconds,
+and then its hearts, fireflies and swaying flowers and grass run for good. It
+is 960 x 600.
 
 The originals are test fixtures and stay as they are. Each example:
 - starts with a header comment of at most three lines;
