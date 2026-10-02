@@ -2,8 +2,10 @@ import duskHills from "./dusk-hills.marey?raw";
 import physicsPile from "./physics-pile.marey?raw";
 import barChartReveal from "./bar-chart-reveal.marey?raw";
 import logoReveal from "./logo-reveal.marey?raw";
+import yellowFlowers from "./yellow-flowers.marey?raw";
 
-export type ExampleId = "dusk-hills" | "physics-pile" | "bar-chart-reveal" | "logo-reveal";
+export type ExampleId =
+  | "dusk-hills" | "physics-pile" | "bar-chart-reveal" | "logo-reveal" | "yellow-flowers";
 
 export interface Example {
   readonly id: ExampleId;
@@ -36,6 +38,12 @@ export const EXAMPLES: ReadonlyArray<Example> = [
     title: "Logo reveal",
     description: "A logo assembles from its parts in sequence.",
     source: logoReveal,
+  },
+  {
+    id: "yellow-flowers",
+    title: "Yellow flowers",
+    description: "A flower bush grows, blooms and fills with drifting hearts.",
+    source: yellowFlowers,
   },
 ];
 

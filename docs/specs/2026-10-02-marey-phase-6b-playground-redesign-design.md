@@ -35,7 +35,7 @@ README task (Task 13).
 | D3 | The default scene | A scenic view, "Dusk over layered hills", with a smiling sun. Over a continuous, seamless loop, the sun sets, falls asleep and rises again. |
 | D4 | The sun's face | It is modelled on the owner's reference image: a flat disc with an amber crescent along the bottom, short flat brows with rounded ends, dot eyes and a small, smooth smile. Its colour is halfway between the reference (`#fdc76a`) and a brighter option (`#ffd451`). |
 | D5 | The sun's resting height | The bottom of the mouth sits clear of the ridges, about 36 scene units above the nearest one. |
-| D6 | Examples | The "example" button becomes a menu: Dusk over layered hills (the default), Physics pile, Bar chart reveal and Logo reveal. The old smiley is dropped. |
+| D6 | Examples | The "example" button becomes a menu: Dusk over layered hills (the default), Physics pile, Bar chart reveal, Logo reveal and Yellow flowers. The old smiley is dropped. |
 | D7 | Favicon | "Layered chin": the whole face sits above three thin ridges on a dusk tile. |
 | D8 | Phones | Scene first, then code, with the log folded into a status line. |
 | D9 | Typeface | Bricolage Grotesque for the interface and the wordmark. Code stays in JetBrains Mono. |
@@ -184,6 +184,7 @@ app as text:
 | `physics-pile.marey` | Physics pile | Shapes tumble, collide and settle under gravity. |
 | `bar-chart-reveal.marey` | Bar chart reveal | A list of numbers grows into bars, one after another. |
 | `logo-reveal.marey` | Logo reveal | A logo assembles from its parts in sequence. |
+| `yellow-flowers.marey` | Yellow flowers | A flower bush grows, blooms and fills with drifting hearts. |
 
 Being `.marey` files, they fall under the repository-wide compile check that
 CI runs on `git ls-files '*.marey'`.
@@ -200,6 +201,14 @@ the repository already has:
 - bar chart reveal from `tools/visual-check/scenes/bars-reveal.marey`;
 - logo reveal from `tools/visual-check/scenes/logo.marey` and
   `eval/scenes-3b/compound-logo.marey`.
+
+Yellow flowers, added after the redesign at the owner's request, is the one
+example that is not adapted: it recreates the popular "yellow flowers" CSS
+animation, and its header comment credits it as that. A scene cannot replay
+its own timeline (`sequence` cannot loop), so it grows once, in about two and a
+half seconds as the original does, and then its hearts, pollen and swaying
+flowers run for good. It is 960 x 600, the shape of the laptop screen the
+original was recorded on.
 
 The originals are test fixtures and stay as they are. Each example:
 - starts with a header comment of at most three lines;

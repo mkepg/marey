@@ -5,12 +5,13 @@ import { encodeCode, MAX_SHARE_LENGTH } from "../lib/share";
 import { DEFAULT_EXAMPLE, EXAMPLES } from "./index";
 
 describe("the examples registry", () => {
-  it("lists spec §5's four examples, titles and descriptions, in order", () => {
+  it("lists spec §5's five examples, titles and descriptions, in order", () => {
     expect(EXAMPLES.map((e) => [e.id, e.title, e.description])).toEqual([
       ["dusk-hills", "Dusk over layered hills", "The sun sets, sleeps and rises again, on a 12-second loop."],
       ["physics-pile", "Physics pile", "Shapes tumble, collide and settle under gravity."],
       ["bar-chart-reveal", "Bar chart reveal", "A list of numbers grows into bars, one after another."],
       ["logo-reveal", "Logo reveal", "A logo assembles from its parts in sequence."],
+      ["yellow-flowers", "Yellow flowers", "A flower bush grows, blooms and fills with drifting hearts."],
     ]);
     expect(DEFAULT_EXAMPLE.id).toBe("dusk-hills");
   });

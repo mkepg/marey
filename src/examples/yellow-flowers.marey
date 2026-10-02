@@ -1,0 +1,232 @@
+// Yellow flowers: the popular "yellow flowers" CSS animation, recreated in Marey.
+// The bush grows once, in about three seconds; then hearts and pollen drift for good.
+// Fills are solid, so the gradients are stepped tones and the glow is a pair of halos.
+
+let petal     = #e8ec18  let petalLit = #f2f44e  let petalShade = #c9d014
+let leafLit   = #5bc24c  let leafDark = #2f8f3d  let stemGreen  = #52b545
+let fernLit   = #38953f  let fernDark = #236a33
+let heartRed  = #f4741c  let ringGreen = #62dc8c  let pollen = #dfe83a
+
+// Unit shapes, scaled where they are used. A leaf runs along +x from its base,
+// light above the midrib and dark below; a petal rises from its base to (0, -1).
+let leafTop    = [(0, 0), (0.15, -0.28), (0.35, -0.45), (0.55, -0.5), (0.75, -0.4), (0.9, -0.22), (1, 0)]
+let leafBottom = [(0, 0), (0.15, 0.28), (0.35, 0.45), (0.55, 0.5), (0.75, 0.4), (0.9, 0.22), (1, 0)]
+let petalPts   = [(0, 0), (0.32, -0.12), (0.48, -0.35), (0.5, -0.6), (0.42, -0.82), (0.24, -0.96),
+                  (0, -1), (-0.24, -0.96), (-0.42, -0.82), (-0.5, -0.6), (-0.48, -0.35), (-0.32, -0.12)]
+let heartPts   = [(0, -0.31), (0.06, -0.48), (0.35, -0.73), (0.79, -0.65), (1, -0.25), (0.79, 0.21),
+                  (0.35, 0.6), (0.06, 0.92), (0, 1.06), (-0.06, 0.92), (-0.35, 0.6), (-0.79, 0.21),
+                  (-1, -0.25), (-0.79, -0.65), (-0.35, -0.73), (-0.06, -0.48)]
+let ringPts    = [(1, 0), (cos(20), sin(20)), (cos(40), sin(40)), (cos(60), sin(60)), (cos(80), sin(80)),
+                  (cos(100), sin(100)), (cos(120), sin(120)), (cos(140), sin(140)), (cos(160), sin(160)),
+                  (-1, 0), (cos(200), sin(200)), (cos(220), sin(220)), (cos(240), sin(240)),
+                  (cos(260), sin(260)), (cos(280), sin(280)), (cos(300), sin(300)),
+                  (cos(320), sin(320)), (cos(340), sin(340)), (1, 0)]
+
+// Each stem's leaves: [height fraction, side, length].
+let stemLeaves = [[[0.22, 1, 40], [0.24, -1, 40], [0.4, 1, 40], [0.42, -1, 38], [0.56, 1, 36],
+                   [0.58, -1, 36], [0.72, 1, 30], [0.74, -1, 30], [0.86, 1, 22]],
+                  [[0.3, -1, 38], [0.32, 1, 34], [0.5, -1, 34], [0.62, 1, 30], [0.64, -1, 30]],
+                  [[0.3, 1, 38], [0.4, -1, 34], [0.5, 1, 36], [0.65, 1, 30], [0.67, -1, 28]],
+                  [[0.45, -1, 32], [0.5, 1, 28]],
+                  [[0.5, -1, 28]]]
+
+// A leaf unfurls from nothing at time `at`.
+template Leaf(len, wid, at, lit, dark) {
+  group unfurl {
+    scale: (0, 0)
+    animate { property: scale, to: (len, wid), duration: 0.45, delay: at, easing: easeOut }
+    polygon top    { position: (0, 0), origin: (0, 1), points: leafTop, color: lit }
+    polygon bottom { position: (0, 0), origin: (0, 0), points: leafBottom, color: dark }
+  }
+}
+
+// A flower opens at `at`: a back petal and two long side petals over a shallow
+// cup whose far rim catches the light, with two faint halos for the glow. It
+// then sways on its stem.
+template Flower(at, sway) {
+  group bloom {
+    scale: 0
+    animate { property: scale, to: 1, duration: 0.6, delay: at, easing: easeOut }
+    group swing {
+      rotation: -sway
+      animate { property: rotation, to: sway, duration: 2, loop: true, yoyo: true }
+      circle haloOut { position: (0, -22), radius: 66, color: petal, alpha: 0.03 }
+      circle haloIn  { position: (0, -22), radius: 50, color: petal, alpha: 0.05 }
+      polygon back    { position: (0, -14), origin: (0.5, 1), scale: (44, 50), points: petalPts, color: petal }
+      polygon backLit { position: (0, -20), origin: (0.5, 1), scale: (30, 40), points: petalPts, color: petalLit }
+      generate s in [-1, 1] {
+        group side {
+          position: (s * 10, -16), rotation: s * 60
+          polygon outer { position: (0, 0), origin: (0.5, 1), scale: (32, 60), points: petalPts, color: petal }
+          polygon inner { position: (0, -6), origin: (0.5, 1), scale: (20, 46), points: petalPts, color: petalLit }
+          circle spot   { position: (0, -40), radius: 3, color: petalShade }
+        }
+      }
+      polygon cup {
+        position: (0, -7), color: petalShade
+        points: [(-36, -18), (-33, -10), (-26, -3), (-14, 2), (0, 4), (14, 2), (26, -3), (33, -10), (36, -18)]
+      }
+      polygon cupLit {
+        position: (0, -9.5), color: petal
+        points: [(-30, -18), (-27, -11), (-20, -5), (-10, -2), (0, -1), (10, -2), (20, -5), (27, -11), (30, -18)]
+      }
+      polygon rim {
+        position: (0, -19.25), color: #fdfde6
+        points: [(-27, -15), (-18, -20), (-9, -22.5), (0, -23.5), (9, -22.5), (18, -20), (27, -15),
+                 (18, -17), (9, -18.8), (0, -19.5), (-9, -18.8), (-18, -17)]
+      }
+    }
+  }
+}
+
+// A stem grows up from its base at `at`, its leaves unfurling as it passes them,
+// and opens a flower at its tip, turned `turn` degrees back towards upright.
+// Its leaves are `stemLeaves[k]`.
+template Stem(len, at, grow, size, turn, k) {
+  group shaft {
+    scale: (1, 0)
+    animate { property: scale, to: (1, 1), duration: grow, delay: at, easing: easeOut }
+    line stalk { position: (0, 0), origin: (0.5, 1), points: [(0, 0), (0, -len)], thickness: 5, color: stemGreen }
+  }
+  generate l in stemLeaves[k] {
+    use Leaf(l[2] * 1.4, l[2] * 0.6, at + grow * l[0] * 0.55, leafLit, leafDark) leaf {
+      position: (0, -len * l[0]), rotation: if l[1] > 0 then -38 else 218
+    }
+  }
+  use Flower(at + grow - 0.15, 3) flower { position: (0, -len), rotation: turn, scale: size }
+}
+
+// A fern frond: a rib with leaflets in pairs, smaller towards the tip.
+template Frond(len, at) {
+  group unroll {
+    scale: 0
+    animate { property: scale, to: 1, duration: 0.7, delay: at, easing: easeOut }
+    line rib { position: (0, 0), origin: (0.5, 1), points: [(0, 0), (0, -len)], thickness: 2.5, color: fernDark }
+    generate f in [0.2, 0.38, 0.54, 0.68, 0.8, 0.9] {
+      generate s in [-1, 1] {
+        group leaflet {
+          position: (0, -len * f), rotation: if s > 0 then -48 else 228
+          scale: (len * (0.44 - 0.3 * f), len * (0.44 - 0.3 * f) * 0.62)
+          polygon top    { position: (0, 0), origin: (0, 1), points: leafTop, color: fernLit }
+          polygon bottom { position: (0, 0), origin: (0, 0), points: leafBottom, color: fernDark }
+        }
+      }
+    }
+    group tip {
+      position: (0, -len), rotation: -90, scale: (len * 0.16, len * 0.1)
+      polygon top    { position: (0, 0), origin: (0, 1), points: leafTop, color: fernLit }
+      polygon bottom { position: (0, 0), origin: (0, 0), points: leafBottom, color: fernDark }
+    }
+  }
+}
+
+// A grass blade `h` tall whose tip leans `bend` sideways (|bend| >= w). The
+// polygon sits at its bounding box's centre, so its base lands on the pivot.
+template Blade(h, bend, w, at, c) {
+  group rise {
+    scale: (1, 0)
+    animate { property: scale, to: (1, 1), duration: 0.8, delay: at, easing: easeOut }
+    polygon blade {
+      position: (if bend >= 0 then (bend - w) / 2 else (bend + w) / 2, -h / 2), color: c
+      points: [(-w, 0), (bend * 0.12 - w * 0.7, -0.35 * h), (bend * 0.49 - w * 0.35, -0.7 * h), (bend, -h),
+               (bend * 0.49 + w * 0.15, -0.7 * h), (bend * 0.12 + w * 0.4, -0.35 * h), (w, 0)]
+    }
+  }
+}
+
+// A heart rises from where it starts to above the scene every `period` seconds,
+// swaying as it goes. One that starts on screen (`shown` 0) fades in and out so
+// it never pops; one that starts below the scene stays opaque. `ring` is the
+// alpha of its bubble.
+template Heart(size, rise, period, at, drift, ring, shown) {
+  group float {
+    alpha: shown
+    animate { property: position, to: (drift, -rise), duration: period, delay: at, easing: linear, loop: true }
+    animate { property: alpha, to: 1, duration: period / 2, delay: at, easing: easeOut, loop: true, yoyo: true }
+    group sway {
+      position: (-8, 0)
+      animate { property: position, to: (8, 0), duration: 1.6, loop: true, yoyo: true }
+      group bubble {
+        scale: size / 10
+        circle tint { position: (0, 0), radius: 19, color: ringGreen, alpha: ring * 0.12 }
+        line edge   { position: (0, 0), points: ringPts, scale: 19, thickness: 0.12, color: ringGreen, alpha: ring }
+      }
+      polygon heart { position: (0, 0), points: heartPts, scale: size, color: heartRed }
+    }
+  }
+}
+
+let starAt   = [(40, 30), (130, 90), (210, 40), (300, 120), (380, 60), (590, 40), (660, 110),
+                (740, 50), (820, 130), (900, 70), (60, 200), (170, 260), (860, 240), (930, 180),
+                (250, 330), (700, 330), (100, 380), (890, 360), (620, 200), (340, 220)]
+let pollenAt = [(420, 120), (455, 92), (520, 105), (560, 150), (600, 210), (395, 200), (430, 300),
+                (520, 230), (610, 260), (330, 330), (300, 400), (405, 380), (540, 330), (470, 75),
+                (640, 170), (350, 270), (580, 95), (500, 200)]
+
+// Blades: [x, height, bend, width, start]. Hearts: [x, y, size, period, start, ring].
+let grass  = [[110, 120, -20, 4, 2.0], [140, 180, -18, 5, 1.8], [160, 240, 12, 5, 1.6], [178, 150, 26, 6, 1.9],
+              [205, 210, -12, 4.5, 1.7], [228, 130, 22, 5, 2.1], [252, 170, 30, 5, 2.2],
+              [730, 200, 14, 5, 1.7], [752, 262, -14, 5.5, 1.6], [772, 170, 30, 5, 2.0], [792, 232, -22, 5, 1.8],
+              [816, 190, 18, 4.5, 2.1], [842, 140, -24, 5, 2.2], [864, 220, 10, 5, 1.9],
+              [432, 90, -14, 4, 1.5], [540, 104, 18, 4, 1.6]]
+let sweeps = [[492, 300, 190, 9, 1.8], [500, 236, 150, 8, 2.0], [470, 216, -122, 8, 2.1]]
+let hearts = [[120, 640, 23, 12, 0, 0.9], [300, 660, 18, 10, 1.6, 0], [620, 330, 26, 7, 0, 0.9],
+              [820, 660, 20, 11, 2.6, 0], [540, 470, 16, 8, 0.2, 0.9], [700, 660, 22, 12, 4.2, 0],
+              [230, 300, 20, 6, 0.1, 0.9], [900, 660, 17, 10, 5.4, 0.9], [380, 660, 16, 11, 7, 0.9]]
+
+scene {
+  size: (960, 600)
+  duration: 16
+  background: #141933
+
+  // ── Night sky: a violet haze low on the right, and faint stars ──
+  generate r, i in [340, 280, 220, 160, 100] {
+    circle haze { position: (840, 580), radius: r, color: #3b2b62, alpha: 0.07 }
+  }
+  generate p, i in starAt {
+    circle star { position: p, radius: [1.2, 1.6, 1][i % 3], color: #c4caff, alpha: 0.35 }
+  }
+
+  // ── Grass at both edges ──
+  generate g, i in grass {
+    use Blade(g[1], g[2], g[3], g[4], if i % 2 == 0 then #3fae48 else #26732f) blade { position: (g[0], 612) }
+  }
+
+  // ── Ferns either side of the stems ──
+  use Frond(150, 1.4) fernA { position: (452, 612), rotation: -68 }
+  use Frond(176, 1.5) fernB { position: (458, 612), rotation: -46 }
+  use Frond(120, 1.7) fernC { position: (444, 612), rotation: -84 }
+  use Frond(160, 1.45) fernD { position: (506, 612), rotation: 36 }
+  use Frond(138, 1.6) fernE { position: (514, 612), rotation: 58 }
+  use Frond(104, 1.75) fernF { position: (520, 612), rotation: 76 }
+
+  // ── The bush: the sprout's first two leaves, then five stems ──
+  use Leaf(46, 20, 0, leafLit, leafDark) sproutR { position: (482, 598), rotation: -40 }
+  use Leaf(44, 19, 0.05, leafLit, leafDark) sproutL { position: (478, 598), rotation: 220 }
+  use Stem(450, 0.15, 1.0, 1.3, 0, 0) top      { position: (480, 612), rotation: 1 }
+  use Stem(350, 0.35, 0.9, 1.2, 4, 1) middle   { position: (480, 612), rotation: -6 }
+  use Stem(335, 0.5, 0.9, 1.25, -10, 2) right  { position: (480, 612), rotation: 15 }
+  use Stem(290, 0.7, 0.8, 1.15, 14, 3) left    { position: (480, 612), rotation: -21 }
+  use Stem(220, 0.85, 0.8, 0.95, 28, 4) low    { position: (480, 612), rotation: -40 }
+
+  // ── Long blades sweeping out from the base ──
+  generate g, i in sweeps {
+    use Blade(g[1], g[2], g[3], g[4], #3fae48) sweep { position: (g[0], 612) }
+  }
+
+  // ── Hearts, some in bubbles, and pollen ──
+  generate h, i in hearts {
+    use Heart(h[2], h[1] + 60, h[3], h[4], if i % 2 == 0 then 36 else -36, h[5], if h[1] > 620 then 1 else 0) heart {
+      position: (h[0], h[1])
+    }
+  }
+  generate p, i in pollenAt {
+    circle mote {
+      position: p, radius: [2.6, 3.4, 2.2][i % 3], color: pollen, alpha: 0
+      animate {
+        property: alpha, to: 0.9, duration: [0.9, 1.3, 1.7][i % 3], delay: 1.4 + (i % 5) * 0.15,
+        loop: true, yoyo: true
+      }
+    }
+  }
+}
