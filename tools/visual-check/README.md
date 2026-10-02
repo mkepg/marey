@@ -731,6 +731,31 @@ Exit code is non-zero unless the export throws exactly
 (the control case) or any other refusal both count as failures, so a
 weakened or deleted device-limit check cannot pass silently.
 
+## Checking the playground layout
+
+`playground-check.mjs` measures the redesigned playground's layout (Phase 6B,
+spec §9.7). It loads the app at 1440 x 900 and 390 x 844 in both themes, waits
+for the status to read "compiled", saves a screenshot, and asserts that no two
+top-bar controls intersect or leave the viewport, that the plate frame's aspect
+ratio equals the scene's 800/600 within 1 px, that the caption reads `800 × 600`
+and `12 s`, and that each menu (Examples and Export on desktop, Examples and
+More on a phone) opens with Enter, moves with ArrowDown and closes with Escape
+with focus back on its button. At 320 x 640 it repeats the top-bar assertions.
+
+```bash
+node tools/visual-check/playground-check.mjs [--url http://localhost:5199] [--headed]
+```
+
+It writes `.visual-check/6b/{desktop,phone}-{light,dark}.png` and
+`.visual-check/6b/report.json` (every assertion's result, plus every console
+error), and exits 1 if anything failed. Look at the four screenshots: the
+assertions measure geometry, not whether the layout looks right.
+
+Wait for focus to move into a menu before pressing the next key. Opening a menu
+shows it first and focuses its first item in an effect, so a script that presses
+ArrowDown and Escape straight after Enter can land them on the button and fail
+about half the time.
+
 ## Environment
 
 Needs `playwright` (a devDependency) and its Chromium download:

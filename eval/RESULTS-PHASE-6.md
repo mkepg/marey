@@ -578,3 +578,59 @@ Every run on this page (both quality checks, both gate runs and the
 diagnostic) logs one console warning, "Mediabunny was loaded twice". It comes
 from injecting the mediabunny bundle into a page whose app already bundles
 mediabunny, and HEAD's `quality-check.mjs` logs it too.
+
+---
+
+## 6B: the playground redesign
+
+Spec: `docs/specs/2026-10-02-marey-phase-6b-playground-redesign-design.md`, §9.5
+and §9.7.
+
+**Layout, measured in a browser.** `tools/visual-check/playground-check.mjs`
+against the dev server (`npx vite --port 5199 --strictPort`), at 1440 x 900 and
+390 x 844 in both themes, and at 320 x 640 for the top bar only:
+
+```
+{"assertions":33,"passed":33,"failed":0,"consoleErrors":0}
+```
+
+Per page it asserts that no two top-bar controls intersect and that none leave
+the viewport; that the plate frame's aspect ratio equals 800/600 within 1 px;
+that the caption reads `800 × 600` and `12 s`; and that each menu (Examples and
+Export on desktop, Examples and More on a phone) opens with Enter, moves with
+ArrowDown, and closes with Escape with focus back on its button. The phone runs
+also assert that the log is folded behind its toggle. The run logged no console
+errors. It passed on four consecutive runs once the menu wait described in the
+plan's execution notes was in place.
+
+**The check can fail.** Two temporary edits to the Examples button, both
+reverted:
+
+- `min-width: 400px` pushed Examples, More and Run past the right edge. The
+  overlap assertion stayed green (a flex row does not overlap, it overflows),
+  and the viewport assertion failed at 390 and 320 px
+  (`{"assertions":33,"passed":30,"failed":3}`, exit 1).
+- `position: absolute` with `min-width: 400px` made the controls overlap. The
+  overlap assertion failed on every page
+  (`{"assertions":33,"passed":23,"failed":10}`, exit 1), for example
+  `Examples x More (32.0 x 16.0 px); Examples x Run (Ctrl+Enter) (65.1 x 16.0 px)`
+  at 320 px.
+
+**Exports.** `marey export` on the four examples in `src/examples/`, in each of
+`png apng webm mp4 lottie` at 30 fps, after
+`npm run build:export-page && npm run build:cli`. All 20 exited 0.
+
+| Example | Frames | png | apng | webm | mp4 | lottie |
+|---|---|---|---|---|---|---|
+| `dusk-hills` | 360 | 9,683,595 B | 9,652,096 B | 3,962,669 B | 2,874,360 B | 1,897,932 B |
+| `physics-pile` | 210 | 5,040,535 B | 5,024,390 B | 2,243,846 B | 1,517,298 B | 1,276,217 B |
+| `bar-chart-reveal` | 150 | 3,709,402 B | 3,697,109 B | 206,579 B | 132,765 B | 202,059 B |
+| `logo-reveal` | 150 | 3,195,622 B | 3,185,429 B | 484,574 B | 447,169 B | 142,990 B |
+
+The png column is the total over the frames. Images and Lottie are 800 x 600;
+webm and mp4 are 1600 x 1200. The simulation-state hash is the same across the
+five formats of each example (`dbe106b8`, `951d2afc`, `4eb7ddbc`, `3567142c`).
+
+`npm run check:export` against its recorded baselines:
+`matrix: all passed  (134.8 s)`. The mp4 SHA-256 differs between its two runs on
+the canonical scenes, which is reported and not gated (R47), as before.

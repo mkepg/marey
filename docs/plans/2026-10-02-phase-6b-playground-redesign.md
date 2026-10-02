@@ -998,4 +998,27 @@ scene playing (spec §9.8). 6B is done when the owner accepts them.
 
 ## Execution notes
 
-Written during execution.
+Task 9 added `tools/visual-check/playground-check.mjs`, a Playwright check run
+against the dev server. Its results and the export evidence are in
+`eval/RESULTS-PHASE-6.md`, "6B: the playground redesign".
+
+**Measured.**
+- 33 assertions, 33 passed, 0 console errors, on four consecutive runs.
+- The four screenshots are in `.visual-check/6b/`.
+- `marey export` wrote all four examples in all five formats, 20 of 20 exiting 0.
+- `npm run check:export` passed: `matrix: all passed  (134.8 s)`.
+
+**Deviations from the task text.**
+- The check also opens the Export menu on desktop (the spec asks for every menu).
+- The overlap assertion alone cannot catch an overflowing flex row. A
+  `min-width: 400px` on the Examples button pushed Examples, More and Run off
+  the right edge at 320 and 390 px and the overlap assertion stayed green. The
+  check therefore also asserts that every top-bar control lies inside the
+  viewport. With that edit the new assertion failed; with `position: absolute`
+  added, the overlap assertion failed too. Both edits were reverted.
+- The first version of the menu check failed on roughly half of its runs. A menu
+  is shown before an effect focuses its first item, so ArrowDown and Escape
+  pressed straight after Enter could land on the trigger, leaving the menu open.
+  The check now waits for focus to reach a menu item, presses ArrowDown, waits
+  for focus to move to a different item, then presses Escape. This is a
+  timing property of the script, not an application defect.
