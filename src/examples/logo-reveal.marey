@@ -1,31 +1,52 @@
-// Logo reveal: three parts fly in one after another and lock into a mark.
-// Each part has its own delay, so they arrive in sequence.
+// Logo reveal: the Marey mark, a sun over three ridges, assembles and the name fades in.
+// Each part rises on its own beat, and the finished lockup holds for the last second.
 
-let coral = #e8846f
-let amber = #feb93e
+let sunRim  = #feb93e
+let sunDisc = #fecd5e
+let cream   = #f5e6d3
+
+template Ridge(shade, delay, peaks) {
+  polygon ridge {
+    position: (400, 346 + 70), origin: (0.5, 1), color: shade, alpha: 0
+    points: peaks
+    sequence {
+      parallel {
+        animate { property: position, to: (400, 346), duration: 0.8, delay: delay, easing: easeOut }
+        animate { property: alpha, to: 1, duration: 0.5, delay: delay }
+      }
+    }
+  }
+}
 
 scene {
   size: (800, 600)
-  duration: 4
-  background: #1a1b41
+  duration: 5
+  background: #2b2d5c
 
-  group mark {
-    position: (360, 300)
+  group sun {
+    position: (400, 270), scale: (0.4, 0.4), alpha: 0
+    circle rim  { position: (0, 0), radius: 96, color: sunRim }
+    circle disc { position: (0, -8), radius: 91, color: sunDisc }
+    sequence {
+      parallel {
+        animate { property: position, to: (400, 236), duration: 1.1, easing: easeOut }
+        animate { property: scale, to: (1, 1), duration: 1.1, easing: easeOut }
+        animate { property: alpha, to: 1, duration: 0.6 }
+      }
+    }
+  }
 
-    rectangle stem {
-      position: (0, -300), size: (40, 200), color: coral, alpha: 0
-      animate { property: position, to: (0, 0), duration: 0.8, easing: easeOut }
-      animate { property: alpha, to: 1, duration: 0.5 }
-    }
-    rectangle armTop {
-      position: (500, -70), size: (80, 40), color: amber, alpha: 0
-      animate { property: position, to: (60, -70), duration: 0.8, delay: 0.7, easing: easeOut }
-      animate { property: alpha, to: 1, duration: 0.5, delay: 0.7 }
-    }
-    rectangle armMid {
-      position: (500, 18), size: (62, 40), color: amber, alpha: 0
-      animate { property: position, to: (46, 18), duration: 0.8, delay: 1.4, easing: easeOut }
-      animate { property: alpha, to: 1, duration: 0.5, delay: 1.4 }
+  use Ridge(#6b4a7a, 0.9, [(-190, 0), (-70, -84), (-10, -40), (70, -100), (190, 0)]) back {}
+  use Ridge(#4a3560, 1.2, [(-190, 0), (-110, -48), (-30, -14), (50, -58), (190, 0)]) middle {}
+  use Ridge(#2f2444, 1.5, [(-190, 0), (-130, -24), (-60, -2), (30, -30), (190, 0)]) front {}
+
+  text name {
+    position: (400, 470), content: "marey", fontSize: 64, color: cream, alpha: 0
+    sequence {
+      parallel {
+        animate { property: position, to: (400, 450), duration: 0.9, delay: 2.2, easing: easeOut }
+        animate { property: alpha, to: 1, duration: 0.9, delay: 2.2 }
+      }
     }
   }
 }

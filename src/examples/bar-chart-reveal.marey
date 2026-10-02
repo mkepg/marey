@@ -1,18 +1,22 @@
-// Bar chart reveal: seven values grow into bars, one after another.
-// Each bar pivots on the baseline (origin (0.5, 1)), so scaling in y grows it upward.
+// Bar chart reveal: seven values grow into bars, each labelled as it lands.
+// Bars pivot on the baseline (origin (0.5, 1)); every object comes from a list.
 
 let values   = [3, 7, 2, 9, 5, 8, 4]
+let tags     = ["3", "7", "2", "9", "5", "8", "4"]   // text cannot be built from numbers
+let weeks    = ["W1", "W2", "W3", "W4", "W5", "W6", "W7"]
 let unit     = 30           // pixels per unit of value
 let baseline = 500
 let step     = 800 / (length(values) + 1)
+let grow     = 0.6          // seconds a bar takes to grow
+let cream    = #f5e6d3
 
 scene {
   size: (800, 600)
-  duration: 4
+  duration: 5
   background: #1a1b41
 
   text title {
-    position: (400, 60), content: "Sales by week", fontSize: 24, color: #f5e6d3
+    position: (400, 60), content: "Sales by week", fontSize: 24, color: cream
   }
 
   line baselineRule {
@@ -21,16 +25,23 @@ scene {
   }
 
   generate v, i in values {
+    let start = 0.3 + i * 0.25
     rectangle bar {
       position: (step * (i + 1), baseline)
       size: (step - 30, v * unit)
       color: #feb93e
       origin: (0.5, 1)
       scale: (1, 0)
-      animate {
-        property: scale, to: (1, 1), duration: 0.6
-        delay: 0.3 + i * 0.25, easing: easeOut
-      }
+      animate { property: scale, to: (1, 1), duration: grow, delay: start, easing: easeOut }
+    }
+    text amount {
+      position: (step * (i + 1), baseline - v * unit - 20)
+      content: tags[i], fontSize: 20, color: cream, alpha: 0
+      animate { property: alpha, to: 1, duration: 0.25, delay: start + grow }
+    }
+    text week {
+      position: (step * (i + 1), baseline + 28)
+      content: weeks[i], fontSize: 16, color: #b8a9d6
     }
   }
 }

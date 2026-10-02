@@ -1,54 +1,73 @@
-// Physics pile: shapes drop from staggered heights, collide and settle.
-// Every body shares one world; nothing is scripted after the drop.
+// Physics pile: 26 shapes fall in three waves, collide and settle into one heap in a bin.
+// A waiting shape is invisible but solid, so the first wave starts lowest and the last highest.
 
 let coral    = #e8846f
 let amber    = #feb93e
 let rose     = #b8608a
 let lavender = #a99be0
+let colors   = [amber, coral, rose, lavender]
+let waveAt   = [0, 1.4, 2.8]       // when each wave is released
+let bandY    = [370, 230, 90]      // the height of each wave's top row
+let end      = 7                   // every body freezes where it lies at this time
 
 scene {
   size: (800, 600)
-  duration: 8
+  duration: 7
   background: #1a1b41
 
-  line floor {
-    position: (400, 596), points: [(-400, 0), (400, 0)]
-    thickness: 1, color: #7a4f8a, alpha: 0.6
+  // Two frozen walls hold the heap together, leaning out a little so the bin widens upward.
+  generate s in [-1, 1] {
+    rectangle wall {
+      position: (400 + s * 205, 505), size: (18, 190), rotation: s * 6, color: #4a3560
+      physics { gravity: (0, 0), duration: 0.05 }
+    }
   }
 
-  // A column of crates falls from the top, and the other shapes land among them.
-  generate i in 0 to 4 {
-    rectangle crate {
-      position: (400 + [0, 22, -18, 26, -12][i], 40 + i * 80)
-      size: (64, 64)
-      color: [amber, coral, rose, lavender, coral][i]
-      physics {
-        gravity: (0, 980), bounce: 0.15, airDrag: 0.02
-        collideBounds: true, duration: indefinitely
+  generate i in 0 to 7 {
+    let n = i  let w = n % 3  let j = (n - w) / 3  let c = j % 3
+    circle ball {
+      position: (280 + c * 120, bandY[w] + (j - c) / 3 * 70)
+      radius: 16 + (i % 3) * 5, color: colors[i % 4], alpha: 0
+      sequence {
+        animate { property: alpha, to: 1, duration: 0.01, delay: waveAt[w] }
+        physics { gravity: (0, 980), bounce: 0.3, airDrag: 0.01, duration: end - waveAt[w] }
       }
     }
   }
 
-  polygon wedge {
-    position: (560, 60)
-    points: [(0, -34), (30, 18), (-30, 18)]
-    color: amber
-    physics {
-      gravity: (0, 980), bounce: 0.35, collideBounds: true, duration: indefinitely
+  generate i in 0 to 7 {
+    let n = i + 8  let w = n % 3  let j = (n - w) / 3  let c = j % 3
+    rectangle crate {
+      position: (280 + c * 120, bandY[w] + (j - c) / 3 * 70)
+      size: (34 + (i % 3) * 10, 34 + (i % 3) * 10), color: colors[(i + 1) % 4], alpha: 0
+      sequence {
+        animate { property: alpha, to: 1, duration: 0.01, delay: waveAt[w] }
+        physics { gravity: (0, 980), bounce: 0.2, airDrag: 0.01, duration: end - waveAt[w] }
+      }
     }
   }
 
-  circle ball {
-    position: (330, 20), radius: 28, color: lavender
-    physics {
-      gravity: (0, 980), bounce: 0.5, collideBounds: true, duration: indefinitely
+  generate i in 0 to 6 {
+    let n = i + 16  let w = n % 3  let j = (n - w) / 3  let c = j % 3
+    polygon wedge {
+      position: (280 + c * 120, bandY[w] + (j - c) / 3 * 70)
+      points: [(0, -26), (24, 16), (-24, 16)], color: colors[(i + 2) % 4], alpha: 0
+      sequence {
+        animate { property: alpha, to: 1, duration: 0.01, delay: waveAt[w] }
+        physics { gravity: (0, 980), bounce: 0.25, airDrag: 0.01, duration: end - waveAt[w] }
+      }
     }
   }
 
-  rectangle slab {
-    position: (470, 14), size: (96, 28), color: rose
-    physics {
-      gravity: (0, 980), bounce: 0.2, collideBounds: true, duration: indefinitely
+  generate i in 0 to 2 {
+    let n = i + 23  let w = n % 3  let j = (n - w) / 3  let c = j % 3
+    rectangle plank {
+      position: (280 + c * 120, bandY[w] + (j - c) / 3 * 70)
+      size: (120, 14), color: colors[(i + 3) % 4], rotation: (i * 37) % 60 - 30, alpha: 0
+      sequence {
+        animate { property: alpha, to: 1, duration: 0.01, delay: waveAt[w] }
+        physics { gravity: (0, 980), bounce: 0.2, airDrag: 0.01, duration: end - waveAt[w] }
+      }
     }
   }
 }
