@@ -1,8 +1,10 @@
 /**
  * Measured layout check for the redesigned playground (Phase 6B, spec §9.7).
  *
- * For each of 1440x900 and 390x844, in each theme, it loads the app, waits for
- * the status to read "compiled", saves a screenshot and asserts:
+ * For each of 1440x900 and 390x844, in each theme, it loads the app at a
+ * device pixel ratio of 2, waits for the status to read "compiled", saves a
+ * screenshot (so 2880x1800 and 780x1688 pixels; spec §11 reviews them at 2x)
+ * and asserts:
  *   1. no two visible controls in `header[data-topbar]` have intersecting
  *      bounding boxes;
  *   2. the plate frame's aspect ratio equals 800/600 within 1 px;
@@ -11,7 +13,9 @@
  *      Escape, returning focus to its button (Examples and Export on
  *      desktop; Examples and More on a phone);
  *   5. the page logs no console errors.
- * At 320x640 it repeats assertion 1 only.
+ * At 320x640 it repeats assertion 1 only. At 760x900, the narrowest desktop
+ * layout (the phone breakpoint is 759), it runs assertion 1 in the normal
+ * state and again while New shows its "Clear editor?" confirmation.
  *
  * Usage:
  *   node tools/visual-check/playground-check.mjs [--url http://localhost:5199] [--headed]
@@ -36,6 +40,10 @@ mkdirSync(outDir, { recursive: true });
 const LAUNCH_ARGS = ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--use-gl=angle"];
 
 const SCENE = { width: 800, height: 600, caption: { size: "800 × 600", length: "12 s" } };
+
+// The page renders the scene at a device pixel ratio of 2 on a software GL
+// stack, so a menu's effects can lag a keypress by well over a second.
+const MENU_WAIT_MS = 10_000;
 
 const results = [];
 const consoleErrors = [];
@@ -98,19 +106,19 @@ async function checkMenu(page, context, label) {
     await button.focus();
     focusedBefore = await button.evaluate((el) => document.activeElement === el);
     await page.keyboard.press("Enter");
-    await page.locator('[role="menu"]').waitFor({ state: "visible", timeout: 2000 });
+    await page.locator('[role="menu"]').waitFor({ state: "visible", timeout: MENU_WAIT_MS });
     const opened = (await button.getAttribute("aria-expanded")) === "true";
     // Opening focuses the first item in an effect, after the menu is visible.
     // Wait for it, as a person would, before pressing the next key.
     const isItem = () => document.activeElement?.getAttribute("role")?.startsWith("menuitem") ?? false;
-    await page.waitForFunction(isItem, null, { timeout: 2000 });
+    await page.waitForFunction(isItem, null, { timeout: MENU_WAIT_MS });
     const first = await page.evaluate(() => document.activeElement?.textContent);
     await page.keyboard.press("ArrowDown");
     const itemFocused = await page
-      .waitForFunction((f) => document.activeElement?.getAttribute("role")?.startsWith("menuitem") && document.activeElement.textContent !== f, first, { timeout: 2000 })
+      .waitForFunction((f) => document.activeElement?.getAttribute("role")?.startsWith("menuitem") && document.activeElement.textContent !== f, first, { timeout: MENU_WAIT_MS })
       .then(() => true, () => false);
     await page.keyboard.press("Escape");
-    await page.locator('[role="menu"]').waitFor({ state: "detached", timeout: 2000 });
+    await page.locator('[role="menu"]').waitFor({ state: "detached", timeout: MENU_WAIT_MS });
     const closed = (await button.getAttribute("aria-expanded")) === "false";
     const focusBack = await button.evaluate((el) => document.activeElement === el);
     record(context, name, opened && itemFocused && closed && focusBack,
@@ -123,8 +131,8 @@ async function checkMenu(page, context, label) {
   }
 }
 
-async function load(browser, viewport, theme) {
-  const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1 });
+async function load(browser, viewport, theme, deviceScaleFactor = 1) {
+  const ctx = await browser.newContext({ viewport, deviceScaleFactor });
   if (theme) await ctx.addInitScript((t) => localStorage.setItem("marey_theme", t), theme);
   const page = await ctx.newPage();
   const label = `${viewport.width}x${viewport.height}${theme ? ` ${theme}` : ""}`;
@@ -143,7 +151,7 @@ const browser = await chromium.launch({ headless: !process.argv.includes("--head
 
 for (const [kind, viewport] of [["desktop", { width: 1440, height: 900 }], ["phone", { width: 390, height: 844 }]]) {
   for (const theme of ["light", "dark"]) {
-    const { ctx, page, label } = await load(browser, viewport, theme);
+    const { ctx, page, label } = await load(browser, viewport, theme, 2);
     const context = `${kind}-${theme} (${label})`;
     await page.screenshot({ path: `${outDir}/${kind}-${theme}.png` });
 
@@ -175,6 +183,18 @@ for (const [kind, viewport] of [["desktop", { width: 1440, height: 900 }], ["pho
 {
   const { ctx, page } = await load(browser, { width: 320, height: 640 }, null);
   await checkOverlap(page, "narrowest (320x640)");
+  await ctx.close();
+}
+{
+  const { ctx, page } = await load(browser, { width: 760, height: 900 }, null);
+  const context = "narrowest desktop (760x900)";
+  await checkOverlap(page, context);
+  await page.locator('header[data-topbar] button[aria-label="New file"]').click();
+  const confirming = await page
+    .locator('header[data-topbar] button', { hasText: "Clear editor?" })
+    .waitFor({ state: "visible", timeout: 2000 }).then(() => true, () => false);
+  record(context, "New shows its confirmation", confirming);
+  await checkOverlap(page, `${context}, confirming New`);
   await ctx.close();
 }
 await browser.close();

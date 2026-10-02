@@ -588,10 +588,13 @@ and §9.7.
 
 **Layout, measured in a browser.** `tools/visual-check/playground-check.mjs`
 against the dev server (`npx vite --port 5199 --strictPort`), at 1440 x 900 and
-390 x 844 in both themes, and at 320 x 640 for the top bar only:
+390 x 844 in both themes at a device pixel ratio of 2 (screenshots of 2880 x
+1800 and 780 x 1688 pixels, as spec §11 reviews them), at 320 x 640 for the top
+bar only, and at 760 x 900, the narrowest desktop layout, for the top bar in its
+normal state and while New shows "Clear editor?":
 
 ```
-{"assertions":33,"passed":33,"failed":0,"consoleErrors":0}
+{"assertions":38,"passed":38,"failed":0,"consoleErrors":0}
 ```
 
 Per page it asserts that no two top-bar controls intersect and that none leave

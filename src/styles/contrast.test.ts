@@ -3,9 +3,15 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 /**
- * Spec 6B §9.6: every text colour in both themes reaches WCAG AA (4.5:1) on
- * the background it is drawn on. The colours are read from the theme blocks
- * in global.scss, so the test checks what ships, not a copy of it.
+ * Spec 6B §9.6: the text colours of both themes reach WCAG AA (4.5:1) on the
+ * backgrounds the UI draws them on. Checked, per theme: primary and secondary
+ * text on the pane, the terminal, the menu (the pane in light, `--bg-preview`
+ * in dark), the hover and focus ground and `--accent-dim`; ok and error text
+ * on the bar; the accent's label on the accent; and the editor's comment colour
+ * on the editor background and on the current-line highlight. Not checked:
+ * `--text-muted` and `--text-info`, which carry no body text, and the
+ * syntax colours other than comments. Colours are read from global.scss and
+ * themes.ts, so the test checks what ships, not a copy of it.
  */
 // Not `?raw`: Vitest's CSS pipeline hands back an empty module for a .scss
 // import, and the app project carries no Node types, hence the reference above.
@@ -45,6 +51,15 @@ const PAIRS: ReadonlyArray<readonly [string, string]> = [
   ["text-ok", "bg-bar"],
   ["text-error", "bg-bar"],
   ["accent-text", "accent"],
+  // Menus: the pane's ground in light, --bg-preview in dark.
+  ["text-primary", "bg-preview"],
+  ["text-secondary", "bg-preview"],
+  // Hovered and focused menu items.
+  ["text-primary", "bg-handle"],
+  ["text-secondary", "bg-handle"],
+  // The running export's button.
+  ["text-primary", "accent-dim"],
+  ["text-secondary", "accent-dim"],
 ];
 
 describe.each([["dark", dark], ["light", light]] as const)("%s theme", (_name, theme) => {
@@ -59,5 +74,40 @@ describe("the contrast formula", () => {
   it("measures black on white as 21:1 and a colour on itself as 1:1", () => {
     expect(contrast("#000000", "#ffffff")).toBeCloseTo(21, 5);
     expect(contrast("#6b58f0", "#6b58f0")).toBeCloseTo(1, 5);
+  });
+});
+
+// Monaco takes literal hex strings, so themes.ts holds its own copy of the
+// palette. Comments are the one syntax colour the spec holds to 4.5:1.
+const themesSource = readFileSync(
+  new URL("../components/Editor/MonacoEditor/themes.ts", import.meta.url), "utf8");
+
+function monacoTheme(name: string) {
+  const start = themesSource.indexOf(`defineTheme("${name}"`);
+  if (start < 0) throw new Error(`themes.ts does not define ${name}`);
+  const next = themesSource.indexOf("defineTheme(", start + 1);
+  const block = themesSource.slice(start, next < 0 ? undefined : next);
+  const pick = (re: RegExp, what: string): string => {
+    const m = block.match(re);
+    if (!m) throw new Error(`${name} has no ${what}`);
+    return `#${m[1].toLowerCase()}`;
+  };
+  return {
+    comment: pick(/token:\s*"comment",\s*foreground:\s*"([0-9a-fA-F]{6})"/, "comment colour"),
+    background: pick(/"editor\.background":\s*"#([0-9a-fA-F]{6})"/, "editor.background"),
+    lineHighlight: pick(/"editor\.lineHighlightBackground":\s*"#([0-9a-fA-F]{6})"/, "line highlight"),
+  };
+}
+
+describe.each([["Marey-dark", "#80858f"], ["Marey-light", "#646d82"]] as const)("%s editor comments", (name, expected) => {
+  const t = monacoTheme(name);
+  it("uses the colour the spec records", () => {
+    expect(t.comment).toBe(expected);
+  });
+  it("reach 4.5:1 on the editor background", () => {
+    expect(contrast(t.comment, t.background)).toBeGreaterThanOrEqual(4.5);
+  });
+  it("reach 4.5:1 on the current-line highlight", () => {
+    expect(contrast(t.comment, t.lineHighlight)).toBeGreaterThanOrEqual(4.5);
   });
 });

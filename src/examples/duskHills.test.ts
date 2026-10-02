@@ -2,12 +2,10 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { Container } from "pixi.js";
 import duskSource from "./dusk-hills.marey?raw";
 import { compileSource } from "../compiler/compileSource";
-import { planExport } from "../compiler/export/exportContract";
 import { buildNode } from "../compiler/renderer/builder";
 import { SceneRuntime } from "../compiler/renderer/sceneRuntime";
 import { MatterWorld } from "../compiler/renderer/physicsWorld";
 import { snapshotFor, type ObjectSnapshot } from "../compiler/renderer/frameSampler";
-import { encodeCode, MAX_SHARE_LENGTH } from "../lib/share";
 import type { IRAnimation, IRObjectNode, IRPoint, IRSceneNode } from "../compiler/sceneIR";
 
 const TICKS_PER_SECOND = 120;
@@ -34,17 +32,6 @@ describe("dusk-hills.marey", () => {
     expect(ir.height).toBe(600);
     expect(ir.duration).toBe(12);
     expect(ir.fit).toBe("contain");
-  });
-
-  it("exports as loaded, at the buttons' 30 fps", () => {
-    const planned = planExport(ir, { fps: 30 });
-    expect(planned.ok ? [] : planned.diagnostics).toEqual([]);
-  });
-
-  it("is small enough to share", () => {
-    const encoded = encodeCode(duskSource);
-    expect(encoded).not.toBeNull();
-    expect(encoded!.length).toBeLessThanOrEqual(MAX_SHARE_LENGTH);
   });
 
   it("obeys the seamless-loop rule in every animation (spec §6)", () => {

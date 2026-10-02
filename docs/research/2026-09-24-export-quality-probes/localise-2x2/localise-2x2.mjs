@@ -27,8 +27,8 @@
 // Re-run, from the repository root:
 //   npx vite --port 5199 --strictPort   # separate terminal
 //   node docs/research/2026-09-24-export-quality-probes/localise-2x2/localise-2x2.mjs
-// Options: --scene <path.marey> (default: the app's DEFAULT_CODE, read from
-// src/store/defaultScene.ts), --out <dir> (default .visual-check/localise-2x2).
+// Options: --scene <path.marey> (default: the former default scene,
+// tools/visual-check/scenes/hello-face.marey), --out <dir> (default .visual-check/localise-2x2).
 //
 // report.json beside this script is the 2026-09-25 run's output, the one
 // eval/RESULTS-PHASE-5C.md ("fix round 2") and spec §9.1 cite. That run read
@@ -46,19 +46,10 @@ function arg(name, fallback) {
   const i = process.argv.indexOf(`--${name}`);
   return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
 }
-// DEFAULT_CODE is a plain template literal with no interpolation. The file's
-// JSDoc also contains backticks, so anchor on `DEFAULT_CODE = \`` (the same
-// extraction tools/visual-check/lottie-click-check.mjs uses).
-function extractDefaultCode() {
-  const src = readFileSync(resolve("src/store/defaultScene.ts"), "utf8");
-  const marker = "DEFAULT_CODE = `";
-  const first = src.indexOf(marker) + marker.length - 1;
-  const last = src.lastIndexOf("`");
-  if (first < marker.length - 1 || last <= first) throw new Error("could not find DEFAULT_CODE's template literal");
-  return src.slice(first + 1, last);
-}
+// The former default scene, preserved as a visual-check fixture.
+const DEFAULT_SCENE = "tools/visual-check/scenes/hello-face.marey";
 const scenePath = arg("scene", null);
-const source = scenePath ? readFileSync(resolve(scenePath), "utf8") : extractDefaultCode();
+const source = readFileSync(resolve(scenePath ?? DEFAULT_SCENE), "utf8");
 const url = "http://localhost:5199";
 const sceneUrl = `${url}/#code=${LZString.compressToEncodedURIComponent(source)}`;
 const mediabunnyPath = resolve("node_modules/mediabunny/dist/bundles/mediabunny.mjs");
