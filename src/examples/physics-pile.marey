@@ -1,0 +1,54 @@
+// Physics pile: shapes drop from staggered heights, collide and settle.
+// Every body shares one world; nothing is scripted after the drop.
+
+let coral    = #e8846f
+let amber    = #feb93e
+let rose     = #b8608a
+let lavender = #a99be0
+
+scene {
+  size: (800, 600)
+  duration: 8
+  background: #1a1b41
+
+  line floor {
+    position: (400, 596), points: [(-400, 0), (400, 0)]
+    thickness: 1, color: #7a4f8a, alpha: 0.6
+  }
+
+  // A column of crates falls from the top, and the other shapes land among them.
+  generate i in 0 to 4 {
+    rectangle crate {
+      position: (400 + [0, 22, -18, 26, -12][i], 40 + i * 80)
+      size: (64, 64)
+      color: [amber, coral, rose, lavender, coral][i]
+      physics {
+        gravity: (0, 980), bounce: 0.15, airDrag: 0.02
+        collideBounds: true, duration: indefinitely
+      }
+    }
+  }
+
+  polygon wedge {
+    position: (560, 60)
+    points: [(0, -34), (30, 18), (-30, 18)]
+    color: amber
+    physics {
+      gravity: (0, 980), bounce: 0.35, collideBounds: true, duration: indefinitely
+    }
+  }
+
+  circle ball {
+    position: (330, 20), radius: 28, color: lavender
+    physics {
+      gravity: (0, 980), bounce: 0.5, collideBounds: true, duration: indefinitely
+    }
+  }
+
+  rectangle slab {
+    position: (470, 14), size: (96, 28), color: rose
+    physics {
+      gravity: (0, 980), bounce: 0.2, collideBounds: true, duration: indefinitely
+    }
+  }
+}
