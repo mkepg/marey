@@ -103,6 +103,32 @@ const MENU_ITEM = '[role="menuitem"], [role="menuitemcheckbox"]';
 const CONFIRM_MS = 3_000;
 
 /**
+ * An ask-then-confirm prompt: `arm(key)` raises it, and it lowers itself after
+ * `CONFIRM_MS` unless `clear()` runs first. `armed` holds the key it was raised
+ * for, so one prompt can serve a list of items.
+ */
+function useConfirm<K>() {
+  const [armed, setArmed] = useState<K | null>(null);
+  const timer = useRef<number | undefined>(undefined);
+
+  /** Lowers the prompt `ms` from now, replacing any pending timeout. */
+  const expireIn = (ms: number): void => {
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setArmed(null), ms);
+  };
+  const arm = (key: K): void => {
+    setArmed(key);
+    expireIn(CONFIRM_MS);
+  };
+  const clear = (): void => {
+    window.clearTimeout(timer.current);
+    setArmed(null);
+  };
+
+  return { armed, arm, clear, expireIn };
+}
+
+/**
  * Open/close, outside-click and keyboard handling shared by the top bar's
  * menus. Opening focuses the first item; Escape closes and returns focus to
  * the trigger; the key rules themselves live in `menuKey`.
@@ -207,20 +233,12 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
   const isExporting = useAppStore((s) => s.isExporting);
   const { exportScene, progress } = useExport();
 
-  const [confirmingNew, setConfirmingNew] = useState(false);
-  const newTimer = useRef<number | undefined>(undefined);
-  const [confirmingId, setConfirmingId] = useState<ExampleId | null>(null);
-  const confirmTimer = useRef<number | undefined>(undefined);
-
-  const clearConfirm = (): void => {
-    window.clearTimeout(confirmTimer.current);
-    setConfirmingId(null);
-  };
-
-  const clearNewConfirm = (): void => {
-    window.clearTimeout(newTimer.current);
-    setConfirmingNew(false);
-  };
+  const newConfirm = useConfirm<true>();
+  const confirmingNew = newConfirm.armed !== null;
+  const exampleConfirm = useConfirm<ExampleId>();
+  const confirmingId = exampleConfirm.armed;
+  const clearConfirm = exampleConfirm.clear;
+  const clearNewConfirm = newConfirm.clear;
 
   const exportMenu  = useMenu();
   const exampleMenu = useMenu(clearConfirm);
@@ -236,9 +254,7 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
   /** New asks once, then clears the editor on a second choice within 3 s. Returns true once it has cleared. */
   const chooseNew = (): boolean => {
     if (!confirmingNew) {
-      window.clearTimeout(newTimer.current);
-      setConfirmingNew(true);
-      newTimer.current = window.setTimeout(() => setConfirmingNew(false), CONFIRM_MS);
+      newConfirm.arm(true);
       return false;
     }
     clearNewConfirm();
@@ -249,15 +265,12 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
   // Leaving New cancels its confirmation, after a short grace period so a
   // second click that moves focus still counts.
   const handleNewBlur = (): void => {
-    window.clearTimeout(newTimer.current);
-    newTimer.current = window.setTimeout(() => setConfirmingNew(false), 150);
+    newConfirm.expireIn(150);
   };
 
   const handleExampleChoice = (id: ExampleId): void => {
     if (exampleNeedsConfirm && confirmingId !== id) {
-      window.clearTimeout(confirmTimer.current);
-      setConfirmingId(id);
-      confirmTimer.current = window.setTimeout(() => setConfirmingId(null), CONFIRM_MS);
+      exampleConfirm.arm(id);
       return;
     }
     clearConfirm();
@@ -314,7 +327,7 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
             return (
               <button
                 key={example.id}
-                className={`${styles.menuItem} ${styles.exampleItem}${confirming ? ` ${styles.exampleConfirm}` : ""}`}
+                className={`${styles.menuItem} ${styles.exampleItem}${confirming ? ` ${styles.confirmDestructive}` : ""}`}
                 role="menuitem"
                 tabIndex={-1}
                 onClick={() => handleExampleChoice(example.id)}
@@ -333,20 +346,24 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
     </div>
   );
 
-  const exportItems = EXPORT_OPTIONS.map((option) => (
-    <button
-      key={option.kind}
-      className={styles.menuItem}
-      role="menuitem"
-      tabIndex={-1}
-      aria-disabled={isExporting || undefined}
-      onClick={() => handleExportClick(option.kind)}
-    >
-      <option.Icon />
-      <span className={styles.menuLabel}>{option.label}</span>
-      <span className={styles.menuDetail}>{option.detail}</span>
-    </button>
-  ));
+  const exportItems = (
+    <div role="group" aria-label="Export">
+      {EXPORT_OPTIONS.map((option) => (
+        <button
+          key={option.kind}
+          className={styles.menuItem}
+          role="menuitem"
+          tabIndex={-1}
+          aria-disabled={isExporting || undefined}
+          onClick={() => handleExportClick(option.kind)}
+        >
+          <option.Icon />
+          <span className={styles.menuLabel}>{option.label}</span>
+          <span className={styles.menuDetail}>{option.detail}</span>
+        </button>
+      ))}
+    </div>
+  );
 
   const licensesItem = (onChoose: () => void) => (
     <a
@@ -421,7 +438,7 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
                   </span>
                 </button>
                 <button
-                  className={`${styles.menuItem}${confirmingNew ? ` ${styles.menuItemConfirm}` : ""}`}
+                  className={`${styles.menuItem}${confirmingNew ? ` ${styles.confirmDestructive}` : ""}`}
                   role="menuitem"
                   tabIndex={-1}
                   onClick={() => { if (chooseNew()) moreMenu.close(); }}
@@ -495,10 +512,10 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
           {exampleMenuEl}
 
           <button
-            className={`${styles.btn}${confirmingNew ? ` ${styles.btnConfirm}` : ""}`}
+            className={`${styles.btn}${confirmingNew ? ` ${styles.confirmDestructive}` : ""}`}
             onClick={() => { chooseNew(); }}
             onBlur={handleNewBlur}
-            aria-label={confirmingNew ? "Clear the editor? Choose New again to confirm" : "New file"}
+            aria-label={confirmingNew ? "Clear editor? Choose New again to confirm" : "New file"}
             title={confirmingNew ? "Choose again to clear the editor" : "New file"}
           >
             {confirmingNew ? "Clear editor?" : "New"}

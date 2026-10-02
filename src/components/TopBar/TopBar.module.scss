@@ -186,16 +186,6 @@
   }
 }
 
-.btnConfirm {
-  color: var(--text-error);
-  background: color-mix(in srgb, var(--text-error) 10%, transparent);
-
-  &:hover:not(:disabled) {
-    color: var(--text-error);
-    background: color-mix(in srgb, var(--text-error) 16%, transparent);
-  }
-}
-
 .btnExporting,
 .btnExporting:hover:not(:disabled) {
   color: var(--text-primary);
@@ -400,12 +390,6 @@
   }
 }
 
-.menuItemConfirm {
-  color: var(--text-error);
-
-  svg { color: var(--text-error); }
-}
-
 .menuLabel {
   flex: 1;
 }
@@ -497,9 +481,24 @@
   color: var(--text-secondary);
 }
 
-.exampleConfirm {
-  background: var(--accent-dim);
-  box-shadow: inset 2px 0 0 var(--accent);
+// The second choice of an ask-then-confirm prompt that throws away the
+// editor's code: New, and loading an example over existing code. One class, so
+// both read the same, on a bar button and on a menu item.
+.confirmDestructive {
+  color: var(--text-error);
+  background: color-mix(in srgb, var(--text-error) 10%, transparent);
+
+  &:hover:not(:disabled),
+  &:focus {
+    color: var(--text-error);
+    background: color-mix(in srgb, var(--text-error) 16%, transparent);
+  }
+
+  svg,
+  .exampleTitle,
+  .exampleDescription {
+    color: var(--text-error);
+  }
 }
 
 // ─── Export progress on phones ──────────────────────────────────────────────

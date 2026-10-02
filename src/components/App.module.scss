@@ -79,9 +79,11 @@
     // Fill what the preview and the log line leave of the first screen, and
     // never less than 45% of the viewport (spec 6B §4). The hairline above
     // it is added on top, so the editor itself keeps the full 45vh.
+    // --below-editor is the folded log line (44px) plus two 1px hairlines.
+    --below-editor: 46px;
     box-sizing: content-box;
-    height: max(45vh, calc(100vh - var(--bar-h) - var(--preview-h) - 46px));
-    height: max(45vh, calc(100dvh - var(--bar-h) - var(--preview-h) - 46px));
+    height: max(45vh, calc(100vh - var(--bar-h) - var(--preview-h) - var(--below-editor)));
+    height: max(45vh, calc(100dvh - var(--bar-h) - var(--preview-h) - var(--below-editor)));
     border-top: 1px solid var(--border);
   }
 

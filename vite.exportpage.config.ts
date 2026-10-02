@@ -12,7 +12,7 @@ import { thirdPartyLicenses } from "./vite-plugins/thirdPartyLicenses";
  * and none of the site's own (`favicon.svg`, `og-image.png`, ...).
  * `publicDir` still points at it, because the licence plugin reads the font
  * licences from there. That plugin lists every font in `public/fonts/`, so
- * the page's licence file also names the Syne fonts it does not ship. That
+ * the page's licence file also names the other fonts it does not ship. That
  * over-lists, which is the safe direction for a notices file.
  */
 const EXPORT_FONT_FILE = "fonts/JetBrainsMono-Regular.ttf";

@@ -52,6 +52,12 @@ export const App: FunctionComponent = () => {
     containerRef: leftPaneRef,
   });
 
+  // The page root follows the theme too, so an overscroll on a phone, where
+  // the document scrolls, shows the theme's ground and not the dark default.
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
   useEffect(() => {
     const id = setTimeout(() => editorRef.current?.layout(), 0);
     return () => clearTimeout(id);

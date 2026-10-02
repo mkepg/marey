@@ -37,7 +37,7 @@ export const Preview: FunctionComponent<PreviewProps> = ({ hostRef }) => {
   const caption = rect && sceneInfo ? captionFor(sceneInfo) : null;
 
   return (
-    <div className={styles.wrap} data-plate-surface>
+    <div className={styles.wrap}>
       {isCompiling && (
         <div className={styles.loadingOverlay}>Compiling…</div>
       )}
