@@ -5,10 +5,10 @@ import {
   saveToStorage,
   encodeCode,
 } from "../lib/share";
-import duskHills from "../examples/dusk-hills.marey?raw";
+import { EXAMPLES, DEFAULT_EXAMPLE, type ExampleId } from "../examples";
 
 /** The scene loaded when there is no saved or shared document. */
-export const DEFAULT_CODE: string = duskHills;
+const DEFAULT_CODE: string = DEFAULT_EXAMPLE.source;
 
 export type Theme = "dark" | "light";
 export type CompileStatus = "idle" | "ok" | "error";
@@ -50,7 +50,7 @@ export interface AppState {
   showToast: (message: string, kind: ToastState["kind"]) => void;
   dismissToast: (id: number) => void;
   newFile: () => void;
-  loadExample: () => void;
+  loadExample: (id: ExampleId) => void;
   setAutoRun: (val: boolean) => void;
   setIsCompiling: (val: boolean) => void;
   setIsExporting: (val: boolean) => void;
@@ -125,16 +125,18 @@ export const useAppStore = create<AppState>((set) => ({
       fileId: s.fileId + 1,
     }));
   },
-  // Restores the bundled example. Without this the default scene is
-  // unrecoverable once it has been edited, since autosave overwrites it.
-  loadExample: () => {
-    saveToStorage(DEFAULT_CODE);
+  // Loads one of the bundled examples. It is saved because autosave has
+  // already overwritten the previous document, so the choice persists like an edit.
+  loadExample: (id) => {
+    const source = EXAMPLES.find((e) => e.id === id)?.source;
+    if (source === undefined) return;
+    saveToStorage(source);
     set((s) => ({
-      code: DEFAULT_CODE,
+      code: source,
       logs: [],
       errors: [],
       compileStatus: "idle",
-      isTooLargeToShare: computeIsTooLarge(DEFAULT_CODE),
+      isTooLargeToShare: computeIsTooLarge(source),
       fileId: s.fileId + 1,
     }));
   },

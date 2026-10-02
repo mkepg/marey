@@ -3,7 +3,9 @@ import type { FunctionComponent } from "preact";
 import { useAppStore } from "../../store";
 import { useShare } from "../../hooks/useShare";
 import { useExport, type ExportKind } from "../../hooks/useExport";
+import { EXAMPLES, type ExampleId } from "../../examples";
 import { exportLabelFor } from "./exportLabel";
+import { menuKey } from "./menuKeys";
 import styles from "./TopBar.module.scss";
 
 const SunIcon: FunctionComponent = () => (
@@ -111,6 +113,70 @@ const EXPORT_OPTIONS: readonly ExportOption[] = [
 
 const MENU_ITEM = '[role="menuitem"]';
 
+/** How long a "Replace your code?" prompt waits for a second choice. */
+const CONFIRM_MS = 3_000;
+
+/**
+ * Open/close, outside-click and keyboard handling shared by the top bar's
+ * menus. Opening focuses the first item; Escape closes and returns focus to
+ * the trigger; the key rules themselves live in `menuKey`.
+ */
+function useMenu(onClose?: () => void) {
+  const [open, setOpen] = useState(false);
+  const wrapRef    = useRef<HTMLDivElement>(null);
+  const menuRef    = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    menuRef.current?.querySelector<HTMLElement>(MENU_ITEM)?.focus();
+    const onPointerDown = (e: PointerEvent): void => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      onClose?.();
+    };
+    // onClose only touches a ref and a state setter, so a stale closure is harmless.
+  }, [open]);
+
+  const close = (): void => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  const onMenuKeyDown = (e: KeyboardEvent): void => {
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLElement>(MENU_ITEM) ?? []);
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const result = menuKey(e.key, at, items.length);
+    switch (result.kind) {
+      case "move":
+        e.preventDefault();
+        items[result.index]?.focus();
+        break;
+      case "activate":
+        e.preventDefault();
+        items[at]?.click();
+        break;
+      case "close":
+        if (e.key === "Escape") { e.preventDefault(); close(); } else setOpen(false);
+        break;
+      case "ignore":
+        break;
+    }
+  };
+
+  const onTriggerKeyDown = (e: KeyboardEvent): void => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setOpen(true);
+    }
+  };
+
+  return { open, setOpen, close, wrapRef, menuRef, triggerRef, onMenuKeyDown, onTriggerKeyDown };
+}
+
 interface TopBarProps {
   onRun: () => void;
 }
@@ -130,11 +196,16 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
   const { exportScene, progress } = useExport();
 
   const [confirmingNew, setConfirmingNew] = useState(false);
-  const [confirmingExample, setConfirmingExample] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuWrapRef = useRef<HTMLDivElement>(null);
-  const menuRef     = useRef<HTMLDivElement>(null);
-  const triggerRef  = useRef<HTMLButtonElement>(null);
+  const [confirmingId, setConfirmingId] = useState<ExampleId | null>(null);
+  const confirmTimer = useRef<number | undefined>(undefined);
+
+  const clearConfirm = (): void => {
+    window.clearTimeout(confirmTimer.current);
+    setConfirmingId(null);
+  };
+
+  const exportMenu  = useMenu();
+  const exampleMenu = useMenu(clearConfirm);
 
   // An empty editor has nothing to lose, so skip the confirmation there —
   // that is the case a first-timer who cleared the editor is most likely in.
@@ -157,60 +228,20 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
     setTimeout(() => setConfirmingNew(false), 150);
   };
 
-  const handleExampleClick = (): void => {
-    if (exampleNeedsConfirm && !confirmingExample) {
-      setConfirmingExample(true);
-      setTimeout(() => setConfirmingExample(false), 3_000);
+  const handleExampleChoice = (id: ExampleId): void => {
+    if (exampleNeedsConfirm && confirmingId !== id) {
+      window.clearTimeout(confirmTimer.current);
+      setConfirmingId(id);
+      confirmTimer.current = window.setTimeout(() => setConfirmingId(null), CONFIRM_MS);
       return;
     }
-    setConfirmingExample(false);
-    loadExample();
-  };
-
-  const handleExampleBlur = (): void => {
-    setTimeout(() => setConfirmingExample(false), 150);
-  };
-
-  // Opening the menu focuses its first entry; a press anywhere outside the
-  // menu or its trigger closes it.
-  useEffect(() => {
-    if (!menuOpen) return;
-    menuRef.current?.querySelector<HTMLElement>(MENU_ITEM)?.focus();
-    const onPointerDown = (e: PointerEvent): void => {
-      if (!menuWrapRef.current?.contains(e.target as Node)) setMenuOpen(false);
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [menuOpen]);
-
-  const closeMenu = (): void => {
-    setMenuOpen(false);
-    triggerRef.current?.focus();
-  };
-
-  const handleMenuKeyDown = (e: KeyboardEvent): void => {
-    const items = Array.from(menuRef.current?.querySelectorAll<HTMLElement>(MENU_ITEM) ?? []);
-    const at = items.indexOf(document.activeElement as HTMLElement);
-    const focusAt = (i: number): void => items[(i + items.length) % items.length]?.focus();
-    switch (e.key) {
-      case "Escape":    e.preventDefault(); closeMenu(); break;
-      case "Tab":       setMenuOpen(false); break;
-      case "ArrowDown": e.preventDefault(); focusAt(at + 1); break;
-      case "ArrowUp":   e.preventDefault(); focusAt(at - 1); break;
-      case "Home":      e.preventDefault(); focusAt(0); break;
-      case "End":       e.preventDefault(); focusAt(items.length - 1); break;
-    }
-  };
-
-  const handleTriggerKeyDown = (e: KeyboardEvent): void => {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setMenuOpen(true);
-    }
+    clearConfirm();
+    exampleMenu.close();
+    loadExample(id);
   };
 
   const handleExportClick = (kind: ExportKind): void => {
-    closeMenu();
+    exportMenu.close();
     void exportScene(kind);
   };
 
@@ -256,24 +287,52 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
           {confirmingNew ? "confirm?" : <span className={styles.btnText}>new</span>}
         </button>
 
-        <button
-          className={`${styles.btnIcon}${confirmingExample ? ` ${styles.btnConfirm}` : ""}`}
-          onClick={handleExampleClick}
-          onBlur={handleExampleBlur}
-          aria-label={
-            confirmingExample
-              ? "Click again to confirm loading the example"
-              : "Load the example scene"
-          }
-          title={
-            confirmingExample
-              ? "Click again to confirm — replaces your code"
-              : "Load the example scene"
-          }
-        >
-          <ExampleIcon />
-          {confirmingExample ? "replace?" : <span className={styles.btnText}>example</span>}
-        </button>
+        <div className={styles.menuWrap} ref={exampleMenu.wrapRef}>
+          <button
+            ref={exampleMenu.triggerRef}
+            className={styles.btnIcon}
+            onClick={() => exampleMenu.setOpen(!exampleMenu.open)}
+            onKeyDown={exampleMenu.onTriggerKeyDown}
+            aria-haspopup="menu"
+            aria-expanded={exampleMenu.open}
+            aria-label="Examples"
+            title="Load an example scene"
+          >
+            <ExampleIcon />
+            <span className={styles.btnText}>Examples</span>
+            <ChevronIcon />
+          </button>
+
+          {exampleMenu.open && (
+            <div
+              ref={exampleMenu.menuRef}
+              className={`${styles.menu} ${styles.menuLeft} ${styles.exampleMenu}`}
+              role="menu"
+              aria-label="Examples"
+              onKeyDown={exampleMenu.onMenuKeyDown}
+            >
+              {EXAMPLES.map((example) => {
+                const confirming = confirmingId === example.id;
+                return (
+                  <button
+                    key={example.id}
+                    className={`${styles.menuItem} ${styles.exampleItem}${confirming ? ` ${styles.exampleConfirm}` : ""}`}
+                    role="menuitem"
+                    tabIndex={-1}
+                    onClick={() => handleExampleChoice(example.id)}
+                  >
+                    <span className={styles.exampleTitle}>
+                      {confirming ? "Replace your code?" : example.title}
+                    </span>
+                    <span className={styles.exampleDescription}>
+                      {confirming ? `Choose again to load ${example.title}.` : example.description}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         <div className={styles.tooltipWrap}>
           <button
@@ -294,15 +353,15 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
           )}
         </div>
 
-        <div className={styles.menuWrap} ref={menuWrapRef}>
+        <div className={styles.menuWrap} ref={exportMenu.wrapRef}>
           <button
-            ref={triggerRef}
+            ref={exportMenu.triggerRef}
             className={`${styles.btnIcon}${running ? ` ${styles.btnExporting}` : ""}`}
-            onClick={() => setMenuOpen(!menuOpen)}
-            onKeyDown={handleTriggerKeyDown}
+            onClick={() => exportMenu.setOpen(!exportMenu.open)}
+            onKeyDown={exportMenu.onTriggerKeyDown}
             disabled={isExporting}
             aria-haspopup="menu"
-            aria-expanded={menuOpen}
+            aria-expanded={exportMenu.open}
             aria-label={
               running
                 ? running.kind === "lottie"
@@ -317,13 +376,13 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
             {!running && <ChevronIcon />}
           </button>
 
-          {menuOpen && (
+          {exportMenu.open && (
             <div
-              ref={menuRef}
+              ref={exportMenu.menuRef}
               className={styles.menu}
               role="menu"
               aria-label="Export format"
-              onKeyDown={handleMenuKeyDown}
+              onKeyDown={exportMenu.onMenuKeyDown}
             >
               {EXPORT_OPTIONS.map((option) => (
                 <button
@@ -347,7 +406,7 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
                 href={`${import.meta.env.BASE_URL}third-party-licenses.txt`}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={() => setMenuOpen(false)}
+                onClick={() => exportMenu.setOpen(false)}
                 aria-label="Third-party licenses (opens in a new tab)"
               >
                 <span className={styles.menuLabel}>Third-party licenses</span>
