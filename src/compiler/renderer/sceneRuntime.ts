@@ -1,6 +1,6 @@
 import type { Container } from "pixi.js";
 import type { IRAnimation, IRPhysics, IRSequence, IRPoint, IRParallelStep } from "../sceneIR";
-import { secondsToTicks } from "./clock";
+import { secondsToTicks, TICK_HZ } from "./clock";
 import {
   advanceAnimTime,
   animProgress,
@@ -24,7 +24,7 @@ import {
   type PhysicsBinding,
 } from "./physicsSync";
 import { rotateScaleVector, toWorld, type LocalTransform } from "./transform";
-import { evaluateEasing } from "./easing";
+import { evaluateEasing, releaseEndOf } from "./easing";
 
 export interface RunningAnim {
   container: Container;
@@ -57,18 +57,28 @@ interface SequenceRunner {
   activeStepRunners: AnimOrPhysics[];
 }
 
-function getEasingDerivativeAtEnd(easing: string): number {
-  switch (easing) {
-    case "easeIn":    return 2.0;
-    case "easeOut":   return 0.5;
-    case "easeInOut": return 0.5;
-    case "linear":
-    default:          return 1.0;
-  }
-}
-
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
+}
+
+/**
+ * The velocity an animation had over its final tick, in px/s: the
+ * displacement of that tick times `TICK_HZ` (Phase 6C spec §2.1). A
+ * non-looping yoyo's final tick is the last of its return leg, from progress
+ * 1/N back to 0, so its direction needs no special case.
+ */
+function finalTickVelocity(ra: RunningAnim): IRPoint {
+  const n = Math.max(ra.time.durationTicks, 1);
+  const release = releaseEndOf(ra.anim);
+  const [pPrev, pEnd] = release === "start" ? [1 / n, 0] : [(n - 1) / n, 1];
+  const ePrev = evaluateEasing(pPrev, ra.anim.easing, release);
+  const eEnd = evaluateEasing(pEnd, ra.anim.easing, release);
+  const s = ra.startVal as IRPoint;
+  const t = ra.targetVal as IRPoint;
+  return {
+    x: (lerp(s.x, t.x, eEnd) - lerp(s.x, t.x, ePrev)) * TICK_HZ,
+    y: (lerp(s.y, t.y, eEnd) - lerp(s.y, t.y, ePrev)) * TICK_HZ,
+  };
 }
 
 /**
@@ -79,7 +89,7 @@ function lerp(a: number, b: number, t: number): number {
  * class purely because it never touches the world.
  */
 function applyAnim(ra: RunningAnim, alpha: number): void {
-  const e = evaluateEasing(animProgress(ra.time, alpha), ra.anim.easing);
+  const e = evaluateEasing(animProgress(ra.time, alpha), ra.anim.easing, releaseEndOf(ra.anim));
 
   if (ra.anim.property === "alpha") {
     ra.container.alpha = lerp(ra.startVal as number, ra.targetVal as number, e);
@@ -204,33 +214,11 @@ export class SceneRuntime {
     // them once per rendered frame instead, silently dropping physics ticks.
     if (justCompleted && ra.isPosAnim && ra.container.__mareyLayout) {
       if (ra.anim.handoff && ra.anim.duration > 0) {
-        const startPt = ra.startVal as IRPoint;
-        const targetPt = ra.targetVal as IRPoint;
-        const deriv = getEasingDerivativeAtEnd(ra.anim.easing);
-        const durSec = Math.max(ra.anim.duration, 0.001);
-
-        // A non-looping yoyo finishes at the end of its RETURN leg, travelling
-        // from `to` back toward where it started, so it exits along the reverse
-        // of the outbound displacement (P3A-10). `duration` is still the
-        // half-cycle, so the speed is unchanged — only the direction flips.
-        //
-        // Expressed by swapping the endpoints rather than negating, so a zero
-        // component stays +0 and the two legs read as the same formula.
-        //
-        // A looping animation never completes and so never reaches this line;
-        // the `loop` term is here so the rule states itself rather than relying
-        // on that.
-        const reversing = ra.anim.yoyo && !ra.anim.loop;
-        const from = reversing ? targetPt : startPt;
-        const to = reversing ? startPt : targetPt;
-
-        ra.container.__pendingVelocity = {
-          x: ((to.x - from.x) / durSec) * deriv,
-          y: ((to.y - from.y) / durSec) * deriv,
-        };
+        ra.container.__pendingVelocity = finalTickVelocity(ra);
       }
 
-      unpinBody(ra.container, this.world, "POS_ANIM");
+      // A handoff keeps its pin until `advanceOneTick` has stepped the world.
+      if (!ra.anim.handoff) unpinBody(ra.container, this.world, "POS_ANIM");
     }
 
     // The rotation-override release is state, not paint, for the same reason:
@@ -302,7 +290,7 @@ export class SceneRuntime {
 
   /** A scale runner's own value for this tick, evaluated at `alpha = 0`. */
   private scaleOf(ra: RunningAnim): { x: number; y: number } {
-    const e = evaluateEasing(animProgress(ra.time, 0), ra.anim.easing);
+    const e = evaluateEasing(animProgress(ra.time, 0), ra.anim.easing, releaseEndOf(ra.anim));
     const s = ra.startVal as IRPoint;
     const t = ra.targetVal as IRPoint;
     return { x: lerp(s.x, t.x, e), y: lerp(s.y, t.y, e) };
@@ -341,7 +329,7 @@ export class SceneRuntime {
     const id = ra.container.__body;
     if (!id) return;
 
-    const e = evaluateEasing(animProgress(ra.time, 0), ra.anim.easing);
+    const e = evaluateEasing(animProgress(ra.time, 0), ra.anim.easing, releaseEndOf(ra.anim));
 
     const layout = ra.container.__mareyLayout;
     // `(0, 0)` at the default origin, which is every scene written before
@@ -674,6 +662,18 @@ export class SceneRuntime {
     }
 
     this.world.step();
+
+    // A handoff lets its body go after the step of the tick it completed on,
+    // so that step leaves the body at its release value and the first free
+    // step is the next one, as in a sequence, where the NO_RUNNER pin already
+    // holds it through this step (Phase 6C spec §2.3). Releasing before the
+    // step moved the body twice in one tick.
+    for (let i = 0; i < this.runningAnims.length; i++) {
+      const ra = this.runningAnims[i];
+      if (ra.completedThisTick && ra.isPosAnim && ra.anim.handoff && ra.container.__mareyLayout) {
+        unpinBody(ra.container, this.world, "POS_ANIM");
+      }
+    }
 
     for (let i = 0; i < this.sequenceRunners.length; i++) {
       const sr = this.sequenceRunners[i];

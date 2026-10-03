@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Container } from "pixi.js";
 import { SceneRuntime } from "./sceneRuntime";
 import { TICK_HZ } from "./clock";
+import { evaluateEasing, releaseEndOf } from "./easing";
 import { MatterWorld } from "./physicsWorld";
 import type {
   IPhysicsWorld, BodyGeometry, BodyState, PhysicsParams, PinReason,
@@ -258,7 +259,9 @@ describe("SceneRuntime · tick phase", () => {
   it("parks a handoff velocity on the completion tick and flushes it when the last pin lifts", () => {
     const c = makeContainer({
       animations: [anim({ handoff: true, easing: "linear" })],
-      physics: PHYSICS,
+      // Indefinite, so the physics block does not freeze the body on the very
+      // tick the animation releases it.
+      physics: { ...PHYSICS, duration: "indefinitely" },
     });
     const world = new RecordingWorld();
     const rt = new SceneRuntime(world, makeRoot(c));
@@ -266,8 +269,10 @@ describe("SceneRuntime · tick phase", () => {
 
     for (let i = 0; i < TICK_HZ; i++) rt.advanceOneTick();
 
-    // linear hands off at average speed: 200px over 1s.
-    expect(world.velocities.get(id)).toEqual({ x: 200, y: 0 });
+    // linear hands off at its final tick's speed: 200px over 1s. Compared
+    // closely, as the speed is a per-tick difference times TICK_HZ.
+    expect(world.velocities.get(id)!.x).toBeCloseTo(200, 6);
+    expect(world.velocities.get(id)!.y).toBeCloseTo(0, 6);
   });
 
   it("pins FROZEN when a physics duration expires", () => {
@@ -415,7 +420,9 @@ describe("SceneRuntime · tick phase", () => {
     expect(world.velocities.get(id)).toBeUndefined();
 
     rt.advanceOneTick();
-    expect(world.velocities.get(id)).toEqual({ x: -200, y: 0 });
+    // Compared closely: a per-tick difference times TICK_HZ is not exact.
+    expect(world.velocities.get(id)!.x).toBeCloseTo(-200, 6);
+    expect(world.velocities.get(id)!.y).toBeCloseTo(0, 6);
   });
 
   it("lets a real body fall again once a position yoyo completes", () => {
@@ -873,7 +880,9 @@ describe("SceneRuntime · frame pacing must not reach the world", () => {
     const handoff = calls.indexOf("setVelocity:b0:-480.0000,0.0000");
     expect(handoff).toBeGreaterThan(-1);
     const ticksBefore = calls.slice(0, handoff).filter((s) => s === "step").length;
-    expect(ticksBefore).toBe(9);
+    // The release follows the step of the completing tick (10th), so ten
+    // steps precede the velocity write.
+    expect(ticksBefore).toBe(10);
 
     // And it stops pushing after it completes: 10 pushes, not 40.
     expect(calls.filter((s) => s.startsWith("setPosition:"))).toHaveLength(10);
@@ -1082,4 +1091,83 @@ describe("SceneRuntime · paintExactTick places both subsystems at the same tick
     // `paint(1)` would land one tick further along.
     expect(c.__mareyLayout!.currentPos.x).toBeCloseTo(100 + (1100 * 60) / 1200, 6);
   });
+});
+
+/**
+ * Phase 6C spec §3: the handoff seam, against the real solver.
+ *
+ * 200 px over 1 s with gravity and air drag off, so any change of pace at
+ * the seam is the handoff's own. "Concurrent" puts `physics` beside the
+ * animation; "sequence" puts it in a step after.
+ */
+describe("SceneRuntime · the handoff seam", () => {
+  const FREE: IRPhysics = {
+    velocity: { x: 0, y: 0 },
+    gravity: { x: 0, y: 0 },
+    airDrag: 0,
+    bounce: 0,
+    collideBounds: false,
+    duration: "indefinitely",
+  };
+  const START = { x: 200, y: 300 };
+  const TO = { x: 400, y: 300 };
+  const EASINGS = ["linear", "easeIn", "easeOut", "easeInOut"] as const;
+
+  /**
+   * Body x after every tick (index 0 = before the first), the tick the
+   * animation started on, and the tick it released on.
+   */
+  function runSeam(arrangement: "concurrent" | "sequence", easing: string, yoyo: boolean) {
+    const a = anim({ to: TO, duration: 1, easing: easing as IRAnimation["easing"], yoyo, handoff: true });
+    const c = arrangement === "concurrent"
+      ? makeContainer({ position: START, animations: [a], physics: FREE })
+      : makeContainer({ position: START, sequence: { steps: [a, FREE] } });
+    const world = new MatterWorld(2000, 2000);
+    const rt = new SceneRuntime(world, makeRoot(c));
+    const id = c.__body!;
+    const runTicks = (yoyo ? 2 : 1) * TICK_HZ;
+
+    const xs = [world.readState(id, 1)!.x];
+    const pinnedAfter: boolean[] = [true];
+    for (let k = 1; k <= runTicks + 6; k++) {
+      rt.advanceOneTick();
+      xs.push(world.readState(id, 1)!.x);
+      pinnedAfter.push(world.isPinned(id));
+    }
+    world.destroy();
+
+    // The first tick that moves the body is the animation's first tick.
+    const first = xs.findIndex((x, k) => k > 0 && x !== xs[k - 1]);
+    return { xs, pinnedAfter, first, release: first - 1 + runTicks, a };
+  }
+
+  /** The curve's own final step, signed, in px (spec §3, check 2). */
+  function finalStep(a: IRAnimation): number {
+    const release = releaseEndOf(a);
+    const [pPrev, pEnd] = release === "start" ? [1 / TICK_HZ, 0] : [1 - 1 / TICK_HZ, 1];
+    return (TO.x - START.x) * (evaluateEasing(pEnd, a.easing, release) - evaluateEasing(pPrev, a.easing, release));
+  }
+
+  for (const arrangement of ["concurrent", "sequence"] as const) {
+    for (const yoyo of [false, true]) {
+      for (const easing of EASINGS) {
+        it(`${arrangement}, ${easing}${yoyo ? ", yoyo" : ""}: crosses the seam at an even pace`, () => {
+          const { xs, pinnedAfter, first, release: n, a } = runSeam(arrangement, easing, yoyo);
+          const d = (k: number) => xs[k] - xs[k - 1];
+
+          // 3. Released after tick N, never before, in both arrangements.
+          expect(first).toBeGreaterThan(0);
+          expect(pinnedAfter[n - 1]).toBe(true);
+          expect(pinnedAfter[n]).toBe(false);
+
+          // 2. Tick N moved the curve's final step: not doubled, not stalled.
+          const step = finalStep(a);
+          expect(Math.abs(d(n) - step)).toBeLessThanOrEqual(Math.abs(step) * 1e-3);
+
+          // 1. The first free tick moves as far as the last animated one.
+          expect(Math.abs(d(n + 1) - d(n))).toBeLessThanOrEqual(Math.abs(d(n)) * 1e-3);
+        });
+      }
+    }
+  }
 });
