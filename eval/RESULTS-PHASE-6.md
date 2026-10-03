@@ -724,9 +724,9 @@ step in px, with k counted from the release tick N:
 | N+2 | 1.6667 | 1.6667 | 1.6667 | 1.6667 |
 | N+3 | 1.6667 | 1.6667 | 1.6667 | 1.6667 |
 
-Two frames at half speed before, none after. Concurrent `linear` at alpha 0.5
-measured the same 0.8333, 0.8333 at N and N+1 once the release moved after the
-step. Sequence `easeOut` at alpha 0.5 read 0.4167, 0.4167 against 0.8336,
+Two frames at half speed before, none after. Before the painting change but
+with the release already moved after the step, concurrent `linear` at alpha 0.5
+measured the same 0.8333, 0.8333 at N and N+1. Sequence `easeOut` at alpha 0.5 read 0.4167, 0.4167 against 0.8336,
 0.8334 expected. After the change, over 16 cases x 3 alphas x 7 steps (336
 steps), the largest relative error is 0.799% (concurrent `easeInOut`, alpha
 0.5, k = N+1: painted 0.854058 against 0.860938 expected), inside the 1%
@@ -756,13 +756,16 @@ difference is 0, inside the allowed 1. The PNG export's SHA-256 is the same
 before and after (`79f3f294...`). The `throw-arc` and `test-card` handoffs
 start with their animation at t = 0, and `easeOut` is reshaped, so frame 1 is
 the first frame that can differ. In `hello-face` the handoff animation has
-`delay: 2.0` (frame 60) and the first differing frame is 66, after it starts.
+`delay: 2.0` (frame 60) and the first differing frame is 66. Frames 60 to 65
+are pixel-identical before and after, although the reshaped curve starts at
+frame 60; that is what the comparison showed, and it was not investigated
+further.
 
 **Browser check.** `npx vite --port 5199 --strictPort`, then
 `node tools/visual-check/check.mjs --scene tools/visual-check/scenes/test-card.marey --at 300,800,1300,1800,2300 --settle 3000 --out .visual-check/6c/browser`:
 `compiled true`, `rendered true`, `page errors 0`. `frozen at rest` and
-`deterministic` both read `false`; the scene loops, so the README says neither
-applies to it. The handoff ball at 300 ms is rising to the right
+`deterministic` both read `false`; the scene loops, so neither check is
+meaningful for it, as the README says. The handoff ball at 300 ms is rising to the right
 (about (230, 347) in the 624 px wide capture), at 800 ms it is past its apex
 and falling (about (347, 585)), and from 1300 ms it rests on the floor at the
 bottom edge. The captures are 500 ms apart, so they show the arc but cannot
