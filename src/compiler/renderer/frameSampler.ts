@@ -92,13 +92,14 @@ export function snapshotFor(root: Container): ObjectSnapshot[] {
  * once per tick — and the 30-vs-60 coincident-frame test still passed. It
  * does not distinguish the two cadences, for a documented reason: `tickAnim`
  * (`sceneRuntime.ts`) already snaps a runner's own property to its exact
- * tick-aligned value with `applyAnim(ra, 0)` **in the tick phase**, the moment
- * that runner completes — precisely to keep a later `getCurrentVal` read
- * tick-aligned regardless of when paint next runs. Every `spawnAnim` in this
- * suite's fixture reads a property that was either never animated or was
- * snapped that way, so paint cadence had nothing left to affect. (The fixture
- * has no `sequence` block; whether a mid-scene sequence step could still
- * observe paint-phase state some other way is untested here and open.)
+ * tick-aligned value with `applyAnim(ra, animProgress(ra.time, 0))` **in the
+ * tick phase**, the moment that runner completes — precisely to keep a later
+ * `getCurrentVal` read tick-aligned regardless of when paint next runs.
+ * Every `spawnAnim` in this suite's fixture reads a property that was either
+ * never animated or was snapped that way, so paint cadence had nothing left
+ * to affect. (The fixture has no `sequence` block; whether a mid-scene
+ * sequence step could still observe paint-phase state some other way is
+ * untested here and open.)
  *
  * Painting every tick is kept anyway, as the more conservative choice — it
  * matches the "state mutation in the tick phase, painting in the paint

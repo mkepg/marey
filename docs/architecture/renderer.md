@@ -49,18 +49,24 @@ only thing enforcing it; check it by grepping the five files above for
   test before the change). Painted backward it reads 1.6667 throughout, and
   across all 16 handoff cases at alpha 0.25, 0.5 and 0.75 the painted step
   stays within 0.8% of the tick path's; what is left is an eased curve's bend
-  between two ticks. One rule in `paintAt` follows from painting a tick
-  behind: a runner that completed on the tick just advanced is still moving
-  at the painted moment, so it paints after the bodies and after a
-  sequence's next step, and is spliced only once a paint reaches its end. A
-  body let go after that tick's step was pinned through it, so `readState`
-  gives its end value at every alpha and cannot show that moment.
-  `paintExactTick()` never has such a runner, so exported frames are painted
-  and spliced exactly as before. The sampler paints every tick, not every
-  frame — kept as the conservative choice, not a proven necessity; see its
-  own docstring for the paint-cadence experiment that failed to find a scene
-  sensitive to the difference, and for the one case (a `sequence`-bearing
-  scene) that experiment did not cover.
+  between two ticks. Painting a tick behind brings one rule in `paintAt`.
+  A runner that completed on the tick just advanced is still moving at the
+  painted moment, so it is spliced only once a paint reaches its end, and two
+  writers that would otherwise paint over it at that moment give way: a
+  runner on the same container and property that has not ticked yet (a
+  sequence's next step, which had not started), and a body let go after
+  that tick's step, which was pinned through it, so `readState` gives its
+  end value at every alpha. A runner later in spawn order on the same
+  property that was running at that moment still wins, as it does on every
+  other frame. Because that paint leaves the property short of its end, the
+  next `advanceOneTick()` first restores the tick-exact end before the tick
+  phase can read it back (invariant 3). `paintExactTick()` never has such a
+  runner, so exported frames are painted and spliced exactly as before.
+  The sampler paints every tick, not every frame — kept as the conservative
+  choice, not a proven necessity; see its own docstring for the
+  paint-cadence experiment that failed to find a scene sensitive to the
+  difference, and for the one case (a `sequence`-bearing scene) that
+  experiment did not cover.
 
 - **`timeline.ts`** — `AnimTime`/`PhysicsTime` state, advanced one tick at a
   time. Durations are converted from IR seconds to ticks at runner creation.

@@ -803,6 +803,25 @@ describe("SceneRuntime · paint phase", () => {
     expect(rt.isIdle()).toBe(true);
   });
 
+  it("lets the later of two overlapping position animations win, even on the tick the earlier one ends", () => {
+    // Both run from x = 0; the later one in spawn order owns the position for
+    // as long as it runs. The earlier one completes on tick 30, and the paint
+    // of that tick shows it short of its end, still moving: it must not paint
+    // over the later one, which was moving through the same moment.
+    const c = makeContainer({
+      animations: [
+        anim({ to: { x: 100, y: 0 }, duration: 30 / TICK_HZ }),
+        anim({ to: { x: 400, y: 0 }, duration: 60 / TICK_HZ }),
+      ],
+    });
+    const rt = new SceneRuntime(new RecordingWorld(), makeRoot(c));
+    for (let k = 1; k <= 59; k++) {
+      rt.advanceOneTick();
+      rt.paint(0.5);
+      expect(c.__mareyLayout!.currentPos.x).toBeCloseTo((400 * (k - 0.5)) / 60, 9);
+    }
+  });
+
   it("reports not idle while the world says a body is still moving", () => {
     const c = makeContainer({ physics: { ...PHYSICS, duration: "indefinitely" } });
     const world = new RecordingWorld();
@@ -1009,6 +1028,32 @@ describe("SceneRuntime · frame pacing must not reach the world", () => {
     expect(frozenPivot(12)).toEqual(frozenPivot(1));
   });
 
+  it("starts a sequence step from the exact tick value after a one-tick step, at every pacing", () => {
+    // The paint after the tick a runner completes on shows it a tick behind,
+    // short of its end. A one-tick middle step on another property makes the
+    // third step spawn on the very next tick, so it reads `currentPos` before
+    // any later paint has written the end. Ticks: step 1 runs 2-61, step 2
+    // is tick 62, step 3 spawns at the end of 62 and first pushes on 63.
+    const subject = (): Container =>
+      makeContainer({
+        sequence: {
+          steps: [
+            anim({ to: { x: 100, y: 0 }, duration: 60 / TICK_HZ }),
+            anim({ property: "alpha", to: 0.5, duration: 1 / TICK_HZ }),
+            anim({ to: { x: 200, y: 0 }, duration: 60 / TICK_HZ }),
+            { ...PHYSICS, duration: "indefinitely" },
+          ],
+        },
+      });
+    const thirdStepFirstPush = (ticksPerFrame: number): string =>
+      runAtPacing(ticksPerFrame, 130, subject).filter((s) => s.startsWith("setPosition:"))[60];
+
+    // One tick of the third step from exactly 100: 100 + 100 / 60.
+    expect(thirdStepFirstPush(1)).toBe("setPosition:b0:101.6667,0.0000");
+    expect(thirdStepFirstPush(7)).toBe(thirdStepFirstPush(1));
+    expect(thirdStepFirstPush(12)).toBe(thirdStepFirstPush(1));
+  });
+
   it("starts a sequence's second animation from the first one's exact target", () => {
     // The specific mechanism: the second animation's startVal is read from
     // container state that the paint phase last wrote at the driver's alpha.
@@ -1132,7 +1177,8 @@ describe("SceneRuntime · paintExactTick places both subsystems at the same tick
     rt.paintExactTick();
 
     // Linear, 10s = 1200 ticks, 100 -> 1200. After 60 ticks: 100 + 1100*60/1200.
-    // `paint(1)` would land one tick further along.
+    // Before Phase 6C, `paint(1)` landed one tick further along; animations
+    // now paint backward, so it gives this same value.
     expect(c.__mareyLayout!.currentPos.x).toBeCloseTo(100 + (1100 * 60) / 1200, 6);
   });
 });
@@ -1216,8 +1262,9 @@ describe("SceneRuntime · the handoff seam", () => {
   }
 
   /**
-   * The painted x after `paint(a)` following each tick from `from` to `to`,
-   * alongside the tick-level x the same run reaches.
+   * The painted x after `paint(a)` following each tick (index 0 = before the
+   * first), alongside the tick-level x the same run reaches, over the run
+   * and six ticks past it.
    */
   function paintedSeam(arrangement: "concurrent" | "sequence", easing: string, yoyo: boolean, a: number) {
     const anim1 = anim({ to: TO, duration: 1, easing: easing as IRAnimation["easing"], yoyo, handoff: true });

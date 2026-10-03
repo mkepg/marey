@@ -40,6 +40,25 @@ export interface RunningAnim {
    * two lifecycle bits — `time.completed` and this — sit on the same object.
    */
   completedThisTick: boolean;
+  /**
+   * Whether `tickAnim` has advanced this runner yet. A runner a sequence
+   * spawns at the end of a tick has not, so it had not started at the moment
+   * the following paint shows, which lies inside that tick.
+   */
+  hasTicked: boolean;
+  /**
+   * Set by a paint that left this completed runner's property short of its
+   * end (see `paintAt`), so the next tick restores the tick-exact value before
+   * anything in the tick phase reads it (invariant 3).
+   */
+  paintedShort: boolean;
+  /** Paint scratch: the progress the current paint shows this runner at. */
+  paintP: number;
+  /**
+   * Paint scratch: completed, yet painted short of its end by the current
+   * paint, because the moment painted lies inside its final tick.
+   */
+  stillMoving: boolean;
 }
 
 export interface PhysicsRunner {
@@ -113,6 +132,11 @@ function applyAnim(ra: RunningAnim, p: number): void {
     layout.currentScale.y = lerp(startPt.y, targetPt.y, e);
     ra.container.__updateLayout?.();
   }
+}
+
+/** Whether two runners write the same property of the same container. */
+function sameTarget(a: RunningAnim, b: RunningAnim): boolean {
+  return a.container === b.container && a.anim.property === b.anim.property;
 }
 
 function getCurrentVal(container: Container, prop: string): number | IRPoint {
@@ -189,6 +213,7 @@ export class SceneRuntime {
   }
 
   private tickAnim(ra: RunningAnim): boolean {
+    ra.hasTicked = true;
     const justCompleted = advanceAnimTime(ra.time);
 
     // Snap the animated property to its exact final value, in the TICK phase.
@@ -306,7 +331,8 @@ export class SceneRuntime {
    * its own `alpha = 0` lerp instead. With no runner in flight the field is
    * tick-aligned by construction — `builder.ts` wrote it once, and `tickAnim`
    * snaps it with `applyAnim(ra, animProgress(ra.time, 0))` on the tick a
-   * scale animation completes.
+   * scale animation completes. A paint that then shows that runner short of
+   * its end is undone at the top of the next tick (`paintedShort`).
    */
   private tickScaleOf(container: Container, layout: MareyLayout): { x: number; y: number } {
     const owner = this.scaleOwnerOf(container);
@@ -517,6 +543,10 @@ export class SceneRuntime {
       },
       isPosAnim: isPos,
       completedThisTick: false,
+      hasTicked: false,
+      paintedShort: false,
+      paintP: 0,
+      stillMoving: false,
     };
     this.runningAnims.push(ra);
     localList.push(ra);
@@ -618,9 +648,23 @@ export class SceneRuntime {
    * physics runners, step the world, release the pins of handoffs that
    * completed this tick, then advance the sequence runners. The release comes
    * after `world.step()` and before the sequence runners (Phase 6C spec §2.3).
-   * See the class comment and docs/architecture/renderer.md's invariants.
+   * Ahead of all seven, a completed runner the last paint left short of its
+   * end gets its tick-exact end back. See the class comment and docs/architecture/renderer.md's invariants.
    */
   advanceOneTick(): void {
+    // Undo what the last paint left behind it: a completed runner painted
+    // short of its end, a tick behind (`paintAt`). The tick phase reads these
+    // properties back (`getCurrentVal` when a sequence spawns, `tickScaleOf`),
+    // so they must hold the tick-exact end, as the completion snap wrote it.
+    // Only a paint at alpha below 1 sets the flag, so the export path, which
+    // paints with `paintExactTick`, never comes through here.
+    for (let i = 0; i < this.runningAnims.length; i++) {
+      const ra = this.runningAnims[i];
+      if (!ra.paintedShort) continue;
+      ra.paintedShort = false;
+      applyAnim(ra, animProgress(ra.time, 0));
+    }
+
     // A runner that completed is not spliced until the paint phase, so without
     // the guard below it would keep pushing for every remaining tick of a
     // catch-up burst — making the simulation a function of how many ticks the
@@ -757,28 +801,39 @@ export class SceneRuntime {
    *
    * A runner that completed on the tick just advanced, painted short of its
    * end, is still moving at the moment being painted. Only `paint` does that,
-   * at alpha below 1. Such a runner paints after the bodies and after the
-   * other runners, and stays unspliced until a paint reaches its end:
-   * - A body let go after that tick's step (a handoff, or a sequence starting
-   *   its physics step) was pinned through the step, so the world's
-   *   interpolation buffer holds its end value at every alpha.
-   * - A sequence's next step, spawned at the end of that tick, had not started
-   *   at that moment, and would otherwise paint its start over it.
-   * - Spliced now, nothing would paint it again, and once the scene went idle
-   *   it would rest short of its end.
-   * The next tick does not move it, so the paint after that reaches its end,
-   * paints it first, as any other runner, and splices it. `paintExactTick`
-   * paints every runner at its tick-exact progress, so it never has such a
-   * runner and paints and splices exactly as before.
+   * at alpha below 1. Such a runner stays unspliced until a paint reaches its
+   * end: spliced now, nothing would paint it again, and once the scene went
+   * idle it would rest short of its end. The next tick does not move it, so
+   * the paint after that reaches its end and splices it.
+   *
+   * Two writers would otherwise paint over it at a moment it owns:
+   * - A runner that has not ticked yet, on the same container and property,
+   *   such as a sequence's next step spawned at the end of that tick. It had
+   *   not started at that moment, so it is not painted at all this time.
+   * - The body, if it was let go after that tick's step (a handoff, or a
+   *   sequence starting its physics step). It was pinned through the step,
+   *   so `readState` gives its end value at every alpha. So the runner paints
+   *   again after the bodies.
+   * It does not override a runner later in spawn order on the same container
+   * and property that was running at that moment: as everywhere else, the
+   * last runner wins. `paintExactTick` paints every runner at its tick-exact
+   * progress, so it never has a runner still moving, and paints and splices
+   * exactly as before.
    */
   private paintAt(progressOf: (t: AnimTime) => number, physicsAlpha: number): void {
     const anims = this.runningAnims;
-    const progress = anims.map((ra) => progressOf(ra.time));
-    const stillMoving = (i: number): boolean =>
-      anims[i].time.completed && progress[i] !== animProgress(anims[i].time, 0);
+    let anyStillMoving = false;
+    for (let i = 0; i < anims.length; i++) {
+      const ra = anims[i];
+      ra.paintP = progressOf(ra.time);
+      ra.stillMoving = ra.time.completed && ra.paintP !== animProgress(ra.time, 0);
+      if (ra.stillMoving) anyStillMoving = true;
+    }
 
     for (let i = 0; i < anims.length; i++) {
-      if (!stillMoving(i)) applyAnim(anims[i], progress[i]);
+      const ra = anims[i];
+      if (anyStillMoving && (this.paintsAfterBodies(i) || this.notStartedUnderStillMoving(ra))) continue;
+      applyAnim(ra, ra.paintP);
     }
 
     // Physics writes after animations, so a dynamic body's position wins over
@@ -786,14 +841,18 @@ export class SceneRuntime {
     // syncWorldToContainers skips pinned bodies, so the two never fight.
     syncWorldToContainers(this.bindings, this.world, physicsAlpha);
 
-    for (let i = 0; i < anims.length; i++) {
-      if (stillMoving(i)) applyAnim(anims[i], progress[i]);
+    if (anyStillMoving) {
+      for (let i = 0; i < anims.length; i++) {
+        if (!this.paintsAfterBodies(i)) continue;
+        applyAnim(anims[i], anims[i].paintP);
+        anims[i].paintedShort = true;
+      }
     }
 
     for (let i = anims.length - 1; i >= 0; i--) {
       // The rotation-override release lives in tickAnim (the tick phase),
       // not here — see the comment there. This loop only splices.
-      if (anims[i].time.completed && !stillMoving(i)) anims.splice(i, 1);
+      if (anims[i].time.completed && !anims[i].stillMoving) anims.splice(i, 1);
     }
     for (let i = this.physicsRunners.length - 1; i >= 0; i--) {
       if (this.physicsRunners[i].time.completed) this.physicsRunners.splice(i, 1);
@@ -801,6 +860,35 @@ export class SceneRuntime {
     for (let i = this.sequenceRunners.length - 1; i >= 0; i--) {
       if (this.sequenceRunners[i].state === "DONE") this.sequenceRunners.splice(i, 1);
     }
+  }
+
+  /**
+   * Whether `runningAnims[i]` is still moving (see `paintAt`) and no runner
+   * after it in spawn order, on the same container and property, was running
+   * at the moment painted. Reads the scratch fields `paintAt` just set.
+   */
+  private paintsAfterBodies(i: number): boolean {
+    const anims = this.runningAnims;
+    if (!anims[i].stillMoving) return false;
+    for (let j = i + 1; j < anims.length; j++) {
+      const other = anims[j];
+      if (!sameTarget(anims[i], other) || !other.hasTicked) continue;
+      if (!other.time.completed || other.stillMoving) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Whether `ra` has not ticked yet and a still-moving runner owns its
+   * container and property at the moment painted, which `ra` had not reached.
+   */
+  private notStartedUnderStillMoving(ra: RunningAnim): boolean {
+    if (ra.hasTicked) return false;
+    for (let i = 0; i < this.runningAnims.length; i++) {
+      const other = this.runningAnims[i];
+      if (other.stillMoving && sameTarget(ra, other)) return true;
+    }
+    return false;
   }
 
   /**
