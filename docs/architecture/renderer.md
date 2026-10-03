@@ -166,7 +166,9 @@ Three invariants that are easy to break, each of which has caused a real bug:
    whole renderer, inside `driver.pump()`.
 2. **State mutation belongs in the tick phase, painting in the paint phase.**
    `tickAnim` advances and fires completion side effects (kinematic-count
-   decrement, `handoff` velocity); `applyAnim` only writes display properties.
+   decrement); a `handoff`'s pin release, which flushes its velocity, runs in
+   `advanceOneTick`'s post-step phase, still the tick phase. `applyAnim` only
+   writes display properties.
    Moving side effects into paint means they fire once per *frame* instead of
    once per *tick*, which silently drops physics ticks. This has been a bug
    twice — most recently the rotation-override release in Phase 1.

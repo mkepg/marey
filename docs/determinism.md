@@ -96,14 +96,17 @@ leftover fraction of a tick, `alpha`, to draw smoothly between ticks. Nothing
 that feeds the physics world may depend on `alpha`. The renderer's
 invariants are in `docs/architecture/renderer.md`.
 
-**`alpha` means opposite things to the two subsystems.** An animation extends
-forward from tick N, so it is exact at `alpha = 0`. A physics body
-interpolates backward from its previous position to tick N, so it is exact
-at `alpha = 1`. No single `alpha` puts both on the same tick. Exports
-therefore paint with `paintExactTick()`, which uses 0 for animations and 1
-for physics. Painting at `alpha = 0` instead left a falling body exactly one
-tick of fall short; at `alpha = 1`, a linear animation one tick of travel
-ahead (measured, `sceneRuntime.ts`'s docstring).
+**Both subsystems read `alpha` backward.** Since Phase 6C, `paint(alpha)`
+paints an animation at `paintProgress` (`timeline.ts`), the lerp from tick
+N-1's progress to tick N's, and a physics body at `readState`, which lerps
+from its previous position to tick N. Each is exact at `alpha = 1`, so one
+`alpha` puts both on the same moment. Exports still paint with
+`paintExactTick()`, which reads tick-exact values: animations through
+`animProgress(…, 0)`, physics at `readState(…, 1)`. That is the same picture
+as `paint(1)` except on a looping animation's wrap tick, where alpha 1 is the
+end of the cycle and the exact tick is the start of the next one. Before 6C
+an animation extended forward from tick N, so the two subsystems sat a tick
+apart live (`docs/architecture/renderer.md` has the measurement).
 
 **The sampler never sees a clock.** `sampleFrames` (`frameSampler.ts`) turns
 a frame index into a tick count and calls `advanceOneTick()` that many

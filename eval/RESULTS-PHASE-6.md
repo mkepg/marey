@@ -786,9 +786,23 @@ table above measures.
   a sequence's next step over the completing runner.
 - When a concurrent `physics` block freezes the body on the same tick a
   handoff completes, which only `delay` makes reachable, the handoff velocity
-  stays parked. A later `physics` step in a `sequence` on that object would take
-  it over its declared velocity. The outcome of the freeze itself is the same
-  as before. This was found in the review of the release change and left open.
+  stays parked. Any later `sequence` step on that object thaws the frozen
+  body, because `spawnAnim` unpins FROZEN and that flushes the parked
+  velocity: a later `physics` step would take it over its declared velocity,
+  and an `animate` step on another property sets the body drifting. Probe: a
+  position handoff `(200, 300)` to `(400, 300)` with `delay: 1, duration: 1`
+  beside `physics { duration: 2 }`, followed by `sequence { animate {
+  property: alpha, to: 0.5, duration: 1 } }`, which `marey check` accepts, run
+  through a throwaway vitest file that called `advanceOneTick()` and
+  `paintExactTick()` 360 times. At 7e09051 x reads 400.0000 at ticks 240, 241
+  and 360. At HEAD it reads 400.0000, 401.6667 and 600.0000, a drift of 200
+  px/s after the physics block has expired. With `physics { duration: 1.5 }`,
+  which expires first, 7e09051 and HEAD both read 401.6667 at tick 241 and
+  600.0000 at tick 360, so that variant predates 6C, and 6C extends it to the
+  exact-tie tick. The root cause is that the validator's
+  `TYPE_HANDOFF_DURATION` check ignores `delay`. The outcome of the freeze
+  itself is the same as before. This was found in the review of the release
+  change and left open; the validator is unchanged.
 - Two edges were already there before 6C and were not measured. A non-handoff
   physics freeze can still jump forward by up to one tick in the preview. A
   freeze snap on the same tick as a position runner's completion is overwritten
