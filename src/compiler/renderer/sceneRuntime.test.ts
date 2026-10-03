@@ -155,12 +155,14 @@ describe("SceneRuntime · tick phase", () => {
     const world = new RecordingWorld();
     const rt = new SceneRuntime(world, makeRoot(c));
 
+    // `paint(1)` shows tick N exactly: animations paint backward across
+    // [N-1, N], as bodies do, so `paint(0)` would show the tick before.
     rt.advanceOneTick();
-    rt.paint(0);
+    rt.paint(1);
     expect(c.alpha).toBeCloseTo(1 - 1 / TICK_HZ, 6);
 
     rt.advanceOneTick();
-    rt.paint(0);
+    rt.paint(1);
     expect(c.alpha).toBeCloseTo(1 - 2 / TICK_HZ, 6);
   });
 
@@ -177,18 +179,20 @@ describe("SceneRuntime · tick phase", () => {
     const world = new RecordingWorld();
     const rt = new SceneRuntime(world, makeRoot(c));
 
+    // Painted at alpha 1, which shows tick N exactly and is the alpha that
+    // would leak the most progress into a delay.
     rt.advanceOneTick();
-    rt.paint(0);
+    rt.paint(1);
     expect(c.alpha).toBe(1);
 
     rt.advanceOneTick();
-    rt.paint(0);
+    rt.paint(1);
     expect(c.alpha).toBe(1);
 
     // Delay spent; behaves exactly like the undelayed case above, offset by
     // the two ticks just spent.
     rt.advanceOneTick();
-    rt.paint(0);
+    rt.paint(1);
     expect(c.alpha).toBeCloseTo(1 - 1 / TICK_HZ, 6);
   });
 
@@ -252,8 +256,9 @@ describe("SceneRuntime · tick phase", () => {
     rt.paint(0.75);
 
     expect(world.positions.get(id)!.x).toBeCloseTo(200 / TICK_HZ, 6);
-    // The painted position leads it by up to one tick — that is the documented cost.
-    expect(c.__mareyLayout!.currentPos.x).toBeCloseTo((200 * 1.75) / TICK_HZ, 6);
+    // The painted position trails the body by a quarter tick, as a physics
+    // body's would: `paint(0.75)` interpolates backward from tick 0 to tick 1.
+    expect(c.__mareyLayout!.currentPos.x).toBeCloseTo((200 * 0.75) / TICK_HZ, 6);
   });
 
   it("parks a handoff velocity on the completion tick and flushes it when the last pin lifts", () => {
@@ -760,10 +765,42 @@ describe("SceneRuntime · paint phase", () => {
     expect(rt.isIdle()).toBe(false);
     for (let i = 0; i < 12; i++) rt.advanceOneTick();
     expect(rt.isIdle()).toBe(false); // not spliced until paint
+    // Painted backward, the completion tick at alpha 0 shows tick 11, one
+    // step short of the start, so the runner stays until a paint reaches it.
+    rt.paint(0);
+    expect(rt.isIdle()).toBe(false);
+    rt.advanceOneTick();
     rt.paint(0);
     expect(rt.isIdle()).toBe(true);
     // And it rests on its exact starting value, not one tick short of it.
     expect(c.alpha).toBe(1);
+  });
+
+  it("crosses from one sequence animation to the next at an even pace, and rests on the end", () => {
+    // The next step spawns at the end of the tick the first one completes on,
+    // so it has not started at the moment that tick paints, a tick behind.
+    // Letting it paint its start there read 2.5 then 0.8333 px at alpha 0.5,
+    // where every other step is 1.6667; splicing the last runner on its
+    // completion tick left the object resting half a step short of 200.
+    const step = (x: number) => anim({ to: { x, y: 0 }, duration: 60 / TICK_HZ });
+    const c = makeContainer({ sequence: { steps: [step(100), step(200)] } });
+    const world = new RecordingWorld();
+    world.idle = true;
+    const rt = new SceneRuntime(world, makeRoot(c));
+
+    // The sequence starts its first step at the end of tick 1, so the steps
+    // run on ticks 2-61 and 62-121.
+    const painted = [c.__mareyLayout!.currentPos.x];
+    for (let k = 1; k <= 125; k++) {
+      rt.advanceOneTick();
+      rt.paint(0.5);
+      painted.push(c.__mareyLayout!.currentPos.x);
+    }
+    for (let k = 3; k <= 121; k++) {
+      expect(painted[k] - painted[k - 1]).toBeCloseTo(100 / 60, 9);
+    }
+    expect(painted[125]).toBe(200);
+    expect(rt.isIdle()).toBe(true);
   });
 
   it("reports not idle while the world says a body is still moving", () => {
@@ -1173,6 +1210,53 @@ describe("SceneRuntime · the handoff seam", () => {
 
           // 1. The first free tick moves as far as the last animated one.
           expect(Math.abs(d(n + 1) - d(n))).toBeLessThanOrEqual(Math.abs(d(n)) * 1e-3);
+        });
+      }
+    }
+  }
+
+  /**
+   * The painted x after `paint(a)` following each tick from `from` to `to`,
+   * alongside the tick-level x the same run reaches.
+   */
+  function paintedSeam(arrangement: "concurrent" | "sequence", easing: string, yoyo: boolean, a: number) {
+    const anim1 = anim({ to: TO, duration: 1, easing: easing as IRAnimation["easing"], yoyo, handoff: true });
+    const c = arrangement === "concurrent"
+      ? makeContainer({ position: START, animations: [anim1], physics: FREE })
+      : makeContainer({ position: START, sequence: { steps: [anim1, FREE] } });
+    const world = new MatterWorld(2000, 2000);
+    const rt = new SceneRuntime(world, makeRoot(c));
+    const id = c.__body!;
+    const runTicks = (yoyo ? 2 : 1) * TICK_HZ;
+    const ticks = [world.readState(id, 1)!.x];
+    const painted = [c.__mareyLayout!.currentPos.x];
+    for (let k = 1; k <= runTicks + 6; k++) {
+      rt.advanceOneTick();
+      ticks.push(world.readState(id, 1)!.x);
+      rt.paint(a);
+      painted.push(c.__mareyLayout!.currentPos.x);
+    }
+    world.destroy();
+    return { ticks, painted };
+  }
+
+  for (const arrangement of ["concurrent", "sequence"] as const) {
+    for (const yoyo of [false, true]) {
+      for (const easing of EASINGS) {
+        it(`${arrangement}, ${easing}${yoyo ? ", yoyo" : ""}: the preview follows the tick path across the seam`, () => {
+          const { release: n } = runSeam(arrangement, easing, yoyo);
+          for (const a of [0.25, 0.5, 0.75]) {
+            const { ticks, painted } = paintedSeam(arrangement, easing, yoyo, a);
+            const d = (k: number) => ticks[k] - ticks[k - 1];
+            for (let k = n - 3; k <= n + 3; k++) {
+              const expected = (1 - a) * d(k - 1) + a * d(k);
+              const got = painted[k] - painted[k - 1];
+              // 1%, not 0.1%: an animation paints its curve at an interpolated
+              // progress, which bends away from the straight line between two
+              // ticks by up to 0.8% of a step where the curve bends (spec §3).
+              expect(Math.abs(got - expected)).toBeLessThanOrEqual(Math.abs(expected) * 1e-2 + 1e-9);
+            }
+          }
         });
       }
     }

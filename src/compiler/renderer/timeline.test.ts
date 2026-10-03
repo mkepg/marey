@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   advanceAnimTime,
   animProgress,
+  paintProgress,
   advancePhysicsTime,
   type AnimTime,
   type PhysicsTime,
@@ -16,6 +17,8 @@ function makeAnim(over: Partial<AnimTime> = {}): AnimTime {
     loop: false,
     yoyo: false,
     delayTicks: 0,
+    prevElapsedTicks: 0,
+    wrappedThisTick: false,
     ...over,
   };
 }
@@ -158,6 +161,7 @@ describe("delay", () => {
   const delayed = (delayTicks: number, durationTicks = 4): AnimTime => ({
     elapsedTicks: 0, durationTicks, direction: 1,
     completed: false, loop: false, yoyo: false, delayTicks,
+    prevElapsedTicks: 0, wrappedThisTick: false,
   });
 
   it("does not advance elapsed time while the delay is outstanding", () => {
@@ -207,6 +211,7 @@ describe("delay", () => {
     const t: AnimTime = {
       elapsedTicks: 0, durationTicks: 4, direction: 1,
       completed: false, loop: true, yoyo: false, delayTicks: 5,
+      prevElapsedTicks: 0, wrappedThisTick: false,
     };
     for (let i = 0; i < 5; i++) advanceAnimTime(t);
     // Delay spent; now time four ticks of the first cycle, which wraps to 0.
@@ -216,6 +221,62 @@ describe("delay", () => {
     // The second cycle starts immediately -- no second delay.
     advanceAnimTime(t);
     expect(t.elapsedTicks).toBe(1);
+  });
+});
+
+describe("paintProgress", () => {
+  /** Advance `t` by `n` ticks. */
+  function run(t: AnimTime, n: number): AnimTime {
+    for (let i = 0; i < n; i++) advanceAnimTime(t);
+    return t;
+  }
+
+  it("interpolates backward from the previous tick to this one", () => {
+    const t = run(makeAnim(), 4);
+    expect(paintProgress(t, 0)).toBeCloseTo(0.3, 12);
+    expect(paintProgress(t, 0.5)).toBeCloseTo(0.35, 12);
+    expect(paintProgress(t, 1)).toBeCloseTo(0.4, 12);
+  });
+
+  it("turns a yoyo without leaving [0, 1] or skipping the turn", () => {
+    const t = run(makeAnim({ yoyo: true }), 10); // the turning tick
+    expect(paintProgress(t, 0)).toBeCloseTo(0.9, 12);
+    expect(paintProgress(t, 1)).toBe(1);
+    advanceAnimTime(t); // first tick of the return leg
+    expect(paintProgress(t, 0)).toBe(1);
+    expect(paintProgress(t, 1)).toBeCloseTo(0.9, 12);
+  });
+
+  it("paints a completion tick from the previous tick to the end", () => {
+    const t = run(makeAnim(), 10);
+    expect(t.completed).toBe(true);
+    expect(paintProgress(t, 0)).toBeCloseTo(0.9, 12);
+    expect(paintProgress(t, 1)).toBe(1);
+  });
+
+  it("holds still once completed, on later ticks of a catch-up burst", () => {
+    const t = run(makeAnim(), 11);
+    expect(paintProgress(t, 0)).toBe(1);
+  });
+
+  it("does not sweep back through the path when a loop wraps", () => {
+    const t = run(makeAnim({ loop: true }), 10); // the wrap tick
+    expect(t.elapsedTicks).toBe(0);
+    expect(paintProgress(t, 0)).toBeCloseTo(0.9, 12);
+    expect(paintProgress(t, 1)).toBe(1);
+    advanceAnimTime(t);
+    expect(paintProgress(t, 0)).toBe(0);
+    expect(paintProgress(t, 1)).toBeCloseTo(0.1, 12);
+  });
+
+  it("stays at 0 through a delay and on the tick it ends", () => {
+    const t = makeAnim({ delayTicks: 2 });
+    advanceAnimTime(t);
+    expect(paintProgress(t, 0.5)).toBe(0);
+    advanceAnimTime(t);
+    expect(paintProgress(t, 0.5)).toBe(0);
+    advanceAnimTime(t);
+    expect(paintProgress(t, 0.5)).toBeCloseTo(0.05, 12);
   });
 });
 

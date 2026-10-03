@@ -31,26 +31,36 @@ only thing enforcing it; check it by grepping the five files above for
   export plan's output-frame index straight to a tick count and never sees a
   clock at all. Both call the same tick-argument-free `advanceOneTick()`
   (invariant 1). It paints with `SceneRuntime.paintExactTick()`, never with
-  `paint(alpha)` — the two exist because the renderer's two subsystems read
-  `alpha` in **opposite temporal directions**, so no single value tick-aligns
-  both: `animProgress` (`timeline.ts`) computes
-  `(elapsedTicks + alpha) / durationTicks`, extending *forward* from tick N
-  into N+1, so `alpha = 0` is exact; `readState` (`physicsWorld.ts`) lerps
-  `prevX -> body.position` by alpha, interpolating *backward* across
-  `[N-1, N]`, so `alpha = 1` is exact. `paintExactTick()` is
-  `paintAt(0, 1)` — animations at 0, physics at 1 — for exactly this reason.
-  Measured, not assumed (`sceneRuntime.ts`'s own docstring): over 60 ticks,
-  `paint(0)` placed a falling body exactly one tick of fall short of
-  `readState(id, 1)`, and `paint(1)` placed a linear animation exactly one
-  tick of travel past its tick-60 value. Live, at 8.3ms per tick, that
-  disagreement is invisible and `paint(driver.alpha)` stays correct; baked
-  into an exported frame it would be a permanent skew between animated and
-  simulated objects, which is why the sampler calls `paintExactTick()`
-  instead of reusing `paint()`. It paints every tick, not every frame — kept
-  as the conservative choice, not a proven necessity; see its own docstring
-  for the paint-cadence experiment that failed to find a scene sensitive to
-  the difference, and for the one case (a `sequence`-bearing scene) that
-  experiment did not cover.
+  `paint(alpha)`. Both of the renderer's subsystems read `alpha` *backward*,
+  across `[N-1, N]`: `paint(alpha)` paints an animation at `paintProgress`
+  (`timeline.ts`), the lerp from tick N-1's progress to tick N's, and a body
+  at `readState` (`physicsWorld.ts`), which lerps `prevX -> body.position`.
+  `paintExactTick()` reads tick-exact values instead: animations through
+  `animProgress(…, 0)`, physics at `readState(…, 1)`. That is the same picture
+  as `paint(1)` except on a looping animation's wrap tick, where alpha 1 is
+  the end of the cycle and the exact tick is the start of the next one; an
+  exported frame paints the start. Until Phase 6C, animations extended
+  *forward* from tick N into N+1, so live the two subsystems sat a tick
+  apart, and this paragraph called that offset invisible. Between two objects
+  it was. On one object crossing a `handoff` it cost a tick: at alpha 0.5 the
+  painted step across a linear handoff read 1.6667, **0.8333, 0.8333**,
+  1.6667 px where the tick path is an even 1.6667, in both arrangements
+  (Phase 6C spec §1, re-measured by `sceneRuntime.test.ts`'s handoff seam
+  test before the change). Painted backward it reads 1.6667 throughout, and
+  across all 16 handoff cases at alpha 0.25, 0.5 and 0.75 the painted step
+  stays within 0.8% of the tick path's; what is left is an eased curve's bend
+  between two ticks. One rule in `paintAt` follows from painting a tick
+  behind: a runner that completed on the tick just advanced is still moving
+  at the painted moment, so it paints after the bodies and after a
+  sequence's next step, and is spliced only once a paint reaches its end. A
+  body let go after that tick's step was pinned through it, so `readState`
+  gives its end value at every alpha and cannot show that moment.
+  `paintExactTick()` never has such a runner, so exported frames are painted
+  and spliced exactly as before. The sampler paints every tick, not every
+  frame — kept as the conservative choice, not a proven necessity; see its
+  own docstring for the paint-cadence experiment that failed to find a scene
+  sensitive to the difference, and for the one case (a `sequence`-bearing
+  scene) that experiment did not cover.
 
 - **`timeline.ts`** — `AnimTime`/`PhysicsTime` state, advanced one tick at a
   time. Durations are converted from IR seconds to ticks at runner creation.
@@ -158,9 +168,10 @@ Three invariants that are easy to break, each of which has caused a real bug:
    Anything wall-clock dependent makes the simulation a function of frame rate,
    which is what the fixed tick exists to prevent and what baked-keyframe export
    depends on. `driver.alpha` is the obvious instance — `pushAnimToWorld`
-   evaluates animations at `alpha = 0` for exactly this reason, at the cost that
-   during a position animation the drawn position leads the collision shape by
-   up to one tick. Painting may use alpha freely.
+   evaluates animations at tick N exactly (`animProgress(…, 0)`) for exactly
+   this reason. Since animations paint backward, the drawn position trails the
+   collision shape by under a tick during a position animation, in step with
+   how a free body paints. Painting may use alpha freely.
 
    **It was worded as "may not derive from `driver.alpha`" until Phase 2, and
    that wording caught neither of the two defects it should have.** Alpha

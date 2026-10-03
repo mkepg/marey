@@ -4,6 +4,7 @@ import { secondsToTicks, TICK_HZ } from "./clock";
 import {
   advanceAnimTime,
   animProgress,
+  paintProgress,
   advancePhysicsTime,
   type AnimTime,
   type PhysicsTime,
@@ -88,8 +89,8 @@ function finalTickVelocity(ra: RunningAnim): IRPoint {
  * effects, `applyAnim` only writes display properties. It sits outside the
  * class purely because it never touches the world.
  */
-function applyAnim(ra: RunningAnim, alpha: number): void {
-  const e = evaluateEasing(animProgress(ra.time, alpha), ra.anim.easing, releaseEndOf(ra.anim));
+function applyAnim(ra: RunningAnim, p: number): void {
+  const e = evaluateEasing(p, ra.anim.easing, releaseEndOf(ra.anim));
 
   if (ra.anim.property === "alpha") {
     ra.container.alpha = lerp(ra.startVal as number, ra.targetVal as number, e);
@@ -203,11 +204,11 @@ export class SceneRuntime {
     // This is a state snap in the tick phase, not a side effect moved into
     // paint, so it does not conflict with invariant 2 — it is the same move
     // `snapContainerToBody` already makes for the freeze transition, and for
-    // the same reason. `animProgress` drops the sub-tick term once a runner is
-    // completed, so evaluating at alpha 0 gives exactly the final value: `to`
-    // for a plain animation, and the starting value for a non-looping yoyo,
-    // which finishes back where it began (P3A-10).
-    if (justCompleted) applyAnim(ra, 0);
+    // the same reason. `animProgress(time, 0)` is the tick-exact progress, so
+    // on the completion tick it is exactly the final value: `to` for a plain
+    // animation, and the starting value for a non-looping yoyo, which finishes
+    // back where it began (P3A-10).
+    if (justCompleted) applyAnim(ra, animProgress(ra.time, 0));
 
     // Completion side effects are state, not paint, so they must happen on the
     // tick they occur — not once per rendered frame. Deferring them would fire
@@ -304,7 +305,8 @@ export class SceneRuntime {
    * invariant 3 forbids feeding it to the world. The owning runner is asked for
    * its own `alpha = 0` lerp instead. With no runner in flight the field is
    * tick-aligned by construction — `builder.ts` wrote it once, and `tickAnim`
-   * snaps it with `applyAnim(ra, 0)` on the tick a scale animation completes.
+   * snaps it with `applyAnim(ra, animProgress(ra.time, 0))` on the tick a
+   * scale animation completes.
    */
   private tickScaleOf(container: Container, layout: MareyLayout): { x: number; y: number } {
     const owner = this.scaleOwnerOf(container);
@@ -314,11 +316,12 @@ export class SceneRuntime {
   /**
    * Push an animation's tick-aligned value into the physics world.
    *
-   * Evaluated at alpha 0 deliberately. `applyAnim` paints at the driver's
-   * wall-clock alpha, and feeding that to the world would make body positions a
-   * function of frame rate — which is exactly the determinism Phase 0 bought.
-   * The cost is that during a position animation the drawn position leads the
-   * collision shape by up to one tick.
+   * Evaluated at tick N exactly, `animProgress(time, 0)`, deliberately.
+   * `applyAnim` paints at the driver's wall-clock alpha, and feeding that to
+   * the world would make body positions a function of frame rate — which is
+   * exactly the determinism Phase 0 bought. Since animations paint backward
+   * across [N-1, N] (Phase 6C), the drawn position trails the body by under a
+   * tick during a position animation, in step with how physics paints.
    *
    * Only called for runners that are still running or completed on this very
    * tick; `advanceOneTick` skips anything that completed on an earlier tick,
@@ -509,6 +512,8 @@ export class SceneRuntime {
         // default delay of 0 through it would add one tick of delay to every
         // animation that never asked for one. Short-circuit at 0 instead.
         delayTicks: anim.delay <= 0 ? 0 : secondsToTicks(anim.delay),
+        prevElapsedTicks: 0,
+        wrappedThisTick: false,
       },
       isPosAnim: isPos,
       completedThisTick: false,
@@ -712,43 +717,68 @@ export class SceneRuntime {
   /**
    * Paint once, at the fractional position between the last two ticks.
    *
+   * Both subsystems interpolate backward across [N-1, N]: an animation at
+   * `paintProgress(time, alpha)`, a body at `readState(id, alpha)`. So the
+   * moment painted is N-1+alpha for both, up to a tick behind the simulation.
+   *
    * Display writes only. The one piece of bookkeeping here is splicing
    * completed runners, which is where it has always lived — it is not a side
    * effect, and moving it would be an unrequested behaviour change.
    */
   paint(alpha: number): void {
-    this.paintAt(alpha, alpha);
+    this.paintAt((t) => paintProgress(t, alpha), alpha);
   }
 
   /**
    * Paint the state at exactly the tick just advanced, with no sub-tick term.
    *
-   * The two subsystems read `alpha` in **opposite temporal directions**, so no
-   * single value places both at tick N:
+   * Animations paint at their tick-exact progress, `animProgress(time, 0)`,
+   * and bodies at `readState(id, 1)`. Both subsystems interpolate backward
+   * across [N-1, N], so `paint(1)` gives the same picture except on a looping
+   * animation's wrap tick: there alpha 1 means the end of the cycle, while the
+   * exact tick is the start of the next one, and this paints the start.
    *
-   * - `animProgress` computes `(elapsedTicks + alpha) / durationTicks`
-   *   (`timeline.ts`), extending FORWARD from tick N into N+1 — so `0` is exact.
-   * - `readState` lerps `prevX -> body.position` by alpha, and `prevX` is
-   *   captured at the top of `step()` (`physicsWorld.ts`), so it interpolates
-   *   BACKWARD across [N-1, N] — so `1` is exact. `snapContainerToBody` already
-   *   relies on this and says so.
-   *
-   * Measured, not assumed: over 60 ticks, `paint(0)` placed a falling body
-   * exactly one tick of fall short of `readState(id, 1)`, and `paint(1)` placed
-   * a linear animation exactly one tick of travel past its tick-60 value.
-   *
-   * Live, that 8.3ms disagreement is invisible and `paint(driver.alpha)` stays
-   * correct. Baked into an exported frame it is a permanent skew between
-   * animated and simulated objects, which is why the frame sampler calls this
-   * instead.
+   * Until Phase 6C, `paint` extended animations FORWARD from tick N into N+1
+   * while `readState` interpolated bodies backward, so the two sat a tick
+   * apart live. Between two objects that offset could not be seen. On one
+   * object handing off from an animation to physics it lost a tick: at alpha
+   * 0.5 the painted step across a linear handoff read 1.6667, 0.8333, 0.8333,
+   * 1.6667 px, a two-frame hitch where the tick path is even (Phase 6C spec
+   * §1). Exported frames were never affected, because the frame sampler
+   * calls this.
    */
   paintExactTick(): void {
-    this.paintAt(0, 1);
+    this.paintAt((t) => animProgress(t, 0), 1);
   }
 
-  private paintAt(animAlpha: number, physicsAlpha: number): void {
-    for (let i = 0; i < this.runningAnims.length; i++) {
-      applyAnim(this.runningAnims[i], animAlpha);
+  /**
+   * The one paint loop behind both entry points. `progressOf` is the progress
+   * each animation paints at; `physicsAlpha` is what bodies are read at.
+   *
+   * A runner that completed on the tick just advanced, painted short of its
+   * end, is still moving at the moment being painted. Only `paint` does that,
+   * at alpha below 1. Such a runner paints after the bodies and after the
+   * other runners, and stays unspliced until a paint reaches its end:
+   * - A body let go after that tick's step (a handoff, or a sequence starting
+   *   its physics step) was pinned through the step, so the world's
+   *   interpolation buffer holds its end value at every alpha.
+   * - A sequence's next step, spawned at the end of that tick, had not started
+   *   at that moment, and would otherwise paint its start over it.
+   * - Spliced now, nothing would paint it again, and once the scene went idle
+   *   it would rest short of its end.
+   * The next tick does not move it, so the paint after that reaches its end,
+   * paints it first, as any other runner, and splices it. `paintExactTick`
+   * paints every runner at its tick-exact progress, so it never has such a
+   * runner and paints and splices exactly as before.
+   */
+  private paintAt(progressOf: (t: AnimTime) => number, physicsAlpha: number): void {
+    const anims = this.runningAnims;
+    const progress = anims.map((ra) => progressOf(ra.time));
+    const stillMoving = (i: number): boolean =>
+      anims[i].time.completed && progress[i] !== animProgress(anims[i].time, 0);
+
+    for (let i = 0; i < anims.length; i++) {
+      if (!stillMoving(i)) applyAnim(anims[i], progress[i]);
     }
 
     // Physics writes after animations, so a dynamic body's position wins over
@@ -756,10 +786,14 @@ export class SceneRuntime {
     // syncWorldToContainers skips pinned bodies, so the two never fight.
     syncWorldToContainers(this.bindings, this.world, physicsAlpha);
 
-    for (let i = this.runningAnims.length - 1; i >= 0; i--) {
+    for (let i = 0; i < anims.length; i++) {
+      if (stillMoving(i)) applyAnim(anims[i], progress[i]);
+    }
+
+    for (let i = anims.length - 1; i >= 0; i--) {
       // The rotation-override release lives in tickAnim (the tick phase),
       // not here — see the comment there. This loop only splices.
-      if (this.runningAnims[i].time.completed) this.runningAnims.splice(i, 1);
+      if (anims[i].time.completed && !stillMoving(i)) anims.splice(i, 1);
     }
     for (let i = this.physicsRunners.length - 1; i >= 0; i--) {
       if (this.physicsRunners[i].time.completed) this.physicsRunners.splice(i, 1);
