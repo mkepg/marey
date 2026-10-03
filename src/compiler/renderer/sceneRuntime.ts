@@ -608,8 +608,12 @@ export class SceneRuntime {
    *
    * Everything that changes scene state lives here and takes no time argument,
    * so an export driver can call it in a bare loop with no wall clock involved.
-   * The order of the six phases below is load-bearing; see the class comment
-   * and docs/architecture/renderer.md's invariants.
+   * The order of the seven phases below is load-bearing: advance the
+   * animations, push their values into the world, cull escaped bodies, expire
+   * physics runners, step the world, release the pins of handoffs that
+   * completed this tick, then advance the sequence runners. The release comes
+   * after `world.step()` and before the sequence runners (Phase 6C spec §2.3).
+   * See the class comment and docs/architecture/renderer.md's invariants.
    */
   advanceOneTick(): void {
     // A runner that completed is not spliced until the paint phase, so without

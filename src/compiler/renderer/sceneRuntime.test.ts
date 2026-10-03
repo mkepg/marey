@@ -273,6 +273,13 @@ describe("SceneRuntime · tick phase", () => {
     // closely, as the speed is a per-tick difference times TICK_HZ.
     expect(world.velocities.get(id)!.x).toBeCloseTo(200, 6);
     expect(world.velocities.get(id)!.y).toBeCloseTo(0, 6);
+
+    // The flush follows the step of the completion tick: the velocity is
+    // written after the TICK_HZ-th step and before any further one.
+    const flush = world.calls.findIndex((c2) => c2.startsWith(`setVelocity:${id}:`));
+    expect(flush).toBeGreaterThan(-1);
+    expect(world.calls.slice(0, flush).filter((c2) => c2 === "step")).toHaveLength(TICK_HZ);
+    expect(world.calls.slice(flush + 1)).not.toContain("step");
   });
 
   it("pins FROZEN when a physics duration expires", () => {
