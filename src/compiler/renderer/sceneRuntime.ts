@@ -24,6 +24,7 @@ import {
   type PhysicsBinding,
 } from "./physicsSync";
 import { rotateScaleVector, toWorld, type LocalTransform } from "./transform";
+import { evaluateEasing } from "./easing";
 
 export interface RunningAnim {
   container: Container;
@@ -54,18 +55,6 @@ interface SequenceRunner {
   state: "WAITING" | "RUNNING" | "DONE";
   basePeers: AnimOrPhysics[];
   activeStepRunners: AnimOrPhysics[];
-}
-
-function evaluateEasing(t: number, easing: string): number {
-  if (t <= 0) return 0;
-  if (t >= 1) return 1;
-  switch (easing) {
-    case "easeIn":    return t * t;
-    case "easeOut":   return t * (2 - t);
-    case "easeInOut": return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-    case "linear":
-    default:          return t;
-  }
 }
 
 function getEasingDerivativeAtEnd(easing: string): number {
