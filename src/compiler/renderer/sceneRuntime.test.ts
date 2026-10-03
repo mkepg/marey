@@ -1054,6 +1054,52 @@ describe("SceneRuntime · frame pacing must not reach the world", () => {
     expect(thirdStepFirstPush(12)).toBe(thirdStepFirstPush(1));
   });
 
+  it("restores a completed scale animation's exact end before the next tick reads it, at every pacing", () => {
+    // The scale counterpart of the test above. A scale step completes, and the
+    // paint after that tick shows it a tick behind, short of its end. With no
+    // scale runner left in flight, `tickScaleOf` answers with
+    // `layout.currentScale`, which the next position step reads through
+    // `pushAnimToWorld`'s centre correction on a bottom-origin body. Without the
+    // `paintedShort` restore it reads the painted, short scale, and the world
+    // is told a position that depends on how the frame fell.
+    //
+    // The scale step spawns after tick 1 and runs 83 ticks, so it completes on
+    // tick 84: the last tick of a frame at pacing 7 and at pacing 12, which is
+    // the only place a paint can follow it before the next tick. The position
+    // step spawns at the end of 84 and first pushes on 85.
+    const subject = (): Container =>
+      makeContainer({
+        position: { x: 400, y: 300 },
+        centreOffset: BOTTOM_ORIGIN,
+        sequence: {
+          steps: [
+            anim({ property: "scale", to: { x: 1, y: 3 }, duration: 83 / TICK_HZ, easing: "easeInOut" }),
+            anim({ to: { x: 500, y: 300 }, duration: 60 / TICK_HZ }),
+            { ...PHYSICS, duration: "indefinitely" },
+          ],
+        },
+      });
+    const afterCompletion = (ticksPerFrame: number): string[] => {
+      const calls = runAtPacing(ticksPerFrame, 90, subject);
+      const steps: number[] = [];
+      calls.forEach((s, i) => { if (s === "step") steps.push(i); });
+      // Everything the world is told once tick 84 has stepped: the position
+      // step's pushes on ticks 85 to 90.
+      return calls.slice(steps[83] + 1).filter((s) => s.startsWith("setPosition:"));
+    };
+
+    const exact = afterCompletion(1);
+    expect(exact).toHaveLength(6);
+    // The pivot sits at the baseline: scale y is exactly 3 in the first push,
+    // so its centre is exactly 30px above (the 10px offset, tripled).
+    expect(exact[0]).toBe("setPosition:b0:401.6667,270.0000");
+    // Pacing 1 paints after tick 84 as well, so it leaks on tick 85 alone
+    // without the restore; pacing 7 and 12 stay short for the rest of the
+    // frame, which is the difference this compares.
+    expect(afterCompletion(7)).toEqual(exact);
+    expect(afterCompletion(12)).toEqual(exact);
+  });
+
   it("starts a sequence's second animation from the first one's exact target", () => {
     // The specific mechanism: the second animation's startVal is read from
     // container state that the paint phase last wrote at the driver's alpha.
