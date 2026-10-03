@@ -640,3 +640,153 @@ five formats of each example (`dbe106b8`, `951d2afc`, `4eb7ddbc`, `3567142c`).
 `npm run check:export` against its recorded baselines:
 `matrix: all passed  (134.8 s)`. The mp4 SHA-256 differs between its two runs on
 the canonical scenes, which is reported and not gated (R47), as before.
+
+## 6C: smooth handoff
+
+Spec: `docs/specs/2026-10-03-marey-phase-6c-smooth-handoff-design.md`. A
+`handoff: true` animation now gives the body the velocity it had over its
+final tick, its curve is reshaped so it does not arrive at rest, the release
+happens after the physics step on the same tick in both arrangements, and the
+preview paints animations backward across the tick as physics does. Every
+figure below is one body moving 200 px in 1 s (120 ticks) under the real
+`MatterWorld`, with gravity 0, air drag 0 and no bounds. Tick values are the
+body's displacement per tick in px. N is the release tick: 120 for a forward
+animation and 240 for a yoyo when `physics` runs beside the animation
+(concurrent), and one tick later when it follows in a `sequence`.
+
+**Ticks, before the change.** The 16 seam cases (2 arrangements, forward or
+yoyo, 4 easings) failed 14 of 16 on the old code; the two that passed are
+`linear` and yoyo `linear` in a sequence. The command was
+`npx vitest run src/compiler/renderer/sceneRuntime.test.ts -t "handoff seam"`,
+which reported `Tests 14 failed | 2 passed | 40 skipped (56)`, for example
+`expected 1.6666666666666536 to be less than or equal to 0.0016666666666666607`
+for concurrent `linear`.
+
+| Case | d(N-1) | d(N) | d(N+1) | Result |
+|---|---|---|---|---|
+| concurrent linear | 1.6667 | 3.3333 | 1.6667 | fail |
+| concurrent easeIn | 3.2917 | 6.6528 | 3.3333 | fail |
+| concurrent easeOut | 0.0417 | 0.8472 | 0.8333 | fail |
+| concurrent easeInOut | 0.0833 | 0.8611 | 0.8333 | fail |
+| concurrent linear yoyo | -1.6667 | -3.3333 | -1.6667 | fail |
+| concurrent easeIn yoyo | -0.0417 | -3.3472 | -3.3333 | fail |
+| concurrent easeOut yoyo | -3.2917 | -4.1528 | -0.8333 | fail |
+| concurrent easeInOut yoyo | -0.0833 | -0.8611 | -0.8333 | fail |
+| sequence linear | 1.6667 | 1.6667 | 1.6667 | pass |
+| sequence easeIn | 3.2917 | 3.3194 | 3.3333 | fail |
+| sequence easeOut | 0.0417 | 0.0139 | 0.8333 | fail |
+| sequence easeInOut | 0.0833 | 0.0278 | 0.8333 | fail |
+| sequence linear yoyo | -1.6667 | -1.6667 | -1.6667 | pass |
+| sequence easeIn yoyo | -0.0417 | -0.0139 | -3.3333 | fail |
+| sequence easeOut yoyo | -3.2917 | -3.3194 | -0.8333 | fail |
+| sequence easeInOut yoyo | -0.0833 | -0.0278 | -0.8333 | fail |
+
+N is 120 or 240 for concurrent and 121 or 241 for sequence. The curve's own
+final step is 1.6667, 3.3194, 0.8334 and 0.8609 for `linear`, `easeIn`,
+`easeOut` and `easeInOut` (reversed in sign for a yoyo).
+
+**Ticks, after.** All 16 pass: d(N) equals the curve's final step, d(N+1)
+equals d(N) to 1e-3, and the position pin is released after tick N in every
+case. `npx vitest run src/compiler/renderer/sceneRuntime.test.ts` reported
+`Tests 56 passed (56)` at that commit.
+
+| Case | d(N-1) | d(N) | d(N+1) |
+|---|---|---|---|
+| concurrent linear | 1.6667 | 1.6667 | 1.6667 |
+| concurrent easeIn | 3.2917 | 3.3194 | 3.3194 |
+| concurrent easeOut | 0.8337 | 0.8334 | 0.8334 |
+| concurrent easeInOut | 0.9155 | 0.8609 | 0.8609 |
+| concurrent linear yoyo | -1.6667 | -1.6667 | -1.6667 |
+| concurrent easeIn yoyo | -0.8337 | -0.8334 | -0.8334 |
+| concurrent easeOut yoyo | -3.2917 | -3.3194 | -3.3194 |
+| concurrent easeInOut yoyo | -0.9155 | -0.8609 | -0.8609 |
+| sequence linear | 1.6667 | 1.6667 | 1.6667 |
+| sequence easeIn | 3.2917 | 3.3194 | 3.3194 |
+| sequence easeOut | 0.8337 | 0.8334 | 0.8334 |
+| sequence easeInOut | 0.9155 | 0.8609 | 0.8609 |
+| sequence linear yoyo | -1.6667 | -1.6667 | -1.6667 |
+| sequence easeIn yoyo | -0.8337 | -0.8334 | -0.8334 |
+| sequence easeOut yoyo | -3.2917 | -3.3194 | -3.3194 |
+| sequence easeInOut yoyo | -0.9155 | -0.8609 | -0.8609 |
+
+**The painted seam.** The preview paints at alpha between ticks. The seam test
+compares the painted step between `paint(a)` after tick k-1 and after tick k
+with the tick path, `(1 - a)·d[k-1] + a·d[k]`. Sequence, `linear`, alpha 0.5,
+step in px, with k counted from the release tick N:
+
+| k | Before: painted | Expected | After: painted | Expected |
+|---|---|---|---|---|
+| N-3 | 1.6667 | 1.6667 | 1.6667 | 1.6667 |
+| N-2 | 1.6667 | 1.6667 | 1.6667 | 1.6667 |
+| N-1 | 1.6667 | 1.6667 | 1.6667 | 1.6667 |
+| N | **0.8333** | 1.6667 | 1.6667 | 1.6667 |
+| N+1 | **0.8333** | 1.6667 | 1.6667 | 1.6667 |
+| N+2 | 1.6667 | 1.6667 | 1.6667 | 1.6667 |
+| N+3 | 1.6667 | 1.6667 | 1.6667 | 1.6667 |
+
+Two frames at half speed before, none after. Concurrent `linear` at alpha 0.5
+measured the same 0.8333, 0.8333 at N and N+1 once the release moved after the
+step. Sequence `easeOut` at alpha 0.5 read 0.4167, 0.4167 against 0.8336,
+0.8334 expected. After the change, over 16 cases x 3 alphas x 7 steps (336
+steps), the largest relative error is 0.799% (concurrent `easeInOut`, alpha
+0.5, k = N+1: painted 0.854058 against 0.860938 expected), inside the 1%
+tolerance and matching the 0.8% curvature bound in spec section 3.
+
+**Exports.** The four affected scenes exported as PNG at the pre-change commit
+and at the head of the branch, with
+`node bin/marey.mjs export <scene> --format png --out .visual-check/6c/<before|after>/<name>`
+after `npm run build && npm run build:export-page && npm run build:cli`.
+`throw-arc` and `test-card` end in `physics { duration: indefinitely }`, which
+the CLI refuses without a length, so both runs of those two used
+`--duration 3`. A Node script compared the frames pixel by pixel (all four
+channels of every pixel).
+
+| Scene | Frames | `frames` hash before / after | Frames that differ | Largest channel difference | First differing frame |
+|---|---|---|---|---|---|
+| `compound-logo` | 240 | `26cca4e9` / `3dbb171f` | 0 | 0 | none |
+| `throw-arc` | 90 | `571e9967` / `51d47aa3` | 89 | 241 | 1 (0.033 s) |
+| `test-card` | 90 | `70b1eab9` / `c4b3e404` | 89 | 241 | 1 (0.033 s) |
+| `hello-face` | 180 | `2bacabcb` / `616c7406` | 114 | 241 | 66 (2.200 s) |
+
+`compound-logo` is `linear` in a sequence, so its motion should not change.
+The `frames` hash does move, because it hashes unrounded simulation values and
+the final-tick velocity is 199.99999999999886 px/s where the old multiplier
+gave 200. All 240 rendered frames are identical, so the largest per-channel
+difference is 0, inside the allowed 1. The PNG export's SHA-256 is the same
+before and after (`79f3f294...`). The `throw-arc` and `test-card` handoffs
+start with their animation at t = 0, and `easeOut` is reshaped, so frame 1 is
+the first frame that can differ. In `hello-face` the handoff animation has
+`delay: 2.0` (frame 60) and the first differing frame is 66, after it starts.
+
+**Browser check.** `npx vite --port 5199 --strictPort`, then
+`node tools/visual-check/check.mjs --scene tools/visual-check/scenes/test-card.marey --at 300,800,1300,1800,2300 --settle 3000 --out .visual-check/6c/browser`:
+`compiled true`, `rendered true`, `page errors 0`. `frozen at rest` and
+`deterministic` both read `false`; the scene loops, so the README says neither
+applies to it. The handoff ball at 300 ms is rising to the right
+(about (230, 347) in the 624 px wide capture), at 800 ms it is past its apex
+and falling (about (347, 585)), and from 1300 ms it rests on the floor at the
+bottom edge. The captures are 500 ms apart, so they show the arc but cannot
+show the absence of a stop; the smoothness of the seam is what the painted-seam
+table above measures.
+
+**Known edges.**
+
+- The painting rule has one addition the spec does not describe. A runner that
+  completed on the latest tick but is painted short of its end paints after the
+  bodies, unless a later runner on the same property is running, and is
+  spliced once a paint reaches its end. Its tick-exact end is restored before
+  the next tick reads it. `docs/architecture/renderer.md` documents it. It was
+  needed because on the release tick `readState(alpha)` returns the body's
+  position at tick N for every alpha (the pinned body is placed before the
+  step and released after it). Painting bodies last, as first written, read
+  2.5000 then 0.8333 px at N and N+1 in the sequence `linear` case, and moved
+  a sequence's next step over the completing runner.
+- When a concurrent `physics` block freezes the body on the same tick a
+  handoff completes, which only `delay` makes reachable, the handoff velocity
+  stays parked. A later `physics` step in a `sequence` on that object would take
+  it over its declared velocity. The outcome of the freeze itself is the same
+  as before. This was found in the review of the release change and left open.
+- Two edges were already there before 6C and were not measured. A non-handoff
+  physics freeze can still jump forward by up to one tick in the preview. A
+  freeze snap on the same tick as a position runner's completion is overwritten
+  by the runner's end after a short paint.

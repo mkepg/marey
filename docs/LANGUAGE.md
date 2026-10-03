@@ -532,21 +532,38 @@ it carries the animation's exit velocity into the physics simulation, so an
 object that slides and then falls keeps its momentum and arcs, instead of
 stopping dead and dropping straight down.
 
-The exit velocity is derived from the animation's average speed — the
-displacement from its starting value to `to`, divided by `duration` — scaled
-by a fixed multiplier that depends on the easing. That multiplier is `2.0`
-for `easeIn`, `0.5` for `easeOut`, `0.5` for `easeInOut`, and `1.0` for
-`linear`: a `linear` animation hands off at its average speed, `easeIn` at
-twice that speed, and `easeOut` and `easeInOut` at half of it. `easeOut` and
-`easeInOut` are momentarily flat at the instant they end, so using that
-literally would hand off no momentum at all; the `0.5` is a deliberate
-choice, not a measurement of the curve.
+The body leaves at the velocity the animation had over its final tick: the
+distance it moved in that tick, times the tick rate. The first tick of free
+motion then covers the same distance as the last animated one, so the object
+neither stalls nor lurches at the seam. The speed comes from the curve itself,
+so it follows whatever easing you choose.
 
-**With `yoyo: true` the exit direction reverses.** A non-looping yoyo finishes
-at the end of its return leg, travelling from `to` back toward its starting
-value, so it hands off along that direction rather than the outbound one — the
-same speed, the opposite way. Its runtime is `2 × duration`, and that is the
-figure the duration rule below compares against.
+An easing that would arrive at rest would hand off no momentum, so with
+`handoff: true` it is reshaped to arrive at half the average speed instead.
+The average speed is the displacement from the starting value to `to`,
+divided by `duration`. Only the arriving end changes: an `easeOut` still
+starts fast and an `easeInOut` still starts from rest. Without `handoff` every
+easing keeps its usual curve.
+
+| Animation | Release speed, as a multiple of the average speed |
+|---|---|
+| `linear` | 1 |
+| `easeIn` | 2 |
+| `easeOut` | 0.5 |
+| `easeInOut` | 0.5 |
+| `linear`, yoyo | 1 |
+| `easeIn`, yoyo | 0.5 |
+| `easeOut`, yoyo | 2 |
+| `easeInOut`, yoyo | 0.5 |
+
+**With `yoyo: true` the exit direction reverses, and the curve is released
+from its start.** A non-looping yoyo finishes at the end of its return leg,
+travelling from `to` back toward its starting value, so it hands off along
+that direction. Because the return leg runs the curve backward, the body
+leaves at the start of the curve: a yoyo `easeIn` releases at half the average
+speed and a yoyo `easeOut` at twice it, as the yoyo rows of the table show.
+Its runtime is `2 × duration`, and that is the figure the duration rule below
+compares against.
 
 Six rules govern `handoff: true`, each a compile error when broken:
 

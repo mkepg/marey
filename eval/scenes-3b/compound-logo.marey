@@ -41,9 +41,10 @@ scene {
     rectangle armMid { position: (30, 12),  size: (40, 26),  color: amber }
 
     sequence {
-      // `linear` hands off at exactly the animation's average speed: the
-      // handoff multiplier is 1.0 for linear, 2.0 for easeIn and 0.5 for the
-      // two ease-outs. `easeIn` here threw the mark hard enough to settle in
+      // `linear` keeps the throw at exactly the animation's average speed:
+      // it leaves at the speed it had over its final tick, and for `linear`
+      // every tick is the same. `easeIn` leaves at twice that speed
+      // and here threw the mark hard enough to settle in
       // the corner with its arms clipped by the scene edge, which is a worse
       // frame to look at and a worse thing to assert on.
       animate {
