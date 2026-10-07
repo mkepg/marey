@@ -1,12 +1,32 @@
 # Phase 6 evidence
 
 **Phase:** 6 (`docs/specs/2026-09-27-marey-phase-6-packaging-and-legibility-design.md`).
-**Date:** 2026-09-28. Branch `phase-6`.
+**Date:** 2026-09-28 to 2026-10-07. Branch `phase-6`, merged into `main` on
+2026-10-02; then `phase-6-finish` for the README, the ten-minute read and the
+exit-criteria sections, all measured at `a4e4cee`.
 
 This file is the standing evidence record for Phase 6, in the same spirit as
 `eval/RESULTS-PHASE-5B.md`/`RESULTS-PHASE-5C.md`: measured numbers, with the
 command that produced each one, so a later reader can re-run rather than
 trust a paraphrase. One section per piece of the phase.
+
+## Exit criteria (spec §9.4), 2026-10-07
+
+Roadmap §9.3's three criteria, each with the command that closes it. Every
+number was measured on a clean tree at `a4e4cee` (`git status --porcelain`
+and `git diff --stat` both empty), Windows 11, Node 22.13.1.
+
+| Criterion | Command | Result |
+|---|---|---|
+| 1. The package builds and installs from a clean checkout | `npm run build:package && npm run check:pack` | **Not closed.** 11 of 11 checks pass on this machine, exit 0, 17.0 s. On a fresh clone in CI the same check fails at `npm install --offline <tarball>` (`ENOTCACHED`), on all four pushes since it was added. Cause reproduced locally. See "Exit criterion 1" |
+| 2. A reader states what Marey is and what is hard within ten minutes | spec §6.3's procedure | One read, scored against the rubric: Q1 3 of 3, Q2 3 of 4 (H1, H2, H4), so it **passes** the rubric. **The owner's judgment is pending** (spec O6). See "Exit criterion 2" |
+| 3. Both CLI commands work on the canonical scenes | `node bin/marey.mjs check --export-ready eval/scenes-3b/*.marey`; `npm run check:export` | 4 of 4 `ok`, exit 0; 21 of 21 cases pass, exit 0, 111.2 s. See "Exit criterion 3" |
+
+The four AGENTS.md checks on the same tree, before the runs above: `npm test`
+61 files, 1306 tests, all passing; `npx vitest run --config
+eval/vitest.config.ts` 1 file, 5 tests; `npm run build` exit 0 (the existing
+chunk-size warning only); `npm run build:cli && node bin/marey.mjs check
+$(git ls-files '*.marey')` exit 0, 85 files, every one `ok`.
 
 ---
 
@@ -40,6 +60,9 @@ trust a paraphrase. One section per piece of the phase.
   the page; the WebM file. Every `hash` a seam reports must equal the CLI's.
   `__mareyExportApng` reports no `hash`, so for apng the file bytes are the
   whole comparison.
+
+The runs in this section are from 2026-09-28, before Phase 6C changed
+compound-logo's `frames` hash. The 2026-10-07 run is under "Exit criterion 3".
 
 Measured at `a861a37` plus the script (`13c5348`, and the mp4 change on top of it), from
 `C:\Users\gomez\repos\PROGRAMMING_LANGUAGE\marey`, Windows 11, Chromium
@@ -328,6 +351,284 @@ eval/vitest.config.ts` (1 file, 5 tests), `npm run build` (typecheck plus the
 app's `vite build`), and `npm run build:cli && node bin/marey.mjs check
 $(git ls-files '*.marey')` (every first-party `.marey` scene, `ok`).
 
+### Re-run 2026-10-07 at `a4e4cee`: 11 of 11 pass
+
+```
+npm run build:package && npm run check:pack
+```
+
+Run right after the four AGENTS.md checks listed at the top of this file, on
+the same clean tree. Exit 0, `real 0m17.044s`.
+
+| # | Check | Result | Time (s) | Detail |
+|---|---|---|---|---|
+| 1 | `build:package` | ok | 3.2 | built dist/lib, dist/export-page, dist/cli |
+| 2 | `npm pack --json` | ok | 0.9 | 57 files, 579,484 B packed, 1,790,638 B unpacked |
+| 3 | `npm init -y` | ok | 1.1 | package.json created |
+| 4 | `npm install --offline <tarball>` | ok | 1.3 | installed |
+| 5 | `npx marey --version` | ok | 1.6 | `0.4.0` |
+| 6 | `npx marey check <copy of radial-dots.marey>` | ok | 1.2 | `...\radial-dots.marey: ok` |
+| 7 | `npx marey export <copy> --format lottie` | ok | 2.9 | `wrote radial-dots.json  30 frames @ 30 fps  800x600  5848 B  sha256 5aba4b1aff965c8f6ab927fa83757ca18c8b2f911d3214cd8d60c2bf9e0d13c6  frames 94d15a5d` |
+| 8 | `node -e "import { compile } from 'marey'"` | ok | 0.1 | compiled a 10x10 scene |
+| 9 | consumer typecheck, esnext / bundler | ok | 0.4 | 0 errors |
+| 10 | consumer typecheck, nodenext / nodenext | ok | 0.4 | 0 errors |
+| 11 | `grep -c pixi` on the installed library bundle | ok | 0.0 | `grep -c pixi: 0` |
+
+Beside the 2026-09-28 run: the same 57 files; the tarball is 1,355 B larger
+packed and 4,057 B larger unpacked (the README and the bundles it
+holds have changed since); check 7's line is identical, byte for byte.
+
+### On a fresh clone, in CI: fails at the offline install
+
+Spec §9.4 closes this criterion with `check:pack` on a fresh clone. The only
+fresh clones it has run on are CI's, and every one failed:
+
+```
+gh run list --limit 8
+gh run view <run id> --log-failed
+```
+
+| Run | Commit on `main` | Date | Result |
+|---|---|---|---|
+| 37008376353 | `14059ac` | 2026-10-02 | failure at "Package builds, packs and installs" |
+| 37019433519 | `50236f2` | 2026-10-02 | the same |
+| 37025612509 | `7e09051` | 2026-10-02 | the same |
+| 37136330252 | `c7b87ae` | 2026-10-03 | the same |
+
+The earlier runs in the list, up to `e7c5c29` on 2026-09-27, predate the
+check and passed. In each failing run the test suite, the build and the
+scene check pass, and `check:pack` passes `build:package`, `npm pack`
+(57 files) and `npm init`, then stops:
+
+```
+FAIL  npm install --offline <tarball>               0.4 s  exit 1
+npm error code ENOTCACHED
+npm error request to https://registry.npmjs.org/playwright-core failed: cache mode is 'only-if-cached' but no cached response is available.
+```
+
+The export matrix comes after it in the same job, so it has never run in CI,
+and the CI time spec §9.3 asks for is not measured (see "CI (O8)").
+
+**Cause, reproduced.** Plan Task 10 installs the tarball with `--offline`,
+reasoning that `playwright-core` is "already in the npm cache from installing
+this repository" (`pack-check.mjs`'s header). That holds on this machine,
+whose cache also holds npm's registry metadata for the package from earlier
+`npm install` runs. It does not hold after `npm ci`, which fetches tarballs by
+the lockfile's resolved URLs. Installing into an empty directory has no
+lockfile, so npm needs the metadata to resolve `playwright-core@1.62.1`, and
+offline it has none. Reproduced with a fresh cache in a temporary directory:
+
+```
+npm ci --cache <fresh>                      # a package.json and lockfile holding only playwright-core 1.62.1
+npm install --offline --cache <fresh> <marey-0.4.0.tgz>     # in an empty npm init -y directory
+```
+
+The install exits 1 with the same `ENOTCACHED` message. Then
+`npm cache add playwright-core@1.62.1 --cache <fresh>`, which fetches the
+metadata, and the same install exits 0 with `marey` and `playwright-core` in
+`node_modules`. The check needs either a network install in CI or that
+metadata in the cache first. Neither is applied here.
+
+---
+
+## Exit criterion 2: the ten-minute read
+
+Spec §6.3. The reader's answers are recorded word for word and scored against
+the rubric, fixed in the spec before the read. The owner makes the final
+judgment (O6).
+
+### The structural checklist, first
+
+Run against `README.md` at `a4e4cee` before the read was spent:
+
+| Item | Command or location | Result |
+|---|---|---|
+| An artifact in the first screen, the source beside it | `README.md:20` (the APNG), `README.md:26` (its source) | present |
+| A "what's hard" section naming at least two things | `README.md:133` | three subsections |
+| A first-screen link to `docs/determinism.md` | `README.md:13` | present |
+| An install and usage block | `README.md:67` | present |
+| At most 2,000 words | `wc -w README.md` | 1606 |
+| None of the stale strings | `grep -n -E "refused outright\|one command\|not implemented" README.md` | no output |
+
+The image is exactly what the regenerate command produces: `node
+bin/marey.mjs export docs/media/bars-reveal.marey --format apng --out <tmp>`
+printed `sha256 d56c2e03f61c975adef196760d37ed4cf881b132ff4b8e40589bb80916505994
+frames 35ebdda6`, and `sha256sum docs/media/bars-reveal.png` gives the same
+digest.
+
+### The reader's copy
+
+```bash
+rm -rf .visual-check/phase6/reader && mkdir -p .visual-check/phase6/reader
+git archive a4e4cee | tar -x -C .visual-check/phase6/reader
+rm .visual-check/phase6/reader/docs/specs/2026-09-27-marey-phase-6-packaging-and-legibility-design.md .visual-check/phase6/reader/docs/plans/2026-09-27-phase-6-packaging-and-legibility.md
+grep -rl -i "ten-minute\|rubric\|H1\. Identical\|blind reader" .visual-check/phase6/reader
+```
+
+The grep prints one file, `eval/RESULTS-PHASE-6.md`, at two lines that state
+spec §9.3's ten-minute CI budget (this file as of `a4e4cee`, before this
+section existed). Separately, `docs/specs/2026-09-09-marey-engineering-roadmap-design.md`
+states the exit criterion itself ("A reader can state what Marey is and what
+is technically hard about it within ten minutes of opening the repository."),
+not the rubric. Both stay: the aim is that the rubric is not readable, not that
+the phrase is absent. The 6B and 6C designs and plans contain no rubric text.
+The copy's `README.md` is identical to the committed one.
+
+### The reader and the prompt
+
+Reader 1, on 2026-10-07: a reader with no prior context of the project, given
+the copy and the prompt below, and nothing else. They could read files inside
+the copy only. The prompt, exactly:
+
+> The folder is: C:\Users\gomez\repos\PROGRAMMING_LANGUAGE\marey\.visual-check\phase6\reader
+>
+> Read only files inside that folder, and do not run, build, or modify anything. Do not look at any file outside it.
+>
+> Start at README.md in this folder. Read for about ten minutes, which is about 2,500 words in total, and follow any links you like within that budget. Then answer, in a few sentences each: (1) What is Marey? (2) What is technically hard about it?
+>
+> At the end, list the files you opened, in order, with roughly how many words of each you read.
+
+The third paragraph is the plan's text, word for word. The other three are
+additions: the folder's path, a sentence confining the reader to it, and a
+request to list what they opened. None of them carries a hint about the
+answers.
+
+### The answers, word for word
+
+> **(1) What is Marey?**
+> Marey is a small language and compiler for 2D motion graphics. You write a scene as text: shapes, animations, an optional Matter.js physics simulation, and a timeline. The compiler turns that into files that play without Marey: Lottie JSON, MP4, WebM, animated PNG, or PNG frames. There is a CLI with `check` and `export` commands, a pure `compile()` library function, and a browser app with an editor and live preview. It is not a game engine or a general animation library. It is at version 0.4.0, and PixiJS and Matter.js are internal details.
+>
+> **(2) What is technically hard about it?**
+> - **Determinism.** The same source has to give the same frames on every run, physics included. The simulation runs on a fixed 120 Hz tick, and exports sample tick state only. The live preview interpolates between ticks, so nothing the simulation reads can depend on that interpolation. The README gives a real bug here: a body frozen mid-air kept its interpolated position and rested in one of two places depending on page-load timing. All 94 headless tests passed. Only a browser harness that cold-loads a scene twice and compares frames caught it.
+> - **Limits of the guarantee.** `docs/determinism.md` says what is not claimed. Output is not guaranteed identical across JavaScript engines, because Node's V8 and Chromium's V8 differ in the last bit of `Math.sin`. Cross-machine identity is untested, and MP4 bytes differ between runs because of the browser's H.264 encoder. The `frames` hash does match for MP4.
+> - **Exporting to formats that don't need Marey.** The Lottie export bakes physics, easing, and sequencing into per-frame keyframes. It turns text into glyph outlines through HarfBuzz instead of using Lottie's unsettled text layer. It refuses characters the font lacks rather than drawing them differently from the preview.
+> - **Keeping one language consistent across the parser, type checker, editor, and docs.** Four hand-kept property lists drifted apart. Each property is now declared once in `languageContract.ts`, and the other pieces derive their tables from it. The test suite also compiles every example in the docs.
+>
+> **Files opened, in order, with approximate words read**
+> 1. `README.md`: about 1,650 words, read in full.
+> 2. `docs/determinism.md`: about 600 words, the first 80 lines only.
+>
+> Total is about 2,250 words, within the 2,500-word budget.
+
+The reader stayed inside the budget (about 2,250 of 2,500 words, by their own
+count; `wc -w README.md` gives 1606).
+
+### Scoring
+
+A point counts only if the answer states it, and only if what it states is
+true of the repository.
+
+**Q1: all three points needed.**
+
+| Point | What the answer states | Checked against | Met |
+|---|---|---|---|
+| 1. A language and compiler; motion written as text source | "a small language and compiler for 2D motion graphics. You write a scene as text" | README.md:3-5 | yes |
+| 2. Compiles to portable artifacts that play without Marey | "turns that into files that play without Marey: Lottie JSON, MP4, WebM, animated PNG, or PNG frames" | the `export` formats, README.md:85-89; criterion 3 below exports all five | yes |
+| 3. For 2D motion graphics, not a game engine or a general animation library | "for 2D motion graphics" and "It is not a game engine or a general animation library" | README.md:6-7 | yes |
+
+Q1: 3 of 3.
+
+**Q2: at least two of H1-H4, each with a correct reason.**
+
+| Item | What the answer states | Checked against | Met |
+|---|---|---|---|
+| H1. Identical output with physics: the fixed tick, and the simulation/painted-state boundary | "a fixed 120 Hz tick, and exports sample tick state only. The live preview interpolates between ticks, so nothing the simulation reads can depend on that interpolation", with the frozen-body bug as the case | `TICK_HZ = 120` (`src/compiler/sceneIR.ts:14`); the bug and its fix, `1ce8307` | yes |
+| H2. A portable format with no runtime: a baked Lottie subset, refusing instead of degrading | "bakes physics, easing, and sequencing into per-frame keyframes"; "refuses characters the font lacks rather than drawing them differently from the preview" | README.md:162-172; `[LOTTIE_TEXT_MISSING_GLYPH]` | yes |
+| H3. Verification: a headless suite cannot see a canvas; a browser harness caught a bug it missed | "All 94 headless tests passed. Only a browser harness that cold-loads a scene twice and compares frames caught it." | `docs/determinism.md` §5 | **not counted**: the fact is stated, as evidence inside the determinism point, but checking is not named as a difficulty of its own, and the answer does not say why the suite missed it |
+| H4. One language contract shared by compiler, editor and documentation | "Four hand-kept property lists drifted apart. Each property is now declared once in `languageContract.ts`, and the other pieces derive their tables from it. The test suite also compiles every example in the docs." | README.md:174-183 | yes, with one imprecision: "the other pieces" includes the docs, which do not derive tables from the contract; the next sentence states correctly how the docs are held to it |
+
+Q2: 3 of 4 (H1, H2, H4), each with a correct reason; two were needed.
+
+The answer's second bullet, "Limits of the guarantee", is not a rubric item.
+Each of its claims holds against `docs/determinism.md` §2: the Node and
+Chromium `Math.sin` results differ by about one unit in the last place,
+cross-machine identity is untested, and MP4 bytes differ between runs while
+the `frames` hash matches.
+
+**Result: the read passes the rubric on the first reader.** No README
+revision followed it.
+
+**The owner's judgment: pending.** Spec O6 makes it final; this section is
+the material for it.
+
+---
+
+## Exit criterion 3: both CLI commands on the canonical scenes
+
+### `marey check --export-ready`
+
+```
+npm run build:cli && node bin/marey.mjs check --export-ready eval/scenes-3b/*.marey
+```
+
+```
+eval/scenes-3b/bar-chart.marey: ok
+eval/scenes-3b/compound-logo.marey: ok
+eval/scenes-3b/radial-dots.marey: ok
+eval/scenes-3b/timeline-ticks.marey: ok
+```
+
+Exit 0. The flag is not a no-op: on `eval/scenes-r2/collide-stack.marey`,
+which declares no `duration`, plain `check` prints `ok` and exits 0, and
+`check --export-ready` exits 1 with `[EXPORT_UNBOUNDED_SCENE] This scene
+declares no 'duration', so it has no finite length to export. ...`.
+
+### `marey export`: `npm run check:export`, default mode
+
+```
+npm run build:export-page && npm run build:cli && npm run check:export
+```
+
+Exit 0, `matrix: all passed  (111.2 s)`, `real 1m54.132s`. What the matrix
+asserts is in "CLI export matrix" above.
+
+| Scene | Format | Result | Time (s) | Frames | Size | sha256 (first 16) | `hash` |
+|---|---|---|---|---|---|---|---|
+| bar-chart | png | ok | 3.9 | 30 | 800x600 | `ee2b6ddadd11e709` | `0adcc9f9` |
+| bar-chart | apng | ok | 3.2 | 30 | 800x600 | `c6e51569220cf225` | `0adcc9f9` |
+| bar-chart | webm | ok | 4.7 | 30 | 1600x1200 | `19bf665bb55445f6` | `0adcc9f9` |
+| bar-chart | mp4 | ok | 4.8 | 30 | 1600x1200 | differs, reported: `f05cca9100bf0cab` vs `c38ebd9745753486` | `0adcc9f9` |
+| bar-chart | lottie | ok | 1.1 | 30 | 800x600 | `79aa2ffc7216b022` | `0adcc9f9` |
+| radial-dots | png | ok | 3.0 | 30 | 800x600 | `d6a1fb2fdcd8d9f7` | `94d15a5d` |
+| radial-dots | apng | ok | 2.8 | 30 | 800x600 | `9d9234324f1709ee` | `94d15a5d` |
+| radial-dots | webm | ok | 4.1 | 30 | 1600x1200 | `81f81ac2c5a10961` | `94d15a5d` |
+| radial-dots | mp4 | ok | 4.5 | 30 | 1600x1200 | differs, reported: `246e17fc9881c7c3` vs `4239063a2fb76f66` | `94d15a5d` |
+| radial-dots | lottie | ok | 1.0 | 30 | 800x600 | `5aba4b1aff965c8f` | `94d15a5d` |
+| compound-logo | png | ok | 11.7 | 240 | 800x600 | `79f3f2947d9c4407` | `3dbb171f` |
+| compound-logo | apng | ok | 10.3 | 240 | 800x600 | `df3988b9223c6f87` | `3dbb171f` |
+| compound-logo | webm | ok | 19.3 | 240 | 1600x1200 | `89b23932748ef09d` | `3dbb171f` |
+| compound-logo | mp4 | ok | 19.3 | 240 | 1600x1200 | differs, reported: `4b60d00ff7d886cb` vs `c774a4b5bf01ba9b` | `3dbb171f` |
+| compound-logo | lottie | ok | 0.9 | 240 | 800x600 | `708484b0189fc0d4` | `3dbb171f` |
+| timeline-ticks | png | ok | 3.5 | 30 | 800x600 | `3443dd4a85e13b0a` | `93ac7785` |
+| timeline-ticks | apng | ok | 2.7 | 30 | 800x600 | `c7ccaafa0f3c7b53` | `93ac7785` |
+| timeline-ticks | webm | ok | 4.8 | 30 | 1600x1200 | `dd5d14a7365ce0b5` | `93ac7785` |
+| timeline-ticks | mp4 | ok | 4.0 | 30 | 1600x1200 | differs, reported: `524df4b241142b82` vs `ab6da8e0fc767dd2` | `93ac7785` |
+| timeline-ticks | lottie | ok | 1.1 | 30 | 800x600 | `38c44cdd8fff0b15` | `93ac7785` |
+| bar-chart | png, font aborted | ok | 0.5 | | | | |
+
+The font-abort case printed the same `[EXPORT_FONT_UNAVAILABLE]` message as
+on 2026-09-28.
+
+**Beside the 2026-09-28 runs.** Every png, apng and webm SHA-256 is unchanged,
+and so is every `hash` and Lottie SHA-256 of bar-chart, radial-dots and
+timeline-ticks. Two values moved, both on compound-logo, both from Phase 6C:
+
+- its `hash` is `3dbb171f`, not `26cca4e9`. "6C: smooth handoff" below
+  records this change and its cause, a final-tick velocity of
+  199.99999999999886 px/s where the old code gave 200;
+- its Lottie SHA-256 is `708484b0...`, not `e80dffee...` (42,073 B, not
+  42,074 B). The Lottie file stores the unrounded positions. Measured by
+  building the CLI at `7e09051`, the commit before 6C, in a temporary
+  worktree: it exports `e80dffee...` and `frames 26cca4e9`, as recorded
+  above. Of the two files' 6,573 numeric tokens, 542 differ, by at most
+  8.9e-11 px, for example `363.41688531247667` against `363.4168853124768`.
+
+As before, all four mp4 cases differ between their two runs and are reported,
+not gated (R47).
+
+`--compare-seams` was not re-run for this section; it needs the dev server
+and runs again before the merge.
+
 ---
 
 ## CI (O8)
@@ -352,6 +653,13 @@ total exceeds ten
 minutes, spec §9.3's fallback applies: `check:export` gains a `--ci` mode that
 runs one scene per format instead of the full four-scene, five-format matrix,
 and the full matrix stays a before-merge check.
+
+**Update 2026-10-07: the CI time is still not measured.** The change reached
+`main` on 2026-10-02, and all four CI runs since then failed at the pack step,
+before the export matrix (see "Exit criterion 1", "On a fresh clone, in CI").
+Those jobs took 1m14s to 1m46s each (`gh run list`), and none reached the
+matrix. The local default-mode run of 2026-10-07
+took 111.2 s ("Exit criterion 3").
 
 ---
 

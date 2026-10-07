@@ -1824,3 +1824,171 @@ only mentions are in this plan and the design spec. `check:export
 the frame count against `__mareyExportVideo({ container: "mp4" })` and reports
 both SHA-256s without gating on them, since WebCodecs' H.264 is not
 byte-identical between runs (R47).
+
+**Tasks 13-15, and the phase as a whole.** Written 2026-10-07, at the end of
+Task 14, from `git log e7c5c29..a4e4cee`, `eval/RESULTS-PHASE-6.md`, CI's run
+history (`gh run list`), and the decisions recorded while executing this plan.
+Every number below was re-measured on a clean tree at `a4e4cee`, or is quoted
+from the RESULTS section named beside it.
+
+### Final evidence
+
+| Check | Command | Result |
+|---|---|---|
+| Unit suite | `npm test` | **61 files / 1306 tests**, all passing |
+| Baseline | the same, at `b0759e8` (this plan's commit), in a temporary worktree | 43 files / 1061 tests |
+| Eval suite | `npx vitest run --config eval/vitest.config.ts` | 1 file / 5 tests |
+| Typecheck and build | `npm run build` | exit 0 |
+| Every first-party scene | `npm run build:cli && node bin/marey.mjs check $(git ls-files '*.marey')` | 85 files, all `ok` (78 tracked at `b0759e8`) |
+| Exit criterion 1, locally | `npm run build:package && npm run check:pack` | 11 of 11, exit 0, 17.0 s |
+| Exit criterion 1, fresh clone | CI's "Package builds, packs and installs" step | **fails** on every push since 2026-10-02: `ENOTCACHED` at `npm install --offline <tarball>`. Defect 4 below |
+| Exit criterion 2 | spec §6.3's read | passes the rubric with the first reader: Q1 3 of 3, Q2 3 of 4 (H1, H2, H4). The owner's judgment is pending |
+| Exit criterion 3 | `node bin/marey.mjs check --export-ready eval/scenes-3b/*.marey`; `npm run check:export` | 4 of 4 `ok`; 21 of 21, exit 0, 111.2 s |
+| x264 gate (Task 1) | `node tools/visual-check/x264-gate.mjs ...` | failed: none of 8 configurations meets the specks threshold. MP4 stays on WebCodecs |
+| Branch shape, as of `a4e4cee` (a snapshot: a commit cannot hold its own diffstat) | `git rev-list --count e7c5c29..a4e4cee`; `git diff --shortstat e7c5c29..a4e4cee` | **56 commits**, **135 files changed, +14,367 / -1,468**, 6B and 6C included |
+
+Phase 6 is not closed. Criterion 1 needs `check:pack` to pass on a fresh
+clone, and the owner's judgment on the read and the npm publish are still to
+come.
+
+### Defects found in this plan
+
+1. **Global Constraint 17 names "Task 10 (CI)".** CI is Task 11. Ruled
+   PF-R2 before execution.
+2. **Task 2's boundary test cannot resolve a relative import.** Its `join`
+   drops a leading `..`: `join("./index.ts", "../compiler/compileSource")`
+   returns `compiler/compileSource`, so the test would have failed on its own
+   fixture. Ruled PF-R2b: the committed test normalises the segments.
+3. **Tasks 11 and 13 stage `AGENTS.md`, which is untracked.** `.gitignore`
+   has kept it local since `0e10d54` (2026-09-26), and force-adding an
+   ignored file is against the repository's rules. Ruled PF-R1, and R7 for
+   Task 13 Step 4: both edits went to the local file only.
+4. **Task 10 Step 2 installs the tarball with `npm install --offline`.** That
+   works only where npm's cache already holds the registry metadata for
+   `playwright-core`. A fresh CI runner, after `npm ci`, holds the tarball
+   and not the metadata, so the step fails there with `ENOTCACHED`. It went
+   unseen from 2026-10-02 to 2026-10-07, because CI's results were not read
+   after the pushes. Reproduced with a fresh cache, and shown to pass once
+   `npm cache add playwright-core@1.62.1` fetches the metadata (RESULTS,
+   "Exit criterion 1"). Open.
+5. **Task 1 Step 4 asks for MP4 scores equal across two runs.** WebCodecs
+   encodes differently each run (R47), so they cannot be. The scorer's
+   extraction was shown unchanged by WebM equality across runs and by one
+   set of MP4 bytes scored identically by both scorers (RESULTS, "The shared
+   scorer").
+6. **Task 13 Step 3 asks the README to say MP4 needs ffmpeg.** It was stale
+   once Task 9 recorded the failed gate: the CLI never spawns ffmpeg. Ruled
+   R1.
+7. **Task 14 Step 1's deletion scope.** It removes this plan and the design,
+   and 6B's files "if they mention the rubric". The question is which files
+   state the rubric, not which mention "ten-minute". Ruled R4.
+8. **Task 15 Step 3 merges `phase-6`.** That branch was merged into `main` on
+   2026-10-02 and deleted. Tasks 13-15 run on `phase-6-finish` (R3).
+
+### Every ruling, by id
+
+PF-R ids were taken before execution, R ids for Tasks 13-15. Rulings inside
+single tasks were not numbered. The ones that changed what was built are
+recorded in RESULTS: mp4 reported and not gated, in the matrix and in
+`--compare-seams`; the x264 gate re-run with colour tags matching the
+WebCodecs file; and Task 1 Step 4's scorer proof (defect 5).
+
+| id | Ruling |
+|---|---|
+| PF-R1 | Tasks 11 and 13 edit the local, untracked `AGENTS.md` only, and their commits drop it. The committed record of O7 is spec §6.2 and the README's regenerate command. |
+| PF-R2 | Global Constraint 17's "Task 10 (CI)" means Task 11. |
+| PF-R2b | Task 2's boundary test gets a `join` that keeps leading `..` segments; every other line stays as written. |
+| PF-R3 | The export page reports each format's size from what was produced: APNG from its IHDR, Lottie from `w`/`h`, png from `runPngExport`, video from the plan. No pipeline signature changes. |
+| PF-R4 | One copy of each usage synopsis: `check`'s from `check.ts`, `export`'s from `exportArgs.ts` once Task 6 exists. |
+| PF-R5 | Order: Tasks 2-8, then 10-12 while ffmpeg was being installed, then 1 and 9; 6B; 6C; then 13-15. |
+| PF-R6b | Task 4's untested `canvas.width = 0` lines are memory hygiene, as in `runApngExport`, and stay untested. |
+| R1 | The README does not list ffmpeg: the x264 gate failed and MP4 uses the browser's WebCodecs path. |
+| R2 | O7 and O8 count as confirmed (the owner, 2026-09-28) and are not asked again. |
+| R3 | Tasks 13-15 run on `phase-6-finish`, cut from `main` at `c7b87ae`, since `phase-6` merged into `main` on 2026-10-02. |
+| R4 | The reader's copy removes the files that state the rubric or the procedure. Passing mentions of "ten-minute" (the CI budget in RESULTS, the exit criterion in the roadmap) stay. |
+| R5 | The reader is new to the project, with no prior context, confined to the copy, and given only the prompt. The owner's judgment stays final (O6). |
+| R6 | The README presents `npx marey ...` and `import { compile } from "marey"` as the usage, with no claim that is false before publishing (no download badges). Its Status drops "unpublished", "one command" and "not implemented". |
+| R7 | The O7 exception line lives in the local `AGENTS.md`. Spec §6.2 and the README's regenerate command are its committed record. |
+| R8 | The read is scored by someone other than the person who gave it, from the verbatim answers. |
+| R47 | (5B, cross-phase) WebCodecs MP4 bytes are reported, not gated; its `frames` hash and size are gated. |
+
+### Mutation results, each beside its suite size
+
+| Task | Mutation | Suite at the time | Result |
+|---|---|---|---|
+| 8 | Ten mutations of the export page, the CLI bundle and the matrix script (RESULTS, "CLI export matrix", "Mutations") | 53 files / 1142 tests | each makes the matrix fail on the assertion it targets |
+| 10 | `fix-dts-extensions.mjs` dropped from `build:lib` | 53 files / 1142 tests | `check:pack` fails at the nodenext consumer typecheck (`TS2834`) |
+| 10 | `dist/export-page/` removed from `files` | 53 files / 1142 tests | `check:pack` fails at `npx marey export`: the export page is not in the package |
+| 12 | The `snapContainerToBody` call deleted from the freeze loop (`docs/determinism.md` §5) | not recorded | 2 tests fail. At `1ce8307`, the fix's own commit, the same deletion left 97 of 97 passing |
+| 6B | `min-width: 400px` on the Examples button; then with `position: absolute` added | the 33-assertion layout check | the viewport assertion fails at 390 and 320 px; then the overlap assertion fails on every page |
+| 6C | The pre-change code under the new handoff seam tests | `sceneRuntime.test.ts`, 56 tests | 14 of 16 seam cases fail; all pass after the change |
+| 13 | One line (`color: sky`) deleted from `docs/media/bars-reveal.marey` | 61 files / 1306 tests | `readmeMedia.test.ts`: 1 failed, 1 passed |
+| 13 | The README's three `docs/media/bars-reveal.png` references replaced | 61 files / 1306 tests | the image-before-source test fails |
+
+Task 14 changed no code and has no mutation.
+
+### Deliberate gaps and deferrals, each with what makes it harmless today
+
+This list covers what Tasks 13 and 14 deferred or found.
+
+1. **`README.md:17-18`: "Try it in the browser" has no blank line before
+   it**, so it renders in the badge paragraph, on the badges' line.
+   *Harmless today:* the link is visible and works; it is spacing only.
+2. **The README's sample output line shortens the SHA-256 to
+   `d56c2e03…`.** `marey export` prints all 64 hex digits. The `frames`
+   value, `35ebdda6`, is the full hash. *Harmless today:* the ellipsis marks
+   the cut, and the prefix shown is the real one (re-exported 2026-10-07,
+   RESULTS "Exit criterion 2").
+3. **`readmeMedia.test.ts` dereferences its regex match with `!`.** If the
+   README loses its `marey` code fence, the test fails with a bare
+   `TypeError` rather than a message naming the missing block. *Harmless
+   today:* it still fails, and the stack points at the line.
+4. **The README's structural checklist (spec §6.3) is manual**: the word
+   count, the stale strings and the first-screen link are not tested.
+   *Harmless today:* it was run on 2026-10-07 and passed (RESULTS), and only
+   a README edit can break it. The media block and the image position are
+   tested.
+5. **Leftovers of the failed x264 gate.** CI still installs ffmpeg
+   (`ci.yml`, "Install ffmpeg and the pinned browser"), and
+   `src/cli/exportReport.ts` keeps an optional `ffmpeg` field that no caller
+   sets (only `exportReport.test.ts` does). *Harmless today:* the install
+   costs CI time only, and the field is never set, so the summary line never
+   shows it.
+6. **`TYPE_HANDOFF_DURATION` ignores `delay`** (`validator.ts`'s concurrent
+   handoff check compares durations only). *Harmless today:* reaching it
+   takes a delayed handoff that ends on the physics block's freeze tick,
+   then a later `sequence` step on the same object. RESULTS "6C: smooth
+   handoff", "Known edges", has the probe and its numbers.
+7. **`docs/determinism.md` §4 quotes `frames 26cca4e9` for compound-logo.**
+   Since 6C the scene's `frames` hash is `3dbb171f`. *Harmless today:* the
+   passage is dated ("on 2026-09-30"), and its point, that two runs print
+   the same line, still holds.
+8. **`src/cli/exportDriver.test.ts` leaves three directories in the OS temp
+   folder on every `npm test`** (`marey-page-*` twice, `marey-scene-*`), with
+   no cleanup. 385 had accumulated on this machine by 2026-10-07.
+   *Harmless today:* they are small, and outside the repository.
+
+### The process record
+
+- **Order.** Tasks 2-8 ran first while ffmpeg was not installed, then 10-12,
+  then 1 and 9 once it was (PF-R5). 6B and 6C followed with their own
+  designs and plans, then 13-15 on `phase-6-finish`.
+- **Reviews.** Tasks 1-13 each had their own review. Tasks 5, 6, 10, 11 and
+  12 each needed one fix round; Task 8 had one before its review, for the
+  mp4 gate (R47). Task 13's review was clean.
+- **Interruptions.** Work stopped four times with uncommitted changes in the
+  tree: Task 10's fix round, Task 1 twice, and Task 13's first attempt. Each
+  time the tree was inspected (`git diff --stat`, `git status`) and the work
+  finished from it, with nothing lost.
+- **A verdict held until its anomaly was explained.** Task 1's first gate run
+  scored every x264 file about 3.4 dB below WebCodecs, almost independent of
+  CRF, which points to a colour error rather than the encoder. The verdict
+  was held until x264 was re-measured with the WebCodecs file's colour tags:
+  +5.12 dB on identical YUV planes. The gate still failed, on specks
+  (RESULTS, "Task 1: x264 gate").
+- **A green local check is not a fresh clone.** `check:pack` passed every
+  local run and failed every CI run (defect 4), and CI's results were not
+  read for five days. Reading the CI run after each push to `main` would
+  have caught it the day it landed.
+- **The read.** One reader, who passed the rubric. The README needed no
+  revision.

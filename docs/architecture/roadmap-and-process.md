@@ -255,6 +255,22 @@ explicitly rather than quietly deviating.
   README, `marey check`/`marey export`, and a written account of the
   determinism work. Replaces the old Phase 5B (Distribution); acquisition work
   is deliberately out of scope.
+  - **Status (2026-10-07): built, not yet closed.** Tasks 1-12 are merged on
+    `main`, and so are two pieces the owner added within the phase: 6B, the
+    playground redesign, and 6C, a smooth animation-to-physics handoff. The
+    README (Task 13) and the exit evidence (Task 14) are on
+    `phase-6-finish`. Of roadmap §9.3's exit criteria, the third passes
+    (`check --export-ready` and `check:export` on the canonical scenes). The
+    second's read passes the rubric fixed in spec §6.3; the owner's judgment
+    on it is pending. The first passes on the development machine but fails
+    on a fresh clone in CI: `check:pack` installs the tarball with
+    `--offline`, which needs registry metadata that `npm ci` does not cache.
+    Publishing to npm follows the merge and the owner's sign-off. Evidence is
+    in `eval/RESULTS-PHASE-6.md`. Design:
+    `docs/specs/2026-09-27-marey-phase-6-packaging-and-legibility-design.md`,
+    with 6B's and 6C's own designs and plans dated 2026-10-02 and 2026-10-03.
+    Plan and execution notes:
+    `docs/plans/2026-09-27-phase-6-packaging-and-legibility.md`.
 - **Phase 7 — motion-graphics core.** Color animation, `stagger`, scrubbing,
   and live-edit replay.
 - **Phase 8 — remaining physics syntax.** `world`, `lockPosition`,

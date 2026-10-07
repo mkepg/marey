@@ -131,6 +131,15 @@ for a **complete, provable engineering artifact with a declarable finish
 line**, and acquisition work moved past that line. Read its §1 before
 proposing anything the old roadmap justified by adoption.
 
+**6 — packaging and legibility is built but not yet closed** (status
+2026-10-07). The package, `marey check`/`marey export`, the determinism
+account, and the owner's additions 6B (playground redesign) and 6C (smooth
+handoff) are merged on `main`; the README and the exit evidence are on
+`phase-6-finish`. Exit criterion 3 passes. The ten-minute read passes the
+rubric, and the owner's judgment on it is pending. Criterion 1 fails on a
+fresh clone in CI (`check:pack`'s offline install), so the phase is not done.
+npm publish follows the merge. Evidence is in `eval/RESULTS-PHASE-6.md`;
+`roadmap-and-process.md`'s Phase 6 bullet carries the same status.
 **5C — Lottie completion and video quality is done and merged** (merge
 commit `081c940` onto `main`, 2026-09-26; added by the project owner on
 2026-09-24). It delivered:
