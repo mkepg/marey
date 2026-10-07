@@ -1826,10 +1826,12 @@ both SHA-256s without gating on them, since WebCodecs' H.264 is not
 byte-identical between runs (R47).
 
 **Tasks 13-15, and the phase as a whole.** Written 2026-10-07, at the end of
-Task 14, from `git log e7c5c29..a4e4cee`, `eval/RESULTS-PHASE-6.md`, CI's run
-history (`gh run list`), and the decisions recorded while executing this plan.
-Every number below was re-measured on a clean tree at `a4e4cee`, or is quoted
-from the RESULTS section named beside it.
+Task 14, from `git log e7c5c29..a4e4cee`, `eval/RESULTS-PHASE-6.md` and CI's run
+history (`gh run list`). The decisions made while executing are the notes
+above and the ruling table below. Every number is either re-measured on a
+clean tree at `a4e4cee` (the final-evidence table, except where a row names a
+RESULTS section) or quoted from the RESULTS section the row names in
+"Where each mutation or gate row comes from" at the end of this section.
 
 ### Final evidence
 
@@ -1926,6 +1928,18 @@ WebCodecs file; and Task 1 Step 4's scorer proof (defect 5).
 | 13 | The README's three `docs/media/bars-reveal.png` references replaced | 61 files / 1306 tests | the image-before-source test fails |
 
 Task 14 changed no code and has no mutation.
+
+#### Where each mutation or gate row comes from
+
+| Row | Source |
+|---|---|
+| x264 gate (Task 1) | RESULTS, "Task 1: x264 gate" |
+| Task 8 mutations | RESULTS, "CLI export matrix", "Mutations: each assertion made to fail" |
+| Task 10 mutations | RESULTS, "Exit criterion 1", "Mutations: each assertion made to fail, then restored" |
+| Task 12 mutation | `docs/determinism.md` §5, the command beside the `snapContainerToBody` deletion; not in RESULTS |
+| 6B mutations | RESULTS, "6B: the playground redesign" (the `min-width` and `position: absolute` cases) |
+| 6C mutation | RESULTS, "6C: smooth handoff" |
+| Task 13 mutations | recorded only in this table; RESULTS has no section for them |
 
 ### Deliberate gaps and deferrals, each with what makes it harmless today
 

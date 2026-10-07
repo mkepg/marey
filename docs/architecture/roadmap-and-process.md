@@ -262,9 +262,11 @@ explicitly rather than quietly deviating.
     `phase-6-finish`. Of roadmap §9.3's exit criteria, the third passes
     (`check --export-ready` and `check:export` on the canonical scenes). The
     second's read passes the rubric fixed in spec §6.3; the owner's judgment
-    on it is pending. The first passes on the development machine but fails
-    on a fresh clone in CI: `check:pack` installs the tarball with
-    `--offline`, which needs registry metadata that `npm ci` does not cache.
+    on it is pending. The first failed on a fresh clone in CI:
+    `check:pack` installed the tarball with `--offline`, which needs registry
+    metadata that `npm ci` does not cache. The fix, `--prefer-offline`, is
+    committed and passes on the local (warm) npm cache; whether it passes on
+    CI's cold cache is confirmed only by the next push.
     Publishing to npm follows the merge and the owner's sign-off. Evidence is
     in `eval/RESULTS-PHASE-6.md`. Design:
     `docs/specs/2026-09-27-marey-phase-6-packaging-and-legibility-design.md`,

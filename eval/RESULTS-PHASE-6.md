@@ -18,7 +18,7 @@ and `git diff --stat` both empty), Windows 11, Node 22.13.1.
 
 | Criterion | Command | Result |
 |---|---|---|
-| 1. The package builds and installs from a clean checkout | `npm run build:package && npm run check:pack` | **Not closed.** 11 of 11 checks pass on this machine, exit 0, 17.0 s. On a fresh clone in CI the same check fails at `npm install --offline <tarball>` (`ENOTCACHED`), on all four pushes since it was added. Cause reproduced locally. See "Exit criterion 1" |
+| 1. The package builds and installs from a clean checkout | `npm run build:package && npm run check:pack` | **Not closed.** 11 of 11 checks pass on this machine, exit 0, 17.0 s. On a fresh clone in CI the same check fails at `npm install --offline <tarball>` (`ENOTCACHED`), on all four pushes since it was added. Cause reproduced locally. The fix (`--prefer-offline`) is committed and passes on the warm local cache; CI's cold cache is confirmed only by the next push. See "Exit criterion 1" |
 | 2. A reader states what Marey is and what is hard within ten minutes | spec §6.3's procedure | One read, scored against the rubric: Q1 3 of 3, Q2 3 of 4 (H1, H2, H4), so it **passes** the rubric. **The owner's judgment is pending** (spec O6). See "Exit criterion 2" |
 | 3. Both CLI commands work on the canonical scenes | `node bin/marey.mjs check --export-ready eval/scenes-3b/*.marey`; `npm run check:export` | 4 of 4 `ok`, exit 0; 21 of 21 cases pass, exit 0, 111.2 s. See "Exit criterion 3" |
 
@@ -375,8 +375,8 @@ the same clean tree. Exit 0, `real 0m17.044s`.
 | 11 | `grep -c pixi` on the installed library bundle | ok | 0.0 | `grep -c pixi: 0` |
 
 Beside the 2026-09-28 run: the same 57 files; the tarball is 1,355 B larger
-packed and 4,057 B larger unpacked (the README and the bundles it
-holds have changed since); check 7's line is identical, byte for byte.
+packed and 4,057 B larger unpacked (the README and the bundles the
+tarball holds have changed since); check 7's line is identical, byte for byte.
 
 ### On a fresh clone, in CI: fails at the offline install
 
@@ -428,6 +428,32 @@ The install exits 1 with the same `ENOTCACHED` message. Then
 metadata, and the same install exits 0 with `marey` and `playwright-core` in
 `node_modules`. The check needs either a network install in CI or that
 metadata in the cache first. Neither is applied here.
+
+**Fix, committed.** `pack-check.mjs` now installs the tarball with
+`npm install --prefer-offline <tarball>` instead of `--offline`. npm's
+configuration reference (`npm/docs/content/using-npm/config.md`, the npm 11.7.0
+installed here) says: "If true, staleness checks for cached data will be
+bypassed, but missing data will be requested from the server. To force full
+offline mode, use `--offline`." So cached data is used and the registry is
+asked only for what the cache lacks, which on CI's cold cache is the
+`playwright-core` metadata. The header comment and the check's label say the
+same.
+
+**Verification, and its limit.** On this machine's warm cache `npm run
+check:pack` passes 11 of 11 with the new label. The cold-cache case was not
+re-run: it needs the registry, which this task did not have approval to use.
+The warm run was also not offline. `npm install --prefer-offline --loglevel http
+<tarball>` into an empty `npm init -y` directory logged `npm http fetch GET 200
+https://registry.npmjs.org/playwright-core 35ms (cache stale)` and an audit
+`POST` to `/-/npm/v1/security/advisories/bulk`, while the two tarballs were
+cache hits. That is, a stale cached packument is revalidated under
+`--prefer-offline`, and the earlier plan to show "no registry request" on the
+warm cache does not hold; the command that showed it also made those two
+requests itself. (A `grep` for `GET https://registry` counted 0 because npm
+logs the status between the verb and the URL; it is the wrong pattern.) What
+is established: the check passes locally, and the flag's documented behaviour
+is the one the failure needs. Whether it passes on CI's cold cache is
+confirmed only by the next push to `main`.
 
 ---
 
@@ -533,8 +559,8 @@ Q1: 3 of 3.
 | Item | What the answer states | Checked against | Met |
 |---|---|---|---|
 | H1. Identical output with physics: the fixed tick, and the simulation/painted-state boundary | "a fixed 120 Hz tick, and exports sample tick state only. The live preview interpolates between ticks, so nothing the simulation reads can depend on that interpolation", with the frozen-body bug as the case | `TICK_HZ = 120` (`src/compiler/sceneIR.ts:14`); the bug and its fix, `1ce8307` | yes |
-| H2. A portable format with no runtime: a baked Lottie subset, refusing instead of degrading | "bakes physics, easing, and sequencing into per-frame keyframes"; "refuses characters the font lacks rather than drawing them differently from the preview" | README.md:162-172; `[LOTTIE_TEXT_MISSING_GLYPH]` | yes |
-| H3. Verification: a headless suite cannot see a canvas; a browser harness caught a bug it missed | "All 94 headless tests passed. Only a browser harness that cold-loads a scene twice and compares frames caught it." | `docs/determinism.md` §5 | **not counted**: the fact is stated, as evidence inside the determinism point, but checking is not named as a difficulty of its own, and the answer does not say why the suite missed it |
+| H2. A portable format with no runtime: a baked Lottie subset, refusing instead of degrading | "bakes physics, easing, and sequencing into per-frame keyframes"; "refuses characters the font lacks rather than drawing them differently from the preview" | README.md:162-172; `[LOTTIE_TEXT_MISSING_GLYPH]` | yes, with one gap: the answer never says "subset". The rubric's wording is "a baked Lottie subset, and refusing unsupported features instead of degrading them"; the answer gives the baking and the refusal, each with its reason, and the subset is implied by the refusal. It still counts, on the rubric's substance |
+| H3. Verification: a headless suite cannot see a canvas; a browser harness caught a bug it missed | "All 94 headless tests passed. Only a browser harness that cold-loads a scene twice and compares frames caught it." | `docs/determinism.md` §5 | **not counted**: the fact is stated, as evidence inside the determinism point, but the answer gives no reason the suite missed the bug (that a headless suite cannot see a canvas), and the rubric asks for each item "with a correct reason" |
 | H4. One language contract shared by compiler, editor and documentation | "Four hand-kept property lists drifted apart. Each property is now declared once in `languageContract.ts`, and the other pieces derive their tables from it. The test suite also compiles every example in the docs." | README.md:174-183 | yes, with one imprecision: "the other pieces" includes the docs, which do not derive tables from the contract; the next sentence states correctly how the docs are held to it |
 
 Q2: 3 of 4 (H1, H2, H4), each with a correct reason; two were needed.

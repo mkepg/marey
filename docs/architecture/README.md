@@ -136,10 +136,13 @@ proposing anything the old roadmap justified by adoption.
 account, and the owner's additions 6B (playground redesign) and 6C (smooth
 handoff) are merged on `main`; the README and the exit evidence are on
 `phase-6-finish`. Exit criterion 3 passes. The ten-minute read passes the
-rubric, and the owner's judgment on it is pending. Criterion 1 fails on a
-fresh clone in CI (`check:pack`'s offline install), so the phase is not done.
+rubric, and the owner's judgment on it is pending. Criterion 1 failed on a
+fresh clone in CI (`check:pack`'s offline install). Its fix, `--prefer-offline`,
+is committed and passes on the local (warm) npm cache; whether it passes on
+CI's cold cache is confirmed only by the next push. The phase is not closed.
 npm publish follows the merge. Evidence is in `eval/RESULTS-PHASE-6.md`;
 `roadmap-and-process.md`'s Phase 6 bullet carries the same status.
+
 **5C — Lottie completion and video quality is done and merged** (merge
 commit `081c940` onto `main`, 2026-09-26; added by the project owner on
 2026-09-24). It delivered:
