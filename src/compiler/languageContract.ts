@@ -74,7 +74,7 @@ export const FIT_VALUES = ["contain", "cover", "fill", "none"] as const;
 export const BOOLEAN_VALUES = ["true", "false"] as const;
 export const EASING_VALUES = ["linear", "easeIn", "easeOut", "easeInOut"] as const;
 export const DURATION_VALUES = ["indefinitely"] as const;
-export const ANIMATABLE_PROPERTIES = ["position", "rotation", "scale", "alpha"] as const;
+export const ANIMATABLE_PROPERTIES = ["position", "rotation", "scale", "alpha", "color"] as const;
 
 export const NAMED_COLORS = {
   red: "#ff0000", green: "#008000", blue: "#0000ff", white: "#ffffff",
@@ -298,7 +298,7 @@ const animateProperties = Object.freeze({
     { required: true },
   ),
   to: property(
-    ["number", "point"],
+    ["number", "point", "color"],
     "The target value for the animation.",
     "to: 360",
     "(0, 0)",
@@ -443,7 +443,7 @@ export const KIND_LABEL: Readonly<Record<ValueKind, string>> = {
   fit: "a fit keyword (contain, cover, fill, or none)",
   boolean: "a boolean (true or false)",
   easing: "an easing keyword (e.g. easeInOut, linear)",
-  animProperty: "an animatable property name (e.g. position, rotation, scale, alpha)",
+  animProperty: `an animatable property name (${ANIMATABLE_PROPERTIES.join(", ")})`,
   indefinitely: "the keyword 'indefinitely'",
 };
 

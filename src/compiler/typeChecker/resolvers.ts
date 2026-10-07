@@ -163,7 +163,8 @@ export function resolveAnimToValue(props: Record<string, AstValue>, key: string)
   }
   if (v.kind === "number") return v.value;
   if (v.kind === "point") return { x: v.x, y: v.y };
-  throw new Error(`[IR] Animation property '${key}' must be a number or point.`);
+  if (v.kind === "color") return normaliseColor((v as ColorValue).value);
+  throw new Error(`[IR] Animation property '${key}' must be a number, point or colour.`);
 }
 export function getReqNumber(props: Record<string, AstValue>, key: string): number {
   return (props[key] as NumberValue).value;

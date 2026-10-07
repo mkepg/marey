@@ -275,12 +275,13 @@ receive its exit velocity — directly on the same object, inside one
 `delay` is also a number of seconds, defaults to `0`, and must be `0` or
 greater; it is covered below.
 
-Only four properties can be animated: `position`, `rotation`, `scale`, and
-`alpha`. Naming any other property is a compile error listing those four.
+Only five properties can be animated: `position`, `rotation`, `scale`,
+`alpha`, and `color`. Naming any other property is a compile error listing
+those five.
 
 `to` must match the animated property. `position` requires a point.
 `rotation` and `alpha` require a number. `scale` accepts either a number
-(applied to both axes) or a point.
+(applied to both axes) or a point. `color` requires a colour.
 
 `easing` is one of four unquoted keywords: `linear`, `easeIn`, `easeOut`, or
 `easeInOut`. Omitting `easing` defaults to `easeInOut`.
@@ -310,6 +311,36 @@ scene {
       to: (400, 300)
       duration: 1.0
       easing: easeOut
+    }
+  }
+}
+```
+
+### Animating colour
+
+`property: color` takes a colour for `to`: a hex code, a named colour, or a
+`let` binding that holds one. The shape's red, green and blue channels each
+blend in sRGB at the eased progress, and every frame lands on whole 8-bit
+channel values. `delay`, `loop`, `yoyo`, `easing`, `sequence` and `parallel`
+apply exactly as they do to any other property. A `group` has no colour of
+its own, so animating one is a compile error (`TYPE_ANIM_COLOR_TARGET`), as
+is animating a `use` instance, which expands to a group. `handoff` stays
+position-only.
+
+```marey
+scene {
+  size: (400, 300)
+
+  circle pulse {
+    position: (200, 150)
+    radius: 50
+    color: red
+    animate {
+      property: color
+      to: #00ff80
+      duration: 1.5
+      loop: true
+      yoyo: true
     }
   }
 }
@@ -1209,10 +1240,8 @@ them.
 **Strings compare and nothing else.** `"a" + "b"` is a compile error;
 equality is the only string operation.
 
-**Colours neither animate nor do arithmetic.** `animate`'s `property`
-accepts only `position`, `rotation`, `scale`, and `alpha`; see "Not covered
-here" below. And a colour is not a number, so it cannot be an arithmetic
-operand: `red + blue` is a compile error naming the kind it found, under the
+**Colours do no arithmetic.** A colour is not a number, so it cannot be an
+arithmetic operand: `red + blue` is a compile error naming the kind it found, under the
 same rule that rejects any other non-number operand.
 
 There is also no `sqrt`, `atan2`, `pow`, `abs`, `min`, `max`, `floor`, or
@@ -1288,12 +1317,6 @@ kinds, required lists, defaults, and constraints from it, so it cannot drift
 out of sync with the source the way hand-written prose can. Until that phase
 lands, the editor's own completions and hovers are the authority on which
 properties a given object accepts.
-
-Colour animation is not supported. `animate`'s `property` accepts only the
-four names in `ANIMATABLE_PROPERTIES` (`languageContract.ts:59`) —
-`position`, `rotation`, `scale`, and `alpha` — checked at
-`typeChecker/validator.ts:567`; naming any other property, including a
-colour, is a compile error (`[TYPE_ANIM_PROP]`).
 
 For the design rationale behind these decisions, see
 `docs/specs/`. The authoritative future sequence is

@@ -21,7 +21,7 @@ describe("language contract", () => {
   it("derives required and accepted properties from one data object", () => {
     expect(REQUIRED_PROPS.circle).toEqual(["position", "radius"]);
     expect(PROP_TYPES.animate).toEqual({
-      property: "animProperty", to: ["number", "point"], duration: "number", delay: "number",
+      property: "animProperty", to: ["number", "point", "color"], duration: "number", delay: "number",
       easing: "easing", loop: "boolean", yoyo: "boolean", handoff: "boolean",
     });
     expect(Object.keys(LANGUAGE_CONTRACT.scene.properties)).toEqual([
@@ -157,7 +157,7 @@ describe("language contract", () => {
       }
     }`));
     expect(errors).toEqual([]);
-    expect(() => buildIR(ast!)).toThrow("Animation property 'to' must be a number or point");
+    expect(() => buildIR(ast!)).toThrow("Animation property 'to' must be a number, point or colour");
   });
 
   it("declares scene.duration as optional with absence as its documented meaning", () => {

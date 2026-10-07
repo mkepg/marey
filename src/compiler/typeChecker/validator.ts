@@ -592,6 +592,22 @@ export function collectErrors(ast: AstNode): CompilerError[] {
           errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property '${p}' expects a number for 'to'.`, line: toVal.line, col: toVal.col, endLine: toVal.endLine, endCol: toVal.endCol });
         }
 
+        if (p === "color" && toVal.kind !== "color") {
+          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property 'color' expects a colour for 'to' (e.g., to: #ff8800).`, line: toVal.line, col: toVal.col, endLine: toVal.endLine, endCol: toVal.endCol });
+        }
+
+        // A group has no colour of its own to blend. The owner is the
+        // renderable the block belongs to, which a `sequence`/`parallel` may
+        // sit in front of, so it is looked up the same way the zero-scale
+        // rule below does rather than taken from `parentNode`.
+        if (p === "color") {
+          const colourOwnerIdx = ownerIndex(ancestors);
+          const colourOwner = colourOwnerIdx >= 0 ? ancestors[colourOwnerIdx] : undefined;
+          if (colourOwner && colourOwner.type === "group") {
+            errors.push({ phase: "TYPE", message: `[TYPE_ANIM_COLOR_TARGET] 'property: color' can only animate a shape with a 'color' (circle, rectangle, polygon, line or text); '${colourOwner.name}' is a group.`, line: propVal.line, col: propVal.col, endLine: propVal.endLine, endCol: propVal.endCol });
+          }
+        }
+
         // A `to` reaches exactly the same runtime state a declared `scale`
         // does, so both scale rules apply to it (design §5.3). Until Phase 3C
         // this block validated `to` by *kind* alone, which is why the ban on
