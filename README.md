@@ -1,27 +1,27 @@
 # Marey
 
-**A text-first compiler for generative, deterministic 2D motion graphics.**
+Marey is a small language and a compiler for 2D motion graphics. A scene is
+written as text: shapes, animations, an optional physics simulation and a
+timeline. The compiler turns it into files that play without Marey: Lottie
+JSON, MP4 and WebM video, animated PNG, or one PNG per frame. It is not a game
+engine or a general-purpose animation library. PixiJS (drawing) and Matter.js
+(physics) are used internally and are not part of its interface.
 
-You describe motion as readable source — shapes, animations, a physics
-simulation, a timeline — and Marey compiles it to portable artifacts that play
-without Marey anywhere in the loop. Scenes are text, so they diff, review and
-parameterize like the rest of your code.
-
-Marey is **not** trying to be a more general animation API than GSAP, a visual
-editor like Rive, a replacement playback format for Lottie, or a game engine.
-PixiJS and Matter.js are implementation machinery, not the product. The niche is
-narrow on purpose: *motion graphics as readable, generative source code.*
+The same source produces the same frames on every run, physics included. The
+simulation advances on a fixed 120 Hz tick, painting only reads its state, and
+every export prints a hash of the sampled frames so two runs can be compared.
+[`docs/determinism.md`](docs/determinism.md) states exactly what is and is not
+claimed, and how each claim is checked.
 
 [![CI](https://github.com/mkepg/marey/actions/workflows/ci.yml/badge.svg)](https://github.com/mkepg/marey/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+**[Try it in the browser](https://marey.netlify.app/)**
 
-**[Try it live →](https://marey.netlify.app/)**
+<img src="docs/media/bars-reveal.png" width="400" alt="Seven light-blue bars of different heights grow upward from a common baseline, one after another, on a dark navy background.">
 
----
-
-## A scene
-
-Seven bars rise out of a baseline, one after another, sized from data:
+This animated PNG is the unedited output of `marey export` on the source below
+([`docs/media/bars-reveal.marey`](docs/media/bars-reveal.marey)). Regenerate it
+from a checkout with `npm run build:export-page && npm run build:cli && node bin/marey.mjs export docs/media/bars-reveal.marey --format apng --out docs/media/bars-reveal.png`.
 
 ```marey
 let sky    = #38bdf8
@@ -53,138 +53,184 @@ scene {
 }
 ```
 
-Nothing here is a hand-computed coordinate. `step` derives the spacing from the
+No coordinate here is computed by hand. `step` derives the spacing from the
 length of the list, so adding an eighth value re-lays-out the whole row.
 `origin: (0.5, 1)` puts each bar's pivot on its bottom edge, so scaling in y
-grows it *upward* out of the baseline rather than outward from its middle —
-which is why the reveal needs one animation instead of a `position` and a
-`scale` moving in lockstep. `delay` staggers the starts as a function of the
-bar's index.
+grows the bar upward out of the baseline, and the reveal needs one animation
+instead of a `position` and a `scale` moving in lockstep. `delay` staggers the
+starts by the bar's index.
 
-That example is compiled by the test suite on every run. So is every example in
-[the language reference](docs/LANGUAGE.md) — if the language changes underneath
-them, the build goes red rather than the docs going quietly stale.
+The test suite compiles this example on every run, and checks that it is
+identical to the file the image was exported from. Every example in
+[the language reference](docs/LANGUAGE.md) is compiled the same way.
+
+## Install and use
+
+Marey needs Node 22 or later.
+
+```bash
+npx marey check scene.marey
+npx marey export scene.marey --format mp4
+```
+
+`check` compiles and type-checks one or more files and prints `ok` or the
+errors with their line numbers. With `--export-ready` it also checks that the
+scene can be exported: a bounded duration, and a frame count within budget at
+the rate given by `--fps`.
+
+`export` writes one output per run:
+
+| `--format` | Output (default name) |
+|---|---|
+| `png` | A directory of numbered frames (`scene-frames/frame_0000.png`, ...) |
+| `apng` | An animated PNG (`scene.png`) |
+| `webm` | VP9 video (`scene.webm`) |
+| `mp4` | H.264 video (`scene.mp4`) |
+| `lottie` | Lottie JSON (`scene.json`) |
+
+`--fps` defaults to 30 and must divide 120, so every frame lands on a
+simulation tick. `--duration <s>` overrides the scene's own `duration`, and
+`--out <path>` names the output. On success it prints one line, for example:
+
+```text
+wrote docs/media/bars-reveal.png  60 frames @ 30 fps  800x600  717577 B  sha256 d56c2e03…  frames 35ebdda6
+```
+
+`sha256` is the hash of the file's bytes and `frames` is the hash of every
+object's sampled state at every frame. Running the same export twice and
+comparing the two lines is the determinism check. MP4 is the one format whose
+bytes differ between runs: its `frames` hash matches, and the difference is
+inside the browser's H.264 encoder.
+
+`export` renders in headless Chromium, with the same pipeline the app's export
+button uses. `check` needs no browser. Install the pinned browser once before
+the first export:
+
+```bash
+npx --package playwright-core@1.62.1 playwright-core install chromium-headless-shell
+```
+
+Without it, `export` stops with `[EXPORT_BROWSER_MISSING]` and prints that
+command.
+
+### As a library
+
+The package also exports the compiler as a pure function, with no DOM and no
+rendering:
+
+```text
+import { compile } from "marey";
+
+const result = compile(source);   // { ok, ir, errors }
+if (!result.ok) {
+  for (const e of result.errors) console.error(e.line, e.message);
+}
+```
+
+`ir` is the Scene IR, the compiler's typed output, and its types are exported
+too. It is the same structure every exporter consumes.
 
 ## What's actually hard about this
 
-Three things, in rough order of how much thought they took.
+### Determinism, and checking it
 
-### Determinism, and the tick/paint boundary
+The world advances on a fixed tick
+([`sceneIR.ts`](src/compiler/sceneIR.ts) owns `TICK_HZ` and the one
+seconds-to-ticks conversion the type checker and renderer share). The live
+preview interpolates between ticks for smooth display, and nothing the
+simulation reads may depend on that interpolation. Exports sample tick state
+only.
 
-The same scene must produce the same frames every time it runs — otherwise a
-baked export is a lie, and re-exporting a scene after a one-line edit produces a
-diff nobody can read.
-
-That is harder than it sounds once a physics engine is involved. Marey separates
-*simulation* from *presentation*: the world advances on a fixed 120 Hz tick
-([`sceneIR.ts`](src/compiler/sceneIR.ts) owns `TICK_HZ` and the single
-seconds-to-ticks conversion the type checker and renderer share), while painting
-interpolates between ticks for display smoothness. Frames come from tick state,
-never from painted state.
-
-**Getting that boundary wrong is invisible to a headless test suite.** A body
-frozen by `duration` expiry kept its alpha-interpolated *painted* position, so it
-came to rest up to one tick of motion away from where the simulation actually
-stopped it — differently on each page load. All 94 headless tests passed. It was
-caught by a browser harness that loads the same scene twice from cold and
-compares the at-rest frames byte-for-byte, and fixed in `1ce8307`.
-
-The harness lives in [`tools/visual-check/`](tools/visual-check/).
-Its notes record the trap underneath the trap: a scene that *settles* is a weak
-determinism test, because a pile converging on a stable resting configuration
-reaches the same fixed point even when the trajectory diverged. Testing a
-trajectory needs a scene that freezes mid-motion, which is what
-`scenes/freeze.marey` exists to do.
+Getting that boundary wrong is invisible to a headless test suite. A body
+frozen in mid-air kept its interpolated painted position instead of its tick
+position, so it rested in one of two places depending on page-load timing. All
+94 headless tests passed. A browser harness that loads a scene twice from cold
+and compares the frames caught it, and `1ce8307` fixed it. A scene that
+settles would have hidden the bug, because a pile reaches the same resting
+state even when its path differed; the test scene has to freeze mid-motion.
+[`docs/determinism.md`](docs/determinism.md) has the full account, including
+what is not claimed (identical output across JavaScript engines, and MP4
+bytes).
 
 ### Compiling to something that doesn't need Marey
 
 `lex → parse → typeCheck → buildIR → render`. The IR
 ([`sceneIR.ts`](src/compiler/sceneIR.ts)) is the frozen, `readonly` contract
-between the compiler and everything downstream, and it is deliberately the only
-thing an exporter sees.
+between the compiler and everything downstream, and it is the only thing an
+exporter sees.
 
-Marey emits a bounded [Lottie](https://lottiefiles.github.io/lottie-docs/)
-subset — static circle, rectangle, polygon and group geometry, with baked
-position, rotation, scale and alpha at a fixed duration and frame rate — that
-plays with **no Marey and no Matter.js code present at playback**. Deciding what
-to leave out was most of the work. Lottie `text` is refused outright rather than
-half-supported, because the Lottie specification's own tracker has carried "Add
-Text Layer" open for 19 months; the shape-layer subset is the only
-normative-and-stable part to target.
+The Lottie export is a bounded subset: circle, rectangle, polygon, line, group
+and text geometry, with position, rotation, scale and opacity baked per frame
+at a fixed duration and frame rate. Physics, easing and sequencing are
+evaluated at export and stored as keyframes, so the file plays with no Marey
+and no Matter.js code present at playback, and with no Lottie expressions.
+Text does not use Lottie's text layer, whose specification is still unsettled:
+HarfBuzz shapes each line in the export font, and the glyph outlines become
+ordinary shape paths, so any Lottie player draws them without the font. A
+character the font has no glyph for is refused with
+`[LOTTIE_TEXT_MISSING_GLYPH]` instead of being drawn differently from the
+preview.
 
 ### Keeping one language honest across four consumers
 
-The lexer, the type checker, the editor's autocomplete and the reference
-documentation all need to agree about what properties exist and what they accept.
-Four hand-maintained copies of that list drift — this repo has the scar tissue to
-prove it. There is now a single [`languageContract.ts`](src/compiler/languageContract.ts)
-that the others derive from, shaped so that a half-landed change is a *compile*
-error rather than a runtime surprise.
+The parser, the type checker, the editor's hovers and completions, and the
+reference documentation all need to agree about which properties exist and
+what they accept. Four hand-maintained copies of that list drifted apart in
+this repository's history. Every property is now declared once, in
+[`languageContract.ts`](src/compiler/languageContract.ts), and the compiler
+and the editor derive their tables from it when they load, so adding a
+property is one edit. The reference is prose, so it is held to the language
+the other way: the suite compiles every example in it.
 
-Compilation itself runs in a Web Worker
-([`compiler.worker.ts`](src/compiler/compiler.worker.ts)) so the editor stays
-responsive; the worker returns the IR as JSON and the main thread hands it to the
-renderer.
-
-## Quick start
+## Working on Marey
 
 ```bash
 npm install
-npm run dev      # Vite dev server — editor, live preview, terminal
+npm run dev      # Vite dev server: editor, live preview, terminal
 npm test         # vitest, single pass
 npm run build    # tsc -b && vite build (typecheck is part of the build)
 ```
 
-To type-check a scene file from the command line:
+To run the CLI from a checkout, build it and call it through `bin/`:
 
 ```bash
-npm run check -- path/to/scene.marey
+npm run build:export-page && npm run build:cli
+node bin/marey.mjs check path/to/scene.marey
 ```
 
-## Tests
+The suite is over 1,300 tests; run `npm test` for the current figure.
+[CI](.github/workflows/ci.yml) runs it on every push to `main` and every pull
+request, along with the build, `marey check` on every tracked `.marey` file, a
+pack-and-install of the package, and `marey export` of every canonical scene
+in every format, twice, compared against itself.
 
-```bash
-npm test         # vitest, single pass
-```
-
-The suite is upwards of 800 tests — run `npm test` for the current figure rather
-than trusting a number written here, which is the kind of claim that rots.
-
-Those three commands are what [CI](.github/workflows/ci.yml) runs on every push,
-plus a fourth gate: every tracked `.marey` file in the repository is compiled
-through the real CLI, so a language change that breaks the scene corpora fails
-the build.
-
-The test suite is headless by design and cannot see a canvas. Anything that needs
-one — does a scene actually render, does the ticker stop, does a scene replay
-identically across a reload — goes through the browser harness described in
-[`tools/visual-check/README.md`](tools/visual-check/README.md).
-That harness is deliberately **not** in CI: it needs a real browser and a human
-reading the captures, and a green check on a determinism test nobody looked at
-would be worse than no check at all.
+The test suite is headless by design and cannot see a canvas. Anything that
+needs one (does a scene render, does the ticker stop, does a scene replay
+identically across a reload) goes through the browser harness in
+[`tools/visual-check/README.md`](tools/visual-check/README.md). That harness
+is not in CI: it needs a real browser and a person to read the captures.
 
 ## Reading further
 
 | Document | What's in it |
 |---|---|
-| [`docs/LANGUAGE.md`](docs/LANGUAGE.md) | The language reference. Behaviour, units, and edge cases — every example compiled by the suite. |
+| [`docs/LANGUAGE.md`](docs/LANGUAGE.md) | The language reference. Behaviour, units, and edge cases, every example compiled by the suite. |
+| [`docs/determinism.md`](docs/determinism.md) | What "the same output every time" means, how the renderer makes it hold, how it is checked, and the bug that showed the checks had a hole. |
 | [`docs/specs/2026-09-09-marey-engineering-roadmap-design.md`](docs/specs/2026-09-09-marey-engineering-roadmap-design.md) | The roadmap, its decisions, and the research that overturned the previous one. |
-| [`docs/architecture/`](docs/architecture/) | Architecture notes by subsystem — parser, renderer, language contract, share links. |
+| [`docs/architecture/`](docs/architecture/) | Architecture notes by subsystem: parser, renderer, language contract, share links. |
 | [`docs/engineering-lessons.md`](docs/engineering-lessons.md) | A running record of process mistakes made building this, each with its evidence. Mostly about the ways a green test suite can be wrong. |
 | [`docs/research/`](docs/research/) | Primary-source research on where this could go, including the case against the direction it didn't take. |
 
 ## Status
 
-Pre-release and unpublished. Marey has never been distributed, there are no
-external users, and every `.marey` file in existence is first-party and lives in
-this repository — which is why breaking syntax changes are weighed on which
-language is better to live with, not on migration cost.
+Version 0.4.0. The CLI has two commands, `check` and `export`, and every
+format above is implemented. Below 1.0, a minor release may change the
+language and the Scene IR, and the remaining phases of the roadmap will. Breaking
+syntax changes are weighed on which language is better to live with.
 
 Development runs in numbered phases against a written roadmap with an explicit
-finish line; the project is complete when the language, the export pipeline and
-the packaging work are done, and not before.
-
-The CLI currently exposes one command, `check`. `export` is not implemented yet.
+finish line; the project is complete when the language, the export pipeline
+and the packaging work are done.
 
 ## License
 

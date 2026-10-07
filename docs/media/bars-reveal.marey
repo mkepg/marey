@@ -1,0 +1,27 @@
+let sky    = #38bdf8
+let values = [3, 7, 2, 9, 5, 8, 4]
+let count  = length(values)
+let step   = 800 / (count + 1)
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+  duration: 2
+
+  generate v, i in values {
+    rectangle bar {
+      position: (step * (i + 1), 500)
+      size: (step - 30, v * 40)
+      color: sky
+      origin: (0.5, 1)
+      scale: (1, 0)
+      animate {
+        property: scale
+        to: (1, 1)
+        duration: 0.55
+        delay: 0.05 + i * 0.14
+        easing: easeOut
+      }
+    }
+  }
+}
