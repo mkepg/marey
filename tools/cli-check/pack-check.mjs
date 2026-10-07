@@ -8,10 +8,16 @@
  * 2. `npm pack --json` into a temporary directory. The tarball's file list
  *    must hold nothing under `docs/`, `eval/`, `tools/`, `src/` or `public/`
  *    — a leak past the `files` allowlist.
- * 3. `npm init -y`, then `npm install --offline <tarball>`, in a second,
- *    empty temporary directory: a real npm install of the published shape.
- *    Offline, because the tarball's only dependency is playwright-core,
- *    already in the npm cache from installing this repository.
+ * 3. `npm init -y`, then `npm install --prefer-offline <tarball>`, in a
+ *    second, empty temporary directory: a real npm install of the published
+ *    shape. `--prefer-offline` uses whatever the npm cache already holds and
+ *    contacts the registry only for what is missing. The tarball's only
+ *    dependency is playwright-core. On a warm cache (a developer machine)
+ *    the install makes no request. On a cold one (CI, after `npm ci`) the
+ *    cache holds playwright-core's tarball but not its registry metadata,
+ *    which an install into an empty directory needs to resolve the version,
+ *    so `--offline` fails there with ENOTCACHED; `--prefer-offline` fetches
+ *    that metadata.
  * 4. From that directory: `npx marey --version`; `npx marey check` on a copy
  *    of a canonical scene; `npx marey export ... --format lottie`, which
  *    uses the machine's already-installed Chromium (no environment variable
@@ -171,8 +177,8 @@ try {
     return "package.json created";
   });
 
-  check("npm install --offline <tarball>", () => {
-    const r = runNpm(["install", "--offline", tarballPath], { cwd: installDir });
+  check("npm install --prefer-offline <tarball>", () => {
+    const r = runNpm(["install", "--prefer-offline", tarballPath], { cwd: installDir });
     if (r.status !== 0) throw new Error(describe(r));
     return "installed";
   });
