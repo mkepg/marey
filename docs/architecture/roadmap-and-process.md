@@ -261,12 +261,18 @@ explicitly rather than quietly deviating.
     README (Task 13) and the exit evidence (Task 14) are on
     `phase-6-finish`. Of roadmap §9.3's exit criteria, the third passes
     (`check --export-ready` and `check:export` on the canonical scenes). The
-    second's read passes the rubric fixed in spec §6.3; the owner's judgment
-    on it is pending. The first failed on a fresh clone in CI:
+    second is open: the one read so far was by a language model, not a
+    person; its answers meet the rubric fixed in spec §6.3, which shows the
+    README carries both answers within the word budget, but it does not
+    stand in for a human read. It closes on a human read or the owner's
+    ruling (spec O6). The first failed on a fresh clone in CI:
     `check:pack` installed the tarball with `--offline`, which needs registry
     metadata that `npm ci` does not cache. The fix, `--prefer-offline`, is
     committed and passes on the local (warm) npm cache; whether it passes on
-    CI's cold cache is confirmed only by the next push.
+    CI's cold cache is confirmed only by the next CI run (on a pull request
+    from this branch, or on `main`). The export matrix step after it has
+    never run in CI, so its CI time against spec §9.3's ten-minute budget is
+    unmeasured.
     Publishing to npm follows the merge and the owner's sign-off. Evidence is
     in `eval/RESULTS-PHASE-6.md`. Design:
     `docs/specs/2026-09-27-marey-phase-6-packaging-and-legibility-design.md`,

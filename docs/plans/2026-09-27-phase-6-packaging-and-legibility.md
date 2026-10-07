@@ -1844,14 +1844,14 @@ RESULTS section) or quoted from the RESULTS section the row names in
 | Every first-party scene | `npm run build:cli && node bin/marey.mjs check $(git ls-files '*.marey')` | 85 files, all `ok` (78 tracked at `b0759e8`) |
 | Exit criterion 1, locally | `npm run build:package && npm run check:pack` | 11 of 11, exit 0, 17.0 s |
 | Exit criterion 1, fresh clone | CI's "Package builds, packs and installs" step | **fails** on every push since 2026-10-02: `ENOTCACHED` at `npm install --offline <tarball>`. Defect 4 below |
-| Exit criterion 2 | spec §6.3's read | passes the rubric with the first reader: Q1 3 of 3, Q2 3 of 4 (H1, H2, H4). The owner's judgment is pending |
+| Exit criterion 2 | spec §6.3's read | **open**: one read, by a language model, not a person. Its answers meet the rubric (Q1 3 of 3, Q2 3 of 4: H1, H2, H4), which shows the README carries both answers within the word budget; it does not stand in for a human read. Closes on a human read or the owner's ruling (O6) |
 | Exit criterion 3 | `node bin/marey.mjs check --export-ready eval/scenes-3b/*.marey`; `npm run check:export` | 4 of 4 `ok`; 21 of 21, exit 0, 111.2 s |
 | x264 gate (Task 1) | `node tools/visual-check/x264-gate.mjs ...` | failed: none of 8 configurations meets the specks threshold. MP4 stays on WebCodecs |
 | Branch shape, as of `a4e4cee` (a snapshot: a commit cannot hold its own diffstat) | `git rev-list --count e7c5c29..a4e4cee`; `git diff --shortstat e7c5c29..a4e4cee` | **56 commits**, **135 files changed, +14,367 / -1,468**, 6B and 6C included |
 
 Phase 6 is not closed. Criterion 1 needs `check:pack` to pass on a fresh
-clone, and the owner's judgment on the read and the npm publish are still to
-come.
+clone; criterion 2 needs a human read or the owner's ruling; and the npm
+publish is still to come.
 
 ### Defects found in this plan
 
@@ -1874,7 +1874,10 @@ come.
    `npm cache add playwright-core@1.62.1` fetches the metadata (RESULTS,
    "Exit criterion 1"). The fix, `--prefer-offline` in place of `--offline`,
    is committed in `7fe0b8f`. It passes on the warm local cache; whether it
-   passes on CI's cold cache is confirmed only by CI after the next push.
+   passes on CI's cold cache is confirmed only by the next CI run (on a pull
+   request from this branch, or on `main`). The export matrix step comes
+   after it in `ci.yml` and has never run in CI, so its CI time against spec
+   §9.3's ten-minute budget is still unmeasured.
 5. **Task 1 Step 4 asks for MP4 scores equal across two runs.** WebCodecs
    encodes differently each run (R47), so they cannot be. The scorer's
    extraction was shown unchanged by WebM equality across runs and by one
@@ -1888,6 +1891,13 @@ come.
    state the rubric, not which mention "ten-minute". Ruled R4.
 8. **Task 15 Step 3 merges `phase-6`.** That branch was merged into `main` on
    2026-10-02 and deleted. Tasks 13-15 run on `phase-6-finish` (R3).
+9. **Global Constraint 15 (no outbound HTTP from the shell) conflicts with
+   Task 15 Step 2**, which runs `npm run check:pack`. Once the check installs
+   the tarball with `--prefer-offline` (`tools/cli-check/pack-check.mjs:182-183`,
+   R9), npm may reach the registry even on a warm cache: the 2026-10-07 run
+   revalidated a stale `playwright-core` packument and posted an audit request
+   (RESULTS, "Exit criterion 1"). Task 15 Step 2 cannot be run as written
+   without breaking the constraint.
 
 ### Every ruling, by id
 
@@ -1910,10 +1920,12 @@ WebCodecs file; and Task 1 Step 4's scorer proof (defect 5).
 | R2 | O7 and O8 count as confirmed (the owner, 2026-09-28) and are not asked again. |
 | R3 | Tasks 13-15 run on `phase-6-finish`, cut from `main` at `c7b87ae`, since `phase-6` merged into `main` on 2026-10-02. |
 | R4 | The reader's copy removes the files that state the rubric or the procedure. Passing mentions of "ten-minute" (the CI budget in RESULTS, the exit criterion in the roadmap) stay. |
-| R5 | The reader is new to the project, with no prior context, confined to the copy, and given only the prompt. The owner's judgment stays final (O6). |
+| R5 | The reader has no prior context of the project, is confined to the copy, and is given only the prompt. Reader 1 was a language model, not a person: its read shows the README carries both answers within the word budget and does not stand in for a human read. Criterion 2 closes on a human read or the owner's ruling (O6). |
 | R6 | The README presents `npx marey ...` and `import { compile } from "marey"` as the usage, with no claim that is false before publishing (no download badges). Its Status drops "unpublished", "one command" and "not implemented". |
 | R7 | The O7 exception line lives in the local `AGENTS.md`. Spec §6.2 and the README's regenerate command are its committed record. |
-| R8 | The read is scored by someone other than the person who gave it, from the verbatim answers. |
+| R8 | The read is scored from the verbatim answers, by someone other than the reader who gave them. |
+| R9 | `check:pack` installs the tarball with `--prefer-offline`, not `--offline` (defect 4). A cold-cache proof comes from CI, not from this machine. |
+| R10 | Global Constraint 15's no-outbound-HTTP rule was broken twice in work on R9: by the root-cause reproduction (`npm ci` and `npm cache add` into a fresh cache), and by the verification, whose `--prefer-offline` install logged a registry metadata `GET` and an audit `POST`. Both are recorded in RESULTS, "Exit criterion 1", and were reported to the owner. |
 | R47 | (5B, cross-phase) WebCodecs MP4 bytes are reported, not gated; its `frames` hash and size are gated. |
 
 ### Mutation results, each beside its suite size
@@ -1928,6 +1940,8 @@ WebCodecs file; and Task 1 Step 4's scorer proof (defect 5).
 | 6C | The pre-change code under the new handoff seam tests | `sceneRuntime.test.ts`, 56 tests | 14 of 16 seam cases fail; all pass after the change |
 | 13 | One line (`color: sky`) deleted from `docs/media/bars-reveal.marey` | 61 files / 1306 tests | `readmeMedia.test.ts`: 1 failed, 1 passed |
 | 13 | The README's three `docs/media/bars-reveal.png` references replaced | 61 files / 1306 tests | the image-before-source test fails |
+| 13, after review | Only the README's `<img>` line deleted; the regenerate command's `--out docs/media/bars-reveal.png` stays | 61 files / 1306 tests | the test as committed in Task 13: 2 of 2 pass (it matched the path in the command). The test matching the embed itself: `README.md does not embed docs/media/bars-reveal.png`, 1 failed, 1 passed |
+| 13, after review | The `<img>` line moved below the first `marey` block | 61 files / 1306 tests | `the image embed comes after the first ```marey block`, 1 failed |
 
 Task 14 changed no code and has no mutation.
 
@@ -1949,7 +1963,8 @@ This list covers what Tasks 13 and 14 deferred or found.
 
 1. **`README.md:17-18`: "Try it in the browser" has no blank line before
    it**, so it renders in the badge paragraph, on the badges' line.
-   *Harmless today:* the link is visible and works; it is spacing only.
+   *Fixed after the whole-branch review:* a blank line now makes it its own
+   paragraph.
 2. **The README's sample output line shortens the SHA-256 to
    `d56c2e03…`.** `marey export` prints all 64 hex digits. The `frames`
    value, `35ebdda6`, is the full hash. *Harmless today:* the ellipsis marks
@@ -1957,8 +1972,9 @@ This list covers what Tasks 13 and 14 deferred or found.
    RESULTS "Exit criterion 2").
 3. **`readmeMedia.test.ts` dereferences its regex match with `!`.** If the
    README loses its `marey` code fence, the test fails with a bare
-   `TypeError` rather than a message naming the missing block. *Harmless
-   today:* it still fails, and the stack points at the line.
+   `TypeError` rather than a message naming the missing block. *Fixed after
+   the whole-branch review:* the test throws `README.md has no ```marey code
+   block` when the fence is missing.
 4. **The README's structural checklist (spec §6.3) is manual**: the word
    count, the stale strings and the first-screen link are not tested.
    *Harmless today:* it was run on 2026-10-07 and passed (RESULTS), and only
@@ -2006,5 +2022,6 @@ This list covers what Tasks 13 and 14 deferred or found.
   local run and failed every CI run (defect 4), and CI's results were not
   read for five days. Reading the CI run after each push to `main` would
   have caught it the day it landed.
-- **The read.** One reader, who passed the rubric. The README needed no
-  revision.
+- **The read.** One reader, a language model rather than a person, whose
+  answers met the rubric; the README needed no revision. Criterion 2 still
+  needs a human read or the owner's ruling.

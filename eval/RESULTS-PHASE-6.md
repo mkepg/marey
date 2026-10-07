@@ -18,8 +18,8 @@ and `git diff --stat` both empty), Windows 11, Node 22.13.1.
 
 | Criterion | Command | Result |
 |---|---|---|
-| 1. The package builds and installs from a clean checkout | `npm run build:package && npm run check:pack` | **Not closed.** 11 of 11 checks pass on this machine, exit 0, 17.0 s. On a fresh clone in CI the same check fails at `npm install --offline <tarball>` (`ENOTCACHED`), on all four pushes since it was added. Cause reproduced locally. The fix (`--prefer-offline`) is committed and passes on the warm local cache; CI's cold cache is confirmed only by the next push. See "Exit criterion 1" |
-| 2. A reader states what Marey is and what is hard within ten minutes | spec §6.3's procedure | One read, scored against the rubric: Q1 3 of 3, Q2 3 of 4 (H1, H2, H4), so it **passes** the rubric. **The owner's judgment is pending** (spec O6). See "Exit criterion 2" |
+| 1. The package builds and installs from a clean checkout | `npm run build:package && npm run check:pack` | **Not closed.** 11 of 11 checks pass on this machine, exit 0, 17.0 s. On a fresh clone in CI the same check fails at `npm install --offline <tarball>` (`ENOTCACHED`), on all four pushes since it was added. Cause reproduced locally. The fix (`--prefer-offline`) is committed and passes on the warm local cache; CI's cold cache is confirmed only by the next CI run (on a pull request from this branch, or on `main`). See "Exit criterion 1" |
+| 2. A reader states what Marey is and what is hard within ten minutes | spec §6.3's procedure | **Open.** One read, by a language model, not a person. Its answers meet the rubric (Q1 3 of 3, Q2 3 of 4: H1, H2, H4), which shows the README carries both answers within the word budget; it does not stand in for a human read. The criterion closes on a human read or the owner's ruling (spec O6). See "Exit criterion 2" |
 | 3. Both CLI commands work on the canonical scenes | `node bin/marey.mjs check --export-ready eval/scenes-3b/*.marey`; `npm run check:export` | 4 of 4 `ok`, exit 0; 21 of 21 cases pass, exit 0, 111.2 s. See "Exit criterion 3" |
 
 The four AGENTS.md checks on the same tree, before the runs above: `npm test`
@@ -416,7 +416,10 @@ whose cache also holds npm's registry metadata for the package from earlier
 `npm install` runs. It does not hold after `npm ci`, which fetches tarballs by
 the lockfile's resolved URLs. Installing into an empty directory has no
 lockfile, so npm needs the metadata to resolve `playwright-core@1.62.1`, and
-offline it has none. Reproduced with a fresh cache in a temporary directory:
+offline it has none. Reproduced with a fresh cache in a temporary directory.
+This reproduction contacted the npm registry: `npm ci` fetched the
+`playwright-core` tarball into the fresh cache, and `npm cache add` below
+fetched its metadata.
 
 ```
 npm ci --cache <fresh>                      # a package.json and lockfile holding only playwright-core 1.62.1
@@ -441,8 +444,8 @@ same.
 
 **Verification, and its limit.** On this machine's warm cache `npm run
 check:pack` passes 11 of 11 with the new label. The cold-cache case was not
-re-run: it needs the registry, which this task did not have approval to use.
-The warm run was also not offline. `npm install --prefer-offline --loglevel http
+re-run after the fix: the verification used only this machine's warm local
+cache. That run was not offline either. `npm install --prefer-offline --loglevel http
 <tarball>` into an empty `npm init -y` directory logged `npm http fetch GET 200
 https://registry.npmjs.org/playwright-core 35ms (cache stale)` and an audit
 `POST` to `/-/npm/v1/security/advisories/bulk`, while the two tarballs were
@@ -453,7 +456,15 @@ requests itself. (A `grep` for `GET https://registry` counted 0 because npm
 logs the status between the verb and the URL; it is the wrong pattern.) What
 is established: the check passes locally, and the flag's documented behaviour
 is the one the failure needs. Whether it passes on CI's cold cache is
-confirmed only by the next push to `main`.
+confirmed only by the next CI run (`ci.yml` runs on a pull request as well as
+on a push to `main`, so a pull request from this branch is enough).
+
+The export matrix has still never run in CI. In `ci.yml` its step, "marey
+export, every canonical scene and format, twice", comes after "Package builds,
+packs and installs" in the same job and has no `if:` condition, so every run
+that failed at the pack step skipped it. Its CI time against spec §9.3's
+ten-minute budget is unmeasured until a run gets past `check:pack` (see "CI
+(O8)").
 
 ---
 
@@ -500,11 +511,16 @@ not the rubric. Both stay: the aim is that the rubric is not readable, not that
 the phrase is absent. The 6B and 6C designs and plans contain no rubric text.
 The copy's `README.md` is identical to the committed one.
 
+Any later reader's copy must also delete `eval/RESULTS-PHASE-6.md`. This
+file now states the rubric's items, the scoring and Reader 1's answers, so a
+copy cut from a later commit that keeps it hands the reader both the rubric
+and a passing answer.
+
 ### The reader and the prompt
 
-Reader 1, on 2026-10-07: a reader with no prior context of the project, given
-the copy and the prompt below, and nothing else. They could read files inside
-the copy only. The prompt, exactly:
+Reader 1, on 2026-10-07, was a language model, not a person. It had no prior
+context of the project and was given only the copy and the prompt below. It
+could read files inside the copy only. The prompt, exactly:
 
 > The folder is: C:\Users\gomez\repos\PROGRAMMING_LANGUAGE\marey\.visual-check\phase6\reader
 >
@@ -516,7 +532,7 @@ the copy only. The prompt, exactly:
 
 The third paragraph is the plan's text, word for word. The other three are
 additions: the folder's path, a sentence confining the reader to it, and a
-request to list what they opened. None of them carries a hint about the
+request to list what it opened. None of them carries a hint about the
 answers.
 
 ### The answers, word for word
@@ -536,7 +552,7 @@ answers.
 >
 > Total is about 2,250 words, within the 2,500-word budget.
 
-The reader stayed inside the budget (about 2,250 of 2,500 words, by their own
+The reader stayed inside the budget (about 2,250 of 2,500 words, by its own
 count; `wc -w README.md` gives 1606).
 
 ### Scoring
@@ -571,10 +587,14 @@ Chromium `Math.sin` results differ by about one unit in the last place,
 cross-machine identity is untested, and MP4 bytes differ between runs while
 the `frames` hash matches.
 
-**Result: the read passes the rubric on the first reader.** No README
-revision followed it.
+**Result: Reader 1's answers meet the rubric.** No README revision followed
+it. Reader 1 was a language model, so this shows that the README carries both
+answers within the 2,500-word budget. It does not stand in for a human read:
+spec §6.3's criterion is a person reading for ten minutes, and for a model
+"ten minutes" is only a word budget.
 
-**The owner's judgment: pending.** Spec O6 makes it final; this section is
+**Criterion 2 stays open.** It closes on a read by a person, or on the
+owner's ruling: spec O6 makes the owner's judgment final, and this section is
 the material for it.
 
 ---

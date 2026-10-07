@@ -135,11 +135,17 @@ proposing anything the old roadmap justified by adoption.
 2026-10-07). The package, `marey check`/`marey export`, the determinism
 account, and the owner's additions 6B (playground redesign) and 6C (smooth
 handoff) are merged on `main`; the README and the exit evidence are on
-`phase-6-finish`. Exit criterion 3 passes. The ten-minute read passes the
-rubric, and the owner's judgment on it is pending. Criterion 1 failed on a
-fresh clone in CI (`check:pack`'s offline install). Its fix, `--prefer-offline`,
-is committed and passes on the local (warm) npm cache; whether it passes on
-CI's cold cache is confirmed only by the next push. The phase is not closed.
+`phase-6-finish`. Exit criterion 3 passes. Criterion 2 is open: the one
+ten-minute read so far was by a language model, not a person; its answers
+meet the rubric, which shows the README carries both answers within the word
+budget, but it does not stand in for a human read. It closes on a human read
+or the owner's ruling (spec O6). Criterion 1 failed on a fresh clone in CI
+(`check:pack`'s offline install). Its fix, `--prefer-offline`, is committed
+and passes on the local (warm) npm cache; whether it passes on CI's cold
+cache is confirmed only by the next CI run (on a pull request from this
+branch, or on `main`). The export matrix step after it has never run in CI,
+so its CI time against spec §9.3's ten-minute budget is unmeasured. The phase
+is not closed.
 npm publish follows the merge. Evidence is in `eval/RESULTS-PHASE-6.md`;
 `roadmap-and-process.md`'s Phase 6 bullet carries the same status.
 
