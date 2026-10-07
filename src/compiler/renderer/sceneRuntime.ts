@@ -1,6 +1,7 @@
 import type { Container } from "pixi.js";
-import type { IRAnimation, IRPhysics, IRSequence, IRPoint, IRParallelStep } from "../sceneIR";
+import type { IRAnimation, IRColor, IRPhysics, IRSequence, IRPoint, IRParallelStep } from "../sceneIR";
 import { secondsToTicks, TICK_HZ } from "./clock";
+import { colorToInt, lerpColor } from "./color";
 import {
   advanceAnimTime,
   animProgress,
@@ -131,6 +132,14 @@ function applyAnim(ra: RunningAnim, p: number): void {
     layout.currentScale.x = lerp(startPt.x, targetPt.x, e);
     layout.currentScale.y = lerp(startPt.y, targetPt.y, e);
     ra.container.__updateLayout?.();
+  } else if (ra.anim.property === "color" && ra.container.__mareyLayout) {
+    ra.container.__mareyLayout.currentColor = lerpColor(ra.startVal as number, ra.targetVal as number, e);
+    // Unreachable unless `animatesColor` and the validator disagree about which
+    // shapes animate colour; drawing nothing would be silent, so throw.
+    if (!ra.container.__applyColor) {
+      throw new Error(`[renderer] Container '${ra.container.__mareyId}' animates colour but was not built tinted.`);
+    }
+    ra.container.__applyColor();
   }
 }
 
@@ -152,6 +161,7 @@ function getCurrentVal(container: Container, prop: string): number | IRPoint {
   }
   if (prop === "rotation") return container.rotation * (180 / Math.PI);
   if (prop === "alpha") return container.alpha;
+  if (prop === "color") return container.__mareyLayout?.currentColor ?? 0;
   return 0;
 }
 
@@ -514,7 +524,9 @@ export class SceneRuntime {
     // animations on one object take two holds and two releases. An earlier
     // `__kinematicPosAnimCount` on the container tracked the same thing and was
     // read nowhere; the count lives in `MatterWorld.pinReasons` now.
-    unpinBody(container, this.world, "FROZEN");
+    // A colour runner is display-only and must not reach the world, so it
+    // does not thaw either (Phase 7 Review Focus 1).
+    if (anim.property !== "color") unpinBody(container, this.world, "FROZEN");
     if (isPos) pinBody(container, this.world, "POS_ANIM");
 
     const sVal = getCurrentVal(container, anim.property);
@@ -522,6 +534,7 @@ export class SceneRuntime {
     if ((anim.property === "position" || anim.property === "scale") && typeof tVal === "number") {
       tVal = { x: tVal, y: tVal };
     }
+    if (anim.property === "color") tVal = colorToInt(anim.to as IRColor);
 
     const ra: RunningAnim = {
       container, anim,

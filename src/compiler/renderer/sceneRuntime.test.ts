@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Container } from "pixi.js";
 import { SceneRuntime } from "./sceneRuntime";
 import { TICK_HZ } from "./clock";
+import { lerpColor } from "./color";
 import { evaluateEasing, releaseEndOf } from "./easing";
 import { MatterWorld } from "./physicsWorld";
 import type {
@@ -117,6 +118,12 @@ function makeContainer(over: {
    * origin — which is why every pre-origin caller leaves it out.
    */
   centreOffset?: { x: number; y: number };
+  /**
+   * The container's declared colour. Giving one makes it a tinted shape: it
+   * gets `currentColor` and an `__applyColor` that writes it to a fake
+   * drawing, recorded in `colorApplications`.
+   */
+  color?: number;
 } = {}): Container {
   const c = new Container();
   const pos = over.position ?? { x: 0, y: 0 };
@@ -140,8 +147,22 @@ function makeContainer(over: {
   c.__sequences = over.sequence ? [over.sequence] : [];
   c.__physics = over.physics;
   c.__bodyShape = { kind: "circle", radius: 10 };
+  if (over.color !== undefined) {
+    const layout = c.__mareyLayout;
+    layout.currentColor = over.color;
+    const drawing = { tint: over.color };
+    const log: number[] = [];
+    colorApplications.set(c, log);
+    c.__applyColor = () => {
+      drawing.tint = layout.currentColor!;
+      log.push(drawing.tint);
+    };
+  }
   return c;
 }
+
+/** Every tint a container's fake drawing was given, in order. */
+const colorApplications = new WeakMap<Container, number[]>();
 
 function makeRoot(child: Container): Container {
   const root = new Container();
@@ -1354,4 +1375,87 @@ describe("SceneRuntime · the handoff seam", () => {
       }
     }
   }
+});
+
+describe("SceneRuntime · colour animation", () => {
+  const RED = 0xff0000;
+  const BLUE = 0x0000ff;
+  const colorAnim = (to: string, ticks: number): IRAnimation =>
+    anim({ property: "color", to, duration: ticks / TICK_HZ });
+
+  it("blends red to blue and applies the value it wrote to the drawing", () => {
+    const c = makeContainer({ color: RED, animations: [anim({ property: "color", to: "#0000ff", duration: 1 })] });
+    const rt = new SceneRuntime(new RecordingWorld(), makeRoot(c));
+    for (let i = 0; i < 60; i++) {
+      rt.advanceOneTick();
+      rt.paintExactTick();
+    }
+    expect(c.__mareyLayout!.currentColor).toBe(lerpColor(RED, BLUE, 0.5));
+    expect(c.__mareyLayout!.currentColor).toBe(0x800080);
+    expect(colorApplications.get(c)!.at(-1)).toBe(0x800080);
+  });
+
+  it("ends exactly on the target colour", () => {
+    const c = makeContainer({ color: RED, animations: [colorAnim("#0000ff", 10)] });
+    const rt = new SceneRuntime(new RecordingWorld(), makeRoot(c));
+    for (let i = 0; i < 10; i++) {
+      rt.advanceOneTick();
+      rt.paintExactTick();
+    }
+    expect(c.__mareyLayout!.currentColor).toBe(BLUE);
+  });
+
+  it("starts a sequence's second colour step from exactly the first step's end, whatever the paint cadence", () => {
+    const seq: IRSequence = { steps: [colorAnim("#0000ff", 10), colorAnim("#00ff80", 10)] };
+    const trace = (live: boolean): number[] => {
+      const c = makeContainer({ color: RED, sequence: seq });
+      const rt = new SceneRuntime(new RecordingWorld(), makeRoot(c));
+      for (let i = 0; i < 10; i++) {
+        rt.advanceOneTick();
+        // Live cadence paints between ticks at a sub-tick alpha, leaving the
+        // property short of its end; the exact cadence paints the tick itself.
+        if (live) rt.paint(0.5); else rt.paintExactTick();
+      }
+      const out: number[] = [];
+      // Step 2 spawns on tick 11 and reads progress 0 there, then runs 10 ticks.
+      for (let i = 0; i < 11; i++) {
+        rt.advanceOneTick();
+        rt.paintExactTick();
+        out.push(c.__mareyLayout!.currentColor!);
+      }
+      return out;
+    };
+    const exact = trace(false);
+    // Step 2 begins exactly where step 1 ended, then moves a tenth per tick.
+    expect(exact[0]).toBe(BLUE);
+    expect(exact[1]).toBe(lerpColor(BLUE, 0x00ff80, 0.1));
+    expect(exact.at(-1)).toBe(0x00ff80);
+    expect(trace(true)).toEqual(exact);
+  });
+
+  describe("never reaches the physics world (Review Focus 1)", () => {
+    const body = (withColor: boolean) => (): Container =>
+      makeContainer({
+        position: { x: 400, y: 300 },
+        centreOffset: BOTTOM_ORIGIN,
+        ...(withColor ? { color: RED } : {}),
+        animations: [
+          anim({ to: { x: 460, y: 300 }, duration: 10 / TICK_HZ, easing: "easeInOut" }),
+          anim({ property: "scale", to: { x: 1, y: 3 }, duration: 30 / TICK_HZ, easing: "easeInOut" }),
+          ...(withColor ? [anim({ property: "color", to: "#0000ff", duration: 1 })] : []),
+        ],
+        physics: { ...PHYSICS, duration: "indefinitely" },
+      });
+
+    it("sends the same world calls with or without a colour animation, at 1, 7 and 12 ticks per paint", () => {
+      const reference = runAtPacing(1, 120, body(false));
+      expect(reference.length).toBeGreaterThan(0);
+      for (const withColor of [false, true]) {
+        for (const pacing of [1, 7, 12]) {
+          expect(runAtPacing(pacing, 120, body(withColor)), `colour ${withColor}, ${pacing} per paint`)
+            .toEqual(reference);
+        }
+      }
+    });
+  });
 });

@@ -8,6 +8,7 @@
  * why no `text` fixture appears here.
  */
 import { describe, it, expect } from "vitest";
+import type { Graphics } from "pixi.js";
 import { buildNode } from "./builder";
 import type { IRObjectNode, IRObjectProps } from "../sceneIR";
 import type { BodyPart } from "./physicsWorld";
@@ -391,5 +392,100 @@ describe("origin", () => {
     expect(g.pivot.y).toBe(0);
     expect(g.__mareyLayout!.centreOffsetX).toBe(0);
     expect(g.__mareyLayout!.centreOffsetY).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Colour: only a shape that animates colour is drawn white and tinted (D6).
+// ---------------------------------------------------------------------------
+
+const TO_BLUE = {
+  property: "color", to: "#0000ff", duration: 1, delay: 0, easing: "linear",
+  loop: false, yoyo: false, handoff: false,
+} as const;
+
+/** The colour a `Graphics`' first draw instruction recorded (fill or stroke). */
+function drawnColor(g: Graphics): number {
+  // `instructions[0].data.style.color` is the integer pixi resolved the
+  // fill/stroke colour to; `0xffffff` means the shape was drawn white.
+  const instruction = g.context.instructions[0] as { data: { style: { color: number } } };
+  return instruction.data.style.color;
+}
+
+function lineNode(over: Partial<IRObjectProps> = {}): IRObjectNode {
+  return {
+    id: "ln",
+    props: {
+      kind: "line", position: { x: 0, y: 0 }, points: [{ x: 0, y: 0 }, { x: 50, y: 20 }],
+      thickness: 4, color: "#ff0000",
+      rotation: 0, scale: { x: 1, y: 1 }, alpha: 1, layer: 0,
+      origin: { x: 0.5, y: 0.5 },
+      animations: [], sequences: [],
+      ...over,
+    } as IRObjectProps,
+    children: [],
+  };
+}
+
+describe("builder · colour animation draws white and tints", () => {
+  it("leaves a shape with no colour animation drawn in its own colour, untinted", () => {
+    const wrapper = buildNode(circle("c", 0, 0, 20));
+    const gfx = wrapper.children[0] as Graphics;
+    expect(drawnColor(gfx)).toBe(0xff0000);
+    expect(gfx.tint).toBe(0xffffff);
+    expect(wrapper.__mareyLayout!.currentColor).toBe(0xff0000);
+    expect(wrapper.__applyColor).toBeUndefined();
+  });
+
+  it("draws a colour-animated shape white and tints it to its declared colour", () => {
+    const wrapper = buildNode(circle("c", 0, 0, 20, { animations: [TO_BLUE] } as Partial<IRObjectProps>));
+    const gfx = wrapper.children[0] as Graphics;
+    expect(drawnColor(gfx)).toBe(0xffffff);
+    expect(gfx.tint).toBe(0xff0000);
+    expect(wrapper.__applyColor).toBeTypeOf("function");
+
+    wrapper.__mareyLayout!.currentColor = 0x00ff00;
+    wrapper.__applyColor!();
+    expect(gfx.tint).toBe(0x00ff00);
+    // The tint belongs to the drawing, never the wrapper.
+    expect(wrapper.tint).toBe(0xffffff);
+  });
+
+  it("tints a shape whose colour animation sits only in a parallel step of its sequence", () => {
+    const wrapper = buildNode(circle("c", 0, 0, 20, {
+      sequences: [{ steps: [{ type: "parallel", steps: [TO_BLUE] }] }],
+    } as Partial<IRObjectProps>));
+    expect(drawnColor(wrapper.children[0] as Graphics)).toBe(0xffffff);
+    expect(wrapper.__applyColor).toBeTypeOf("function");
+  });
+
+  it("tints a shape whose colour animation is a plain step of its sequence", () => {
+    const wrapper = buildNode(circle("c", 0, 0, 20, {
+      sequences: [{ steps: [TO_BLUE] }],
+    } as Partial<IRObjectProps>));
+    expect(drawnColor(wrapper.children[0] as Graphics)).toBe(0xffffff);
+    expect(wrapper.__applyColor).toBeTypeOf("function");
+  });
+
+  it("does not tint a shape that animates some other property", () => {
+    const wrapper = buildNode(circle("c", 0, 0, 20, {
+      animations: [{ ...TO_BLUE, property: "alpha", to: 0.5 }],
+    } as Partial<IRObjectProps>));
+    expect(drawnColor(wrapper.children[0] as Graphics)).toBe(0xff0000);
+    expect(wrapper.__applyColor).toBeUndefined();
+  });
+
+  it("strokes a colour-animated line white and tints its Graphics", () => {
+    const wrapper = buildNode(lineNode({ animations: [TO_BLUE] } as Partial<IRObjectProps>));
+    const gfx = wrapper.children[0] as Graphics;
+    expect(drawnColor(gfx)).toBe(0xffffff);
+    expect(gfx.tint).toBe(0xff0000);
+    expect(wrapper.__applyColor).toBeTypeOf("function");
+  });
+
+  it("gives a group no current colour", () => {
+    const g = buildNode(group("g", [circle("c", 0, 0, 20)]));
+    expect(g.__mareyLayout!.currentColor).toBeUndefined();
+    expect(g.__applyColor).toBeUndefined();
   });
 });

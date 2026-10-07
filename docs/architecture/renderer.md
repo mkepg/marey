@@ -630,7 +630,22 @@ them, are collected in `docs/determinism.md`.
 - **An `animate` block inside a physics group is visual-only** (D18). The welded
   body is built once from where the group's contents sit at the start, so an
   animating child moves its drawing but not its collision part.
-- **Colour animation is half-built across three layers.** `IRAnimation.to`
-  admits `IRColor` and `resolveAnimToValue` handles it, but `PROP_TYPES`
-  rejects colour, the validator allows only position/rotation/scale/alpha, and
-  `tickAnim` has no colour branch.
+- **Colour is an integer, applied as a tint, and display-only.** A colour's
+  runtime value is `0xRRGGBB`, held as `__mareyLayout.currentColor` (set on every
+  shape, absent on a group). `applyAnim`'s colour branch blends each sRGB channel
+  at the eased progress and rounds it where it is written (`color.ts`'s
+  `lerpColor`), so paint, snapshot, hash, raster and Lottie all read one integer.
+  Only a shape that some `animate { property: color }` belongs to, directly or in
+  its `sequence` or `parallel` steps (`builder.ts`'s `animatesColor`), is drawn
+  white and tinted, with the tint on its own `Graphics` or `Text` child and never
+  the wrapper. Every other shape keeps its colour in its fill: a white-and-tinted
+  `Text` is rasterised through premultiplied 8-bit alpha, which moves
+  anti-aliased glyph edges, so tinting everything would change the pixels of
+  scenes that never animate colour (Phase 7 spec §2.3). `__applyColor` is the colour
+  counterpart of `__updateLayout`: it writes `currentColor` to the drawing's
+  `tint`, and `applyAnim` throws if a colour runner meets a container that lacks
+  it. Colour never reaches the world: `pushAnimToWorld` has no colour branch, and
+  `spawnAnim` does not thaw a frozen body for a colour runner, which would
+  otherwise add an `unpin` call to the world's log. `sceneRuntime.test.ts` pins
+  this with the frame-pacing harness (1, 7 and 12 ticks per paint, with and
+  without a colour animation on one physics body).

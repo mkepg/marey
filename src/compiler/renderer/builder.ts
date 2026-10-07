@@ -1,8 +1,9 @@
 import { Container, Graphics, Text, TextStyle } from "pixi.js";
-import type { IRObjectNode, IRObjectProps, IRAnimation, IRPhysics, IRSequence } from "../sceneIR";
+import type { IRColor, IRObjectNode, IRObjectProps, IRAnimation, IRPhysics, IRSequence } from "../sceneIR";
 import type { BodyGeometry, BodyPart } from "./physicsWorld";
 import { centreInParent } from "./physicsSync";
 import { compose, IDENTITY, type LocalTransform } from "./transform";
+import { colorToInt } from "./color";
 
 declare module "pixi.js" {
   interface Container {
@@ -22,8 +23,19 @@ declare module "pixi.js" {
       centreOffsetY: number;
       currentPos: { x: number; y: number };
       currentScale: { x: number; y: number };
+      /**
+       * A shape's current colour as `0xRRGGBB`: its declared colour until a
+       * colour animation moves it. Absent on a group, which has no colour.
+       */
+      currentColor?: number;
     };
     __updateLayout?: () => void;
+    /**
+     * Writes `__mareyLayout.currentColor` to the shape's drawing as a tint — the
+     * colour counterpart of `__updateLayout`. Present exactly on the shapes drawn
+     * white and tinted, i.e. those some `animate { property: color }` belongs to.
+     */
+    __applyColor?: () => void;
     __animations?: ReadonlyArray<IRAnimation>;
     __startProps?: {
       position: { x: number; y: number };
@@ -70,6 +82,38 @@ declare module "pixi.js" {
 interface LocalBBox {
   readonly min: { x: number; y: number };
   readonly size: { x: number; y: number };
+}
+
+/**
+ * Whether any `animate { property: color }` belongs to this shape: directly,
+ * or as a step (or a `parallel` sub-step) of its sequence. Decided once at
+ * build time, because only such a shape is drawn white and tinted (Phase 7
+ * spec §2.3, D6) — every other shape keeps its colour in its fill, so its
+ * pixels cannot change.
+ */
+function animatesColor(props: IRObjectProps): boolean {
+  if (props.kind === "group") return false;
+  const isColor = (s: IRAnimation | IRPhysics): boolean =>
+    "property" in s && s.property === "color";
+  if (props.animations.some(isColor)) return true;
+  return props.sequences.some((seq) =>
+    seq.steps.some((step) =>
+      "type" in step && step.type === "parallel"
+        ? step.steps.some(isColor)
+        : isColor(step as IRAnimation | IRPhysics),
+    ),
+  );
+}
+
+/** Seed `currentColor`, and give a tinted shape the hook that applies it. */
+function bindColor(wrapper: Container, drawing: Container, color: IRColor, tinted: boolean): void {
+  const layout = wrapper.__mareyLayout!;
+  layout.currentColor = colorToInt(color);
+  if (!tinted) return;
+  wrapper.__applyColor = () => {
+    drawing.tint = layout.currentColor!;
+  };
+  wrapper.__applyColor();
 }
 
 function applyAnchorAndPivot(
@@ -211,10 +255,12 @@ export function buildNode(node: IRObjectNode): Container {
         size: { x: props.radius * 2, y: props.radius * 2 },
       });
 
+      const tinted = animatesColor(props);
       const gfx = new Graphics()
         .circle(props.radius, props.radius, props.radius)
-        .fill(props.color);
+        .fill(tinted ? 0xffffff : props.color);
       wrapper.addChild(gfx);
+      bindColor(wrapper, gfx, props.color, tinted);
       wrapper.__baseSize = { w: props.radius * 2, h: props.radius * 2 };
       wrapper.__bodyShape = { kind: "circle", radius: props.radius };
       break;
@@ -226,10 +272,12 @@ export function buildNode(node: IRObjectNode): Container {
         size: { x: props.width, y: props.height },
       });
 
+      const tinted = animatesColor(props);
       const gfx = new Graphics()
         .rect(0, 0, props.width, props.height)
-        .fill(props.color);
+        .fill(tinted ? 0xffffff : props.color);
       wrapper.addChild(gfx);
+      bindColor(wrapper, gfx, props.color, tinted);
       wrapper.__baseSize = { w: props.width, h: props.height };
       wrapper.__bodyShape = { kind: "rectangle", width: props.width, height: props.height };
       break;
@@ -260,10 +308,12 @@ export function buildNode(node: IRObjectNode): Container {
         flatPoints[i * 2 + 1] = props.points[i].y;
       }
 
+      const tinted = animatesColor(props);
       const gfx = new Graphics()
         .poly(flatPoints, true)
-        .fill(props.color);
+        .fill(tinted ? 0xffffff : props.color);
       wrapper.addChild(gfx);
+      bindColor(wrapper, gfx, props.color, tinted);
       wrapper.__baseSize = { w, h };
       // Relative to the bounding-box centre, not the pivot: the collision
       // shape must stay independent of the visual-only `origin` property. At
@@ -303,10 +353,12 @@ export function buildNode(node: IRObjectNode): Container {
         flatPoints[i * 2 + 1] = props.points[i].y;
       }
 
+      const tinted = animatesColor(props);
       const gfx = new Graphics()
         .poly(flatPoints, false)
-        .stroke({ width: props.thickness, color: props.color });
+        .stroke({ width: props.thickness, color: tinted ? 0xffffff : props.color });
       wrapper.addChild(gfx);
+      bindColor(wrapper, gfx, props.color, tinted);
       wrapper.__baseSize = { w, h };
       wrapper.__bodyShape = {
         kind: "rectangle",
@@ -317,10 +369,11 @@ export function buildNode(node: IRObjectNode): Container {
     }
     case "text": {
       wrapper = new Container();
+      const tinted = animatesColor(props);
       const style = new TextStyle({
         fontFamily: "'JetBrains Mono', monospace",
         fontSize: props.fontSize,
-        fill: props.color,
+        fill: tinted ? 0xffffff : props.color,
       });
       const textObj = new Text({ text: props.content, style });
 
@@ -330,6 +383,7 @@ export function buildNode(node: IRObjectNode): Container {
       });
 
       wrapper.addChild(textObj);
+      bindColor(wrapper, textObj, props.color, tinted);
       wrapper.__baseSize = { w: textObj.width, h: textObj.height };
       wrapper.__bodyShape = {
         kind: "rectangle",
