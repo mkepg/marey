@@ -69,6 +69,12 @@ export function applySnapshot(root: Container, frame: FrameSnapshot): void {
         c.rotation = snap.rotation;
         c.alpha = snap.alpha;
         c.visible = snap.visible;
+        if (snap.color !== null) {
+          layout.currentColor = snap.color;
+          // Only a tinted shape has the hook; any other shape's colour never
+          // changes, so the snapshot already equals what it draws.
+          c.__applyColor?.();
+        }
       }
     }
     for (const child of c.children) visit(child as Container);

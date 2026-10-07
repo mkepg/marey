@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { encodeLottie, type LottieDoc } from "./lottieEncode";
 import { planExport, type SamplerPlan } from "./exportContract";
-import type { LayerSpec } from "./lottieGeometry";
+import { hexToRgb01, rgb01OfInt, type LayerSpec } from "./lottieGeometry";
 import type { FrameSnapshot, ObjectSnapshot } from "../renderer/frameSampler";
 import { lex } from "../lexer";
 import { parse } from "../parser";
@@ -49,7 +49,7 @@ const circle = (id: string, parentId: string | null = null): LayerSpec => ({
 });
 
 const snap = (id: string, over: Partial<ObjectSnapshot> = {}): ObjectSnapshot => ({
-  id, x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1, alpha: 1, visible: true, ...over,
+  id, x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1, alpha: 1, visible: true, color: 0xff0000, ...over,
 });
 
 /**
@@ -404,8 +404,15 @@ describe("encodeLottie · layer order and the background", () => {
 });
 
 describe("encodeLottie · per-kind geometry", () => {
-  const only = (spec: LayerSpec): LottieDoc =>
-    encodeLottie([spec], framesOf([snap(spec.id)]), planFor(1, 30), SCENE);
+  // The snapshot carries the colour the spec declares, as the sampler would
+  // read it off an untouched shape. The specs below use 0/1 channels, which
+  // round-trip through an integer exactly.
+  const only = (spec: LayerSpec): LottieDoc => {
+    const color = spec.color === null
+      ? null
+      : (Math.round(spec.color[0] * 255) << 16) | (Math.round(spec.color[1] * 255) << 8) | Math.round(spec.color[2] * 255);
+    return encodeLottie([spec], framesOf([snap(spec.id, { color })]), planFor(1, 30), SCENE);
+  };
 
   it("draws a circle as an ellipse centred at (r, r), not at the layer origin", () => {
     // `buildNode` emits `.circle(radius, radius, radius)` (builder.ts:215),
@@ -457,11 +464,11 @@ describe("encodeLottie · per-kind geometry", () => {
     // path paints nothing at all.
     const doc = only({
       id: "scene.c", name: "c", shape: { kind: "circle", radius: 5 },
-      anchor: { x: 5, y: 5 }, color: [1, 0.5, 0], parentId: null,
+      anchor: { x: 5, y: 5 }, color: hexToRgb01("#ff8000"), parentId: null,
     });
     const shapes = layerNamed(doc, "c").shapes;
     expect(shapes.map((s: { ty: string }) => s.ty)).toEqual(["el", "fl"]);
-    expect(shapes[1].c).toEqual({ a: 0, k: [1, 0.5, 0] });
+    expect(shapes[1].c).toEqual({ a: 0, k: [1, 128 / 255, 0] });
   });
 
   it("encodes a line as an open path followed by a butt/miter/10 stroke, never a fill", () => {
@@ -633,5 +640,62 @@ describe("encodeLottie · the emitted document survives JSON", () => {
       planFor(2, 30), SCENE,
     );
     expect(JSON.parse(JSON.stringify(doc))).toEqual(doc);
+  });
+});
+
+describe("encodeLottie · colour", () => {
+  it("encodes a colour that never changes exactly as hexToRgb01 gives it", () => {
+    // A declared colour with channels that are not exact in binary, so a
+    // value from different arithmetic would differ in the last place.
+    const declared = "#3a7bd5";
+    const layer: LayerSpec = { ...circle("scene.c"), color: hexToRgb01(declared) };
+    const doc = encodeLottie(
+      [layer],
+      framesOf([snap("scene.c", { color: 0x3a7bd5 })], [snap("scene.c", { color: 0x3a7bd5 })]),
+      planFor(2, 30), SCENE,
+    );
+    const fill = layerNamed(doc, "c").shapes.find((s: { ty: string }) => s.ty === "fl");
+    expect(fill.c).toEqual({ a: 0, k: [...hexToRgb01(declared)] });
+  });
+
+  it("encodes a colour that changes as keyframes of each frame's colour", () => {
+    const colours = [0xff0000, 0x800080, 0x0000ff];
+    const doc = encodeLottie(
+      [circle("scene.c")],
+      framesOf(...colours.map((color) => [snap("scene.c", { color })])),
+      planFor(3, 30), SCENE,
+    );
+    const fill = layerNamed(doc, "c").shapes.find((s: { ty: string }) => s.ty === "fl");
+    expect(fill.c.a).toBe(1);
+    expect(fill.c.k).toHaveLength(3);
+    colours.forEach((c, i) => expect(fill.c.k[i].s).toEqual([...rgb01OfInt(c)]));
+  });
+
+  it("animates a line's stroke colour the same way", () => {
+    const line: LayerSpec = {
+      ...circle("scene.l"),
+      shape: { kind: "line", points: [{ x: 0, y: 0 }, { x: 10, y: 0 }], thickness: 2 },
+    };
+    const colours = [0xff0000, 0x00ff00];
+    const doc = encodeLottie(
+      [line],
+      framesOf(...colours.map((color) => [snap("scene.l", { color })])),
+      planFor(2, 30), SCENE,
+    );
+    const stroke = layerNamed(doc, "l").shapes.find((s: { ty: string }) => s.ty === "st");
+    expect(stroke.c.a).toBe(1);
+    colours.forEach((c, i) => expect(stroke.c.k[i].s).toEqual([...rgb01OfInt(c)]));
+  });
+
+  it("never lets a group's null colour reach a shape item", () => {
+    const group: LayerSpec = { ...circle("scene.g"), shape: { kind: "group" }, color: null };
+    const doc = encodeLottie(
+      [group],
+      framesOf([snap("scene.g", { color: null })]),
+      planFor(1, 30), SCENE,
+    );
+    const layer = layerNamed(doc, "g");
+    expect(layer.shapes).toBeUndefined();
+    expect(JSON.stringify(doc)).not.toContain("null");
   });
 });

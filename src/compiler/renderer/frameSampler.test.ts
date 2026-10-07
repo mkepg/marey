@@ -98,8 +98,8 @@ describe("sampleFrames · exact frame counts (Gate B criterion 1)", () => {
     // runs between construction and this first snapshot — writes to any of
     // those fields.
     expect(frames[0].objects).toEqual([
-      { id: "scene.slider", x: 100, y: 100, rotation: 0, scaleX: 1, scaleY: 1, alpha: 1, visible: true },
-      { id: "scene.faller", x: 400, y: 50, rotation: 0, scaleX: 1, scaleY: 1, alpha: 1, visible: true },
+      { id: "scene.slider", x: 100, y: 100, rotation: 0, scaleX: 1, scaleY: 1, alpha: 1, visible: true, color: 0x00ffff },
+      { id: "scene.faller", x: 400, y: 50, rotation: 0, scaleX: 1, scaleY: 1, alpha: 1, visible: true, color: 0xff00ff },
     ]);
   });
 
@@ -665,5 +665,43 @@ describe("ObjectSnapshot carries `visible` (Important 1, final whole-branch revi
     expect(faller.visible).toBe(true);
 
     runtime.destroy();
+  });
+});
+
+describe("ObjectSnapshot carries colour", () => {
+  const COLOUR_SOURCE = `
+scene {
+  size: (200, 200)
+  duration: 1
+  rectangle r {
+    position: (50, 50)
+    size: (20, 20)
+    color: red
+    animate { property: color, to: blue, duration: 1, easing: linear }
+  }
+  circle c { position: (150, 50) radius: 10 color: cyan }
+  group g { position: (100, 100) }
+}
+`;
+
+  it("samples an animated colour, a static colour and a group's absence of one", () => {
+    const ir = irFor(COLOUR_SOURCE);
+    const result = planExport(ir, { fps: 30 });
+    if (!result.ok) throw new Error("plan failed");
+    const world = new MatterWorld(ir.width, ir.height);
+    const root = buildRoot(ir);
+    const runtime = new SceneRuntime(world, root);
+    const frames = sampleFrames(runtime, root, result.plan);
+    runtime.destroy();
+
+    const colorOf = (f: number, id: string) => frames[f].objects.find((o) => o.id === id)!.color;
+    expect(colorOf(0, "scene.r")).toBe(0xff0000);
+    // Tick 60 of 120, linear: channel-wise halfway between red and blue.
+    expect(frames[15].tick).toBe(60);
+    expect(colorOf(15, "scene.r")).toBe(0x800080);
+    for (let f = 0; f < frames.length; f++) {
+      expect(colorOf(f, "scene.c")).toBe(0x00ffff);
+      expect(colorOf(f, "scene.g")).toBeNull();
+    }
   });
 });

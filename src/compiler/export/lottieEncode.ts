@@ -1,4 +1,4 @@
-import type { LayerSpec, LottieShapeSpec } from "./lottieGeometry";
+import { rgb01OfInt, type LayerSpec, type LottieShapeSpec } from "./lottieGeometry";
 import type { FrameSnapshot, ObjectSnapshot } from "../renderer/frameSampler";
 import type { SamplerPlan } from "./exportContract";
 
@@ -112,11 +112,11 @@ export type LottieVectorProperty =
   | { readonly a: 0; readonly k: ReadonlyArray<number> }
   | { readonly a: 1; readonly k: ReadonlyArray<LottieKeyframe> };
 
-/** A colour is a static `[r, g, b]` in 0–1 — Marey has no colour animation. */
-export interface LottieColorProperty {
-  readonly a: 0;
-  readonly k: ReadonlyArray<number>;
-}
+/**
+ * A colour is `[r, g, b]` in 0–1, static when the shape never changes colour
+ * and keyframed when it does (Phase 7 spec §2.4).
+ */
+export type LottieColorProperty = LottieVectorProperty;
 
 /** A layer transform. `r` is degrees clockwise, `s` percent, `o` 0–100. */
 export interface LottieTransform {
@@ -374,7 +374,7 @@ function ancestorChain(spec: LayerSpec, byId: ReadonlyMap<string, LayerSpec>): s
 }
 
 /** The drawn items for one spec, geometry first and fill after. */
-function shapeItemsFor(shape: LottieShapeSpec, color: LayerSpec["color"], name: string): LottieShapeItem[] {
+function shapeItemsFor(shape: LottieShapeSpec, color: LottieColorProperty | null, name: string): LottieShapeItem[] {
   const items: LottieShapeItem[] = [];
   switch (shape.kind) {
     case "circle":
@@ -452,7 +452,7 @@ function shapeItemsFor(shape: LottieShapeSpec, color: LayerSpec["color"], name: 
     items.push({
       ty: "st",
       nm: `${name} stroke`,
-      c: { a: 0, k: [...color] },
+      c: color,
       o: staticScalar(100),
       w: staticScalar(shape.thickness),
       lc: 1,
@@ -477,7 +477,7 @@ function shapeItemsFor(shape: LottieShapeSpec, color: LayerSpec["color"], name: 
     // counters and overlapping contours are separate `sh` items under this
     // one fill, and Task 6 Q4 found 19 of 100 JetBrains Mono glyphs (`a`,
     // `e`, `8` among them) render differently under even-odd (`r: 2`).
-    items.push({ ty: "fl", nm: `${name} fill`, c: { a: 0, k: [...color] }, o: staticScalar(100), r: 1 });
+    items.push({ ty: "fl", nm: `${name} fill`, c: color, o: staticScalar(100), r: 1 });
   }
   return items;
 }
@@ -540,6 +540,7 @@ export function encodeLottie(
     const scales: number[][] = [];
     const rotations: number[] = [];
     const opacities: number[] = [];
+    const colors: number[][] = [];
 
     for (let f = 0; f < frames.length; f++) {
       const snap = snapshotFor(spec.id, f);
@@ -553,6 +554,14 @@ export function encodeLottie(
       rotations.push((snap.rotation * 180) / Math.PI);
       // 0–100, from the flattened ancestor product of `visible ? alpha : 0`.
       opacities.push(composedOpacity(chains.get(spec.id)!, (id) => snapshotFor(id, f)) * 100);
+      if (spec.color !== null) {
+        if (snap.color === null) {
+          throw new Error(
+            `[export] Frame ${f} carries no colour for object '${spec.id}', which the Lottie layer spec draws. The specs and the frames came from different compilations.`,
+          );
+        }
+        colors.push([...rgb01OfInt(snap.color)]);
+      }
     }
 
     const base = {
@@ -581,7 +590,7 @@ export function encodeLottie(
     if (spec.shape.kind === "group") {
       return { ...base, ty: 3 };
     }
-    const shapes = shapeItemsFor(spec.shape, spec.color, spec.name);
+    const shapes = shapeItemsFor(spec.shape, spec.color === null ? null : track(colors), spec.name);
     if (spec.shape.kind === "text" && spec.shape.clip) {
       // pixi's texture box (see `lottieGeometry.ts`'s `textClip`): the
       // preview cuts off ink outside it, so the Lottie does too. In layer

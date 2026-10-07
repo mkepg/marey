@@ -134,6 +134,11 @@ export function hexToRgb01(hex: IRColor): readonly [number, number, number] {
   return [r / 255, g / 255, b / 255];
 }
 
+/** `0xRRGGBB` -> the same 0-1 triple `hexToRgb01` gives for its hex form. */
+export function rgb01OfInt(c: number): readonly [number, number, number] {
+  return [((c >> 16) & 0xff) / 255, ((c >> 8) & 0xff) / 255, (c & 0xff) / 255];
+}
+
 /** The last dot-separated segment of a scope-qualified id, for Lottie `nm`. */
 function lastSegment(id: IRObjectId): string {
   const i = id.lastIndexOf(".");

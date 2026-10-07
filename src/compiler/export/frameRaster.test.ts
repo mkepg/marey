@@ -2,13 +2,17 @@ import { describe, it, expect } from "vitest";
 import { Container } from "pixi.js";
 import { buildNode } from "../renderer/builder";
 import { snapshotFor } from "../renderer/frameSampler";
-import { assertFrameSetMatchesTree, createFrameRasterizer } from "./frameRaster";
+import { sampleFrames } from "../renderer/frameSampler";
+import { SceneRuntime } from "../renderer/sceneRuntime";
+import { MatterWorld } from "../renderer/physicsWorld";
+import { planExport } from "./exportContract";
+import { applySnapshot, assertFrameSetMatchesTree, createFrameRasterizer } from "./frameRaster";
 import { lex } from "../lexer";
 import { parse } from "../parser";
 import { typeCheck } from "../typeChecker";
 import type { IRSceneNode } from "../sceneIR";
 import type { FrameSnapshot } from "../renderer/frameSampler";
-import type { Application, ICanvas } from "pixi.js";
+import type { Application, Graphics, ICanvas } from "pixi.js";
 
 function irFor(source: string): IRSceneNode {
   const { ast } = parse(lex(source));
@@ -121,5 +125,37 @@ describe("createFrameRasterizer · scale", () => {
     const rasterize = createFrameRasterizer(fakeApp((opts) => calls.push(opts.resolution)), root, [frame], 1);
     rasterize(frame);
     expect(calls).toEqual([1]);
+  });
+});
+
+describe("applySnapshot · colour", () => {
+  it("replays a sampled colour onto a fresh tree's tint and reads it back unchanged", () => {
+    const source = `
+scene {
+  size: (200, 200)
+  duration: 1
+  rectangle r {
+    position: (50, 50)
+    size: (20, 20)
+    color: red
+    animate { property: color, to: blue, duration: 1, easing: linear }
+  }
+  circle c { position: (150, 50) radius: 10 color: cyan }
+}
+`;
+    const ir = irFor(source);
+    const planned = planExport(ir, { fps: 30 });
+    if (!planned.ok) throw new Error("plan failed");
+    const sampled = new Container();
+    for (const node of ir.children) sampled.addChild(buildNode(node));
+    const runtime = new SceneRuntime(new MatterWorld(ir.width, ir.height), sampled);
+    const frames = sampleFrames(runtime, sampled, planned.plan);
+    runtime.destroy();
+
+    const fresh = treeFor(source);
+    applySnapshot(fresh, frames[15]);
+    const rect = fresh.children[0] as Container;
+    expect((rect.children[0] as Graphics).tint).toBe(0x800080);
+    expect(snapshotFor(fresh)).toEqual(frames[15].objects);
   });
 });

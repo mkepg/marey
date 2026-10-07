@@ -30,6 +30,13 @@ export interface ObjectSnapshot {
    * frames onto the same tree `sampleFrames` just drove to its final state.
    */
   readonly visible: boolean;
+  /**
+   * The shape's colour as `0xRRGGBB`, or null for a group, which has none.
+   * Added in Phase 7: without it every exported frame showed the starting
+   * colour, because `frameRaster.ts` replays snapshots onto the one tree
+   * `sampleFrames` drove to its final state.
+   */
+  readonly color: number | null;
 }
 
 /** One output frame: immutable, and the only thing an encoder ever sees. */
@@ -64,6 +71,7 @@ export function snapshotFor(root: Container): ObjectSnapshot[] {
         scaleY: layout.currentScale.y,
         alpha: c.alpha,
         visible: c.visible,
+        color: layout.currentColor ?? null,
       }));
     }
     for (const child of c.children) visit(child as Container);
