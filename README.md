@@ -15,6 +15,7 @@ claimed, and how each claim is checked.
 
 [![CI](https://github.com/mkepg/marey/actions/workflows/ci.yml/badge.svg)](https://github.com/mkepg/marey/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **[Try it in the browser](https://marey.netlify.app/)**
 
 <img src="docs/media/bars-reveal.png" width="400" alt="Seven light-blue bars of different heights grow upward from a common baseline, one after another, on a dark navy background.">
