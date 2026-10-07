@@ -218,7 +218,8 @@ interface PlaybackState {
 interface PlaybackController {
   play(): void;
   pause(): void;
-  seek(tick: number): void;        // clamped to [0, endTick ?? reachedTick]
+  seek(tick: number): void;        // clamped to [0, endTick ?? reachedTick]; leaves playback paused
+  restart(): void;                 // replay to 0 and play
   subscribe(listener: (s: PlaybackState) => void): () => void;
 }
 ```
