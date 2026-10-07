@@ -135,11 +135,11 @@ proposing anything the old roadmap justified by adoption.
 2026-10-07). The package, `marey check`/`marey export`, the determinism
 account, and the owner's additions 6B (playground redesign) and 6C (smooth
 handoff) are merged on `main`; the README and the exit evidence are on
-`phase-6-finish`. Exit criterion 3 passes. Criterion 2 is open: the one
-ten-minute read so far was by a language model, not a person; its answers
-meet the rubric, which shows the README carries both answers within the word
-budget, but it does not stand in for a human read. It closes on a human read
-or the owner's ruling (spec O6). Criterion 1 failed on a fresh clone in CI
+`phase-6-finish`. Exit criterion 3 passes. Criterion 2 is closed by the
+owner's ruling of 2026-10-07 (spec O6): the one ten-minute read was by a
+language model, not a person, and no human read was done; its answers meet
+the rubric, which shows the README carries both answers within the word
+budget, and the owner ruled that sufficient. Criterion 1 failed on a fresh clone in CI
 (`check:pack`'s offline install). Its fix, `--prefer-offline`, is committed
 and passes on the local (warm) npm cache; whether it passes on CI's cold
 cache is confirmed only by the next CI run (on a pull request from this

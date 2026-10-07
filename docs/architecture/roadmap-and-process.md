@@ -261,11 +261,11 @@ explicitly rather than quietly deviating.
     README (Task 13) and the exit evidence (Task 14) are on
     `phase-6-finish`. Of roadmap §9.3's exit criteria, the third passes
     (`check --export-ready` and `check:export` on the canonical scenes). The
-    second is open: the one read so far was by a language model, not a
-    person; its answers meet the rubric fixed in spec §6.3, which shows the
-    README carries both answers within the word budget, but it does not
-    stand in for a human read. It closes on a human read or the owner's
-    ruling (spec O6). The first failed on a fresh clone in CI:
+    second is closed by the owner's ruling of 2026-10-07 (spec O6): the one
+    read was by a language model, not a person, and no human read was done;
+    its answers meet the rubric fixed in spec §6.3, which shows the README
+    carries both answers within the word budget, and the owner ruled that
+    sufficient. The first failed on a fresh clone in CI:
     `check:pack` installed the tarball with `--offline`, which needs registry
     metadata that `npm ci` does not cache. The fix, `--prefer-offline`, is
     committed and passes on the local (warm) npm cache; whether it passes on

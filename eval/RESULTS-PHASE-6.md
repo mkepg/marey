@@ -19,7 +19,7 @@ and `git diff --stat` both empty), Windows 11, Node 22.13.1.
 | Criterion | Command | Result |
 |---|---|---|
 | 1. The package builds and installs from a clean checkout | `npm run build:package && npm run check:pack` | **Not closed.** 11 of 11 checks pass on this machine, exit 0, 17.0 s. On a fresh clone in CI the same check fails at `npm install --offline <tarball>` (`ENOTCACHED`), on all four pushes since it was added. Cause reproduced locally. The fix (`--prefer-offline`) is committed and passes on the warm local cache; CI's cold cache is confirmed only by the next CI run (on a pull request from this branch, or on `main`). See "Exit criterion 1" |
-| 2. A reader states what Marey is and what is hard within ten minutes | spec §6.3's procedure | **Open.** One read, by a language model, not a person. Its answers meet the rubric (Q1 3 of 3, Q2 3 of 4: H1, H2, H4), which shows the README carries both answers within the word budget; it does not stand in for a human read. The criterion closes on a human read or the owner's ruling (spec O6). See "Exit criterion 2" |
+| 2. A reader states what Marey is and what is hard within ten minutes | spec §6.3's procedure | **Closed by the owner's ruling, 2026-10-07** (spec O6). One read, by a language model, not a person; no human read was done. Its answers meet the rubric (Q1 3 of 3, Q2 3 of 4: H1, H2, H4), which shows the README carries both answers within the word budget; it does not stand in for a human read. The owner ruled that read sufficient. See "Exit criterion 2" |
 | 3. Both CLI commands work on the canonical scenes | `node bin/marey.mjs check --export-ready eval/scenes-3b/*.marey`; `npm run check:export` | 4 of 4 `ok`, exit 0; 21 of 21 cases pass, exit 0, 111.2 s. See "Exit criterion 3" |
 
 The four AGENTS.md checks on the same tree, before the runs above: `npm test`
@@ -593,9 +593,10 @@ answers within the 2,500-word budget. It does not stand in for a human read:
 spec §6.3's criterion is a person reading for ten minutes, and for a model
 "ten minutes" is only a word budget.
 
-**Criterion 2 stays open.** It closes on a read by a person, or on the
-owner's ruling: spec O6 makes the owner's judgment final, and this section is
-the material for it.
+**Criterion 2 is closed by the owner's ruling.** On 2026-10-07 the owner ruled,
+under spec O6 (the owner's judgment is final), that Reader 1's read is
+sufficient. No human read was done: the reader was a language model, and the
+criterion closes on the ruling, not on a read by a person.
 
 ---
 

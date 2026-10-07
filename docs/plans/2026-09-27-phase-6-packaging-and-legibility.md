@@ -1844,14 +1844,14 @@ RESULTS section) or quoted from the RESULTS section the row names in
 | Every first-party scene | `npm run build:cli && node bin/marey.mjs check $(git ls-files '*.marey')` | 85 files, all `ok` (78 tracked at `b0759e8`) |
 | Exit criterion 1, locally | `npm run build:package && npm run check:pack` | 11 of 11, exit 0, 17.0 s |
 | Exit criterion 1, fresh clone | CI's "Package builds, packs and installs" step | **fails** on every push since 2026-10-02: `ENOTCACHED` at `npm install --offline <tarball>`. Defect 4 below |
-| Exit criterion 2 | spec §6.3's read | **open**: one read, by a language model, not a person. Its answers meet the rubric (Q1 3 of 3, Q2 3 of 4: H1, H2, H4), which shows the README carries both answers within the word budget; it does not stand in for a human read. Closes on a human read or the owner's ruling (O6) |
+| Exit criterion 2 | spec §6.3's read | **closed by the owner's ruling, 2026-10-07 (O6)**: one read, by a language model, not a person; no human read was done. Its answers meet the rubric (Q1 3 of 3, Q2 3 of 4: H1, H2, H4), which shows the README carries both answers within the word budget; it does not stand in for a human read. The owner ruled that read sufficient |
 | Exit criterion 3 | `node bin/marey.mjs check --export-ready eval/scenes-3b/*.marey`; `npm run check:export` | 4 of 4 `ok`; 21 of 21, exit 0, 111.2 s |
 | x264 gate (Task 1) | `node tools/visual-check/x264-gate.mjs ...` | failed: none of 8 configurations meets the specks threshold. MP4 stays on WebCodecs |
 | Branch shape, as of `a4e4cee` (a snapshot: a commit cannot hold its own diffstat) | `git rev-list --count e7c5c29..a4e4cee`; `git diff --shortstat e7c5c29..a4e4cee` | **56 commits**, **135 files changed, +14,367 / -1,468**, 6B and 6C included |
 
 Phase 6 is not closed. Criterion 1 needs `check:pack` to pass on a fresh
-clone; criterion 2 needs a human read or the owner's ruling; and the npm
-publish is still to come.
+clone; criterion 2 is closed by the owner's ruling of 2026-10-07 (no human
+read was done); and the npm publish is still to come.
 
 ### Defects found in this plan
 
@@ -1920,7 +1920,7 @@ WebCodecs file; and Task 1 Step 4's scorer proof (defect 5).
 | R2 | O7 and O8 count as confirmed (the owner, 2026-09-28) and are not asked again. |
 | R3 | Tasks 13-15 run on `phase-6-finish`, cut from `main` at `c7b87ae`, since `phase-6` merged into `main` on 2026-10-02. |
 | R4 | The reader's copy removes the files that state the rubric or the procedure. Passing mentions of "ten-minute" (the CI budget in RESULTS, the exit criterion in the roadmap) stay. |
-| R5 | The reader has no prior context of the project, is confined to the copy, and is given only the prompt. Reader 1 was a language model, not a person: its read shows the README carries both answers within the word budget and does not stand in for a human read. Criterion 2 closes on a human read or the owner's ruling (O6). |
+| R5 | The reader has no prior context of the project, is confined to the copy, and is given only the prompt. Reader 1 was a language model, not a person: its read shows the README carries both answers within the word budget and does not stand in for a human read. The owner ruled it sufficient on 2026-10-07 (O6), which closes criterion 2; no human read was done. |
 | R6 | The README presents `npx marey ...` and `import { compile } from "marey"` as the usage, with no claim that is false before publishing (no download badges). Its Status drops "unpublished", "one command" and "not implemented". |
 | R7 | The O7 exception line lives in the local `AGENTS.md`. Spec §6.2 and the README's regenerate command are its committed record. |
 | R8 | The read is scored from the verbatim answers, by someone other than the reader who gave them. |
@@ -2023,5 +2023,6 @@ This list covers what Tasks 13 and 14 deferred or found.
   read for five days. Reading the CI run after each push to `main` would
   have caught it the day it landed.
 - **The read.** One reader, a language model rather than a person, whose
-  answers met the rubric; the README needed no revision. Criterion 2 still
-  needs a human read or the owner's ruling.
+  answers met the rubric; the README needed no revision. The owner ruled
+  that read sufficient on 2026-10-07 (O6), which closes criterion 2; no
+  human read was done.
