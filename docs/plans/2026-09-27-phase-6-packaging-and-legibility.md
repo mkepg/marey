@@ -1872,7 +1872,9 @@ come.
    unseen from 2026-10-02 to 2026-10-07, because CI's results were not read
    after the pushes. Reproduced with a fresh cache, and shown to pass once
    `npm cache add playwright-core@1.62.1` fetches the metadata (RESULTS,
-   "Exit criterion 1"). Open.
+   "Exit criterion 1"). The fix, `--prefer-offline` in place of `--offline`,
+   is committed in `7fe0b8f`. It passes on the warm local cache; whether it
+   passes on CI's cold cache is confirmed only by CI after the next push.
 5. **Task 1 Step 4 asks for MP4 scores equal across two runs.** WebCodecs
    encodes differently each run (R47), so they cannot be. The scorer's
    extraction was shown unchanged by WebM equality across runs and by one

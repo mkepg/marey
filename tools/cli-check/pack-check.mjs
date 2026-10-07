@@ -10,10 +10,12 @@
  *    — a leak past the `files` allowlist.
  * 3. `npm init -y`, then `npm install --prefer-offline <tarball>`, in a
  *    second, empty temporary directory: a real npm install of the published
- *    shape. `--prefer-offline` uses whatever the npm cache already holds and
- *    contacts the registry only for what is missing. The tarball's only
- *    dependency is playwright-core. On a warm cache (a developer machine)
- *    the install makes no request. On a cold one (CI, after `npm ci`) the
+ *    shape. npm documents `--prefer-offline` as bypassing staleness
+ *    checks for cached data and requesting only missing data from the server.
+ *    It is not offline: the install may still contact the registry (a
+ *    2026-10-07 run on a warm cache logged a metadata GET marked "cache
+ *    stale" and an audit POST). The tarball's only dependency is
+ *    playwright-core. On a cold cache (CI, after `npm ci`) the
  *    cache holds playwright-core's tarball but not its registry metadata,
  *    which an install into an empty directory needs to resolve the version,
  *    so `--offline` fails there with ENOTCACHED; `--prefer-offline` fetches
