@@ -255,25 +255,25 @@ explicitly rather than quietly deviating.
   README, `marey check`/`marey export`, and a written account of the
   determinism work. Replaces the old Phase 5B (Distribution); acquisition work
   is deliberately out of scope.
-  - **Status (2026-10-07): built, not yet closed.** Tasks 1-12 are merged on
-    `main`, and so are two pieces the owner added within the phase: 6B, the
-    playground redesign, and 6C, a smooth animation-to-physics handoff. The
-    README (Task 13) and the exit evidence (Task 14) are on
-    `phase-6-finish`. Of roadmap §9.3's exit criteria, the third passes
-    (`check --export-ready` and `check:export` on the canonical scenes). The
-    second is closed by the owner's ruling of 2026-10-07 (spec O6): the one
-    read was by a language model, not a person, and no human read was done;
-    its answers meet the rubric fixed in spec §6.3, which shows the README
-    carries both answers within the word budget, and the owner ruled that
-    sufficient. The first failed on a fresh clone in CI:
-    `check:pack` installed the tarball with `--offline`, which needs registry
-    metadata that `npm ci` does not cache. The fix, `--prefer-offline`, is
-    committed and passes on the local (warm) npm cache; whether it passes on
-    CI's cold cache is confirmed only by the next CI run (on a pull request
-    from this branch, or on `main`). The export matrix step after it has
-    never run in CI, so its CI time against spec §9.3's ten-minute budget is
-    unmeasured.
-    Publishing to npm follows the merge and the owner's sign-off. Evidence is
+  - **Status (2026-10-07): complete.** Tasks 1-12 are merged on `main`, and
+    so are two pieces the owner added within the phase: 6B, the playground
+    redesign, and 6C, a smooth animation-to-physics handoff. The README
+    (Task 13) and the exit evidence (Task 14) are on `phase-6-finish`. All
+    three of roadmap §9.3's exit criteria are closed. The first, the
+    package builds and installs from a clean checkout, is closed by CI run
+    37596207589 (pull request #1, on `35747ce`): `check:pack` had failed on a
+    fresh clone because it installed the tarball with `--offline`, which needs
+    registry metadata that `npm ci` does not cache; after the
+    `--prefer-offline` fix it passed on the runner, and `check:export` ran in
+    CI for the first time at 156 s of a 3 min 56 s job, within spec §9.3's
+    ten-minute budget, so CI keeps the full matrix. The second is closed by
+    the owner's ruling of 2026-10-07 (spec O6): the one read was by a
+    language model, not a person, and no human read was done; its answers
+    meet the rubric fixed in spec §6.3, which shows the README carries both
+    answers within the word budget, and the owner ruled that sufficient. The
+    third is closed by `check --export-ready` and `check:export` on the
+    canonical scenes.
+    The npm publish of 0.4.0 follows the merge and the owner's sign-off. Evidence is
     in `eval/RESULTS-PHASE-6.md`. Design:
     `docs/specs/2026-09-27-marey-phase-6-packaging-and-legibility-design.md`,
     with 6B's and 6C's own designs and plans dated 2026-10-02 and 2026-10-03.

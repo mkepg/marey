@@ -131,23 +131,23 @@ for a **complete, provable engineering artifact with a declarable finish
 line**, and acquisition work moved past that line. Read its §1 before
 proposing anything the old roadmap justified by adoption.
 
-**6 — packaging and legibility is built but not yet closed** (status
-2026-10-07). The package, `marey check`/`marey export`, the determinism
-account, and the owner's additions 6B (playground redesign) and 6C (smooth
-handoff) are merged on `main`; the README and the exit evidence are on
-`phase-6-finish`. Exit criterion 3 passes. Criterion 2 is closed by the
-owner's ruling of 2026-10-07 (spec O6): the one ten-minute read was by a
-language model, not a person, and no human read was done; its answers meet
-the rubric, which shows the README carries both answers within the word
-budget, and the owner ruled that sufficient. Criterion 1 failed on a fresh clone in CI
-(`check:pack`'s offline install). Its fix, `--prefer-offline`, is committed
-and passes on the local (warm) npm cache; whether it passes on CI's cold
-cache is confirmed only by the next CI run (on a pull request from this
-branch, or on `main`). The export matrix step after it has never run in CI,
-so its CI time against spec §9.3's ten-minute budget is unmeasured. The phase
-is not closed.
-npm publish follows the merge. Evidence is in `eval/RESULTS-PHASE-6.md`;
-`roadmap-and-process.md`'s Phase 6 bullet carries the same status.
+**6 — packaging and legibility is complete** (status 2026-10-07). The
+package, `marey check`/`marey export`, the determinism account, and the
+owner's additions 6B (playground redesign) and 6C (smooth handoff) are merged
+on `main`; the README and the exit evidence are on `phase-6-finish`. All
+three exit criteria are closed. Criterion 1, the package builds and installs
+from a clean checkout, is closed by CI run 37596207589 (pull request #1, on
+`35747ce`, 2026-10-07): `check:pack` passed on a fresh runner after the
+`--prefer-offline` fix, and `check:export` ran in CI for the first time, 156 s
+of a 3 min 56 s job, within spec §9.3's ten-minute budget, so CI keeps the
+full matrix. Criterion 2 is closed by the owner's ruling of 2026-10-07 (spec
+O6): the one ten-minute read was by a language model, not a person, and no
+human read was done; its answers meet the rubric, which shows the README
+carries both answers within the word budget, and the owner ruled that
+sufficient. Criterion 3 is closed by `check --export-ready` and the export
+matrix on the canonical scenes. The npm publish of 0.4.0 follows the merge.
+Evidence is in `eval/RESULTS-PHASE-6.md`; `roadmap-and-process.md`'s Phase 6
+bullet carries the same status.
 
 **5C — Lottie completion and video quality is done and merged** (merge
 commit `081c940` onto `main`, 2026-09-26; added by the project owner on

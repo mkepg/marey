@@ -18,7 +18,7 @@ and `git diff --stat` both empty), Windows 11, Node 22.13.1.
 
 | Criterion | Command | Result |
 |---|---|---|
-| 1. The package builds and installs from a clean checkout | `npm run build:package && npm run check:pack` | **Not closed.** 11 of 11 checks pass on this machine, exit 0, 17.0 s. On a fresh clone in CI the same check fails at `npm install --offline <tarball>` (`ENOTCACHED`), on all four pushes since it was added. Cause reproduced locally. The fix (`--prefer-offline`) is committed and passes on the warm local cache; CI's cold cache is confirmed only by the next CI run (on a pull request from this branch, or on `main`). See "Exit criterion 1" |
+| 1. The package builds and installs from a clean checkout | `npm run build:package && npm run check:pack` | **Closed by CI run 37596207589, 2026-10-07.** On a fresh clone in CI the same check had failed at `npm install --offline <tarball>` (`ENOTCACHED`) on all four pushes since it was added; cause reproduced locally, fix `--prefer-offline`. Pull request #1, on `35747ce`, passed in CI: "Package builds, packs and installs" 9 s, on the cache as `npm ci` left it. Locally 11 of 11 checks pass, exit 0, 17.0 s. See "Exit criterion 1" |
 | 2. A reader states what Marey is and what is hard within ten minutes | spec §6.3's procedure | **Closed by the owner's ruling, 2026-10-07** (spec O6). One read, by a language model, not a person; no human read was done. Its answers meet the rubric (Q1 3 of 3, Q2 3 of 4: H1, H2, H4), which shows the README carries both answers within the word budget; it does not stand in for a human read. The owner ruled that read sufficient. See "Exit criterion 2" |
 | 3. Both CLI commands work on the canonical scenes | `node bin/marey.mjs check --export-ready eval/scenes-3b/*.marey`; `npm run check:export` | 4 of 4 `ok`, exit 0; 21 of 21 cases pass, exit 0, 111.2 s. See "Exit criterion 3" |
 
@@ -406,8 +406,8 @@ npm error code ENOTCACHED
 npm error request to https://registry.npmjs.org/playwright-core failed: cache mode is 'only-if-cached' but no cached response is available.
 ```
 
-The export matrix comes after it in the same job, so it has never run in CI,
-and the CI time spec §9.3 asks for is not measured (see "CI (O8)").
+The export matrix comes after it in the same job, so it had never run in CI
+before the run recorded under "Closed by CI" below (see "CI (O8)").
 
 **Cause, reproduced.** Plan Task 10 installs the tarball with `--offline`,
 reasoning that `playwright-core` is "already in the npm cache from installing
@@ -455,16 +455,26 @@ warm cache does not hold; the command that showed it also made those two
 requests itself. (A `grep` for `GET https://registry` counted 0 because npm
 logs the status between the verb and the URL; it is the wrong pattern.) What
 is established: the check passes locally, and the flag's documented behaviour
-is the one the failure needs. Whether it passes on CI's cold cache is
-confirmed only by the next CI run (`ci.yml` runs on a pull request as well as
-on a push to `main`, so a pull request from this branch is enough).
+is the one the failure needs. Whether it passes on CI's cold cache was left to
+a CI run (`ci.yml` runs on a pull request as well as on a push to `main`, so a
+pull request from this branch was enough).
 
-The export matrix has still never run in CI. In `ci.yml` its step, "marey
+The export matrix had never run in CI up to then. In `ci.yml` its step, "marey
 export, every canonical scene and format, twice", comes after "Package builds,
 packs and installs" in the same job and has no `if:` condition, so every run
-that failed at the pack step skipped it. Its CI time against spec §9.3's
-ten-minute budget is unmeasured until a run gets past `check:pack` (see "CI
-(O8)").
+that failed at the pack step skipped it.
+
+### Closed by CI
+
+Pull request #1 (`phase-6-finish` into `main`), CI run 37596207589
+(https://github.com/mkepg/marey/actions/runs/37596207589), on commit
+`35747ce`, 2026-10-07: **success**, job time 3 min 56 s. "Package builds,
+packs and installs" (`check:pack`) took 9 s and passed on the runner's cache
+as `npm ci` left it, which is the case that failed with `ENOTCACHED` before
+the `--prefer-offline` change. That is the cold-cache confirmation the
+verification above could not give, and it closes criterion 1. The failure
+history and the local verification above stand as recorded. Step times are in
+"CI (O8)".
 
 ---
 
@@ -685,9 +695,9 @@ browser, then runs `check:pack` and `check:export`. The export step builds
 what it reads (`build:export-page`, `build:cli`) before calling
 `check:export`, so it does not depend on the pack step having run first.
 
-This machine cannot run GitHub Actions, so the run time is measured on the
-first run after the owner pushes this change, not here. The local numbers
-above are the baseline it is measured against: `check:pack` including its own
+This machine cannot run GitHub Actions, so the run time was to be measured on
+the first run to get past `check:pack`. The local numbers above are the
+baseline it is measured against: `check:pack` including its own
 `build:package` at **15.6 s**, and the current `check:export` script's two
 default-mode runs, both 21 of 21 cases passing (mp4 reported, not gated, per
 R47), at **100.5 s** and **101.8 s**. (A third, superseded run of the script
@@ -701,12 +711,36 @@ minutes, spec §9.3's fallback applies: `check:export` gains a `--ci` mode that
 runs one scene per format instead of the full four-scene, five-format matrix,
 and the full matrix stays a before-merge check.
 
-**Update 2026-10-07: the CI time is still not measured.** The change reached
-`main` on 2026-10-02, and all four CI runs since then failed at the pack step,
-before the export matrix (see "Exit criterion 1", "On a fresh clone, in CI").
-Those jobs took 1m14s to 1m46s each (`gh run list`), and none reached the
-matrix. The local default-mode run of 2026-10-07
-took 111.2 s ("Exit criterion 3").
+**Update 2026-10-07 (earlier): the CI time was not yet measured.** The change
+reached `main` on 2026-10-02, and all four CI runs since then failed at the
+pack step, before the export matrix (see "Exit criterion 1", "On a fresh
+clone, in CI"). Those jobs took 1m14s to 1m46s each (`gh run list`), and none
+reached the matrix. The local default-mode run of 2026-10-07 took 111.2 s
+("Exit criterion 3").
+
+**Measured 2026-10-07: CI run 37596207589.** Pull request #1
+(`phase-6-finish` into `main`), commit `35747ce`, success, job time 3 min
+56 s (https://github.com/mkepg/marey/actions/runs/37596207589). Step times:
+
+| Step | Time |
+|---|---|
+| `npm ci` | 7 s |
+| Test suite | 12 s |
+| Typecheck and build | 9 s |
+| Every first-party scene compiles | 1 s |
+| Install ffmpeg and the pinned browser | 33 s |
+| Package builds, packs and installs (`check:pack`) | 9 s |
+| marey export, every canonical scene and format, twice (`check:export`) | 2 min 36 s (156 s) |
+
+This is the first time `check:export` ran in CI. Spec §9.3 set about ten
+minutes as the budget beyond which CI would run one scene per format; 156 s is
+within it, so CI keeps the full matrix and the `--ci` mode is not built.
+
+Runner annotations on that run, both deferred as harmless today (the run
+passes): `actions/checkout@v4` and `actions/setup-node@v4` target the
+deprecated Node.js 20 runtime, which the runner forces to Node 24; and
+`ubuntu-latest` migrates to Ubuntu 26 from 2026-10-19. Both are listed in the
+plan's execution notes.
 
 ---
 

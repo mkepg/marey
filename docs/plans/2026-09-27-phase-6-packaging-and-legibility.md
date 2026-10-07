@@ -1843,15 +1843,17 @@ RESULTS section) or quoted from the RESULTS section the row names in
 | Typecheck and build | `npm run build` | exit 0 |
 | Every first-party scene | `npm run build:cli && node bin/marey.mjs check $(git ls-files '*.marey')` | 85 files, all `ok` (78 tracked at `b0759e8`) |
 | Exit criterion 1, locally | `npm run build:package && npm run check:pack` | 11 of 11, exit 0, 17.0 s |
-| Exit criterion 1, fresh clone | CI's "Package builds, packs and installs" step | **fails** on every push since 2026-10-02: `ENOTCACHED` at `npm install --offline <tarball>`. Defect 4 below |
+| Exit criterion 1, fresh clone | CI's "Package builds, packs and installs" step | **closed by CI run 37596207589** (pull request #1, `35747ce`, 2026-10-07): success, step 9 s on `npm ci`'s cache. It had failed on every push from 2026-10-02 (`ENOTCACHED` at `npm install --offline <tarball>`, defect 4 below) |
+| CI time | the same run | job 3 min 56 s; `check:export` 156 s, within spec §9.3's ten-minute budget, so CI keeps the full matrix |
 | Exit criterion 2 | spec §6.3's read | **closed by the owner's ruling, 2026-10-07 (O6)**: one read, by a language model, not a person; no human read was done. Its answers meet the rubric (Q1 3 of 3, Q2 3 of 4: H1, H2, H4), which shows the README carries both answers within the word budget; it does not stand in for a human read. The owner ruled that read sufficient |
 | Exit criterion 3 | `node bin/marey.mjs check --export-ready eval/scenes-3b/*.marey`; `npm run check:export` | 4 of 4 `ok`; 21 of 21, exit 0, 111.2 s |
 | x264 gate (Task 1) | `node tools/visual-check/x264-gate.mjs ...` | failed: none of 8 configurations meets the specks threshold. MP4 stays on WebCodecs |
 | Branch shape, as of `a4e4cee` (a snapshot: a commit cannot hold its own diffstat) | `git rev-list --count e7c5c29..a4e4cee`; `git diff --shortstat e7c5c29..a4e4cee` | **56 commits**, **135 files changed, +14,367 / -1,468**, 6B and 6C included |
 
-Phase 6 is not closed. Criterion 1 needs `check:pack` to pass on a fresh
-clone; criterion 2 is closed by the owner's ruling of 2026-10-07 (no human
-read was done); and the npm publish is still to come.
+All three exit criteria are closed: 1 by CI run 37596207589, 2 by the
+owner's ruling of 2026-10-07 (no human read was done), 3 by `check
+--export-ready` and the export matrix. The merge and the npm publish of 0.4.0
+are still to come.
 
 ### Defects found in this plan
 
@@ -1873,11 +1875,12 @@ read was done); and the npm publish is still to come.
    after the pushes. Reproduced with a fresh cache, and shown to pass once
    `npm cache add playwright-core@1.62.1` fetches the metadata (RESULTS,
    "Exit criterion 1"). The fix, `--prefer-offline` in place of `--offline`,
-   is committed in `7fe0b8f`. It passes on the warm local cache; whether it
-   passes on CI's cold cache is confirmed only by the next CI run (on a pull
-   request from this branch, or on `main`). The export matrix step comes
-   after it in `ci.yml` and has never run in CI, so its CI time against spec
-   §9.3's ten-minute budget is still unmeasured.
+   is committed in `7fe0b8f`. It passed on the warm local cache, and CI
+   confirmed it on the cold one: pull request #1, run 37596207589, on
+   `35747ce`, 2026-10-07, success, with the pack step taking 9 s on the cache
+   as `npm ci` left it. The export matrix step, which comes after it in
+   `ci.yml`, ran in CI for the first time in that run: 156 s of a 3 min 56 s
+   job, within spec §9.3's ten-minute budget, so CI keeps the full matrix.
 5. **Task 1 Step 4 asks for MP4 scores equal across two runs.** WebCodecs
    encodes differently each run (R47), so they cannot be. The scorer's
    extraction was shown unchanged by WebM equality across runs and by one
@@ -1959,7 +1962,8 @@ Task 14 changed no code and has no mutation.
 
 ### Deliberate gaps and deferrals, each with what makes it harmless today
 
-This list covers what Tasks 13 and 14 deferred or found.
+This list covers what Tasks 13 and 14 deferred or found, and the two runner
+annotations CI's pass of 2026-10-07 added (items 9 and 10).
 
 1. **`README.md:17-18`: "Try it in the browser" has no blank line before
    it**, so it renders in the badge paragraph, on the badges' line.
@@ -1999,6 +2003,16 @@ This list covers what Tasks 13 and 14 deferred or found.
    folder on every `npm test`** (`marey-page-*` twice, `marey-scene-*`), with
    no cleanup. 385 had accumulated on this machine by 2026-10-07.
    *Harmless today:* they are small, and outside the repository.
+9. **`actions/checkout@v4` and `actions/setup-node@v4` target the deprecated
+   Node.js 20 runtime.** CI run 37596207589 annotated both; the runner forces
+   them onto Node 24. *Harmless today:* the run passes, and the forced
+   runtime is the one the actions will move to. Bump both actions to a
+   release built for Node 24 when one is chosen.
+10. **`ubuntu-latest` migrates to Ubuntu 26 from 2026-10-19.** The same run
+    annotated it. *Harmless today:* the run on the current image passes. The
+    first run after the migration shows whether the apt packages for ffmpeg
+    and the pinned browser's dependencies install unchanged; pin
+    `ubuntu-24.04` in `ci.yml` if they do not.
 
 ### The process record
 
