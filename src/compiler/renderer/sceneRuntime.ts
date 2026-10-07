@@ -525,7 +525,7 @@ export class SceneRuntime {
     // `__kinematicPosAnimCount` on the container tracked the same thing and was
     // read nowhere; the count lives in `MatterWorld.pinReasons` now.
     // A colour runner is display-only and must not reach the world, so it
-    // does not thaw either (Phase 7 Review Focus 1).
+    // does not thaw either: a thaw is a call the world would see.
     if (anim.property !== "color") unpinBody(container, this.world, "FROZEN");
     if (isPos) pinBody(container, this.world, "POS_ANIM");
 

@@ -1433,7 +1433,7 @@ describe("SceneRuntime · colour animation", () => {
     expect(trace(true)).toEqual(exact);
   });
 
-  describe("never reaches the physics world (Review Focus 1)", () => {
+  describe("colour never reaches the physics world", () => {
     const body = (withColor: boolean) => (): Container =>
       makeContainer({
         position: { x: 400, y: 300 },
