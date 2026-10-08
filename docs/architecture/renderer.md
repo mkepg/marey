@@ -7,14 +7,15 @@ lifecycle: the tick phase, the paint phase and the idle test. Lifting it out of
 to call, since `advanceOneTick()` takes no time argument and now nothing but a
 caller stands between it and a bare loop.
 
-Five pure modules sit under `adapter.ts` and **must not import `pixi.js`** at
+Six pure modules sit under `adapter.ts` and **must not import `pixi.js`** at
 runtime, so they stay testable headlessly in Node: `sceneRuntime.ts`,
-`physicsSync.ts`, `transform.ts`, `clock.ts`, and (Phase 4) `frameSampler.ts`.
+`physicsSync.ts`, `transform.ts`, `clock.ts`, (Phase 4) `frameSampler.ts`
+and (Phase 7) `playback.ts`.
 `sceneRuntime.ts`, `physicsSync.ts` and `transform.ts` are the ones most
 likely to be edited by someone reaching for `Graphics` or `Ticker`; every
 `pixi.js` import in them is `import type`. **There is no automated guard for
 this rule** — no lint rule, no import-boundary test — so this document is the
-only thing enforcing it; check it by grepping the five files above for
+only thing enforcing it; check it by grepping the six files above for
 `from "pixi.js"` and confirming every hit is `import type`.
 
 - **`transform.ts`** — 2D transform algebra, zero imports. One copy of the
@@ -65,8 +66,11 @@ only thing enforcing it; check it by grepping the five files above for
   The sampler paints every tick, not every frame — kept as the conservative
   choice, not a proven necessity; see its own docstring for the
   paint-cadence experiment that failed to find a scene sensitive to the
-  difference, and for the one case (a `sequence`-bearing scene) that
-  experiment did not cover.
+  difference. That experiment's fixture had no `sequence`; the corpus test
+  in "Playback (Phase 7)" below covers one. Played live at 1-, 7- and
+  12-tick bursts and then paused, both sequence-bearing first-party scenes,
+  `src/examples/physics-pile.marey` and `eval/scenes-3b/compound-logo.marey`,
+  equal the sampler's loop at the paused tick.
 
 - **`timeline.ts`** — `AnimTime`/`PhysicsTime` state, advanced one tick at a
   time. Durations are converted from IR seconds to ticks at runner creation.
@@ -615,6 +619,63 @@ numbers are in `eval/RESULTS-PHASE-6.md`, "Task 1: x264 gate".
 
 The determinism claims this boundary serves, and the commands that check
 them, are collected in `docs/determinism.md`.
+
+## Playback (Phase 7)
+
+`renderer/playback.ts`'s `Playback` is the preview's transport: play, pause,
+seek, restart and the end of a scene. It is headless. It owns no ticker,
+imports `pixi.js` for types only, and reaches the stage through a
+`PlaybackHost` (`build`, `attach`, `render`), so its tests drive it in Node
+with real compiled scenes. The ticker stays in `adapter.ts`; its owner calls
+`frame(deltaMS)` once per animation frame.
+
+- **Seek is replay.** Every jump in time runs the frame sampler's own loop,
+  `advanceOneTick(); paintExactTick();` per tick, from tick 0 on a fresh tree
+  built from the cached IR (Phase 7 spec §3.1). So a sought frame is the frame
+  an exporter samples at that tick, not a live frame that happens to share
+  its tick number. A forward seek is the one exception: it continues from the
+  current tick with the same loop, which reaches the same state without a
+  rebuild.
+- **Seeks are coalesced.** `seek(tick)` only records its target, clamped to
+  the scene. The next `frame()` performs the latest one and drops the rest,
+  so a scrub that fires several seeks inside one animation frame costs one
+  replay (§3.2). A performed seek leaves playback paused, which is why
+  `restart()` exists: it replays to 0 at once and plays, where `seek(0)`
+  followed by `play()` would be undone by the seek's pause on the next
+  frame.
+- **A paused frame is an exact frame.** Playing paints at the driver's
+  sub-tick `alpha`, as `adapter.ts`'s loop does. `pause()` and reaching the
+  end both repaint with `paintExactTick()`, so what stays on screen is the
+  exported frame at that tick (§3.1).
+- **A declared `duration` bounds playback** (§3.3). `endTick` is
+  `secondsToTicks(duration)`. A frame's burst of ticks is cut short at it,
+  playback pauses there, and `play()` at the end starts again from 0.
+- **An indefinite scene's bar is how far it has got.** With no `duration`,
+  `endTick` is null and seeks clamp to `reachedTick`, the furthest tick
+  played or sought. Playback pauses on the first frame `isIdle()` holds,
+  the moment `adapter.ts`'s loop stops its ticker. That test runs *after*
+  the frame's paint, because a completed runner is spliced in the paint
+  phase; asked before it, the pause would come a frame late. `play()` from
+  there continues forward rather than restarting.
+- **A start position survives a rebuild.** The constructor takes a
+  `PlaybackStart` (`tick`, `playing`), clamped to the new `endTick`, so a
+  recompile can carry the playhead across. Paused at the old end of a scene
+  whose `duration` grew, playback stays paused there, and `play()` continues
+  forward from that tick.
+
+`snapshotHash()` and `referenceHash(tick)` are the check. The first is
+`hashFrames` over the live tree's snapshot. The second builds a fresh tree,
+runs the sampler's loop for `tick` ticks and hashes that. `playback.test.ts`
+requires the two to agree on every first-party scene without text, reached
+three ways: constructed at a tick, by forward and backward seeks, and by
+playing at 1-, 7- and 12-tick bursts with sub-tick remainders and then
+pausing. Of the 26 scenes in that corpus, `compound-logo.marey`,
+`physics-pile.marey`, `dusk-hills.marey`, `yellow-flowers.marey`, `ghost.marey`
+and `logo.marey` are still moving at the paused tick, so their live paint
+differs from the exact one until `pause()` repaints; deleting that repaint
+fails all six. Scenes with `text` are left out because measuring text needs a
+DOM; the test pins the list of skipped scenes, so one cannot drop out
+unnoticed.
 
 ## Non-obvious gotchas
 

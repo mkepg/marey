@@ -75,10 +75,13 @@ Section 4 shows the output.
   in Phase 4, and the 30-vs-60 fps coincident-frame test still passed. The
   recorded reason: a completing animation's value is already snapped to its
   tick in the tick phase, so nothing in that test's fixture was left for
-  paint cadence to affect. That fixture has no `sequence` block, and whether
-  a `sequence` step could observe paint-phase state some other way is
-  untested (Phase 4 plan, execution notes; `frameSampler.ts`'s docstring).
-  Painting every tick is kept as the conservative choice.
+  paint cadence to affect. That fixture has no `sequence` block. Since
+  Phase 7, `playback.test.ts` plays every first-party scene without text at
+  the live cadence and compares it with the sampler's loop, and both
+  `sequence`-bearing scenes in that corpus, `physics-pile.marey` and
+  `compound-logo.marey`, agree (`frameSampler.ts`'s docstring). Two scenes
+  are evidence, not a proof for every scene, so painting every tick is kept
+  as the conservative choice.
 
 ## 3. The mechanism
 
@@ -111,6 +114,23 @@ apart live (`docs/architecture/renderer.md` has the measurement).
 **The sampler never sees a clock.** `sampleFrames` (`frameSampler.ts`) turns
 a frame index into a tick count and calls `advanceOneTick()` that many
 times. Frame 0 is tick 0, the scene as written.
+
+**A sought or paused frame is a sampled frame.** The preview's playback
+(`src/compiler/renderer/playback.ts`) has no seek of its own: jumping to a
+tick replays the scene from tick 0 with the sampler's loop,
+`advanceOneTick(); paintExactTick();` per tick, and pausing repaints the
+current tick with `paintExactTick()`. So the frame on screen after a seek or
+a pause is the frame an exporter samples at that tick. `Playback`'s
+`referenceHash(tick)` builds a fresh tree, runs that loop and hashes the
+result with `hashFrames`; `snapshotHash()` hashes the tree on screen. Both run
+in the same engine, so they can be compared exactly, and
+`src/compiler/renderer/playback.test.ts` requires them to agree on every
+first-party scene without text, whether it was reached by seeking or by
+playing live and pausing:
+
+```bash
+npx vitest run src/compiler/renderer/playback.test.ts
+```
 
 **Encoders never advance the simulation.** All sampling happens first, in
 `withRasterExport` (`src/compiler/export/rasterExport.ts`). The encoders

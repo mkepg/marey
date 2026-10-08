@@ -105,9 +105,14 @@ export function snapshotFor(root: Container): ObjectSnapshot[] {
  * `getCurrentVal` read tick-aligned regardless of when paint next runs.
  * Every `spawnAnim` in this suite's fixture reads a property that was either
  * never animated or was snapped that way, so paint cadence had nothing left
- * to affect. (The fixture has no `sequence` block; whether a mid-scene
- * sequence step could still observe paint-phase state some other way is
- * untested here and open.)
+ * to affect. The fixture has no `sequence` block. `playback.test.ts` covers
+ * that case: it plays every first-party scene without text at the live
+ * cadence, `paint(alpha)` once per burst of 1, 7 or 12 ticks, pauses, and
+ * requires the snapshot to equal this loop's at the paused tick. Both
+ * sequence-bearing scenes in that corpus, `src/examples/physics-pile.marey`
+ * and `eval/scenes-3b/compound-logo.marey` (which also crosses a `handoff`),
+ * come out identical at tick 480, so no sequence step there observes
+ * paint-phase state.
  *
  * Painting every tick is kept anyway, as the more conservative choice — it
  * matches the "state mutation in the tick phase, painting in the paint
