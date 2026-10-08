@@ -166,8 +166,14 @@ Three invariants that are easy to break, each of which has caused a real bug:
 
 1. **Nothing that mutates scene state may take a time argument.** `advanceOneTick()`
    advances exactly one tick. This is what will let an export driver call it in
-   a bare loop with no wall clock. `ticker.deltaMS` appears exactly once in the
-   whole renderer, inside `driver.pump()`.
+   a bare loop with no wall clock. A frame's wall-clock delta reaches the
+   renderer at one entry point per loop, and that entry point hands it to
+   `driver.pump()` and nothing else; scene state then changes only through
+   the `advanceOneTick()` calls `pump` counts out. In `adapter.ts`'s loop that
+   is `ticker.deltaMS`, which appears exactly once in the whole renderer.
+   In `playback.ts` it is `Playback.frame(deltaMS)`: the one method that
+   takes a time argument and mutates scene state, and the argument goes to
+   `driver.pump()` and nowhere else.
 2. **State mutation belongs in the tick phase, painting in the paint phase.**
    `tickAnim` advances and fires completion side effects (kinematic-count
    decrement); a `handoff`'s pin release, which flushes its velocity, runs in

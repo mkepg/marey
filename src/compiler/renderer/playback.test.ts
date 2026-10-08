@@ -358,6 +358,7 @@ describe("Playback · state", () => {
     pb.restart();
     expect(pb.getState()).toMatchObject({ tick: 0, playing: true });
     expect(host.builds).toBe(before + 1);
+    expect(pb.snapshotHash()).toBe(pb.referenceHash(0));
     pb.frame(TICK_MS * 1.5);
     expect(pb.getState().tick).toBe(1);
 
@@ -366,5 +367,7 @@ describe("Playback · state", () => {
     pb.play();
     pb.frame(0);
     expect(pb.getState()).toMatchObject({ tick: 0, playing: false });
+    // Tick 0 is the sampler's frame 0, the tree as built.
+    expect(pb.snapshotHash()).toBe(pb.referenceHash(0));
   });
 });

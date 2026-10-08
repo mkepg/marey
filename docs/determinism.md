@@ -21,9 +21,11 @@ Given the same source and the same engine build:
 
 - **The simulation state at every output frame is identical.** `hashFrames`
   (`src/compiler/export/frameHash.ts`) hashes the sampled state of every
-  object at every frame: position, rotation, scale, alpha, visibility. The
-  values are not rounded first, so a difference in the last bit changes the
-  hash. `marey export` prints this hash as `frames <hash>`.
+  object at every frame, as `snapshotFor` (`frameSampler.ts`) reads it: its
+  id, position, rotation, scale, alpha, visibility and colour (null for a
+  group), with each frame's index and tick. The values are not rounded
+  first, so a difference in the last bit changes the hash. `marey export`
+  prints this hash as `frames <hash>`.
 - **The file bytes are identical** for `png`, `apng`, `webm` and `lottie`.
   `marey export` prints their SHA-256 as `sha256 <hex>`.
 
@@ -116,10 +118,12 @@ a frame index into a tick count and calls `advanceOneTick()` that many
 times. Frame 0 is tick 0, the scene as written.
 
 **A sought or paused frame is a sampled frame.** The preview's playback
-(`src/compiler/renderer/playback.ts`) has no seek of its own: jumping to a
-tick replays the scene from tick 0 with the sampler's loop,
-`advanceOneTick(); paintExactTick();` per tick, and pausing repaints the
-current tick with `paintExactTick()`. So the frame on screen after a seek or
+(`src/compiler/renderer/playback.ts`) has no seek of its own. Jumping back
+rebuilds the scene and replays it from tick 0 with the sampler's loop,
+`advanceOneTick(); paintExactTick();` per tick. Jumping forward continues
+from the current tick with the same loop, so it reaches the same state
+without a rebuild. Pausing repaints the current tick with
+`paintExactTick()`. So the frame on screen after a seek or
 a pause is the frame an exporter samples at that tick. `Playback`'s
 `referenceHash(tick)` builds a fresh tree, runs that loop and hashes the
 result with `hashFrames`; `snapshotHash()` hashes the tree on screen. Both run
