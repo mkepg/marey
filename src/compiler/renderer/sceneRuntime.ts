@@ -115,7 +115,7 @@ function applyAnim(ra: RunningAnim, p: number): void {
   if (ra.anim.property === "alpha") {
     ra.container.alpha = lerp(ra.startVal as number, ra.targetVal as number, e);
   } else if (ra.anim.property === "rotation") {
-    ra.container.rotation = lerp(ra.startVal as number, ra.targetVal as number, e) * (Math.PI / 180);
+    ra.container.rotation = lerp(ra.startVal as number, ra.targetVal as number, e);
   } else if (ra.anim.property === "position" && ra.container.__mareyLayout) {
     const layout = ra.container.__mareyLayout;
     const startPt = ra.startVal as IRPoint;
@@ -159,7 +159,11 @@ function getCurrentVal(container: Container, prop: string): number | IRPoint {
       ? { x: container.__mareyLayout.currentScale.x, y: container.__mareyLayout.currentScale.y }
       : (container.__startProps ? { x: container.__startProps.scale.x, y: container.__startProps.scale.y } : { x: 1, y: 1 });
   }
-  if (prop === "rotation") return container.rotation * (180 / Math.PI);
+  // Radians, as the container holds it. A rotation runner works in radians so
+  // its start is the container's own value, bit for bit: reading it back as
+  // degrees and converting again lost the last bit, and progress 0 then
+  // painted a different angle from the one the object started at.
+  if (prop === "rotation") return container.rotation;
   if (prop === "alpha") return container.alpha;
   if (prop === "color") return container.__mareyLayout?.currentColor ?? 0;
   return 0;
@@ -415,8 +419,8 @@ export class SceneRuntime {
       // body's angle for the rest of the scene, because this runner is spliced
       // in the paint phase and nothing would ever clear it again.
       if (completedThisTick) return;
-      const deg = lerp(ra.startVal as number, ra.targetVal as number, e);
-      this.world.overrideAngle(id, bodyTransformOf(ra.container).rot + deg * (Math.PI / 180));
+      const rad = lerp(ra.startVal as number, ra.targetVal as number, e);
+      this.world.overrideAngle(id, bodyTransformOf(ra.container).rot + rad);
     } else if (ra.anim.property === "scale") {
       const startPt = ra.startVal as IRPoint;
       const targetPt = ra.targetVal as IRPoint;
@@ -535,6 +539,8 @@ export class SceneRuntime {
       tVal = { x: tVal, y: tVal };
     }
     if (anim.property === "color") tVal = colorToInt(anim.to as IRColor);
+    // `to` is authored in degrees; the runner holds radians (see getCurrentVal).
+    if (anim.property === "rotation") tVal = (anim.to as number) * (Math.PI / 180);
 
     const ra: RunningAnim = {
       container, anim,

@@ -759,6 +759,27 @@ describe("SceneRuntime · origin through the physics seam", () => {
 });
 
 describe("SceneRuntime · paint phase", () => {
+  it("paints a rotation animation's start as the exact angle the builder set", () => {
+    // The builder writes `degrees * (π / 180)`. A runner that read that back as
+    // degrees and converted it again painted -0.0523598775598299 at progress 0
+    // for an authored -3°, one bit off the -0.05235987755982989 it started at.
+    const c = makeContainer({
+      animations: [anim({ property: "rotation", to: 3, duration: 2, yoyo: true, loop: true })],
+    });
+    const built = -3 * (Math.PI / 180);
+    c.rotation = built;
+    const rt = new SceneRuntime(new RecordingWorld(), makeRoot(c));
+
+    rt.paintExactTick();
+    expect(c.rotation).toBe(built);
+    // And again where a yoyo cycle returns to its start, at 4 s.
+    for (let i = 0; i < 4 * TICK_HZ; i++) {
+      rt.advanceOneTick();
+      rt.paintExactTick();
+    }
+    expect(c.rotation).toBe(built);
+  });
+
   it("splices completed runners so isIdle can become true", () => {
     const c = makeContainer({ animations: [anim({ property: "alpha", to: 0 })] });
     const world = new RecordingWorld();
