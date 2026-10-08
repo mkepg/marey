@@ -2,6 +2,7 @@ import type { FunctionComponent, RefObject } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { useAppStore } from "../../store";
 import { captionFor, plateRect, type Size } from "./plateGeometry";
+import { Transport } from "./Transport";
 import styles from "./Preview.module.scss";
 
 interface PreviewProps {
@@ -72,6 +73,7 @@ export const Preview: FunctionComponent<PreviewProps> = ({ hostRef }) => {
           <div className={styles.emptyText}>No preview</div>
         </div>
       )}
+      <Transport />
     </div>
   );
 };

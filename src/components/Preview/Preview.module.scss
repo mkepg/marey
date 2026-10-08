@@ -30,9 +30,12 @@
   }
 }
 
+// The transport strip is 32 px tall and sits along the pane's bottom edge, so
+// the host and the plate layer end above it.
 .host {
   position: absolute;
   inset: var(--plate-margin);
+  bottom: calc(var(--plate-margin) + 32px);
 
   canvas {
     display: block;
@@ -45,6 +48,7 @@
 .plateLayer {
   position: absolute;
   inset: var(--plate-margin);
+  bottom: calc(var(--plate-margin) + 32px);
   pointer-events: none;
 }
 
@@ -56,7 +60,7 @@
 @media (max-width: 759px) {
   .host,
   .plateLayer {
-    bottom: calc(var(--plate-margin) + 22px);
+    bottom: calc(var(--plate-margin) + 22px + 32px);
   }
 }
 

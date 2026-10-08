@@ -1,12 +1,22 @@
 import { Application, Container, Graphics, Ticker } from "pixi.js";
 import type { IRSceneNode } from "../sceneIR";
 import { buildNode } from "./builder";
-import { LiveDriver } from "./clock";
+import { secondsToTicks } from "./clock";
 import { MatterWorld } from "./physicsWorld";
+import { Playback } from "./playback";
+import type { PlaybackController, PlaybackHost, PlaybackStart } from "./playback";
 import { SceneRuntime } from "./sceneRuntime";
 
+/** The controller the playground drives; `inner` is for the dev seam's hashes. */
+export type LivePlayback = PlaybackController & { readonly inner: Playback };
+
 export interface IRendererAdapter {
-  render(scene: IRSceneNode, host: HTMLDivElement, isDark: boolean): Promise<() => void>;
+  render(
+    scene: IRSceneNode,
+    host: HTMLDivElement,
+    isDark: boolean,
+    start?: PlaybackStart,
+  ): Promise<{ cleanup: () => void; playback: LivePlayback }>;
 }
 
 let sharedApp: Application | null = null;
@@ -16,8 +26,9 @@ export const pixiRendererAdapter: IRendererAdapter = {
   async render(
     scene: IRSceneNode,
     hostElement: HTMLDivElement,
-    _isDark: boolean
-  ): Promise<() => void> {
+    _isDark: boolean,
+    start?: PlaybackStart,
+  ): Promise<{ cleanup: () => void; playback: LivePlayback }> {
     await Promise.race([
       document.fonts.ready,
       new Promise<void>((resolve) => setTimeout(resolve, 2000)),
@@ -60,9 +71,8 @@ export const pixiRendererAdapter: IRendererAdapter = {
     sceneRoot.addChild(boundsMask);
     sceneRoot.mask = boundsMask;
 
-    for (const node of scene.children) {
-      sceneRoot.addChild(buildNode(node));
-    }
+    const objectsLayer = new Container();
+    sceneRoot.addChild(objectsLayer);
 
     const logicalWidth  = scene.width;
     const logicalHeight = scene.height;
@@ -101,32 +111,50 @@ export const pixiRendererAdapter: IRendererAdapter = {
     }
     updateLayout();
 
-    const world = new MatterWorld(logicalWidth, logicalHeight);
-    const runtime = new SceneRuntime(world, sceneRoot);
-    const driver = new LiveDriver();
-
-    // The loop: pump -> advance N ticks -> paint once at the sub-tick alpha.
-    // `ticker.deltaMS` appears exactly once in the whole renderer, here.
-    activeTickerCallback = (ticker: Ticker) => {
-      const ticks = driver.pump(ticker.deltaMS);
-
-      for (let t = 0; t < ticks; t++) {
-        runtime.advanceOneTick();
-      }
-
-      runtime.paint(driver.alpha);
-
-      if (runtime.isIdle()) {
-        sharedApp?.ticker.stop();
-      }
+    const host: PlaybackHost = {
+      build() {
+        const root = new Container();
+        for (const node of scene.children) root.addChild(buildNode(node));
+        const runtime = new SceneRuntime(new MatterWorld(logicalWidth, logicalHeight), root);
+        return { root, runtime };
+      },
+      attach(root) {
+        for (const old of objectsLayer.removeChildren()) old.destroy({ children: true });
+        objectsLayer.addChild(root);
+      },
+      render() {
+        sharedApp?.render();
+      },
     };
 
-    sharedApp.ticker.start();
-    sharedApp.ticker.add(activeTickerCallback);
+    const endTick = scene.duration === null ? null : secondsToTicks(scene.duration);
+    // A scene with nothing remembered plays from 0, as the preview always has.
+    const from = start ?? { tick: 0, playing: true };
+    const playback = new Playback(host, endTick, from);
 
-    return () => {
+    // `ticker.deltaMS` still appears exactly once in the renderer: here.
+    activeTickerCallback = (ticker: Ticker) => {
+      playback.frame(ticker.deltaMS);
+      if (!playback.getState().playing && !playback.hasPendingSeek()) sharedApp?.ticker.stop();
+    };
+    sharedApp.ticker.add(activeTickerCallback);
+    const wake = (): void => { sharedApp?.ticker.start(); };
+
+    const control: LivePlayback = {
+      inner: playback,
+      play: () => { playback.play(); wake(); },
+      pause: () => playback.pause(),
+      seek: (tick) => { playback.seek(tick); wake(); },
+      restart: () => { playback.restart(); wake(); },
+      subscribe: (l) => playback.subscribe(l),
+      getState: () => playback.getState(),
+    };
+
+    if (playback.getState().playing) wake();
+
+    const cleanup = (): void => {
       resizeObserver.disconnect();
-      runtime.destroy();
+      playback.destroy();
       if (sharedApp) {
         const oldChildren = sharedApp.stage.removeChildren();
         oldChildren.forEach(c => c.destroy({ children: true, texture: true }));
@@ -137,5 +165,7 @@ export const pixiRendererAdapter: IRendererAdapter = {
         }
       }
     };
+
+    return { cleanup, playback: control };
   },
 };

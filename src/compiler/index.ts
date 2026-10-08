@@ -1,9 +1,12 @@
 import type { CompileResult, LogEntry, CompilerError, LintResult } from "./types";
 import type { IRSceneNode } from "./sceneIR";
 import { renderScene } from "./renderer";
+import type { LivePlayback } from "./renderer";
+import type { PlaybackStart } from "./renderer/playback";
 
 export interface CompileResultWithCleanup extends CompileResult {
   cleanup: (() => void) | null;
+  playback: LivePlayback | null;
   _irPayload?: IRSceneNode;
 }
 
@@ -21,7 +24,8 @@ function createWorker(): Worker {
         success: false,
         logs: [{ kind: "error", text: `[system] Compiler crashed or ran out of memory: ${err.message}` }],
         errors: [{ phase: "SYSTEM", message: `Compiler crashed: ${err.message}` }],
-        cleanup: null
+        cleanup: null,
+        playback: null,
       });
       activeCompileResolve = null;
     }
@@ -53,7 +57,7 @@ function createWorker(): Worker {
       const errors: CompilerError[] = data.errors || [];
 
       if (!data.success || !data.ir) {
-        resolve({ logs, errors, success: false, cleanup: null });
+        resolve({ logs, errors, success: false, cleanup: null, playback: null });
         return;
       }
 
@@ -61,14 +65,14 @@ function createWorker(): Worker {
         // Optimization: Parse the JSON string payload 
         const sceneIR = (typeof data.ir === "string" ? JSON.parse(data.ir) : data.ir) as IRSceneNode;
         logs.push({ kind: "info", text: "[pixi]    initialising renderer..." });
-        resolve({ logs, errors: [], success: true, cleanup: null, _irPayload: sceneIR });
+        resolve({ logs, errors: [], success: true, cleanup: null, playback: null, _irPayload: sceneIR });
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         logs.push({
           kind: "error",
           text: `[render]  ${errorMsg}`
         });
-        resolve({ logs, errors: [{ phase: "RENDER", message: errorMsg }], success: false, cleanup: null });
+        resolve({ logs, errors: [{ phase: "RENDER", message: errorMsg }], success: false, cleanup: null, playback: null });
       }
     }
   };
@@ -79,13 +83,14 @@ function createWorker(): Worker {
 export async function compile(
   source: string,
   hostElement: HTMLDivElement,
-  isDark: boolean | (() => boolean)
+  isDark: boolean | (() => boolean),
+  start?: PlaybackStart,
 ): Promise<CompileResultWithCleanup> {
   currentJobId += 1;
   const jobId = currentJobId;
 
   if (activeCompileResolve) {
-    activeCompileResolve({ logs: [], errors: [], success: false, cleanup: null });
+    activeCompileResolve({ logs: [], errors: [], success: false, cleanup: null, playback: null });
     activeCompileResolve = null;
   }
 
@@ -102,7 +107,7 @@ export async function compile(
 
       try {
         const currentIsDark = typeof isDark === "function" ? isDark() : isDark;
-        const cleanup = await renderScene(result._irPayload, hostElement, currentIsDark);
+        const { cleanup, playback } = await renderScene(result._irPayload, hostElement, currentIsDark, start);
         
         const elapsed = (performance.now() - t0).toFixed(1);
         result.logs.push({
@@ -110,11 +115,11 @@ export async function compile(
           text: `[pixi]    rendered via WebGL/WebGPU in ${elapsed}ms`,
         });
 
-        resolve({ ...result, cleanup });
+        resolve({ ...result, cleanup, playback });
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         result.logs.push({ kind: "error", text: `[render]  ${errorMsg}` });
-        resolve({ logs: result.logs, errors: [{ phase: "RENDER", message: errorMsg }], success: false, cleanup: null });
+        resolve({ logs: result.logs, errors: [{ phase: "RENDER", message: errorMsg }], success: false, cleanup: null, playback: null });
       }
     };
 

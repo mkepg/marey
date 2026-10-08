@@ -51,4 +51,10 @@ if (import.meta.env.DEV) {
   import("./lib/devApngSeam")
     .then((m) => m.installApngSeam())
     .catch((err) => console.error("[devApngSeam] failed to install:", err));
+
+  // Same reasoning, same shape, for the playback harness
+  // (`window.__mareyPlayback`).
+  import("./lib/devPlaybackSeam")
+    .then((m) => m.installPlaybackSeam())
+    .catch((err) => console.error("[devPlaybackSeam] failed to install:", err));
 }

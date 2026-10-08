@@ -5,6 +5,7 @@ import {
   saveToStorage,
   encodeCode,
 } from "../lib/share";
+import type { PlaybackController, PlaybackState } from "../compiler/renderer/playback";
 import { EXAMPLES, DEFAULT_EXAMPLE, type ExampleId } from "../examples";
 
 /** The scene loaded when there is no saved or shared document. */
@@ -42,6 +43,8 @@ export interface AppState {
   isExporting: boolean;
   fileId: number;
   sceneInfo: SceneInfo | null;
+  playback: PlaybackState | null;
+  playbackController: PlaybackController | null;
   setCode: (code: string) => void;
   toggleTheme: () => void;
   setLogs: (logs: LogEntry[]) => void;
@@ -55,6 +58,8 @@ export interface AppState {
   setIsCompiling: (val: boolean) => void;
   setIsExporting: (val: boolean) => void;
   setSceneInfo: (info: SceneInfo | null) => void;
+  setPlayback: (state: PlaybackState | null) => void;
+  setPlaybackController: (controller: PlaybackController | null) => void;
 }
 
 const THEME_STORAGE_KEY = "marey_theme";
@@ -92,6 +97,8 @@ export const useAppStore = create<AppState>((set) => ({
   isExporting: false,
   fileId: 0,
   sceneInfo: null,
+  playback: null,
+  playbackController: null,
   setCode: (code) =>
     set({ code, isTooLargeToShare: computeIsTooLarge(code) }),
   toggleTheme: () =>
@@ -121,6 +128,7 @@ export const useAppStore = create<AppState>((set) => ({
       logs: [],
       errors: [],
       compileStatus: "idle",
+      playback: null,
       isTooLargeToShare: false,
       fileId: s.fileId + 1,
     }));
@@ -136,6 +144,7 @@ export const useAppStore = create<AppState>((set) => ({
       logs: [],
       errors: [],
       compileStatus: "idle",
+      playback: null,
       isTooLargeToShare: computeIsTooLarge(source),
       fileId: s.fileId + 1,
     }));
@@ -144,4 +153,6 @@ export const useAppStore = create<AppState>((set) => ({
   setIsCompiling: (val) => set({ isCompiling: val }),
   setIsExporting: (val) => set({ isExporting: val }),
   setSceneInfo:   (sceneInfo) => set({ sceneInfo }),
+  setPlayback:    (playback) => set({ playback }),
+  setPlaybackController: (playbackController) => set({ playbackController }),
 }));

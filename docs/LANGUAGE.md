@@ -56,10 +56,9 @@ logical dimensions are mapped onto the preview area, which may be any size:
 write, and physics is simulated in logical units regardless of it.
 
 `duration` is optional and takes a positive number of seconds. It declares
-the scene's finite length, which is what an exporter samples — nothing
-consumes it for playback, and the preview plays on regardless of whether it
-is set. A scene that omits it is **indefinite** — it still plays in the
-preview, but it cannot be exported without an explicit export bound.
+the scene's length: the preview stops there, and an exporter samples up to
+it. A scene that omits it is **indefinite** — the preview plays on until the
+scene comes to rest, and export needs an explicit bound.
 
 Unlike `physics`, `scene` does **not** accept `duration: indefinitely`
 (`TYPE_SCENE_DURATION_INDEFINITE`). An indefinite scene is written by leaving
