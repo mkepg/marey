@@ -164,6 +164,11 @@ describe("Playback · seeking equals playing, on every first-party scene without
     const endTick = endTickOf(ir);
     const T = Math.min(endTick ?? 480, 480);
 
+    // Tick 0 is the sampler's frame 0: the tree as built, before any advance.
+    const fresh = new Playback(new TestHost(ir), endTick);
+    expect(fresh.snapshotHash(), `${name}: tick 0`).toBe(fresh.referenceHash(0));
+    fresh.destroy();
+
     const straight = new Playback(new TestHost(ir), endTick, { tick: T, playing: false });
     expect(straight.getState().tick, `${name}: straight tick`).toBe(T);
     expect(straight.snapshotHash(), `${name}: straight`).toBe(straight.referenceHash(T));
