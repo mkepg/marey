@@ -55,7 +55,7 @@ export const pixiRendererAdapter: IRendererAdapter = {
     }
 
     const oldChildren = sharedApp.stage.removeChildren();
-    oldChildren.forEach(c => c.destroy({ children: true, texture: true }));
+    oldChildren.forEach(c => c.destroy({ children: true, texture: true, context: true }));
 
     const sceneRoot = new Container();
     sharedApp.stage.addChild(sceneRoot);
@@ -103,6 +103,9 @@ export const pixiRendererAdapter: IRendererAdapter = {
     const resizeObserver = new ResizeObserver(() => {
       sharedApp?.resize();
       updateLayout();
+      // Resizing clears the canvas, and a paused or ended scene has no ticker
+      // running to draw it again.
+      sharedApp?.render();
     });
     resizeObserver.observe(hostElement);
 
@@ -119,11 +122,13 @@ export const pixiRendererAdapter: IRendererAdapter = {
         return { root, runtime };
       },
       attach(root) {
-        for (const old of objectsLayer.removeChildren()) old.destroy({ children: true });
+        for (const old of objectsLayer.removeChildren()) old.destroy({ children: true, context: true });
         objectsLayer.addChild(root);
       },
       render() {
-        sharedApp?.render();
+        // While the ticker runs, the application's own render step draws every
+        // frame; drawing here as well would paint each playing frame twice.
+        if (sharedApp && !sharedApp.ticker.started) sharedApp.render();
       },
     };
 
@@ -133,11 +138,12 @@ export const pixiRendererAdapter: IRendererAdapter = {
     const playback = new Playback(host, endTick, from);
 
     // `ticker.deltaMS` still appears exactly once in the renderer: here.
-    activeTickerCallback = (ticker: Ticker) => {
+    const tickerCallback = (ticker: Ticker): void => {
       playback.frame(ticker.deltaMS);
       if (!playback.getState().playing && !playback.hasPendingSeek()) sharedApp?.ticker.stop();
     };
-    sharedApp.ticker.add(activeTickerCallback);
+    activeTickerCallback = tickerCallback;
+    sharedApp.ticker.add(tickerCallback);
     const wake = (): void => { sharedApp?.ticker.start(); };
 
     const control: LivePlayback = {
@@ -156,12 +162,15 @@ export const pixiRendererAdapter: IRendererAdapter = {
       resizeObserver.disconnect();
       playback.destroy();
       if (sharedApp) {
-        const oldChildren = sharedApp.stage.removeChildren();
-        oldChildren.forEach(c => c.destroy({ children: true, texture: true }));
+        // Only this render's own tree: a newer render may already own the stage.
+        sceneRoot.destroy({ children: true, texture: true, context: true });
 
-        if (activeTickerCallback) {
-          sharedApp.ticker.remove(activeTickerCallback);
+        // Only this render's own callback: a stale render's cleanup must not
+        // remove a newer one's.
+        sharedApp.ticker.remove(tickerCallback);
+        if (activeTickerCallback === tickerCallback) {
           activeTickerCallback = null;
+          sharedApp.ticker.stop();
         }
       }
     };
