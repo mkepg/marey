@@ -360,6 +360,18 @@ export class MatterWorld implements IPhysicsWorld {
     // parent's, so the parent is the only one that needs it.
     body.deltaTime = MATTER_DELTA_MS;
     Matter.Body.setAngle(body, angle);
+    // setAngle turns the body about its centre of mass, which carries the
+    // reference point off (x, y) whenever the offset is not zero (a polygon or
+    // a compound). Put it back, exactly as `setPosition` places a body: centre
+    // of mass = reference point − offset rotated to the body's angle.
+    if (angle !== 0 && (offsetX !== 0 || offsetY !== 0)) {
+      const c = Math.cos(body.angle);
+      const s = Math.sin(body.angle);
+      Matter.Body.setPosition(body, {
+        x: x - (offsetX * c - offsetY * s),
+        y: y - (offsetX * s + offsetY * c),
+      });
+    }
 
     const rec: BodyRecord = {
       body,

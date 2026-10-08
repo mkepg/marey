@@ -510,13 +510,44 @@ describe("compound bodies (spec D16, D18)", () => {
         { kind: "rectangle", width: 20, height: 20, x: -50, y: 0, angle: 0 },
         { kind: "rectangle", width: 60, height: 60, x: 50, y: 0, angle: 0 },
       ],
-    }, 400, 100, Math.PI / 2, VACUUM);
+    }, 400, 100, 0, VACUUM);
+    world.overrideAngle("g", Math.PI / 2);
+    world.step();
 
     // Rotating 90deg about the centre of mass at (440, 100) carries the origin
     // from (400, 100) to (440, 60). Measured against Matter 0.20.0.
     const state = world.readState("g", 1)!;
     expect(state.x).toBeCloseTo(440, 4);
     expect(state.y).toBeCloseTo(60, 4);
+    world.destroy();
+  });
+
+  it("places a body added at an angle with its reference point on the authored point", () => {
+    // `Body.setAngle` turns a body about its centre of mass. For a compound or
+    // a polygon the reference point is off that centre, so without a
+    // correction it lands (I - R)·offset away from where it was authored,
+    // and the first paint moves the object there. The logo test scene, a
+    // three-bar group at 18°, came out 5.2 px off.
+    const angle = (18 * Math.PI) / 180;
+    const world = new MatterWorld(800, 600);
+    world.addBody("g", {
+      kind: "compound",
+      parts: [
+        { kind: "rectangle", width: 26, height: 130, x: 0, y: 0, angle: 0 },
+        { kind: "rectangle", width: 52, height: 26, x: 38, y: -46, angle: 0 },
+        { kind: "rectangle", width: 40, height: 26, x: 30, y: 12, angle: 0 },
+      ],
+    }, 360, 90, angle, VACUUM);
+    world.addBody("t", { kind: "polygon", points: TRIANGLE }, 400, 300, angle, VACUUM);
+
+    for (const [id, x, y] of [["g", 360, 90], ["t", 400, 300]] as const) {
+      for (const alpha of [0, 1]) {
+        const s = world.readState(id, alpha)!;
+        expect(s.x, `${id} x at alpha ${alpha}`).toBeCloseTo(x, 9);
+        expect(s.y, `${id} y at alpha ${alpha}`).toBeCloseTo(y, 9);
+        expect(s.angle, `${id} angle at alpha ${alpha}`).toBe(angle);
+      }
+    }
     world.destroy();
   });
 
