@@ -887,7 +887,7 @@ describe("nextStart", () => {
 });
 ```
 
-**Review Focus 5** is a property of `useCompile`, not of a pure function: the playhead is remembered only from the controller of the compile that is currently displayed. Implement it so the subscription is attached only after the `currentId !== compileIdRef.current` race check has passed, and the previous controller's subscription is removed in the same place the previous `cleanup` is called. Task 7's browser check exercises rapid edits, and that check is where this property is pinned.
+**Review Focus 5** is a property of `useCompile`, not of a pure function: the playhead is remembered only from the controller of the compile that is currently displayed. Implement it so the subscription is attached only after the `currentId !== compileIdRef.current` race check has passed, and the previous controller's subscription is removed in the same place the previous `cleanup` is called. Task 7's browser check exercises rapid edits.
 
 - [ ] **Step 2: Run them to verify they fail** — `playhead.ts` does not exist.
 

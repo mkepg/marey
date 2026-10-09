@@ -355,7 +355,7 @@ async function checkRecompile(page) {
   const elapsedMs = after.now - before.now;
   const maxTick = Math.floor(before.tick + elapsedMs * TICKS_PER_MS + FRAME_SLACK_TICKS);
   rapid.push({ tickBefore: before.tick, tickAfter: after.tick, elapsedMs: Math.round(elapsedMs), maxTick, endTick: after.endTick, hashesEqual: after.snap === after.ref });
-  record(ctx, "five edits 100 ms apart while playing: the last edit's scene is on screen and the playhead continued",
+  record(ctx, "five edits 100 ms apart while playing: the last edit's scene is on screen and the playhead is bounded by wall time",
     after.endTick === finalEnd && after.snap === after.ref && after.tick >= before.tick && after.tick <= maxTick && after.tick < finalEnd - 600,
     `endTick ${after.endTick} (last edit duration 34 s = ${finalEnd}), tick ${before.tick} -> ${after.tick} in ${Math.round(elapsedMs)} ms (max ${maxTick}), hashes ${after.snap === after.ref ? "equal" : "differ"}`);
 }

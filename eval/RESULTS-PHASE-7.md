@@ -358,9 +358,11 @@ scenes (all rows are in `run.log`). An hour of play (432,000 ticks) on
 scenes stays active: each comes to rest between tick 221 and tick 744
 (`run.log`, "idle tick"), the preview pauses it there, and play then advances
 it only a frame at a time, so its carried playhead stays near the rest tick.
-Their 72,000-tick rows are the cost of a physics scene kept running, for
-example by a looping animation beside it; the only such scene in the corpus,
-`test-card.marey`, has `text` and cannot run headless. These are Node
+Their 72,000-tick rows replay a world that has been at rest since its idle
+tick, so they time a physics scene stepped past rest, not one that stays
+active. A physics scene kept active, for example by a looping animation beside
+it, was not measured; the only such scene in the corpus, `test-card.marey`,
+has `text` and cannot run headless. These are Node
 figures; in the browser the same replay runs on the editor's main thread,
 and it was not timed there.
 

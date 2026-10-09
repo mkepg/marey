@@ -674,11 +674,13 @@ with real compiled scenes. The ticker stays in `adapter.ts`; its owner calls
   ticks while it plays, so every edit pays for all of them on the main thread
   before the new scene's first frame. Measured headlessly on 2026-10-09
   (median of three, Node): `stagger-bars.marey`, a looping animation, 19.5 ms
-  at 7,200 ticks (1 min) and 182.8 ms at 72,000 ticks (10 min); the physics
-  scene `pile.marey` 21.6 ms and 540.2 ms. `eval/RESULTS-PHASE-7.md`,
-  "Recompile replay cost", has the table and the output file. Spec §3.5 keeps
-  the playhead across recompiles for indefinite scenes too, so this is
-  recorded rather than bounded.
+  at 7,200 ticks (1 min) and 182.8 ms at 72,000 ticks (10 min). The physics
+  scene `pile.marey` took 21.6 ms and 540.2 ms, but it comes to rest at tick
+  314 and the preview pauses it there, so its carried playhead stays near 314
+  and those two figures time a world stepped past rest.
+  `eval/RESULTS-PHASE-7.md`, "Recompile replay cost", has the table and the
+  output file. Spec §3.5 keeps the playhead across recompiles for indefinite
+  scenes too, so this is recorded rather than bounded.
 
 `snapshotHash()` and `referenceHash(tick)` are the check. The first is
 `hashFrames` over the live tree's snapshot. The second builds a fresh tree,
