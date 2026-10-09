@@ -50,7 +50,6 @@ const EXAMPLES = [
   { id: "physics-pile", index: 1 },
   { id: "bar-chart-reveal", index: 2 },
   { id: "logo-reveal", index: 3 },
-  { id: "yellow-flowers", index: 4 },
   { id: "dusk-hills", index: 0 },
 ];
 const FIXTURE = readFileSync(resolve("tools/visual-check/scenes/color-sequence.marey"), "utf8");
@@ -188,7 +187,7 @@ async function waitRecompiled(page, tick, old) {
   await ready(page);
 }
 
-// --- 1 to 3: the five examples -------------------------------------------------
+// --- 1 to 3: the examples ------------------------------------------------------
 
 async function checkExample(page, ex) {
   const ctx = ex.id;

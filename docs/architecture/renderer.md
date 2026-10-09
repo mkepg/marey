@@ -690,9 +690,10 @@ three ways: constructed at a tick, by forward and backward seeks, and by
 playing at 1-, 7- and 12-tick bursts with sub-tick remainders and then
 pausing. As measured on 2026-10-08, six scenes in that corpus,
 `compound-logo.marey`, `physics-pile.marey`, `dusk-hills.marey`,
-`yellow-flowers.marey`, `ghost.marey` and `logo.marey`, are still moving at
-the paused tick, so their live paint differs from the exact one until
-`pause()` repaints; deleting that repaint fails all six. Scenes with `text`
+`yellow-flowers.marey` (an example removed on 2026-10-10), `ghost.marey` and
+`logo.marey`, were still moving at the paused tick, so their live paint
+differed from the exact one until `pause()` repainted; deleting that repaint
+failed all six. Scenes with `text`
 are left out because measuring text needs a DOM; the test pins the list of
 skipped scenes, so one cannot drop out unnoticed.
 
