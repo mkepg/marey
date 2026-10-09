@@ -128,7 +128,6 @@ export const useAppStore = create<AppState>((set) => ({
       logs: [],
       errors: [],
       compileStatus: "idle",
-      playback: null,
       isTooLargeToShare: false,
       fileId: s.fileId + 1,
     }));
@@ -144,7 +143,6 @@ export const useAppStore = create<AppState>((set) => ({
       logs: [],
       errors: [],
       compileStatus: "idle",
-      playback: null,
       isTooLargeToShare: computeIsTooLarge(source),
       fileId: s.fileId + 1,
     }));

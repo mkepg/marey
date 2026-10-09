@@ -13,13 +13,16 @@ export const Transport: FunctionComponent = () => {
       <button type="button" className={styles.button} data-transport-toggle
         aria-label={state.playing ? "Pause" : "Play"}
         onClick={() => (state.playing ? control.pause() : control.play())}>
-        {state.playing ? "❚❚" : "▶"}
+        {/* U+FE0E asks for the text form of ▶, which some platforms (macOS,
+            iOS) otherwise draw as an emoji. ❚ and ↺ have no emoji form. */}
+        {state.playing ? "❚❚" : "▶\uFE0E"}
       </button>
       <button type="button" className={styles.button} data-transport-restart aria-label="Restart"
         onClick={() => control.restart()}>
         ↺
       </button>
       <input type="range" className={styles.scrub} data-transport-scrub aria-label="Playhead"
+        aria-valuetext={formatPlayhead(state)}
         min={0} max={max} step={1} value={state.tick}
         onInput={(e) => control.seek(Number((e.target as HTMLInputElement).value))} />
       <span className={styles.readout} data-transport-readout>{formatPlayhead(state)}</span>
