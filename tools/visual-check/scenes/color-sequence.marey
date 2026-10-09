@@ -2,7 +2,8 @@
 // `color`; `duration: 2` is 60 frames at 30 fps, so frame N is tick N * 4.
 //
 // - swatch: a two-step sequence; the second step starts from the colour the
-//   first left, with the step boundary at tick 120.
+//   first left, with the step boundary at tick 121 (tick 120 plus the
+//   sequence's one-tick start).
 // - pulse: a looping yoyo with a 60-tick leg, so its phase repeats every 120
 //   ticks and the sampled frames land on both legs.
 // - stroke: a thick diagonal line; its midpoint is (650, 300).

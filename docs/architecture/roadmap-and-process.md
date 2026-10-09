@@ -293,9 +293,11 @@ explicitly rather than quietly deviating.
     playhead kept across recompiles and reset when the file is replaced;
     playback that stops at a declared `duration`; and the dev-only
     `window.__mareyPlayback` seam. Evidence is in `eval/RESULTS-PHASE-7.md`:
-    colour matches across every output, static output is byte-identical,
-    seeking equals playing on 25 scenes headless and on all five examples in
-    the browser (`tools/visual-check/transport-check.mjs`). Design:
+    colour matches across every output; static output is byte-identical
+    except two Lottie documents, which changed in the last digit through the
+    rotation fix (`3a32c8a`); seeking equals playing on 25 scenes headless
+    and on all five examples in the browser
+    (`tools/visual-check/transport-check.mjs`). Design:
     `docs/specs/2026-10-07-marey-phase-7-motion-graphics-core-design.md`.
     Plan: `docs/plans/2026-10-07-phase-7-motion-graphics-core.md`.
 - **Phase 8 — remaining physics syntax.** `world`, `lockPosition`,

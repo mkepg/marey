@@ -668,6 +668,17 @@ with real compiled scenes. The ticker stays in `adapter.ts`; its owner calls
   recompile can carry the playhead across. Paused at the old end of a scene
   whose `duration` grew, playback stays paused there, and `play()` continues
   forward from that tick.
+- **A stated limit: a recompile of an indefinite scene replays every tick
+  played so far.** The constructor reaches its start tick by replay, and an
+  indefinite scene that never comes to rest (any `loop: true`) keeps adding
+  ticks while it plays, so every edit pays for all of them on the main thread
+  before the new scene's first frame. Measured headlessly on 2026-10-09
+  (median of three, Node): `stagger-bars.marey`, a looping animation, 19.5 ms
+  at 7,200 ticks (1 min) and 182.8 ms at 72,000 ticks (10 min); the physics
+  scene `pile.marey` 21.6 ms and 540.2 ms. `eval/RESULTS-PHASE-7.md`,
+  "Recompile replay cost", has the table and the output file. Spec §3.5 keeps
+  the playhead across recompiles for indefinite scenes too, so this is
+  recorded rather than bounded.
 
 `snapshotHash()` and `referenceHash(tick)` are the check. The first is
 `hashFrames` over the live tree's snapshot. The second builds a fresh tree,
@@ -675,13 +686,13 @@ runs the sampler's loop for `tick` ticks and hashes that. `playback.test.ts`
 requires the two to agree on every first-party scene without text, reached
 three ways: constructed at a tick, by forward and backward seeks, and by
 playing at 1-, 7- and 12-tick bursts with sub-tick remainders and then
-pausing. Of the 26 scenes in that corpus, `compound-logo.marey`,
-`physics-pile.marey`, `dusk-hills.marey`, `yellow-flowers.marey`, `ghost.marey`
-and `logo.marey` are still moving at the paused tick, so their live paint
-differs from the exact one until `pause()` repaints; deleting that repaint
-fails all six. Scenes with `text` are left out because measuring text needs a
-DOM; the test pins the list of skipped scenes, so one cannot drop out
-unnoticed.
+pausing. As measured on 2026-10-08, six scenes in that corpus,
+`compound-logo.marey`, `physics-pile.marey`, `dusk-hills.marey`,
+`yellow-flowers.marey`, `ghost.marey` and `logo.marey`, are still moving at
+the paused tick, so their live paint differs from the exact one until
+`pause()` repaints; deleting that repaint fails all six. Scenes with `text`
+are left out because measuring text needs a DOM; the test pins the list of
+skipped scenes, so one cannot drop out unnoticed.
 
 ## Non-obvious gotchas
 
@@ -697,6 +708,11 @@ unnoticed.
 - **An `animate` block inside a physics group is visual-only** (D18). The welded
   body is built once from where the group's contents sit at the start, so an
   animating child moves its drawing but not its collision part.
+- **A sequence's first step starts at the end of tick 1; a lone `animate`
+  starts at tick 0.** So a sequence step and an identical lone animation are
+  one tick apart in every output, preview and export alike.
+  `tools/visual-check/color-check.mjs` encodes it as `SEQUENCE_START` when it
+  computes a sequence's expected colours.
 - **Colour is an integer, applied as a tint, and display-only.** A colour's
   runtime value is `0xRRGGBB`, held as `__mareyLayout.currentColor` (set on every
   shape, absent on a group). `applyAnim`'s colour branch blends each sRGB channel

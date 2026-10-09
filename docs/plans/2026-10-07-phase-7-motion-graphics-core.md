@@ -1,7 +1,5 @@
 # Phase 7 — Motion-Graphics Core Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Ship colour animation through every output, replay-to-frame scrubbing, and a playhead that survives live recompilation.
 
 **Architecture:** Colour becomes a fifth animatable property whose runtime value is a rounded `0xRRGGBB` integer on the container layout, drawn as a tint only on shapes that animate colour, carried in frame snapshots and baked into Lottie colour tracks. Playback is a headless `Playback` class in `src/compiler/renderer/playback.ts` that implements every jump in time as a replay from tick 0 with the frame sampler's own loop; the PixiJS adapter wraps it with the ticker, and the playground adds a transport strip and remembers the playhead across compiles.
@@ -191,7 +189,7 @@ describe("animate { property: color }", () => {
 });
 ```
 
-Before relying on the `use` case, read how `use` expands (`grep -rn "\"use\"" src/compiler/parser`) and add one more `it` that animates colour on a `use` instance and expects `TYPE_ANIM_COLOR_TARGET` naming the instance — written against the real `use` syntax in `docs/LANGUAGE.md`. If a `use` instance never reaches the validator as a `group` node, report that and assert whatever error it does produce instead, with the reason in a comment.
+Before relying on the `use` case, read how `use` expands (`grep -rn "\"use\"" src/compiler/parser`) and add one more `it` that animates colour on a `use` instance and expects `TYPE_ANIM_COLOR_TARGET` naming the instance — written against the real `use` syntax in `docs/LANGUAGE.md`. If a `use` instance never reaches the validator as a `group` node, the test asserts whatever error it does produce instead, with the reason in a comment.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
@@ -249,7 +247,7 @@ Read how the validator names an object (the field the existing `label` at ~line 
 - [ ] **Step 4: Run the tests to verify they pass, then the whole suite**
 
 Run: `npx vitest run src/compiler/typeChecker/colorAnimation.test.ts` → PASS.
-Run: `npm test`. Existing tests that assert the four-property `TYPE_ANIM_PROP` wording or the old `animProperty` label will fail; update each to the new wording and list them in the report. Any other failure is a regression: stop and report it.
+Run: `npm test`. Existing tests that assert the four-property `TYPE_ANIM_PROP` wording or the old `animProperty` label will fail; update each to the new wording. Any other failure is a regression, and the task does not continue past it.
 
 - [ ] **Step 5: Revert checks.** For each of the three behaviours (mismatch row, group target, IR normalisation), delete the implementing line, run the new test file, record the failing test names, restore. Then flip the one judgment call in this task: change the owner lookup to `parentNode` instead of `ownerIndex(ancestors)` and confirm the "through a sequence" assertion fails.
 
@@ -263,7 +261,7 @@ Run: `npm test`. Existing tests that assert the four-property `TYPE_ANIM_PROP` w
 
 ```bash
 git add src/compiler/languageContract.ts src/compiler/typeChecker/validator.ts src/compiler/typeChecker/resolvers.ts src/compiler/typeChecker/colorAnimation.test.ts docs/LANGUAGE.md
-# plus each existing test file whose wording you updated, by path
+# plus each existing test file whose wording was updated, by path
 git diff --staged
 git commit -m "feat(language): animate a shape's colour"
 ```
@@ -513,7 +511,7 @@ export function rgb01OfInt(c: number): readonly [number, number, number] {
 
 `lottieEncode.ts`: in `encodeLottie`'s per-frame loop also collect `colors.push(snap.color === null ? null : [...rgb01OfInt(snap.color)])`. When `spec.color !== null`, build the colour property with `track(colors as number[][])` and pass it to `shapeItemsFor` in place of the static `color`; `shapeItemsFor`'s `c` fields take that property directly (`c: colorProp`). `track` collapses a constant colour to `{ a: 0, k: first }`, and `first` equals `hexToRgb01(declared)` element for element (same `parseInt / 255` arithmetic) — that equality is what keeps every colour-static document byte-identical. `hexOf` and solid layers are untouched.
 
-- [ ] **Step 4: Run them to verify they pass; run `npm test`.** Existing tests that construct `ObjectSnapshot` literals now fail to typecheck for the missing `color`; add `color: null` (groups) or the shape's colour to each, listing the files in the report.
+- [ ] **Step 4: Run them to verify they pass; run `npm test`.** Existing tests that construct `ObjectSnapshot` literals now fail to typecheck for the missing `color`; add `color: null` (groups) or the shape's colour to each.
 
 - [ ] **Step 5: Revert checks.** (a) Drop `color` from `snapshotFor` → the sampler test fails; (b) drop the `__applyColor?.()` call → the raster test fails; (c) build `fl.c` from `spec.color` again → the animated-layer encode test fails.
 
@@ -821,9 +819,9 @@ export class Playback implements PlaybackController {
 
 `hashFrames` takes `FrameSnapshot[]`; if its object type requires `Object.freeze`d arrays, match how `sampleFrames` builds them. `frameSampler.ts` imports `SceneRuntime` as a type, and `playback.ts` must not import `pixi.js` at runtime (type-only import, like `sceneRuntime.ts`).
 
-- [ ] **Step 4: Run them to verify they pass; run `npm test`.** If test 1's `live` path differs from `straight` on any scene, **do not adjust the test**: that is a determinism defect in the live paint path (invariant 3). Stop and report the scene, the first tick at which `snapshotHash` diverges (bisect `T`), and which object's fields differ.
+- [ ] **Step 4: Run them to verify they pass; run `npm test`.** If test 1's `live` path differs from `straight` on any scene, **the test is not adjusted**: that is a determinism defect in the live paint path (invariant 3), located by the scene, the first tick at which `snapshotHash` diverges (bisect `T`), and which object's fields differ, and it is fixed before the task continues.
 
-- [ ] **Step 5: Revert checks.** (a) In `replayTo`, skip the rebuild on a backward seek → test 2 fails; (b) make `frame()` perform every recorded seek rather than the latest → test 3 fails; (c) drop the `endTick` clamp on `ticks` → test 4 fails; (d) remove `pause()`'s `paintExactTick()` → test 1's `live` path fails on at least one scene — if it does not, say so (the live state may already equal exact at the paused tick for every corpus scene), and keep the call, which spec §3.1 requires regardless.
+- [ ] **Step 5: Revert checks.** (a) In `replayTo`, skip the rebuild on a backward seek → test 2 fails; (b) make `frame()` perform every recorded seek rather than the latest → test 3 fails; (c) drop the `endTick` clamp on `ticks` → test 4 fails; (d) remove `pause()`'s `paintExactTick()` → test 1's `live` path fails on at least one scene — if it does not, that is recorded as a finding (the live state may already equal exact at the paused tick for every corpus scene), and the call stays, which spec §3.1 requires regardless.
 
 - [ ] **Step 6: Docs.**
   - `docs/architecture/renderer.md`: a "Playback" section — seek is replay from tick 0 with the sampler's loop; forward seek continues; seeks are coalesced to one per frame; pause and the end of a scene paint the exact tick; a declared `duration` bounds playback; an indefinite scene's bar is `reachedTick` and it pauses on idle; `Playback` is headless and `adapter.ts` owns the ticker.
@@ -889,7 +887,7 @@ describe("nextStart", () => {
 });
 ```
 
-**Review Focus 5** is a property of `useCompile`, not of a pure function: the playhead is remembered only from the controller of the compile that is currently displayed. Implement it so the subscription is attached only after the `currentId !== compileIdRef.current` race check has passed, and the previous controller's subscription is removed in the same place the previous `cleanup` is called. Task 7's browser check exercises rapid edits; say in the report that this is where it is pinned.
+**Review Focus 5** is a property of `useCompile`, not of a pure function: the playhead is remembered only from the controller of the compile that is currently displayed. Implement it so the subscription is attached only after the `currentId !== compileIdRef.current` race check has passed, and the previous controller's subscription is removed in the same place the previous `cleanup` is called. Task 7's browser check exercises rapid edits, and that check is where this property is pinned.
 
 - [ ] **Step 2: Run them to verify they fail** — `playhead.ts` does not exist.
 
@@ -1056,7 +1054,7 @@ git commit -m "feat(playground): scrub the preview and keep the playhead across 
   - The video check from `tools/visual-check/README.md` ("Measuring video quality") on the fixture, against its PNG frames: within the existing gate.
   - Kill Vite; confirm 5199 is free.
 
-- [ ] **Step 4: Static colours unchanged.** Rebuild the CLI and re-export exactly the scenes, formats and flags Task 1 Step 0 recorded, to `.visual-check/phase7/after/`, write the same manifest, and `diff` the two manifests (ignoring the commit line). Every PNG and every Lottie document must match. If any differs, stop and report the file and the first differing byte offset; do not proceed.
+- [ ] **Step 4: Static colours unchanged.** Rebuild the CLI and re-export exactly the scenes, formats and flags Task 1 Step 0 recorded, to `.visual-check/phase7/after/`, write the same manifest, and `diff` the two manifests (ignoring the commit line). Every PNG and every Lottie document must match. A file that differs is a defect, identified by its path and first differing byte offset, and the task does not continue past it.
 
 - [ ] **Step 5: `eval/RESULTS-PHASE-7.md`.** Create it with: the commits measured; the colour fixture; a table of `color-check` rows; the Lottie `--at` samples and what the diff images showed (with the share/maxDelta numbers); the APNG and video results; the static-colour manifest comparison (count of files, all identical); and a note that frame hashes changed once in Phase 7 because snapshots gained `color`, so hashes recorded in earlier RESULTS files predate the field. Every number comes from a file under `.visual-check/phase7/`; cite the path.
 

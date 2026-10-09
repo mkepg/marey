@@ -235,7 +235,8 @@ command to regenerate).
 
 ## Headless: `playback.test.ts`
 
-`npx vitest run src/compiler/renderer/playback.test.ts`: 35 tests pass. The
+`npx vitest run src/compiler/renderer/playback.test.ts`: 36 tests pass (35
+before the scaled-body fixture was added). The
 corpus is every `.marey` file under `src/examples/`, `eval/` and
 `tools/visual-check/scenes/` (42 files). **25 scenes are compared** (the
 comparison per scene: tick 0 against the sampler's frame 0, a straight replay
@@ -281,7 +282,7 @@ script therefore awaits it directly.
 | 4c. Paused at 90, `to: blue` to `to: green` | Pass: tick 90, still paused, readout `0.75 / 2.00 s`, hashes equal, and the reference hash at 90 changed (the new scene is the one on screen) |
 | 4d. Playing, three recompiles (`duration: 20`, so the scene cannot end) | Pass, three samples, each reading the tick and the page clock before the edit and after the compile lands, then pausing and comparing hashes (`playingSamples` in `report.json`): 131 to 366 in 3068 ms, 406 to 661 in 3710 ms, 700 to 951 in 3381 ms. Each stayed playing, never went back, stayed under the wall-clock ceiling (512, 864 and 1118) and had `snapshotHash() === referenceHash(tick)`. The gains (235, 255 and 251 ticks) are far below the ceiling because the elapsed time includes the compile, the mount and a 500 ms settle, during which the scene is not advancing |
 | 4e. Paused at 90, `duration: 2` to `0.5` | Pass: tick 60, `endTick` 60, paused, hashes equal |
-| 4f. Five edits 100 ms apart while playing (durations 30 to 34 s, so the playhead stays far from the end) | Pass (`rapidEdits` in `report.json`): after the last compile settled, `endTick` is 4080, the last edit's 34 s, so the displayed scene is the last edit's; `snapshotHash() === referenceHash(tick)`; the tick went from 37 before the burst to 484 after 10238 ms, not below 37 and under the ceiling of 1278. This pins which scene is on screen and that the playhead continued from the old one. It does not by itself pin the rule that a stale compile result never becomes the remembered playhead; see the note after the table |
+| 4f. Five edits 100 ms apart while playing (durations 30 to 34 s, so the playhead stays far from the end) | Pass (`rapidEdits` in `report.json`): after the last compile settled, `endTick` is 4080, the last edit's 34 s, so the displayed scene is the last edit's; `snapshotHash() === referenceHash(tick)`; the tick went from 37 before the burst to 484 after 10238 ms, not below 37 and under the ceiling of 1278. This pins which scene is on screen and that the playhead is bounded by wall time. A reset to 0 followed by play would also pass it, so it does not show that the playhead was carried. It does not by itself pin the rule that a stale compile result never becomes the remembered playhead; see the note after the table |
 | 5. Pause at 90, choose another example | Pass: the new scene's first state, read on the frame it mounted, is exactly tick 0, playing, `endTick` 840. The new file autoplays from 0, so tick 0 can only be read at mount; it was read by polling `referenceHash(0)` on every animation frame until it changed |
 | 6. Transport in both themes | `transport-light.png` and `transport-dark.png` (1440 x 900), plus a strip crop of each. Both were looked at: play, restart, the scrub bar at 0.75 / 2.00 s, and the readout sit in a 691 x 32 px strip at the pane's bottom edge, outside the canvas, legible in both themes |
 
@@ -332,6 +333,37 @@ target tick (37 or 0 here), so the replay is short whatever the scene's length, 
 heaviest case spec 3.6 names, a long indefinite physics scene, is not among
 the five examples and stays a recorded limit.
 
+**Recompile replay cost.** A recompile keeps the playhead (spec 3.5), and the
+new scene reaches it by replaying from tick 0, so a recompile of an indefinite
+scene replays every tick played so far. A scene that never comes to rest, such
+as any `loop: true` animation, keeps adding ticks for as long as it plays, and
+each edit pays for all of them before the new scene's first frame. This is kept
+as specified and measured headlessly (Node 22.13.1, 2026-10-09, the
+`playback.test.ts` host): the time to construct `new Playback(host, null,
+{ tick: T, playing: true })`, which is the recompile path, median of three runs
+after a warm-up. Output: `.visual-check/phase7/replay-cost/run.log`, script
+`cost.probe.ts` beside it.
+
+| Scene (indefinite) | 7,200 ticks (1 min) | 72,000 ticks (10 min) |
+|---|---|---|
+| `eval/scenes/stagger-bars.marey` (10 objects, looping animation, never at rest) | 19.5 ms | 182.8 ms |
+| `eval/scenes/spin-triangle.marey` (1 object, looping) | 9.0 ms | 94.1 ms |
+| `tools/visual-check/scenes/pile.marey` (5 physics bodies) | 21.6 ms | 540.2 ms |
+| `tools/visual-check/scenes/tumble.marey` (2 physics bodies) | 57.7 ms | 517.5 ms |
+
+The cost grows linearly with the tick: about 1.3 to 2.7 µs a tick on the
+three looping animation scenes measured, and 1.4 to 8 µs on the eight physics
+scenes (all rows are in `run.log`). An hour of play (432,000 ticks) on
+`stagger-bars` would cost about 1.1 s per edit. None of the eight physics
+scenes stays active: each comes to rest between tick 221 and tick 744
+(`run.log`, "idle tick"), the preview pauses it there, and play then advances
+it only a frame at a time, so its carried playhead stays near the rest tick.
+Their 72,000-tick rows are the cost of a physics scene kept running, for
+example by a looping animation beside it; the only such scene in the corpus,
+`test-card.marey`, has `text` and cannot run headless. These are Node
+figures; in the browser the same replay runs on the editor's main thread,
+and it was not timed there.
+
 ## Spec 4 criteria
 
 1. **Colour matches across every output: met.** PNG max channel delta 0,
@@ -345,24 +377,32 @@ the five examples and stays a recorded limit.
    byte-identical; 7 of 9 Lottie documents byte-identical and the other two
    differ only by the rotation-radians fix (`3a32c8a`), not by colour (section
    above).
-3. **Seeking equals playing: met.** Headless on 25 scenes (35 tests; 17 `text`
+3. **Seeking equals playing: met.** Headless on 25 scenes (36 tests; 17 `text`
    scenes skipped, pinned), including `physics-pile`, sequence and handoff
    scenes; in the browser through `__mareyPlayback` on all five examples,
    `bar-chart-reveal` (text) included (rows 1 and 2).
-4. **An edit keeps the playhead: met.** Rows 4c to 4f and 5: paused at 90
-   stays 90 with a matching hash; across three playing recompiles the playhead
-   never moves back and stays within the wall-clock ceiling; shortening below
-   the playhead clamps to `endTick`; a burst of five edits ends with the last
-   edit's scene on screen and the playhead continued; another example starts at
-   0. The stale-result guard is pinned by `src/lib/playhead.test.ts` (see the
-   note after the table).
+4. **An edit keeps the playhead: met.** Rows 4c to 4f and 5: paused at 90 stays
+   90 with a matching hash; across three playing recompiles the playhead never
+   moves back and stays within the wall-clock ceiling; shortening below the
+   playhead clamps to `endTick`; a burst of five edits ends with the last
+   edit's scene on screen and a playhead bounded by wall time; another example
+   starts at 0. The stale-result guard is pinned by `src/lib/playhead.test.ts`
+   (see the note after the table).
 5. **Playback stops at `duration`: met.** At `endTick` on all five examples
    (row 3; 840, 600, 600, 1920 and 1440 ticks), and the toggle restarts below
    tick 30. The spec's own example, the 2 s fixture, played from tick 230,
-   stops at exactly 240 (row 4b).
-6. **Nothing else regresses: met.** Run on 2026-10-09 after the last change to
-   `transport-check.mjs` and this file: `npm test`, 65 files, 1380 tests
-   passed; `npx vitest run --config eval/vitest.config.ts`, 1 file, 5 tests
-   passed; `npm run build` built; `npm run build:cli` then `marey check` on
-   every tracked `.marey` file, none failed; `npm run check:export`, "matrix:
-   all passed" (131.1 s); `npm run check:pack`, "all passed".
+   stops at exactly 240 (row 4b). "Pressing play restarts at 0" is pinned
+   headlessly by `playback.test.ts`, "stops at endTick, paints the exact tick
+   there, and plays again from zero", which plays from 0 to an `endTick` of 240
+   (2 s) and requires the tick to be exactly 0 after play. The browser rows are
+   a bound, not that pin: row 3 reads the tick two frames after the click and
+   asserts it is below 30, and row 4b starts from tick 230, not from 0.
+6. **Nothing else regresses: met.** Run on 2026-10-09 after the last code
+   change (the scaled-body placement, the playhead guard, the compile reply
+   id, the transport glyph and label, and the store): `npm test`, 66 files,
+   1387 tests passed; `npx vitest run --config eval/vitest.config.ts`, 1 file,
+   5 tests passed; `npm run build` built; `npm run build:cli` then `marey
+   check` on every tracked `.marey` file, none failed; `npm run check:export`,
+   "matrix: all passed" (127.7 s); `npm run check:pack`, "all passed".
+   `transport-check.mjs` re-run on that code passed 25 of 25 requirements with
+   no console or page error (`.visual-check/phase7/transport-fix/`).

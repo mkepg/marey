@@ -58,7 +58,9 @@ write, and physics is simulated in logical units regardless of it.
 `duration` is optional and takes a positive number of seconds. It declares
 the scene's length: the preview stops there, and an exporter samples up to
 it. A scene that omits it is **indefinite** — the preview plays on until the
-scene comes to rest, and export needs an explicit bound.
+scene comes to rest, and export needs an explicit bound. Once an indefinite
+scene has come to rest, pressing play advances it a frame and pauses it again
+at once, because nothing in it moves.
 
 Unlike `physics`, `scene` does **not** accept `duration: indefinitely`
 (`TYPE_SCENE_DURATION_INDEFINITE`). An indefinite scene is written by leaving
@@ -1240,8 +1242,8 @@ them.
 equality is the only string operation.
 
 **Colours do no arithmetic.** A colour is not a number, so it cannot be an
-arithmetic operand: `red + blue` is a compile error naming the kind it found, under the
-same rule that rejects any other non-number operand.
+arithmetic operand: `red + blue` is a compile error naming the kind it found,
+under the same rule that rejects any other non-number operand.
 
 There is also no `sqrt`, `atan2`, `pow`, `abs`, `min`, `max`, `floor`, or
 `round`. None is needed by the scenes this layer was built for, and adding

@@ -248,7 +248,7 @@ async function checkExample(page, ex) {
   const restarted = await page.evaluate(() => window.__afterClick);
   // The toggle's restart is performed on the next animation frame, and a frame
   // can pump up to 12 ticks; the read is two frames after the click, so a
-  // bound is the honest assertion here (observed 0 or 1), not === 0.
+  // bound is the honest assertion here (observed 0 to 4), not === 0.
   record(ctx, "stops at its end and the toggle restarts below tick 30",
     end.tick === s0.endTick && restarted.tick < 30 && restarted.playing,
     `stopped at ${end.tick} of ${s0.endTick}; two frames after the click tick ${restarted.tick}, playing ${restarted.playing}`);
