@@ -235,7 +235,7 @@ node tools/visual-check/transport-check.mjs --out .visual-check/phase7/transport
 ```
 
 Output: `report.json`, `run.log`, `transport-{light,dark}.png` and
-`transport-{light,dark}-strip.png`. Exit 0, **24 of 24 requirements pass**, no
+`transport-{light,dark}-strip.png`. Exit 0, **25 of 25 requirements pass**, no
 console error and no page error. Seven `Canceled` rejections from Monaco's own
 `Delayer.cancel` (raised when the editor's text is replaced) are counted in `report.json` as `monacoCancellations` and left out of
 the error list; they come from the editor library, not from Marey. Each example is chosen through the
@@ -243,44 +243,65 @@ Examples menu (with the "Replace your code?" confirmation); the colour fixture
 is loaded through a share link and then edited by replacing the editor's text.
 
 **What a seek promise means.** `await __mareyPlayback.seek(t)` resolves after
-the seek has been performed, not when it is recorded: across all 35 seeks in
+the seek has been performed, not when it is recorded: across all 36 seeks in
 the run, `state().tick === t` and `playing === false` held at the moment the
 promise resolved, with no exceptions (`seekResolution` in `report.json`). The
 script therefore awaits it directly.
 
 | Requirement | Result |
 |---|---|
-| 1. Seek equals reference at ticks 0, 37, 120 and the end (480 for an indefinite scene), order end, 120, 37, 0 | Pass on all five examples: `snapshotHash() === referenceHash(t)` at every tick |
-| 2. Live play 1.5 s, pause, compare at the tick read | Pass on all five: ticks 159 to 183 reached (the slowest was `yellow-flowers`), hashes equal |
-| 3. Stops at its end, toggle restarts below tick 30 | Pass on all five (every example declares a `duration`, so none is indefinite and the 480 fallback in row 1 was not used): stopped exactly at `endTick` (840, 600, 600, 1920, 1440), and the tick read two animation frames after the click was 0 |
+| 1. Seek equals reference at ticks 0, 37, 120 and the end, in a fixed-seed shuffled order | Pass on all five examples: `snapshotHash() === referenceHash(t)` at every tick. The order is `120, 37, end, 0` for every example (seed 7), after the playhead's own starting tick (74 to 107, from the autoplay before the pause), so each run has two forward and two backward seeks; the order is in `report.json` (`seekTimes[...].order`). None of the five is indefinite, so the 480 fallback end was not used |
+| 2. Live play 1.5 s, pause, compare at the tick read | Pass on all five: ticks 167 to 182 reached, hashes equal |
+| 3. Stops at its end, toggle restarts below tick 30 | Pass on all five: stopped exactly at `endTick` (840, 600, 600, 1920, 1440). The tick read two animation frames after the click was 0 on four examples and 4 on `dusk-hills`. The bound is deliberate and not `=== 0`: the restart is performed on a frame, and a frame can pump up to 12 ticks |
 | 4a. Fixture paused at the colour frames' ticks 0, 60, 120, 180, 236 | Pass: preview hash equals reference at each |
-| 4b. Paused at 90, `to: blue` to `to: green` | Pass: tick 90, still paused, readout `0.75 / 2.00 s`, hashes equal, and the reference hash at 90 changed (the new scene is the one on screen) |
-| 4c. Playing, recompile | Pass: tick 128 before the edit, 357 after the recompile, playing still true (a long duration keeps the scene from ending while it compiles) |
-| 4d. Paused at 90, `duration: 2` to `0.5` | Pass: tick 60, `endTick` 60, paused, hashes equal |
-| 4e. Five edits 100 ms apart while playing | Pass: after the last compile `endTick` is 480, the last edit's `duration: 4`; paused at tick 480, `snapshotHash() === referenceHash(480)`. A stale compile result would have left another `endTick` |
-| 5. Pause at 90, choose another example | Pass: the new scene's first state, read on the frame it mounted, is tick 0, playing, `endTick` 840. The new file autoplays from 0, so tick 0 can only be read at mount; it was read by polling `referenceHash(0)` on every animation frame until it changed |
+| 4b. Fixture played from 230 | Pass: stops at exactly tick 240 (`endTick` 240), hashes equal |
+| 4c. Paused at 90, `to: blue` to `to: green` | Pass: tick 90, still paused, readout `0.75 / 2.00 s`, hashes equal, and the reference hash at 90 changed (the new scene is the one on screen) |
+| 4d. Playing, three recompiles (`duration: 20`, so the scene cannot end) | Pass, three samples, each reading the tick and the page clock before the edit and after the compile lands, then pausing and comparing hashes (`playingSamples` in `report.json`): 131 to 366 in 3068 ms, 406 to 661 in 3710 ms, 700 to 951 in 3381 ms. Each stayed playing, never went back, stayed under the wall-clock ceiling (512, 864 and 1118) and had `snapshotHash() === referenceHash(tick)`. The gains (235, 255 and 251 ticks) are far below the ceiling because the elapsed time includes the compile, the mount and a 500 ms settle, during which the scene is not advancing |
+| 4e. Paused at 90, `duration: 2` to `0.5` | Pass: tick 60, `endTick` 60, paused, hashes equal |
+| 4f. Five edits 100 ms apart while playing (durations 30 to 34 s, so the playhead stays far from the end) | Pass (`rapidEdits` in `report.json`): after the last compile settled, `endTick` is 4080, the last edit's 34 s, so the displayed scene is the last edit's; `snapshotHash() === referenceHash(tick)`; the tick went from 37 before the burst to 484 after 10238 ms, not below 37 and under the ceiling of 1278. This pins which scene is on screen and that the playhead continued from the old one. It does not by itself pin the rule that a stale compile result never becomes the remembered playhead; see the note after the table |
+| 5. Pause at 90, choose another example | Pass: the new scene's first state, read on the frame it mounted, is exactly tick 0, playing, `endTick` 840. The new file autoplays from 0, so tick 0 can only be read at mount; it was read by polling `referenceHash(0)` on every animation frame until it changed |
 | 6. Transport in both themes | `transport-light.png` and `transport-dark.png` (1440 x 900), plus a strip crop of each. Both were looked at: play, restart, the scrub bar at 0.75 / 2.00 s, and the readout sit in a 691 x 32 px strip at the pane's bottom edge, outside the canvas, legible in both themes |
+
+The wall-clock ceiling in rows 4d and 4f is `tick before + elapsed ms x 120 /
+1000 + 13`. The 13 is the most one frame can add: the pump is capped at 12 ticks
+a frame (`MAX_CATCHUP_TICKS` in `clock.ts`), and the accumulator carries under
+one more tick. A playhead that jumped ahead of the clock, for example to a
+newer or a clamped value, would break it.
+
+**What pins the stale-result rule.** The rule that a compile result arriving
+after a newer compile has started must not become the remembered playhead lives
+in `src/hooks/useCompile.ts`, as the `currentId !== compileIdRef.current` guard
+before the result's controller is subscribed. There is no unit test of it:
+`src/lib/playhead.test.ts` tests `nextStart` and `formatPlayhead`, and no test
+file names `compileIdRef` or `rememberedRef`. The browser burst above exercises
+the consequence (scene identity and playhead continuity across a burst) but a
+burst this slow may never produce a late result, so it cannot show the guard
+firing. The guard is therefore unpinned by any automated check.
 
 **Backward-seek times** (milliseconds from `performance.now()` around the
 awaited seek, so each includes the wait for the next animation frame and the
-paint; `report.json`, `seekTimes`; three backward seeks per example, in the
-order end to 120, 120 to 37, 37 to 0):
+paint; `report.json`, `seekTimes`; two backward seeks per example, in the
+shuffled order: `120 to 37` and `end to 0`):
 
-| Example | Ticks (end) | end to 120 | 120 to 37 | 37 to 0 |
-|---|---|---|---|---|
-| `physics-pile` | 840 | 23.4 | 16.9 | 24.9 |
-| `bar-chart-reveal` | 600 | 40.3 | 48.0 | 43.7 |
-| `logo-reveal` | 600 | 5.7 | 18.8 | 19.9 |
-| `yellow-flowers` | 1920 | 22.7 | 20.3 | 39.4 |
-| `dusk-hills` | 1440 | 21.3 | 21.3 | 28.6 |
+| Example | Ticks (end) | 120 to 37 | end to 0 |
+|---|---|---|---|
+| `physics-pile` | 840 | 71.4 | 9.4 |
+| `bar-chart-reveal` | 600 | 26.5 | 24.1 |
+| `logo-reveal` | 600 | 38.3 | 4.1 |
+| `yellow-flowers` | 1920 | 251 | 35.8 |
+| `dusk-hills` | 1440 | 47.5 | 22.7 |
+
+The 251 ms for `yellow-flowers` is a single outlier: the same seek took 20 to
+68 ms in three earlier runs of this check, and the other nine seeks here ran
+from 4 to 71 ms. One sample cannot say whether it is a garbage
+collection pause or a real cost, so it is reported as measured.
 
 Spec 3.6 measured a headless replay from tick 0 of 96 ms (`physics-pile`, 600
 ticks, first run with JIT warm-up), 11 ms (`dusk-hills`) and 3 ms
 (`yellow-flowers`), and predicted a backward seek costs at most about 0.1 s.
-The browser figures agree: the slowest of the fifteen is 48 ms. They are not
+The browser figures mostly agree: nine of the ten are 72 ms or less, and `yellow-flowers` 120 to 37 is the 251 ms outlier above, over the 0.1 s prediction. They are not
 the same quantity: a backward seek in the browser replays only up to the
-target tick (120 or less), which is why the end-to-120 figure is not larger for
-the longer scenes, and it adds a rebuild, a paint and a frame wait. The
+target tick (37 or 0 here), so the replay is short whatever the scene's length, and it adds a rebuild, a paint and a frame wait. The
 heaviest case spec 3.6 names, a long indefinite physics scene, is not among
 the five examples and stays a recorded limit.
 
@@ -301,16 +322,20 @@ the five examples and stays a recorded limit.
    scenes skipped, pinned), including `physics-pile`, sequence and handoff
    scenes; in the browser through `__mareyPlayback` on all five examples,
    `bar-chart-reveal` (text) included (rows 1 and 2).
-4. **An edit keeps the playhead: met.** Rows 4b to 4e and 5: paused at 90
-   stays 90 with a matching hash; playing never moves back; shortening below
+4. **An edit keeps the playhead: met.** Rows 4c to 4f and 5: paused at 90
+   stays 90 with a matching hash; across three playing recompiles the playhead
+   never moves back and stays within the wall-clock ceiling; shortening below
    the playhead clamps to `endTick`; a burst of five edits ends with the last
-   edit's scene on screen; another example starts at 0.
+   edit's scene on screen and the playhead continued; another example starts at
+   0. The stale-result guard in `useCompile.ts` has no unit test (see the note
+   after the table).
 5. **Playback stops at `duration`: met.** At `endTick` on all five examples
    (row 3; 840, 600, 600, 1920 and 1440 ticks), and the toggle restarts below
-   tick 30. The spec's 2 s example (240 ticks) was not played to its end in
-   the final run; the fixture's `endTick` of 240 is read in rows 4b and 4d, and
-   the stop-and-restart behaviour is the same code path the five examples
-   exercise.
-6. **Nothing else regresses: met.** The four pre-commit checks, `check:export`
-   and `check:pack` pass on the commit that adds this section (1380 tests in
-   65 files; 5 eval tests).
+   tick 30. The spec's own example, the 2 s fixture, played from tick 230,
+   stops at exactly 240 (row 4b).
+6. **Nothing else regresses: met.** Run on 2026-10-09 after the last change to
+   `transport-check.mjs` and this file: `npm test`, 65 files, 1380 tests
+   passed; `npx vitest run --config eval/vitest.config.ts`, 1 file, 5 tests
+   passed; `npm run build` built; `npm run build:cli` then `marey check` on
+   every tracked `.marey` file, none failed; `npm run check:export`, "matrix:
+   all passed" (131.1 s); `npm run check:pack`, "all passed".

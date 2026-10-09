@@ -14,7 +14,8 @@
  *   3. a scene with a duration stops at its end, and the play toggle restarts it.
  * On `scenes/color-sequence.marey` (loaded through a share link, then edited by
  * replacing the editor's text) it checks:
- *   4. a recompile keeps the playhead: paused, playing, clamped to a shorter
+ *   4. a recompile keeps the playhead: paused, playing (three samples bounded by
+ *      wall time), clamped to a shorter
  *      duration, and five edits 100 ms apart while playing;
  * and, switching from the last example to another:
  *   5. a replaced file starts again at tick 0;
@@ -59,12 +60,38 @@ const consoleErrors = [];
 const monacoCancellations = [];
 const seekTimes = {};
 const seekResolution = [];
+const playingSamples = [];
+const rapid = [];
 function record(context, name, pass, detail) {
   results.push({ context, name, pass, detail });
   console.log(`${pass ? "PASS" : "FAIL"}  ${context}  ${name}${detail ? `  ${detail}` : ""}`);
 }
 
 let phase = "setup";
+/** Fixed-seed PRNG, so the "shuffled" seek order is the same on every run. */
+function mulberry32(seed) {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function shuffled(items, seed) {
+  const rand = mulberry32(seed);
+  const a = [...items];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+/** Most ticks one frame can add: clock.ts MAX_CATCHUP_TICKS (12), plus the
+ *  sub-tick remainder the accumulator carries (under 1). Slack for the upper
+ *  bound on how far a playing playhead can have advanced in a wall-clock span. */
+const FRAME_SLACK_TICKS = 13;
+const TICKS_PER_MS = 120 / 1000;
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const state = (page) => page.evaluate(() => window.__mareyPlayback.state());
 const hashes = (page, tick) =>
@@ -140,6 +167,17 @@ const fixture = ({ to = "blue", duration = "2" } = {}) =>
     .replace("animate { property: color, to: blue, duration: 1, easing: easeInOut }", `animate { property: color, to: ${to}, duration: 1, easing: easeInOut }`)
     .replace(/^ {2}duration: 2$/m, `  duration: ${duration}`);
 
+/** The tick and the page clock, read in one evaluate. */
+const stamp = (page) => page.evaluate(() => ({ tick: window.__mareyPlayback.state().tick, now: performance.now() }));
+/** Pause, then read the tick, the page clock and both hashes in one evaluate, so nothing runs between them. */
+const pauseStamp = (page) => page.evaluate(() => {
+  const p = window.__mareyPlayback;
+  const wasPlaying = p.state().playing;
+  p.pause();
+  const st = p.state();
+  return { wasPlaying, tick: st.tick, endTick: st.endTick, now: performance.now(), snap: p.snapshotHash(), ref: p.referenceHash(st.tick) };
+});
+
 const refAt = (page, tick) => page.evaluate((t) => window.__mareyPlayback.referenceHash(t), tick);
 
 /** Wait until the scene's reference hash at `tick` is no longer `old`: the edit has compiled and mounted. */
@@ -158,8 +196,11 @@ async function checkExample(page, ex) {
   await chooseExample(page, ex.index);
   const s0 = await state(page);
   const T = s0.endTick ?? 480;
-  const order = [T, 120, 37, 0];
   await page.evaluate(() => window.__mareyPlayback.pause());
+  const order = shuffled([0, 37, 120, T], 7);
+  const steps = [(await state(page)).tick, ...order];
+  const forwardSteps = steps.slice(1).filter((t, i) => t > steps[i]).length;
+  if (forwardSteps < 1 || forwardSteps > order.length - 1) throw new Error(`seek order ${steps.join(" -> ")} lacks a forward or a backward step`);
 
   // 1. Seek equals reference, and a resolved seek has been performed.
   const mismatches = [];
@@ -173,9 +214,9 @@ async function checkExample(page, ex) {
     if (t < prev) backward.push({ from: prev, to: t, ms: Math.round(r.ms * 10) / 10 });
     prev = t;
   }
-  seekTimes[ctx] = { endTick: s0.endTick, ticks: order, backward };
-  record(ctx, "seek equals reference at 0, 37, 120 and the end",
-    mismatches.length === 0, mismatches.length ? mismatches.join("; ") : `ticks ${order.join(", ")}; backward seeks ${backward.map((b) => `${b.from}->${b.to} ${b.ms} ms`).join(", ")}`);
+  seekTimes[ctx] = { endTick: s0.endTick, order, startTick: steps[0], backward };
+  record(ctx, "seek equals reference at 0, 37, 120 and the end, in a fixed shuffled order",
+    mismatches.length === 0, mismatches.length ? mismatches.join("; ") : `order ${steps.join(" -> ")}; backward seeks ${backward.map((b) => `${b.from}->${b.to} ${b.ms} ms`).join(", ")}`);
 
   // 2. Live play equals reference.
   await page.evaluate(() => window.__mareyPlayback.play());
@@ -205,6 +246,9 @@ async function checkExample(page, ex) {
   await page.locator("[data-transport-toggle]").click();
   await waitFor(page, () => window.__afterClick !== null, null, 5000);
   const restarted = await page.evaluate(() => window.__afterClick);
+  // The toggle's restart is performed on the next animation frame, and a frame
+  // can pump up to 12 ticks; the read is two frames after the click, so a
+  // bound is the honest assertion here (observed 0 or 1), not === 0.
   record(ctx, "stops at its end and the toggle restarts below tick 30",
     end.tick === s0.endTick && restarted.tick < 30 && restarted.playing,
     `stopped at ${end.tick} of ${s0.endTick}; two frames after the click tick ${restarted.tick}, playing ${restarted.playing}`);
@@ -228,6 +272,15 @@ async function checkRecompile(page) {
   record(ctx, "paused at the colour frames' ticks the preview equals reference",
     colourBad.length === 0, colourBad.length ? colourBad.join(", ") : `ticks ${colourTicks.join(", ")}`);
 
+  // Played to its end: stops at exactly endTick (2 s = 240).
+  await seek(page, 230);
+  await page.evaluate(() => window.__mareyPlayback.play());
+  await waitFor(page, () => window.__mareyPlayback.state().playing === false, null, 15000);
+  const ended = await pauseStamp(page);
+  record(ctx, "played from 230 it stops at exactly 240 and matches reference",
+    ended.tick === 240 && ended.endTick === 240 && ended.snap === ended.ref,
+    `tick ${ended.tick}, endTick ${ended.endTick}, hashes ${ended.snap === ended.ref ? "equal" : "differ"}`);
+
   // Paused at 90, blue -> green.
   await pauseAt(page, 90);
   const old1 = await refAt(page, 90);
@@ -241,21 +294,32 @@ async function checkRecompile(page) {
     s.tick === 90 && !s.playing && h.snap === h.ref && old1 !== h.ref && readout.startsWith("0.75"),
     `tick ${s.tick}, playing ${s.playing}, readout "${readout}", hashes ${h.snap === h.ref ? "equal" : "differ"}, reference changed ${old1 !== h.ref}`);
 
-  // Playing: the tick after the recompile is not before it. A long duration
-  // keeps the scene from reaching its end while the edit compiles.
-  await setEditor(page, fixture({ to: "green", duration: "8" }));
-  await waitFor(page, () => window.__mareyPlayback.state().endTick === 960);
+  // Playing: three recompiles. A long duration keeps the scene from reaching
+  // its end. Each sample reads the tick and the page clock together before the
+  // edit and again after the compile lands, so the jump is accounted for by
+  // wall time: it can neither go back nor outrun 120 ticks per second.
+  await setEditor(page, fixture({ to: "green", duration: "20" }));
+  await waitFor(page, () => window.__mareyPlayback.state().endTick === 2400);
   await ready(page);
-  await page.evaluate(() => window.__mareyPlayback.play());
-  await sleep(300);
-  const old2 = await refAt(page, 90);
-  const before = (await state(page)).tick;
-  await setEditor(page, fixture({ to: "yellow", duration: "8" }));
-  await waitRecompiled(page, 90, old2);
-  const after = await state(page);
-  record(ctx, "while playing, a recompile does not move the playhead back",
-    after.tick >= before, `tick before the edit ${before}, after the recompile ${after.tick}, playing ${after.playing}`);
-  await page.evaluate(() => window.__mareyPlayback.pause());
+  const samples = [];
+  for (const to of ["yellow", "cyan", "orange"]) {
+    await page.evaluate(() => window.__mareyPlayback.play());
+    await sleep(300);
+    const oldRef = await refAt(page, 90);
+    const before = await stamp(page);
+    await setEditor(page, fixture({ to, duration: "20" }));
+    await waitRecompiled(page, 90, oldRef);
+    const after = await pauseStamp(page);
+    const elapsedMs = after.now - before.now;
+    const maxTick = before.tick + elapsedMs * TICKS_PER_MS + FRAME_SLACK_TICKS;
+    samples.push({ to, tickBefore: before.tick, tickAfter: after.tick, elapsedMs: Math.round(elapsedMs),
+      maxTick: Math.floor(maxTick), wasPlaying: after.wasPlaying, endTick: after.endTick, hashesEqual: after.snap === after.ref });
+  }
+  playingSamples.push(...samples);
+  const sampleOk = (x) => x.tickAfter >= x.tickBefore && x.tickAfter <= x.maxTick && x.wasPlaying && x.endTick === 2400 && x.hashesEqual;
+  record(ctx, "while playing, three recompiles keep the playhead within wall-clock bounds and match reference",
+    samples.every(sampleOk),
+    samples.map((x) => `${x.to}: ${x.tickBefore} -> ${x.tickAfter} in ${x.elapsedMs} ms (max ${x.maxTick}), playing ${x.wasPlaying}, hashes ${x.hashesEqual ? "equal" : "differ"}`).join("; "));
 
   // Shorter duration clamps.
   await pauseAt(page, 90);
@@ -269,13 +333,17 @@ async function checkRecompile(page) {
     s.tick === 60 && s.endTick === 60 && !s.playing && h.snap === h.ref,
     `tick ${s.tick}, endTick ${s.endTick}, playing ${s.playing}, hashes ${h.snap === h.ref ? "equal" : "differ"}`);
 
-  // Rapid edits while playing.
-  await setEditor(page, fixture({ to: "yellow", duration: "2" }));
-  await waitFor(page, () => window.__mareyPlayback.state().endTick === 240);
+  // Rapid edits while playing. The durations are long enough that the scene
+  // cannot reach its end during the burst and the settle, so a clamp to the end
+  // cannot hide a wrong remembered tick: the tick is asserted against wall time.
+  await setEditor(page, fixture({ to: "yellow", duration: "20" }));
+  await waitFor(page, () => window.__mareyPlayback.state().endTick === 2400);
   await ready(page);
   await page.evaluate(() => window.__mareyPlayback.restart());
-  const durations = ["2.5", "3", "3.5", "3.8", "4"];
-  const finalEnd = 480;
+  await sleep(300);
+  const durations = ["30", "31", "32", "33", "34"];
+  const finalEnd = 34 * 120;
+  const before = await stamp(page);
   for (let i = 0; i < durations.length; i++) {
     await setEditor(page, fixture({ to: ["cyan", "orange", "magenta", "white", "black"][i], duration: durations[i] }));
     if (i < durations.length - 1) await sleep(100);
@@ -283,12 +351,13 @@ async function checkRecompile(page) {
   await waitFor(page, (e) => window.__mareyPlayback.state().endTick === e, finalEnd, 30000);
   await ready(page);
   await sleep(700);
-  await page.evaluate(() => window.__mareyPlayback.pause());
-  s = await state(page);
-  h = await hashes(page, s.tick);
-  record(ctx, "five edits 100 ms apart while playing: state belongs to the last edit and matches reference",
-    s.endTick === finalEnd && h.snap === h.ref,
-    `endTick ${s.endTick} (last edit duration 4 s = ${finalEnd}), tick ${s.tick}, hashes ${h.snap === h.ref ? "equal" : "differ"}`);
+  const after = await pauseStamp(page);
+  const elapsedMs = after.now - before.now;
+  const maxTick = Math.floor(before.tick + elapsedMs * TICKS_PER_MS + FRAME_SLACK_TICKS);
+  rapid.push({ tickBefore: before.tick, tickAfter: after.tick, elapsedMs: Math.round(elapsedMs), maxTick, endTick: after.endTick, hashesEqual: after.snap === after.ref });
+  record(ctx, "five edits 100 ms apart while playing: the last edit's scene is on screen and the playhead continued",
+    after.endTick === finalEnd && after.snap === after.ref && after.tick >= before.tick && after.tick <= maxTick && after.tick < finalEnd - 600,
+    `endTick ${after.endTick} (last edit duration 34 s = ${finalEnd}), tick ${before.tick} -> ${after.tick} in ${Math.round(elapsedMs)} ms (max ${maxTick}), hashes ${after.snap === after.ref ? "equal" : "differ"}`);
 }
 
 // --- 5, 6 ----------------------------------------------------------------------
@@ -314,8 +383,8 @@ async function checkReplacement(page) {
   }), before);
   if (await page.locator('[role="menu"]').count()) await page.locator('[role="menuitem"]').nth(1).click();
   const s = await first;
-  record("replacement", "choosing another example while paused at 90 starts the new scene near 0",
-    paused.tick === 90 && s.tick < 30,
+  record("replacement", "choosing another example while paused at 90 starts the new scene at tick 0",
+    paused.tick === 90 && s.tick === 0,
     `paused at ${paused.tick}; first state of the new scene (read on the frame it mounted): tick ${s.tick}, playing ${s.playing}, endTick ${s.endTick}`);
 }
 
@@ -363,6 +432,6 @@ try {
 
 record("page", "no console or page errors", consoleErrors.length === 0, consoleErrors.map((e) => `[${e.phase}] ${e.text}`).join(" | ").slice(0, 400));
 const failed = results.filter((r) => !r.pass);
-writeFileSync(resolve(outDir, "report.json"), JSON.stringify({ results, seekTimes, seekResolution, consoleErrors, monacoCancellations }, null, 2));
+writeFileSync(resolve(outDir, "report.json"), JSON.stringify({ results, seekTimes, seekResolution, playingSamples, rapidEdits: rapid, consoleErrors, monacoCancellations }, null, 2));
 console.log(`\n${results.length - failed.length}/${results.length} requirements passed`);
 process.exit(failed.length ? 1 : 0);
