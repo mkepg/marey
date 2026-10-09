@@ -685,6 +685,45 @@ modern browser and it animates natively, no JavaScript required. Also read
 `decoded_0000.png`, a mid-export frame, and the last decoded frame with the
 Read tool before trusting a run's numbers.
 
+## Checking colour animation
+
+`color-check.mjs` measures a colour animation in the browser's real PNG export
+and compares it with a colour it computes itself. It calls
+`window.__mareyExportPng` on `scenes/color-sequence.marey`, decodes the chosen
+frames in the page (an `ImageBitmap` drawn to an `OffscreenCanvas`, then
+`getImageData`) and reads the pixel at the centre of each non-text shape: the
+swatch at (200, 300), the pulse at (450, 300) and the line's midpoint at
+(650, 300). The expected colour comes from the script's own copy of the easing
+curves and the per-channel formula (`round(c0 + (c1 - c0) * e)`), evaluated at
+tick `frame x 4`, with the sequence's step boundary and the loop and yoyo
+phase modelled in the script. It imports nothing from the renderer. A
+sequence's first step starts at tick 1, so its boundary is tick 121 and not 120.
+
+```bash
+node tools/visual-check/color-check.mjs \
+  --scene tools/visual-check/scenes/color-sequence.marey \
+  --out .visual-check/phase7/color/png
+```
+
+| Flag | Meaning |
+|---|---|
+| `--scene <path>` | A `.marey` file. Required. The expected-colour model is written for `scenes/color-sequence.marey` and is not general |
+| `--frames <list>` | Export frames to sample (default `0,15,30,45,59`) |
+| `--fps <n>` | Export frame rate (default 30) |
+| `--out <dir>` | Where `frame_%04d.png` and `report.json` go |
+| `--url <origin>` | Dev server origin (default `http://localhost:5199`). Same `--strictPort` trap as `check.mjs` |
+| `--headed` | Show the browser window |
+
+`report.json` holds one `{ frame, tick, shape, expected, actual, delta }` row
+per frame and shape. **Exit code is non-zero if the export failed, a page error
+was recorded, or any channel of any row differs by more than 1.** Text is not
+sampled, because a glyph has no reliable centre pixel; check it with
+`lottie-check.mjs --compare-png`. The other outputs use their own scripts on the same
+fixture: `lottie-check.mjs` with `--at 200,300 --at 450,300 --at 650,300`,
+`apng-check.mjs`, and `quality-check.mjs`. Look at the saved PNGs, and at the
+Lottie diff images: mismatches belong on edges, never inside a flat colour.
+The recorded run is in `eval/RESULTS-PHASE-7.md`.
+
 ## Forcing a device-limit refusal
 
 `videoContract.ts`'s `deviceLimitDiagnostic` refuses a coded size larger than

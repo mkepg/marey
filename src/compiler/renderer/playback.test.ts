@@ -146,6 +146,7 @@ describe("Playback · seeking equals playing, on every first-party scene without
       { name: "src/examples/bar-chart-reveal.marey", reason: "text (needs a DOM)" },
       { name: "src/examples/logo-reveal.marey", reason: "text (needs a DOM)" },
       { name: "tools/visual-check/scenes/bars-reveal.marey", reason: "text (needs a DOM)" },
+      { name: "tools/visual-check/scenes/color-sequence.marey", reason: "text (needs a DOM)" },
       { name: "tools/visual-check/scenes/hello-face.marey", reason: "text (needs a DOM)" },
       { name: "tools/visual-check/scenes/lottie-text-ascii.marey", reason: "text (needs a DOM)" },
       { name: "tools/visual-check/scenes/lottie-text-ligature.marey", reason: "text (needs a DOM)" },
