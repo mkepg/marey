@@ -193,6 +193,29 @@ last digit of a double (for example `1.4222222222222225` against
 file holds `0`: a rounding residue replaced by an exact zero. No keyframe
 count, easing handle, position, scale, opacity or colour value differs.
 
+**The scaled-body case.** The whole-branch review found the same placement
+defect as `8650e40` for scale. A polygon or compound body with an effective
+scale other than 1, its own or one inherited from an ancestor such as a scaled
+`use` instance, took that scale from a `setScale` after it was placed, and
+`setScale` scales about the centre of mass. Its reference point therefore
+landed R·((s − 1) ⊙ offset) off the authored point, so playback's tick 0
+painted it there while the sampler's frame 0 did not: 10 px on each axis for a
+60 px triangle at `scale: 2` (painted at (210, 160), authored at (200, 150)).
+The fix passes the starting scale into `addBody`, which scales the body and
+then places its centre of mass at the authored point minus the offset, scaled
+and rotated, in the same step as the rotation correction.
+`physicsWorld.test.ts` ("places a body added at a scale ...") and
+`playback.test.ts` ("Playback · scaled physics bodies") pin it; with the
+placement reverted they read 210 against 200 and a tick-0 hash mismatch.
+**Blast radius: none.** The corpus tick-0 test still passes, and the static set
+re-exported after the fix (`.visual-check/phase7/after-scale/`, commands in
+`after-scale-commands.txt`) has a sha256 manifest identical to
+`.visual-check/phase7/after/manifest.txt` in all 1689 files. That is expected:
+a walk of the IR of all 86 tracked `.marey` files, text scenes included, finds
+no polygon or group with physics whose own scale times its ancestors' is not 1
+(`.visual-check/phase7/scale-probe/output.txt`; the same walk finds both bodies
+of an inline scaled fixture).
+
 ## Frame hashes
 
 Frame hashes changed once in Phase 7: snapshots gained a `color` field, so the

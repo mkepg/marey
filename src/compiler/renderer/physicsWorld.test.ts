@@ -7,6 +7,7 @@ import {
   matterToPxPerSec,
   gravityToTickDelta,
   MatterWorld,
+  type BodyGeometry,
   type PhysicsParams,
 } from "./physicsWorld";
 import { TICK_HZ } from "./clock";
@@ -549,6 +550,55 @@ describe("compound bodies (spec D16, D18)", () => {
       }
     }
     world.destroy();
+  });
+
+  it("places a body added at a scale with its reference point on the authored point", () => {
+    // `Body.scale` scales a body about its centre of mass, so the offset from
+    // that centre to the reference point grows with it. Without a correction a
+    // polygon or compound lands R·((s − 1) ⊙ offset) away from where it was
+    // authored, and the first paint moves the object there: a 60 px triangle
+    // at scale 2 came out 10 px off.
+    const angle = (18 * Math.PI) / 180;
+    const BARS: BodyGeometry = {
+      kind: "compound",
+      parts: [
+        { kind: "rectangle", width: 26, height: 130, x: 0, y: 0, angle: 0 },
+        { kind: "rectangle", width: 52, height: 26, x: 38, y: -46, angle: 0 },
+        { kind: "rectangle", width: 40, height: 26, x: 30, y: 12, angle: 0 },
+      ],
+    };
+    const RIGHT_TRIANGLE: BodyGeometry = {
+      kind: "polygon",
+      points: [{ x: -30, y: -30 }, { x: 30, y: -30 }, { x: -30, y: 30 }],
+    };
+    const cases = [
+      { id: "t", geometry: RIGHT_TRIANGLE, x: 200, y: 150, angle: 0, scale: { x: 2, y: 2 } },
+      { id: "p", geometry: { kind: "polygon", points: TRIANGLE } as BodyGeometry, x: 400, y: 300, angle: 0, scale: { x: 2, y: 3 } },
+      { id: "g", geometry: BARS, x: 360, y: 90, angle: 0, scale: { x: 1.5, y: 0.5 } },
+      { id: "r", geometry: BARS, x: 500, y: 400, angle, scale: { x: 2, y: 2 } },
+    ];
+    const world = new MatterWorld(800, 600);
+    const unscaled = new MatterWorld(800, 600);
+    for (const c of cases) {
+      world.addBody(c.id, c.geometry, c.x, c.y, c.angle, VACUUM, c.scale);
+      unscaled.addBody(c.id, c.geometry, c.x, c.y, c.angle, VACUUM);
+    }
+
+    for (const c of cases) {
+      for (const alpha of [0, 1]) {
+        const s = world.readState(c.id, alpha)!;
+        expect(s.x, `${c.id} x at alpha ${alpha}`).toBeCloseTo(c.x, 9);
+        expect(s.y, `${c.id} y at alpha ${alpha}`).toBeCloseTo(c.y, 9);
+        expect(s.angle, `${c.id} angle at alpha ${alpha}`).toBe(c.angle);
+      }
+      // The scale took: the body's box is the unscaled one's, scaled.
+      const b = world.boundsOf(c.id)!;
+      const u = unscaled.boundsOf(c.id)!;
+      expect(b.max.x - b.min.x, `${c.id} width`).toBeCloseTo((u.max.x - u.min.x) * c.scale.x, 9);
+      expect(b.max.y - b.min.y, `${c.id} height`).toBeCloseTo((u.max.y - u.min.y) * c.scale.y, 9);
+    }
+    world.destroy();
+    unscaled.destroy();
   });
 
   it("collides using the real parts, not the parent's convex hull", () => {

@@ -207,6 +207,51 @@ describe("Playback · seeking equals playing, on every first-party scene without
   });
 });
 
+/*
+ * A polygon and a compound with physics, each scaled: one by its own `scale`,
+ * one by the `use` instance it sits in. No corpus scene has either, so the
+ * corpus test above cannot see a body placed off its authored point.
+ */
+const SCALED_BODIES = `
+template Wedge() {
+  polygon w {
+    position: (0, 0), points: [(0, 0), (30, 0), (0, 30)], color: cyan
+    physics { gravity: (0, 900), bounce: 0.4, duration: indefinitely, collideBounds: true }
+  }
+}
+
+scene {
+  size: (400, 300)
+  duration: 2
+  polygon tri {
+    position: (200, 150), points: [(0, 0), (60, 0), (0, 60)], color: orange, scale: 2
+    physics { gravity: (0, 900), bounce: 0.4, duration: indefinitely, collideBounds: true }
+  }
+  group bars {
+    position: (80, 80), rotation: 18, scale: 1.5
+    rectangle a { position: (0, 0), size: (10, 50), color: white }
+    rectangle b { position: (15, -18), size: (20, 10), color: white }
+    physics { gravity: (0, 900), bounce: 0.4, duration: indefinitely, collideBounds: true }
+  }
+  use Wedge() wedge { position: (320, 60), scale: 2 }
+}
+`;
+
+describe("Playback · scaled physics bodies", () => {
+  it("paints a scaled polygon or compound at its authored point at tick 0, and later ticks match", () => {
+    const ir = compile(SCALED_BODIES);
+    const pb = new Playback(new TestHost(ir), endTickOf(ir));
+    expect(pb.snapshotHash(), "tick 0").toBe(pb.referenceHash(0));
+    pb.play();
+    for (let i = 0; pb.getState().tick < 120; i++) pb.frame(LIVE_DELTAS[i % LIVE_DELTAS.length]);
+    pb.pause();
+    const P = pb.getState().tick;
+    expect(P).toBeGreaterThanOrEqual(120);
+    expect(pb.snapshotHash(), `live at ${P}`).toBe(pb.referenceHash(P));
+    pb.destroy();
+  });
+});
+
 describe("Playback · seek", () => {
   it("continues forward without a rebuild and rebuilds going backward", () => {
     const host = new TestHost(compile(FIXTURE));

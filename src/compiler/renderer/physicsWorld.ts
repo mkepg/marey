@@ -149,13 +149,20 @@ export interface BodyState {
 }
 
 export interface IPhysicsWorld {
+  /**
+   * Adds a body whose reference point is at (x, y) at the given angle and
+   * starting scale (default 1). The scale is taken here, not by a later
+   * `setScale`, because `setScale` scales about the centre of mass and would
+   * carry the reference point of a polygon or compound off (x, y).
+   */
   addBody(
     id: string,
     geometry: BodyGeometry,
     x: number,
     y: number,
     angle: number,
-    params: PhysicsParams
+    params: PhysicsParams,
+    scale?: { readonly x: number; readonly y: number }
   ): void;
   removeBody(id: string): void;
   hasBody(id: string): boolean;
@@ -184,6 +191,11 @@ export interface IPhysicsWorld {
 
 const CATEGORY_OBJECT = 0x0001;
 const CATEGORY_WALL = 0x0002;
+
+/** A body's scale on one axis, kept positive and off zero, where Matter's scaling cannot be undone. */
+function safeScale(v: number): number {
+  return Math.abs(v) < 1e-4 ? 1e-4 : Math.abs(v);
+}
 
 /** How far outside the scene the walls sit, and how thick they are. */
 const WALL_THICKNESS = 200;
@@ -321,7 +333,8 @@ export class MatterWorld implements IPhysicsWorld {
     x: number,
     y: number,
     angle: number,
-    params: PhysicsParams
+    params: PhysicsParams,
+    scale: { readonly x: number; readonly y: number } = { x: 1, y: 1 }
   ): void {
     // Every branch places the geometry's REFERENCE POINT at (x, y); the offset
     // then falls out as `(x, y) − centreOfMass` uniformly. See BodyGeometry's
@@ -360,16 +373,25 @@ export class MatterWorld implements IPhysicsWorld {
     // parent's, so the parent is the only one that needs it.
     body.deltaTime = MATTER_DELTA_MS;
     Matter.Body.setAngle(body, angle);
-    // setAngle turns the body about its centre of mass, which carries the
-    // reference point off (x, y) whenever the offset is not zero (a polygon or
-    // a compound). Put it back, exactly as `setPosition` places a body: centre
-    // of mass = reference point − offset rotated to the body's angle.
-    if (angle !== 0 && (offsetX !== 0 || offsetY !== 0)) {
+    // Rotation first, then scale, the order the two were applied in when the
+    // scale came from a `setScale` call after this one, so an unaffected body
+    // (no offset) gets the same Matter calls it always did.
+    const scaleX = safeScale(scale.x);
+    const scaleY = safeScale(scale.y);
+    if (scaleX !== 1 || scaleY !== 1) Matter.Body.scale(body, scaleX, scaleY);
+    // setAngle and Body.scale both act about the centre of mass, which carries
+    // the reference point off (x, y) whenever the offset is not zero (a
+    // polygon or a compound). Put it back, exactly as `setPosition` places a
+    // body: centre of mass = reference point − the offset, scaled and rotated
+    // to the body's angle (`rotatedOffset`).
+    if ((angle !== 0 || scaleX !== 1 || scaleY !== 1) && (offsetX !== 0 || offsetY !== 0)) {
+      const ox = offsetX * scaleX;
+      const oy = offsetY * scaleY;
       const c = Math.cos(body.angle);
       const s = Math.sin(body.angle);
       Matter.Body.setPosition(body, {
-        x: x - (offsetX * c - offsetY * s),
-        y: y - (offsetX * s + offsetY * c),
+        x: x - (ox * c - oy * s),
+        y: y - (ox * s + oy * c),
       });
     }
 
@@ -379,8 +401,8 @@ export class MatterWorld implements IPhysicsWorld {
       gravityY: params.gravityY,
       offsetX,
       offsetY,
-      scaleX: 1,
-      scaleY: 1,
+      scaleX,
+      scaleY,
       pinReasons: new Map(),
       angleOverride: null,
       prevX: body.position.x,
@@ -494,8 +516,8 @@ export class MatterWorld implements IPhysicsWorld {
   setScale(id: string, sx: number, sy: number): void {
     const rec = this.records.get(id);
     if (!rec) return;
-    const safeX = Math.abs(sx) < 1e-4 ? 1e-4 : Math.abs(sx);
-    const safeY = Math.abs(sy) < 1e-4 ? 1e-4 : Math.abs(sy);
+    const safeX = safeScale(sx);
+    const safeY = safeScale(sy);
     if (safeX === rec.scaleX && safeY === rec.scaleY) return;
     Matter.Body.scale(rec.body, safeX / rec.scaleX, safeY / rec.scaleY);
     rec.scaleX = safeX;

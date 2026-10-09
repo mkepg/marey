@@ -30,6 +30,7 @@ class FakeWorld implements IPhysicsWorld {
     y: number;
     angle: number;
     params: PhysicsParams;
+    scale: { x: number; y: number } | undefined;
   }> = [];
   readonly removeCalls: string[] = [];
   readonly scaleCalls: Array<{ id: string; sx: number; sy: number }> = [];
@@ -46,9 +47,10 @@ class FakeWorld implements IPhysicsWorld {
     x: number,
     y: number,
     angle: number,
-    params: PhysicsParams
+    params: PhysicsParams,
+    scale?: { x: number; y: number }
   ): void {
-    this.addCalls.push({ id, geometry, x, y, angle, params });
+    this.addCalls.push({ id, geometry, x, y, angle, params, scale });
     this.bodies.set(id, { pinned: new Set() });
   }
 
@@ -409,7 +411,8 @@ describe("bindPhysicsBodies", () => {
     bindPhysicsBodies(asContainer(c), world);
 
     expect(world.addCalls[0]).toMatchObject({ x: 123, y: 456, angle: 1.5, geometry: SHAPE });
-    expect(world.scaleCalls).toEqual([{ id: "b0", sx: 2, sy: 3 }]);
+    expect(world.addCalls[0].scale).toEqual({ x: 2, y: 3 });
+    expect(world.scaleCalls).toEqual([]);
   });
 
   it("skips a qualifying container that has no __bodyShape, rather than throwing", () => {
@@ -677,7 +680,7 @@ describe("ancestor transforms (spec D17)", () => {
     expect(world.addCalls[0].x).toBeCloseTo(100, 8);
     expect(world.addCalls[0].y).toBeCloseTo(120, 8);
     // The body's scale is the composed one, not the child's own.
-    expect(world.scaleCalls).toEqual([{ id: "b0", sx: 2, sy: 2 }]);
+    expect(world.addCalls[0].scale).toEqual({ x: 2, y: 2 });
   });
 
   it("converts a body's world position back into the child's local space", () => {
@@ -752,7 +755,7 @@ describe("ancestor transforms (spec D17)", () => {
 
     expect(world.addCalls[0].x).toBe(250);
     expect(world.addCalls[0].y).toBe(175);
-    expect(world.scaleCalls).toEqual([{ id: "b0", sx: 1, sy: 1 }]);
+    expect(world.addCalls[0].scale).toEqual({ x: 1, y: 1 });
   });
 });
 

@@ -177,15 +177,18 @@ export function bindPhysicsBodies(root: Container, world: IPhysicsWorld): Physic
       const centre = centreInParent(container);
       const worldPos = toWorld(t, centre.x, centre.y);
 
+      // The starting scale goes in with the body rather than through a later
+      // `setScale`, which scales about the centre of mass and would carry a
+      // polygon's or compound's reference point off `worldPos`.
       world.addBody(
         id,
         container.__bodyShape,
         worldPos.x,
         worldPos.y,
         t.rot + container.rotation,
-        params
+        params,
+        { x: t.sx * layout.currentScale.x, y: t.sy * layout.currentScale.y }
       );
-      world.setScale(id, t.sx * layout.currentScale.x, t.sy * layout.currentScale.y);
       world.pin(id, "NO_RUNNER");
 
       container.__body = id;

@@ -381,8 +381,8 @@ describe("SceneRuntime · tick phase", () => {
     for (let i = 0; i < 12; i++) rt.advanceOneTick();
     rt.paint(1);
 
-    // bindPhysicsBodies emits one setScale at bind time; drop it.
-    const pushes = world.calls.filter((s) => s.startsWith("setScale:")).slice(1);
+    // The bind-time scale goes in with addBody, so every setScale is a push.
+    const pushes = world.calls.filter((s) => s.startsWith("setScale:"));
     expect(pushes).toHaveLength(6);
     expect(pushes[5]).toBe("setScale:b0:2.0000,2.0000");
   });
