@@ -23,9 +23,9 @@
  * 4. From that directory: `npx marey --version`; `npx marey check` on a copy
  *    of a canonical scene; `npx marey export ... --format lottie`, which
  *    uses the machine's already-installed Chromium (no environment variable
- *    is set); and a bare `import { compile } from "marey"` script.
+ *    is set); and a bare `import { compile } from "marey-lang"` script.
  * 5. The consumer typecheck (spec §2.3): a small file that imports
- *    `compile`, `IRSceneNode` and `CompilerError` from "marey", compiled
+ *    `compile`, `IRSceneNode` and `CompilerError` from "marey-lang", compiled
  *    with this repository's own `tsc --noEmit --strict`, once under
  *    `--module esnext --moduleResolution bundler` and once under
  *    `--module nodenext --moduleResolution nodenext`. nodenext is the mode a
@@ -43,7 +43,7 @@
  *    `types: []`, the same "no ambient @types" result the empty string was
  *    meant to express. There is no `@types/*` package in the install
  *    directory either way, so this only guards against one appearing later.
- * 6. `node_modules/marey/dist/lib/marey.mjs` must not contain "pixi": the
+ * 6. `node_modules/marey-lang/dist/lib/marey.mjs` must not contain "pixi": the
  *    library's boundary (spec §2.3, enforced in-repo by
  *    `src/package/boundary.test.ts`) also holds in the shipped bundle.
  *
@@ -209,9 +209,9 @@ try {
     return line;
   });
 
-  check('node -e "import { compile } from \'marey\'"', () => {
+  check('node -e "import { compile } from \'marey-lang\'"', () => {
     const script =
-      "import { compile } from 'marey'; " +
+      "import { compile } from 'marey-lang'; " +
       "const r = compile('scene { size: (10, 10) }'); " +
       "if (!r.ok) process.exit(1);";
     const r = run(process.execPath, ["--input-type=module", "-e", script], { cwd: installDir });
@@ -223,7 +223,7 @@ try {
   writeFileSync(
     consumerPath,
     [
-      'import { compile, type IRSceneNode, type CompilerError } from "marey";',
+      'import { compile, type IRSceneNode, type CompilerError } from "marey-lang";',
       'const r = compile("scene { size: (10, 10) }");',
       "const ir: IRSceneNode | null = r.ir;",
       "const e: ReadonlyArray<CompilerError> = r.errors;",
@@ -253,7 +253,7 @@ try {
   });
 
   check("no pixi in the installed library bundle", () => {
-    const bundlePath = join(installDir, "node_modules", "marey", "dist", "lib", "marey.mjs");
+    const bundlePath = join(installDir, "node_modules", "marey-lang", "dist", "lib", "marey.mjs");
     const text = readFileSync(bundlePath, "utf8");
     const count = (text.match(/pixi/g) ?? []).length;
     if (count !== 0) throw new Error(`grep -c pixi: ${count}`);

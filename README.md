@@ -67,11 +67,12 @@ identical to the file the image was exported from. Every example in
 
 ## Install and use
 
-Marey needs Node 22 or later.
+Marey needs Node 22 or later. The npm package is `marey-lang`, and it installs
+a command named `marey`.
 
 ```bash
-npx marey check scene.marey
-npx marey export scene.marey --format mp4
+npx marey-lang check scene.marey
+npx marey-lang export scene.marey --format mp4
 ```
 
 `check` compiles and type-checks one or more files and prints `ok` or the
@@ -120,7 +121,7 @@ The package also exports the compiler as a pure function, with no DOM and no
 rendering:
 
 ```text
-import { compile } from "marey";
+import { compile } from "marey-lang";
 
 const result = compile(source);   // { ok, ir, errors }
 if (!result.ok) {
