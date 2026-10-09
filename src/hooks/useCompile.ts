@@ -33,14 +33,17 @@ export function useCompile(hostRef: RefObject<HTMLDivElement>): () => void {
   const memory = memoryRef.current;
 
   const cleanupRef = useRef<(() => void) | null>(null);
-  const isFirstMount = useRef(true);
+  // Whether any compile has run yet. Until one has, the scene must still be
+  // populated even with auto-run off.
+  const hasCompiledRef = useRef(false);
 
   const runCompile = useCallback((): void => {
     const host = hostRef.current;
     if (!host) return;
 
     const source = codeRef.current;
-    
+    hasCompiledRef.current = true;
+
     setIsCompiling(true);
 
     // Ensure we clean up the previous PIXI instance before starting a new one
@@ -102,31 +105,32 @@ export function useCompile(hostRef: RefObject<HTMLDivElement>): () => void {
 
   // Unified Compilation Trigger (Fixes double-compile on boot)
   useEffect(() => {
-    const isFirst = isFirstMount.current;
-    isFirstMount.current = false;
+    const isFirst = !hasCompiledRef.current;
 
-    // Logic: Trigger if it's the very first mount (to populate the scene)
+    // Logic: Trigger until the first compile has run (to populate the scene)
     // OR if autoRun is enabled for subsequent code changes.
     if (!autoRun && !isFirst) return;
 
-    // Use a snappier 300ms delay for the initial boot, 
+    // Use a snappier 300ms delay for the initial boot,
     // and a standard 800ms debounce for typing changes.
     const delay = isFirst ? 300 : 800;
-    
+
     setIsCompiling(true);
     const id = setTimeout(runCompile, delay);
 
-    return () => {
-      clearTimeout(id);
-      // If the hook unmounts during the initial boot phase, ensure cleanup
-      if (isFirst && cleanupRef.current) {
-        cleanupRef.current();
-        cleanupRef.current = null;
-        memory.release();
-        setPlaybackController(null);
-      }
-    };
+    return () => clearTimeout(id);
   }, [code, autoRun, runCompile, setIsCompiling]);
+
+  // Tear the scene down when the hook unmounts, and only then: this effect's
+  // dependencies never change, so a code or auto-run change cannot reach it.
+  useEffect(() => () => {
+    if (cleanupRef.current) {
+      cleanupRef.current();
+      cleanupRef.current = null;
+    }
+    memory.release();
+    setPlaybackController(null);
+  }, [memory, setPlaybackController]);
 
   return runCompile;
 }
