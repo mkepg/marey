@@ -13,6 +13,11 @@ export interface CompileResultWithCleanup extends CompileResult {
 let compilerWorker: Worker | null = null;
 let currentJobId = 0;
 let activeCompileResolve: ((val: CompileResultWithCleanup) => void) | null = null;
+/**
+ * The id of the compile `activeCompileResolve` belongs to. Not `currentJobId`,
+ * which `lint` advances too, so a compile's own reply would no longer match it.
+ */
+let activeCompileId = 0;
 const activeLintResolves = new Map<number, (errors: LintResult) => void>();
 
 function createWorker(): Worker {
@@ -49,7 +54,10 @@ function createWorker(): Worker {
       return;
     }
 
-    if (data.action === "compile" && activeCompileResolve) {
+    // A superseded compile's reply can arrive after a newer compile has been
+    // posted. It belongs to a job that has already been resolved, so it must
+    // not answer the newer one with the older source's IR.
+    if (data.action === "compile" && activeCompileResolve && data.id === activeCompileId) {
       const resolve = activeCompileResolve;
       activeCompileResolve = null;
 
@@ -99,6 +107,7 @@ export async function compile(
   const t0 = performance.now();
 
   return new Promise((resolve) => {
+    activeCompileId = jobId;
     activeCompileResolve = async (result: CompileResultWithCleanup) => {
       if (!result.success || !result._irPayload) {
         resolve(result);
