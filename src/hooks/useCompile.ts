@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef } from "preact/hooks";
 import type { RefObject } from "preact";
 import { compile } from "../compiler";
-import type { PlaybackStart } from "../compiler/renderer/playback";
-import { nextStart } from "../lib/playhead";
+import { PlayheadMemory } from "../lib/playhead";
 import { useAppStore } from "../store";
 
 export function useCompile(hostRef: RefObject<HTMLDivElement>): () => void {
@@ -27,13 +26,13 @@ export function useCompile(hostRef: RefObject<HTMLDivElement>): () => void {
   const fileIdRef = useRef(fileId);
   fileIdRef.current = fileId;
 
-  // The playhead of the compile that is on screen, restored into the next one.
-  const rememberedRef = useRef<PlaybackStart | null>(null);
-  const lastFileIdRef = useRef(fileId);
-  const unsubscribeRef = useRef<(() => void) | null>(null);
+  // The playhead of the compile that is on screen, restored into the next
+  // one, and the rule that only the latest compile may set it.
+  const memoryRef = useRef<PlayheadMemory | null>(null);
+  memoryRef.current ??= new PlayheadMemory(fileId);
+  const memory = memoryRef.current;
 
   const cleanupRef = useRef<(() => void) | null>(null);
-  const compileIdRef = useRef<number>(0);
   const isFirstMount = useRef(true);
 
   const runCompile = useCallback((): void => {
@@ -50,47 +49,25 @@ export function useCompile(hostRef: RefObject<HTMLDivElement>): () => void {
       cleanupRef.current = null;
     }
     // The previous controller stops feeding the remembered playhead in the same
-    // place its scene is torn down.
-    if (unsubscribeRef.current) {
-      unsubscribeRef.current();
-      unsubscribeRef.current = null;
-    }
+    // place its scene is torn down (`begin` releases it).
+    const { id: currentId, start } = memory.begin(fileIdRef.current);
     setPlaybackController(null);
     // The old scene is gone from the host now, so the frame and caption that
     // describe it go too. The new result sets them again.
     setSceneInfo(null);
 
-    compileIdRef.current += 1;
-    const currentId = compileIdRef.current;
     const timestamp = new Date().toLocaleTimeString();
 
-    const fileChanged = fileIdRef.current !== lastFileIdRef.current;
-    lastFileIdRef.current = fileIdRef.current;
-    if (fileChanged) rememberedRef.current = null;
-    const start = nextStart(rememberedRef.current, fileChanged);
-
     compile(source, host, () => themeRef.current === "dark", start).then(({ logs, errors, success, cleanup, playback, _irPayload }) => {
-      // Race condition check: Only apply results if this is still the latest compile job
-      if (currentId !== compileIdRef.current) {
+      // Only the latest compile job's result is applied; an older one that
+      // arrives late is disposed of and never becomes the remembered playhead.
+      if (!memory.adopt(currentId, playback, setPlayback)) {
         if (cleanup) cleanup();
         return;
       }
 
       cleanupRef.current = cleanup;
-      // Only a result that passed the race check is the displayed compile, so
-      // only its controller may become the remembered playhead.
       setPlaybackController(playback);
-      if (playback) {
-        const seed = playback.getState();
-        rememberedRef.current = { tick: seed.tick, playing: seed.playing };
-        setPlayback(seed);
-        unsubscribeRef.current = playback.subscribe((st) => {
-          rememberedRef.current = { tick: st.tick, playing: st.playing };
-          setPlayback(st);
-        });
-      } else {
-        setPlayback(null);
-      }
       setLogs([
         { kind: "sys", text: `» compile ${timestamp}` },
         ...logs,
@@ -109,7 +86,7 @@ export function useCompile(hostRef: RefObject<HTMLDivElement>): () => void {
       );
       setIsCompiling(false);
     });
-  }, [hostRef, setLogs, setErrors, setCompileStatus, setIsCompiling, setSceneInfo, setPlayback, setPlaybackController]);
+  }, [hostRef, memory, setLogs, setErrors, setCompileStatus, setIsCompiling, setSceneInfo, setPlayback, setPlaybackController]);
 
   // Handle Manual Execution (Ctrl+Enter)
   useEffect(() => {
@@ -145,8 +122,7 @@ export function useCompile(hostRef: RefObject<HTMLDivElement>): () => void {
       if (isFirst && cleanupRef.current) {
         cleanupRef.current();
         cleanupRef.current = null;
-        unsubscribeRef.current?.();
-        unsubscribeRef.current = null;
+        memory.release();
         setPlaybackController(null);
       }
     };

@@ -293,13 +293,17 @@ newer or a clamped value, would break it.
 
 **What pins the stale-result rule.** The rule that a compile result arriving
 after a newer compile has started must not become the remembered playhead lives
-in `src/hooks/useCompile.ts`, as the `currentId !== compileIdRef.current` guard
-before the result's controller is subscribed. There is no unit test of it:
-`src/lib/playhead.test.ts` tests `nextStart` and `formatPlayhead`, and no test
-file names `compileIdRef` or `rememberedRef`. The browser burst above exercises
-the consequence (scene identity and playhead continuity across a burst) but a
-burst this slow may never produce a late result, so it cannot show the guard
-firing. The guard is therefore unpinned by any automated check.
+in `PlayheadMemory` (`src/lib/playhead.ts`), which `src/hooks/useCompile.ts`
+calls: `begin` when a compile starts, `adopt` when its result arrives. The
+browser burst above exercises the consequence (scene identity and a bounded
+playhead across a burst), but a burst this slow may never produce a late
+result, so it cannot show the guard firing. The guard is pinned by
+`src/lib/playhead.test.ts`, "lets only the latest compile set the remembered
+playhead, in order": a superseded compile's late result is refused with nothing
+reported, subscribed or remembered; the next compile still starts from the
+pre-burst playhead; an adopted controller's emissions move it; and a released
+controller's emissions are ignored. Removing the id check from `adopt` fails
+that test.
 
 **Backward-seek times** (milliseconds from `performance.now()` around the
 awaited seek, so each includes the wait for the next animation frame and the
@@ -350,8 +354,8 @@ the five examples and stays a recorded limit.
    never moves back and stays within the wall-clock ceiling; shortening below
    the playhead clamps to `endTick`; a burst of five edits ends with the last
    edit's scene on screen and the playhead continued; another example starts at
-   0. The stale-result guard in `useCompile.ts` has no unit test (see the note
-   after the table).
+   0. The stale-result guard is pinned by `src/lib/playhead.test.ts` (see the
+   note after the table).
 5. **Playback stops at `duration`: met.** At `endTick` on all five examples
    (row 3; 840, 600, 600, 1920 and 1440 ticks), and the toggle restarts below
    tick 30. The spec's own example, the 2 s fixture, played from tick 230,
