@@ -1,8 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Container } from "pixi.js";
 import { buildNode } from "../renderer/builder";
-import { snapshotFor } from "../renderer/frameSampler";
-import { sampleFrames } from "../renderer/frameSampler";
+import { sampleFrames, snapshotFor } from "../renderer/frameSampler";
 import { SceneRuntime } from "../renderer/sceneRuntime";
 import { MatterWorld } from "../renderer/physicsWorld";
 import { planExport } from "./exportContract";
