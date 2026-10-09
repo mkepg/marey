@@ -419,7 +419,7 @@ try {
 
   const rep = await open(browser, null, null);
   try {
-    await chooseExample(rep.page, 4);
+    await chooseExample(rep.page, 3);
     await checkReplacement(rep.page);
   } catch (e) { record("replacement", "check ran to completion", false, String(e.message).split("\n")[0]); }
   await rep.ctx.close();
