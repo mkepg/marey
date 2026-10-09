@@ -313,20 +313,28 @@ describe("dusk-hills.marey placement (spec §6)", () => {
   const ridges = () => [0, 1, 2, 3].map((i) => byId(ir, `ridge_${i}`));
   const sun = () => byId(ir, "sun");
 
-  it("draws the backmost ridge first, each night copy just above its ridge", () => {
+  it("draws the backmost ridge first, each darkening to its night shade", () => {
     expect(ridges().map((r) => (r.props.kind === "polygon" ? r.props.color : null))).toEqual([
       "#6b4a7a", "#4a3560", "#2f2444", "#1c1630",
     ]);
     const order = ir.children.map((n) => n.id);
     expect(order.indexOf("scene.ridge_0")).toBeGreaterThan(order.indexOf("scene.sun"));
-    for (let i = 0; i < 4; i++) {
-      const ridge = byId(ir, `ridge_${i}`);
-      const shade = byId(ir, `shade_${i}`);
-      expect(order.indexOf(shade.id), `shade_${i} draws right after ridge_${i}`).toBe(order.indexOf(ridge.id) + 1);
-      expect(shade.props.kind === "polygon" && shade.props.points).toEqual(ridge.props.kind === "polygon" && ridge.props.points);
-      expect(shade.props.alpha).toBe(0);
-      expect(shade.props.animations.map((a) => [a.property, a.to])).toEqual([["alpha", 1]]);
-    }
+    expect(ridges().map((r) => order.indexOf(r.id))).toEqual(
+      [0, 1, 2, 3].map((i) => order.indexOf("scene.ridge_0") + i),
+    );
+    expect(ridges().map((r) => r.props.animations.map((a) => [a.property, a.to]))).toEqual(
+      ["#201a40", "#171333", "#100d25", "#090716"].map((night) => [["color", night]]),
+    );
+  });
+
+  it("turns each sky band from its day colour to its night colour", () => {
+    const bands = [0, 1, 2, 3, 4, 5].map((i) => byId(ir, `band_${i}`));
+    expect(bands.map((b) => (b.props.kind === "rectangle" ? b.props.color : null))).toEqual([
+      "#2b2d5c", "#4a3f78", "#7a4f8a", "#b8608a", "#e8846f", "#f5b36b",
+    ]);
+    expect(bands.map((b) => b.props.animations.map((a) => [a.property, a.to]))).toEqual(
+      ["#0d0f2b", "#131536", "#1a1b41", "#23224d", "#2f2858", "#3d2f66"].map((night) => [["color", night]]),
+    );
   });
 
   let at0: Pose;

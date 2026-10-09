@@ -6,7 +6,8 @@ let stroke = 0.052 * R   // brow and smile thickness
 let ink    = #232323
 let sink   = 185         // deep enough to hide the sun behind the hills
 
-// Sky bands, top to bottom, by their top edges. Night fades in over day.
+// Sky bands, top to bottom, by their top edges. Each turns from its day colour
+// to its night colour and back.
 let edges  = [0, 80, 140, 200, 260, 320, 600]
 let day    = [#2b2d5c, #4a3f78, #7a4f8a, #b8608a, #e8846f, #f5b36b]
 let night  = [#0d0f2b, #131536, #1a1b41, #23224d, #2f2858, #3d2f66]
@@ -17,7 +18,7 @@ let starAt = [(42, 38), (196, 26), (446, 32), (658, 46), (770, 22), (118, 94),
 
 // Ridges, back to front: 13 samples centred on x, w apart, at heights b plus two
 // waves of (amplitude, degrees per sample, phase). Straight segments make the peaks;
-// farther ridges have more, smaller ones. Each has a darker night copy.
+// farther ridges have more, smaller ones. Each darkens to its night shade.
 let ridges = [[500, 84, 324, 24, 155, 90, 12, 97, 0],
               [470, 108, 392, 26, 137, 250, 9, 71, 40],
               [535, 132, 455, 26, 121, 10, 8, 53, 200],
@@ -121,18 +122,13 @@ scene {
     rectangle band {
       position: (400, edges[i]), origin: (0.5, 0), color: c
       size: (800, edges[i + 1] - edges[i])
+      animate { property: color, to: night[i], duration: 6, loop: true, yoyo: true }
     }
   }
+  // ── Stars ── they come out as night falls.
   group nightfall {
     alpha: 0
     animate { property: alpha, to: 1, duration: 6, loop: true, yoyo: true }
-    generate c, i in night {
-      rectangle dark {
-        position: (400, edges[i]), origin: (0.5, 0), color: c
-        size: (800, edges[i + 1] - edges[i])
-      }
-    }
-    // ── Stars ──
     generate p, i in starAt {
       use Star([3, 4.5, 3.5, 6, 2.5][i % 5], [0.5, 0.75, 1, 1.5][i % 4]) star { position: p }
     }
@@ -155,10 +151,9 @@ scene {
       (x+4*w, b + a*sin(p+4*f) + c*sin(q+4*g)), (x+5*w, b + a*sin(p+5*f) + c*sin(q+5*g)),
       (x+6*w, b + a*sin(p+6*f) + c*sin(q+6*g)), (x+6*w, 620), (x-6*w, 620)
     ]
-    polygon ridge { position: (x-6*w, 620), origin: (0, 1), points: edge, color: hills[i] }
-    polygon shade {
-      position: (x-6*w, 620), origin: (0, 1), points: edge, color: shades[i], alpha: 0
-      animate { property: alpha, to: 1, duration: 6, loop: true, yoyo: true }
+    polygon ridge {
+      position: (x-6*w, 620), origin: (0, 1), points: edge, color: hills[i]
+      animate { property: color, to: shades[i], duration: 6, loop: true, yoyo: true }
     }
   }
 
