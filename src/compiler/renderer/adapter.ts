@@ -20,7 +20,34 @@ export interface IRendererAdapter {
 }
 
 let sharedApp: Application | null = null;
+// One initialisation shared by every render: a render that starts while an
+// earlier one is still inside `init()` waits for it rather than using an
+// application that is not ready yet.
+let sharedAppReady: Promise<Application> | null = null;
 let activeTickerCallback: ((ticker: Ticker) => void) | null = null;
+
+function initSharedApp(): Promise<Application> {
+  const app = new Application();
+  return app
+    .init({
+      backgroundAlpha: 0,
+      autoStart:       true,
+      antialias:       true,
+      resolution:      window.devicePixelRatio || 1,
+      autoDensity:     true,
+    })
+    .then(
+      () => {
+        sharedApp = app;
+        return app;
+      },
+      (error: unknown) => {
+        // Let the next render try again instead of failing forever.
+        sharedAppReady = null;
+        throw error;
+      },
+    );
+}
 
 export const pixiRendererAdapter: IRendererAdapter = {
   async render(
@@ -34,31 +61,23 @@ export const pixiRendererAdapter: IRendererAdapter = {
       new Promise<void>((resolve) => setTimeout(resolve, 2000)),
     ]);
 
-    if (!sharedApp) {
-      sharedApp = new Application();
-      await sharedApp.init({
-        backgroundAlpha: 0,
-        autoStart:       true,
-        antialias:       true,
-        resolution:      window.devicePixelRatio || 1,
-        autoDensity:     true,
-      });
-    }
+    sharedAppReady ??= initSharedApp();
+    const app = await sharedAppReady;
 
-    if (sharedApp.canvas.parentElement !== hostElement) {
-      hostElement.appendChild(sharedApp.canvas);
+    if (app.canvas.parentElement !== hostElement) {
+      hostElement.appendChild(app.canvas);
     }
 
     if (activeTickerCallback) {
-      sharedApp.ticker.remove(activeTickerCallback);
+      app.ticker.remove(activeTickerCallback);
       activeTickerCallback = null;
     }
 
-    const oldChildren = sharedApp.stage.removeChildren();
+    const oldChildren = app.stage.removeChildren();
     oldChildren.forEach(c => c.destroy({ children: true, texture: true, context: true }));
 
     const sceneRoot = new Container();
-    sharedApp.stage.addChild(sceneRoot);
+    app.stage.addChild(sceneRoot);
 
     const bgRect = new Graphics()
       .rect(0, 0, scene.width, scene.height)
@@ -143,7 +162,7 @@ export const pixiRendererAdapter: IRendererAdapter = {
       if (!playback.getState().playing && !playback.hasPendingSeek()) sharedApp?.ticker.stop();
     };
     activeTickerCallback = tickerCallback;
-    sharedApp.ticker.add(tickerCallback);
+    app.ticker.add(tickerCallback);
     const wake = (): void => { sharedApp?.ticker.start(); };
 
     const control: LivePlayback = {
