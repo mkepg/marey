@@ -284,8 +284,9 @@ explicitly rather than quietly deviating.
   already writes a linear stagger in one line, which meets finish-line item 5;
   non-linear distributions need `abs`/`min`/`max` and are further capability
   (roadmap §10, amended).
-  - **Status (2026-10-09): built and measured on branch `phase-7`, awaiting the
-    owner; not merged.** It shipped `animate { property: color }` on circles,
+  - **Status (2026-10-09): done and merged** (fast-forward of `phase-7` onto
+    `main` at `1b36cb4`, pushed). It shipped
+    `animate { property: color }` on circles,
     rectangles, polygons, lines and text (an sRGB tint on the shapes that
     change colour, display-only, carried through PNG, APNG, video and Lottie
     export); a playback transport (play/pause, restart, a scrub bar, a
