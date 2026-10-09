@@ -724,6 +724,44 @@ fixture: `lottie-check.mjs` with `--at 200,300 --at 450,300 --at 650,300`,
 Lottie diff images: mismatches belong on edges, never inside a flat colour.
 The recorded run is in `eval/RESULTS-PHASE-7.md`.
 
+## Checking playback
+
+`transport-check.mjs` measures the playground's transport (Phase 7) through the
+dev-only `window.__mareyPlayback` seam. Every requirement compares the live
+tree's `snapshotHash()` with `referenceHash(tick)`, the hash of a fresh runtime
+replayed from tick 0 the way the exporters sample; "the file plays" is not a
+result. For each of the five `src/examples/*.marey`, chosen through the
+Examples menu, it seeks to 0, 37, 120 and the end, plays for 1.5 s and pauses,
+and plays to the end and presses the toggle. On `scenes/color-sequence.marey`
+it edits the editor's text (blue to green while paused at tick 90, again while
+playing, a shorter `duration`, five edits 100 ms apart) and checks that the
+playhead survives each recompile and that the scene on screen is the last
+edit's. It then switches examples and expects the new scene at tick 0, and
+saves screenshots of the transport in both themes.
+
+```bash
+npx vite --port 5199 --strictPort
+node tools/visual-check/transport-check.mjs --out .visual-check/phase7/transport
+```
+
+| Flag | Meaning |
+|---|---|
+| `--out <dir>` | Where `report.json` and the screenshots go (default `.visual-check/phase7/transport`) |
+| `--url <origin>` | Dev server origin (default `http://localhost:5199`). The seam is dev-only, so a production build cannot be checked |
+| `--headed` | Show the browser window |
+
+`report.json` holds every requirement's result, the time of each backward seek
+per example, and each seek's resolution (`state().tick` at the moment its
+promise resolved: a seek promise resolves after the seek is performed, not
+when it is recorded). Exit code is non-zero if any requirement failed or the
+page logged an error. Monaco's own `Canceled` rejection from `Delayer.cancel`,
+raised whenever the editor's text is replaced, is counted separately and not
+treated as an error. Two traps: the seam throws while a scene is being
+replaced, so a script must treat that as "not yet", and a seek promise never
+resolves if the scene is replaced mid-seek, so do not await one across an
+edit. Look at the two screenshots. The recorded run is in
+`eval/RESULTS-PHASE-7.md`.
+
 ## Forcing a device-limit refusal
 
 `videoContract.ts`'s `deviceLimitDiagnostic` refuses a coded size larger than

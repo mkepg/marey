@@ -321,6 +321,14 @@ gallery, and any adoption metric. These move past the finish line per R15.
 
 Spring easing and semantic layout primitives are **not** in this phase; see §13.
 
+> **Amended 2026-10-07:** `stagger` was dropped from this phase. Phase 3C's
+> `delay` already writes a linear stagger in one line, and finish-line item 5
+> (staggered reveal) is met by it. A non-linear distribution needs `abs`,
+> `min` and `max` in the expression language, and is further capability, not
+> part of the finish line. Colour animation, scrubbing and the playhead kept
+> across recompiles are as listed above; see
+> `2026-10-07-marey-phase-7-motion-graphics-core-design.md`.
+
 Each feature is validated through the real export pipeline rather than only in
 the playground, which is why this phase follows the artifact work.
 

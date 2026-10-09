@@ -202,3 +202,115 @@ Phases 5A to 6) were taken on snapshots without the field and predate it; they
 are not comparable with a hash measured now, and a mismatch against one of
 them is expected, not a regression. The pixels are unchanged, as the
 static-colour section above shows.
+
+# Phase 7 results: playback
+
+Measured on 2026-10-09 against the same branch (`phase-7`), with Vite on 5199
+`--strictPort`, stopped afterwards (nothing listening on 5199). Every
+number comes from `.visual-check/phase7/transport/` (git-ignored; re-run the
+command to regenerate).
+
+## Headless: `playback.test.ts`
+
+`npx vitest run src/compiler/renderer/playback.test.ts`: 35 tests pass. The
+corpus is every `.marey` file under `src/examples/`, `eval/` and
+`tools/visual-check/scenes/` (42 files). **25 scenes are compared** (the
+comparison per scene: tick 0 against the sampler's frame 0, a straight replay
+to T, seek forward to T, back to T/3 and forward again, and a live-cadence run
+in bursts of 1, 7 and 12 ticks with paints between), and **17 are skipped,
+all because they contain `text`**, which needs a DOM that the Node test has
+not got. The skip list is pinned in the test, so a scene cannot leave the
+comparison unnoticed. The corpus includes `physics-pile` (named in the test)
+and, by the test's own assertions, at least one scene with a `sequence`, one
+with a `handoff` and one with physics. The text scenes are covered in the
+browser, where text renders: `bar-chart-reveal` and `logo-reveal` are two of
+the five examples below.
+
+## Browser: `transport-check.mjs`
+
+Command:
+
+```
+node tools/visual-check/transport-check.mjs --out .visual-check/phase7/transport
+```
+
+Output: `report.json`, `run.log`, `transport-{light,dark}.png` and
+`transport-{light,dark}-strip.png`. Exit 0, **24 of 24 requirements pass**, no
+console error and no page error. Seven `Canceled` rejections from Monaco's own
+`Delayer.cancel` (raised when the editor's text is replaced) are counted in `report.json` as `monacoCancellations` and left out of
+the error list; they come from the editor library, not from Marey. Each example is chosen through the
+Examples menu (with the "Replace your code?" confirmation); the colour fixture
+is loaded through a share link and then edited by replacing the editor's text.
+
+**What a seek promise means.** `await __mareyPlayback.seek(t)` resolves after
+the seek has been performed, not when it is recorded: across all 35 seeks in
+the run, `state().tick === t` and `playing === false` held at the moment the
+promise resolved, with no exceptions (`seekResolution` in `report.json`). The
+script therefore awaits it directly.
+
+| Requirement | Result |
+|---|---|
+| 1. Seek equals reference at ticks 0, 37, 120 and the end (480 for an indefinite scene), order end, 120, 37, 0 | Pass on all five examples: `snapshotHash() === referenceHash(t)` at every tick |
+| 2. Live play 1.5 s, pause, compare at the tick read | Pass on all five: ticks 159 to 183 reached (the slowest was `yellow-flowers`), hashes equal |
+| 3. Stops at its end, toggle restarts below tick 30 | Pass on all five (every example declares a `duration`, so none is indefinite and the 480 fallback in row 1 was not used): stopped exactly at `endTick` (840, 600, 600, 1920, 1440), and the tick read two animation frames after the click was 0 |
+| 4a. Fixture paused at the colour frames' ticks 0, 60, 120, 180, 236 | Pass: preview hash equals reference at each |
+| 4b. Paused at 90, `to: blue` to `to: green` | Pass: tick 90, still paused, readout `0.75 / 2.00 s`, hashes equal, and the reference hash at 90 changed (the new scene is the one on screen) |
+| 4c. Playing, recompile | Pass: tick 128 before the edit, 357 after the recompile, playing still true (a long duration keeps the scene from ending while it compiles) |
+| 4d. Paused at 90, `duration: 2` to `0.5` | Pass: tick 60, `endTick` 60, paused, hashes equal |
+| 4e. Five edits 100 ms apart while playing | Pass: after the last compile `endTick` is 480, the last edit's `duration: 4`; paused at tick 480, `snapshotHash() === referenceHash(480)`. A stale compile result would have left another `endTick` |
+| 5. Pause at 90, choose another example | Pass: the new scene's first state, read on the frame it mounted, is tick 0, playing, `endTick` 840. The new file autoplays from 0, so tick 0 can only be read at mount; it was read by polling `referenceHash(0)` on every animation frame until it changed |
+| 6. Transport in both themes | `transport-light.png` and `transport-dark.png` (1440 x 900), plus a strip crop of each. Both were looked at: play, restart, the scrub bar at 0.75 / 2.00 s, and the readout sit in a 691 x 32 px strip at the pane's bottom edge, outside the canvas, legible in both themes |
+
+**Backward-seek times** (milliseconds from `performance.now()` around the
+awaited seek, so each includes the wait for the next animation frame and the
+paint; `report.json`, `seekTimes`; three backward seeks per example, in the
+order end to 120, 120 to 37, 37 to 0):
+
+| Example | Ticks (end) | end to 120 | 120 to 37 | 37 to 0 |
+|---|---|---|---|---|
+| `physics-pile` | 840 | 23.4 | 16.9 | 24.9 |
+| `bar-chart-reveal` | 600 | 40.3 | 48.0 | 43.7 |
+| `logo-reveal` | 600 | 5.7 | 18.8 | 19.9 |
+| `yellow-flowers` | 1920 | 22.7 | 20.3 | 39.4 |
+| `dusk-hills` | 1440 | 21.3 | 21.3 | 28.6 |
+
+Spec 3.6 measured a headless replay from tick 0 of 96 ms (`physics-pile`, 600
+ticks, first run with JIT warm-up), 11 ms (`dusk-hills`) and 3 ms
+(`yellow-flowers`), and predicted a backward seek costs at most about 0.1 s.
+The browser figures agree: the slowest of the fifteen is 48 ms. They are not
+the same quantity: a backward seek in the browser replays only up to the
+target tick (120 or less), which is why the end-to-120 figure is not larger for
+the longer scenes, and it adds a rebuild, a paint and a frame wait. The
+heaviest case spec 3.6 names, a long indefinite physics scene, is not among
+the five examples and stays a recorded limit.
+
+## Spec 4 criteria
+
+1. **Colour matches across every output: met.** PNG max channel delta 0,
+   Lottie against PNG max delta 0 on the 15 samples with edge-only diffs, APNG
+   0 differing bytes in 60 frames, both video containers inside the PSNR
+   window (sections above). The last bullet, the live preview, is the
+   `transport-check` row 4a: the preview's `snapshotHash()` equals
+   `referenceHash(tick)` at ticks 0, 60, 120, 180 and 236. Text is compared
+   by Lottie against PNG only, as the criterion says.
+2. **Static colours are unchanged: met.** 1680 of 1680 PNG frames
+   byte-identical; 7 of 9 Lottie documents byte-identical and the other two
+   differ only by the rotation-radians fix (`3a32c8a`), not by colour (section
+   above).
+3. **Seeking equals playing: met.** Headless on 25 scenes (35 tests; 17 `text`
+   scenes skipped, pinned), including `physics-pile`, sequence and handoff
+   scenes; in the browser through `__mareyPlayback` on all five examples,
+   `bar-chart-reveal` (text) included (rows 1 and 2).
+4. **An edit keeps the playhead: met.** Rows 4b to 4e and 5: paused at 90
+   stays 90 with a matching hash; playing never moves back; shortening below
+   the playhead clamps to `endTick`; a burst of five edits ends with the last
+   edit's scene on screen; another example starts at 0.
+5. **Playback stops at `duration`: met.** At `endTick` on all five examples
+   (row 3; 840, 600, 600, 1920 and 1440 ticks), and the toggle restarts below
+   tick 30. The spec's 2 s example (240 ticks) was not played to its end in
+   the final run; the fixture's `endTick` of 240 is read in rows 4b and 4d, and
+   the stop-and-restart behaviour is the same code path the five examples
+   exercise.
+6. **Nothing else regresses: met.** The four pre-commit checks, `check:export`
+   and `check:pack` pass on the commit that adds this section (1380 tests in
+   65 files; 5 eval tests).

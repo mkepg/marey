@@ -279,8 +279,25 @@ explicitly rather than quietly deviating.
     with 6B's and 6C's own designs and plans dated 2026-10-02 and 2026-10-03.
     Plan and execution notes:
     `docs/plans/2026-09-27-phase-6-packaging-and-legibility.md`.
-- **Phase 7 — motion-graphics core.** Color animation, `stagger`, scrubbing,
-  and live-edit replay.
+- **Phase 7 — motion-graphics core.** Color animation, scrubbing, and
+  live-edit replay. `stagger` was dropped on 2026-10-07: Phase 3C's `delay`
+  already writes a linear stagger in one line, which meets finish-line item 5;
+  non-linear distributions need `abs`/`min`/`max` and are further capability
+  (roadmap §10, amended).
+  - **Status (2026-10-09): built and measured on branch `phase-7`, awaiting the
+    owner; not merged.** It shipped `animate { property: color }` on circles,
+    rectangles, polygons, lines and text (an sRGB tint on the shapes that
+    change colour, display-only, carried through PNG, APNG, video and Lottie
+    export); a playback transport (play/pause, restart, a scrub bar, a
+    readout) in which seeking replays from tick 0 with the sampler's loop; a
+    playhead kept across recompiles and reset when the file is replaced;
+    playback that stops at a declared `duration`; and the dev-only
+    `window.__mareyPlayback` seam. Evidence is in `eval/RESULTS-PHASE-7.md`:
+    colour matches across every output, static output is byte-identical,
+    seeking equals playing on 25 scenes headless and on all five examples in
+    the browser (`tools/visual-check/transport-check.mjs`). Design:
+    `docs/specs/2026-10-07-marey-phase-7-motion-graphics-core-design.md`.
+    Plan: `docs/plans/2026-10-07-phase-7-motion-graphics-core.md`.
 - **Phase 8 — remaining physics syntax.** `world`, `lockPosition`,
   `lockRotation`, and `spin`; D13's explicit-body rule remains in force.
 - **Finish line.** Phases 3C–8 complete. Everything after — the documentation

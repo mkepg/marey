@@ -131,6 +131,14 @@ for a **complete, provable engineering artifact with a declarable finish
 line**, and acquisition work moved past that line. Read its §1 before
 proposing anything the old roadmap justified by adoption.
 
+**7 — motion-graphics core is built and measured on branch `phase-7`,
+awaiting the owner; it is not merged** (status 2026-10-09). It adds colour
+animation through every output, a playback transport whose seek replays from
+tick 0, and a playhead kept across recompiles. `stagger` was dropped on
+2026-10-07 because Phase 3C's `delay` already writes a linear stagger (roadmap
+§10, amended). Evidence is in `eval/RESULTS-PHASE-7.md`;
+`roadmap-and-process.md`'s Phase 7 bullet carries the same status.
+
 **6 — packaging and legibility is complete** (status 2026-10-07). The
 package, `marey check`/`marey export`, the determinism account, and the
 owner's additions 6B (playground redesign) and 6C (smooth handoff) are merged
