@@ -58,7 +58,10 @@ function buildPhysicsFromNode(physicsNode: ObjectNode): IRPhysics {
   const durVal = pp["duration"];
   let duration: IRPhysicsDuration;
 
-  if (durVal?.kind === "indefinitely") {
+  const lockVal = pp["lockPosition"];
+  if (durVal?.kind === "indefinitely" || (lockVal?.kind === "boolean" && lockVal.value === true)) {
+    // A locked body has no duration of its own: the validator waives the
+    // requirement and the body is static for the whole scene.
     duration = "indefinitely";
   } else {
     duration = getReqNumber(pp, "duration");
