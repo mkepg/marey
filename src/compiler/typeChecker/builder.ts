@@ -11,13 +11,16 @@ import type {
   IRTextProps,
   IRGroupProps,
   IRTransform,
+  IRPoint,
   IRAnimation,
   IRPhysics,
   IRPhysicsDuration,
+  IREdge,
   IRSequence,
   IRSequenceStep,
   IRParallelStep,
 } from "../sceneIR";
+import { EDGE_VALUES } from "../languageContract";
 import {
   resolveColor,
   resolveNumber,
@@ -53,31 +56,50 @@ function buildAnimationFromNode(an: ObjectNode): IRAnimation {
   };
 }
 
-function buildPhysicsFromNode(physicsNode: ObjectNode): IRPhysics {
+/**
+ * Gravity for a physics block: its own, else the world's, else the contract
+ * default. Resolved once in `buildIR` and passed to every caller, so the IR
+ * carries no world gravity of its own.
+ */
+function buildPhysicsFromNode(physicsNode: ObjectNode, worldGravity: IRPoint): IRPhysics {
   const pp = physicsNode.props;
-  const durVal = pp["duration"];
-  let duration: IRPhysicsDuration;
+  const bounce = resolveNumber(pp, "bounce", contractNumberDefault("physics", "bounce"));
 
   const lockVal = pp["lockPosition"];
-  if (durVal?.kind === "indefinitely" || (lockVal?.kind === "boolean" && lockVal.value === true)) {
-    // A locked body has no duration of its own: the validator waives the
-    // requirement and the body is static for the whole scene.
-    duration = "indefinitely";
-  } else {
-    duration = getReqNumber(pp, "duration");
+  if (lockVal?.kind === "boolean" && lockVal.value === true) {
+    // A locked body is written as what it does: static, no duration of its own,
+    // and only its own bounce. The validator rejects every other property.
+    return {
+      velocity:      { x: 0, y: 0 },
+      gravity:       { x: 0, y: 0 },
+      airDrag:       0,
+      bounce,
+      collideBounds: true,
+      duration:      "indefinitely",
+      lockPosition:  true,
+      lockRotation:  false,
+      spin:          0,
+    };
   }
+
+  const durVal = pp["duration"];
+  const duration: IRPhysicsDuration =
+    durVal?.kind === "indefinitely" ? "indefinitely" : getReqNumber(pp, "duration");
 
   return {
     velocity:      resolvePoint(pp, "velocity", contractPointDefault("physics", "velocity")),
-    gravity:       resolvePoint(pp, "gravity", contractPointDefault("physics", "gravity")),
+    gravity:       resolvePoint(pp, "gravity", worldGravity),
     airDrag:       resolveNumber(pp, "airDrag", contractNumberDefault("physics", "airDrag")),
-    bounce:        resolveNumber(pp, "bounce", contractNumberDefault("physics", "bounce")),
+    bounce,
     collideBounds: resolveBoolean(pp, "collideBounds", contractBooleanDefault("physics", "collideBounds")),
     duration,
+    lockPosition:  false,
+    lockRotation:  resolveBoolean(pp, "lockRotation", contractBooleanDefault("physics", "lockRotation")),
+    spin:          resolveNumber(pp, "spin", contractNumberDefault("physics", "spin")),
   };
 }
 
-function buildSequencesFromChildren(children: ObjectNode[]): ReadonlyArray<IRSequence> {
+function buildSequencesFromChildren(children: ObjectNode[], worldGravity: IRPoint): ReadonlyArray<IRSequence> {
   const seqNodes = children.filter(c => c.type === "sequence");
   return seqNodes.map((seqNode): IRSequence => {
     const steps: IRSequenceStep[] = [];
@@ -86,14 +108,14 @@ function buildSequencesFromChildren(children: ObjectNode[]): ReadonlyArray<IRSeq
       if (child.type === "animate") {
         steps.push(buildAnimationFromNode(child));
       } else if (child.type === "physics") {
-        steps.push(buildPhysicsFromNode(child));
+        steps.push(buildPhysicsFromNode(child, worldGravity));
       } else if (child.type === "parallel") {
         const parallelSteps: (IRAnimation | IRPhysics)[] = [];
         for (const pChild of child.children) {
           if (pChild.type === "animate") {
             parallelSteps.push(buildAnimationFromNode(pChild));
           } else if (pChild.type === "physics") {
-            parallelSteps.push(buildPhysicsFromNode(pChild));
+            parallelSteps.push(buildPhysicsFromNode(pChild, worldGravity));
           }
         }
         
@@ -111,6 +133,16 @@ function buildSequencesFromChildren(children: ObjectNode[]): ReadonlyArray<IRSeq
 
 export function buildIR(ast: AstNode): IRSceneNode {
   const registry: Record<IRObjectId, IRObjectNode> = {};
+  const sceneNode = ast as AstNode & { type: "scene" };
+  const worldGravity = resolvePoint(
+    sceneNode.world?.props ?? {}, "gravity", contractPointDefault("physics", "gravity"),
+  );
+  const boundsVal = sceneNode.world?.props["bounds"];
+  const walls: ReadonlyArray<IREdge> = Object.freeze(
+    boundsVal?.kind === "edges"
+      ? EDGE_VALUES.filter(edge => boundsVal.value.some(word => word.name === edge))
+      : [...EDGE_VALUES],
+  );
 
   function buildObjectNode(node: ObjectNode, scopePath: string): IRObjectNode {
     if (node.type === "animate" || node.type === "physics" || node.type === "sequence" || node.type === "parallel" || node.type === "world") {
@@ -131,10 +163,10 @@ export function buildIR(ast: AstNode): IRSceneNode {
 
     let physics: IRPhysics | undefined;
     if (physicsNode) {
-      physics = buildPhysicsFromNode(physicsNode);
+      physics = buildPhysicsFromNode(physicsNode, worldGravity);
     }
 
-    const sequences = buildSequencesFromChildren(node.children);
+    const sequences = buildSequencesFromChildren(node.children, worldGravity);
 
     let props: IRObjectProps;
 
@@ -306,6 +338,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
     background: resolveColor(sceneAst.props, "background", contractStringDefault("scene", "background")),
     fit:        resolveFit(sceneAst.props, contractStringDefault("scene", "fit")),
     duration:   resolveOptionalNumber(sceneAst.props, "duration"),
+    walls,
     children:   Object.freeze(topLevelChildrenNodes.map(x => x.node)) as ReadonlyArray<IRObjectNode>,
     registry:   Object.freeze(registry) as Readonly<Record<IRObjectId, IRObjectNode>>,
   });

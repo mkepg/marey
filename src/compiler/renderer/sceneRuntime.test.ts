@@ -78,6 +78,9 @@ const PHYSICS: IRPhysics = {
   bounce: 0.65,
   collideBounds: true,
   duration: 1,
+  lockPosition: false,
+  lockRotation: false,
+  spin: 0,
 };
 
 function anim(over: Partial<IRAnimation> = {}): IRAnimation {
@@ -1286,6 +1289,9 @@ describe("SceneRuntime · the handoff seam", () => {
     bounce: 0,
     collideBounds: false,
     duration: "indefinitely",
+    lockPosition: false,
+    lockRotation: false,
+    spin: 0,
   };
   const START = { x: 200, y: 300 };
   const TO = { x: 400, y: 300 };

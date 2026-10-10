@@ -335,6 +335,12 @@ exports[`compiler determinism > keeps list, indexed generate, modulo, comparison
       },
     },
   },
+  "walls": [
+    "left",
+    "right",
+    "top",
+    "bottom",
+  ],
   "width": 800,
 }
 `;
@@ -381,6 +387,9 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
                 "x": 0,
                 "y": 980,
               },
+              "lockPosition": false,
+              "lockRotation": false,
+              "spin": 0,
               "velocity": {
                 "x": 0,
                 "y": 0,
@@ -443,6 +452,9 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
             "x": 0,
             "y": 20,
           },
+          "lockPosition": false,
+          "lockRotation": false,
+          "spin": 0,
           "velocity": {
             "x": 0,
             "y": 0,
@@ -499,6 +511,9 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
                 "x": 0,
                 "y": 980,
               },
+              "lockPosition": false,
+              "lockRotation": false,
+              "spin": 0,
               "velocity": {
                 "x": 0,
                 "y": 0,
@@ -600,6 +615,9 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
                       "x": 0,
                       "y": 20,
                     },
+                    "lockPosition": false,
+                    "lockRotation": false,
+                    "spin": 0,
                     "velocity": {
                       "x": 0,
                       "y": 0,
@@ -617,6 +635,9 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
                   "x": 0,
                   "y": 20,
                 },
+                "lockPosition": false,
+                "lockRotation": false,
+                "spin": 0,
                 "velocity": {
                   "x": 0,
                   "y": 0,
@@ -656,6 +677,9 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
             "x": 0,
             "y": 20,
           },
+          "lockPosition": false,
+          "lockRotation": false,
+          "spin": 0,
           "velocity": {
             "x": 0,
             "y": 0,
@@ -735,6 +759,9 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
                       "x": 0,
                       "y": 20,
                     },
+                    "lockPosition": false,
+                    "lockRotation": false,
+                    "spin": 0,
                     "velocity": {
                       "x": 0,
                       "y": 0,
@@ -752,6 +779,9 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
                   "x": 0,
                   "y": 20,
                 },
+                "lockPosition": false,
+                "lockRotation": false,
+                "spin": 0,
                 "velocity": {
                   "x": 0,
                   "y": 0,
@@ -801,6 +831,9 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
                 "x": 0,
                 "y": 980,
               },
+              "lockPosition": false,
+              "lockRotation": false,
+              "spin": 0,
               "velocity": {
                 "x": 0,
                 "y": 0,
@@ -877,6 +910,9 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
             "x": 0,
             "y": 980,
           },
+          "lockPosition": false,
+          "lockRotation": false,
+          "spin": 0,
           "velocity": {
             "x": 0,
             "y": 0,
@@ -933,6 +969,9 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
                 "x": 0,
                 "y": 980,
               },
+              "lockPosition": false,
+              "lockRotation": false,
+              "spin": 0,
               "velocity": {
                 "x": 0,
                 "y": 0,
@@ -1009,6 +1048,9 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
             "x": 0,
             "y": 980,
           },
+          "lockPosition": false,
+          "lockRotation": false,
+          "spin": 0,
           "velocity": {
             "x": 0,
             "y": 0,
@@ -1028,6 +1070,12 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
       },
     },
   },
+  "walls": [
+    "left",
+    "right",
+    "top",
+    "bottom",
+  ],
   "width": 240,
 }
 `;
@@ -1209,6 +1257,12 @@ exports[`compiler determinism > keeps primitive defaults and layer order in the 
       },
     },
   },
+  "walls": [
+    "left",
+    "right",
+    "top",
+    "bottom",
+  ],
   "width": 160,
 }
 `;

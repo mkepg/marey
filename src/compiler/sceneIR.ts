@@ -1,3 +1,5 @@
+import type { EDGE_VALUES } from "./languageContract";
+
 /**
  * The fixed simulation rate. 120Hz is chosen so that common export frame
  * rates divide evenly into it (24 → 5 ticks, 30 → 4, 60 → 2), which keeps
@@ -48,6 +50,8 @@ export interface IRAnimation {
   readonly handoff: boolean;
 }
 
+export type IREdge = (typeof EDGE_VALUES)[number];
+
 export type IRPhysicsDuration = number | "indefinitely";
 
 export interface IRPhysics {
@@ -57,6 +61,12 @@ export interface IRPhysics {
   readonly bounce: number;
   readonly collideBounds: boolean;
   readonly duration: IRPhysicsDuration;
+  /** The body never moves from physics; other bodies still collide with it. */
+  readonly lockPosition: boolean;
+  /** The body never rotates from contact or physics. */
+  readonly lockRotation: boolean;
+  /** Initial angular velocity in degrees per second (the renderer converts). */
+  readonly spin: number;
 }
 
 export interface IRParallelStep {
@@ -145,6 +155,8 @@ export interface IRSceneNode {
   readonly fit: IRFit;
   /** Scene length in seconds, or null for an indefinite scene. */
   readonly duration: number | null;
+  /** Scene edges that carry a wall, in canonical order (left, right, top, bottom). */
+  readonly walls: ReadonlyArray<IREdge>;
   readonly children: ReadonlyArray<IRObjectNode>;
   readonly registry: Readonly<Record<IRObjectId, IRObjectNode>>;
 }

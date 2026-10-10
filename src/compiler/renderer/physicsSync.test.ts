@@ -234,6 +234,9 @@ function physicsChild(
       bounce: 0.65,
       collideBounds: true,
       duration: 1,
+      lockPosition: false,
+      lockRotation: false,
+      spin: 0,
     },
     __mareyLayout: {
       localPivotX: 0,
@@ -286,6 +289,9 @@ const PHYSICS: IRPhysics = {
   bounce: 0.5,
   collideBounds: true,
   duration: "indefinitely",
+  lockPosition: false,
+  lockRotation: false,
+  spin: 0,
 };
 
 const ANIMATION: IRAnimation = {
@@ -607,6 +613,9 @@ describe("physicsParamsFromIR", () => {
       bounce: 0.75,
       collideBounds: false,
       duration: 2.5,
+      lockPosition: false,
+      lockRotation: false,
+      spin: 0,
     };
     expect(physicsParamsFromIR(ph)).toEqual({
       gravityX: 3,
