@@ -589,6 +589,10 @@ export class SceneRuntime {
       // each unpin, so if another reason still holds the pin — a position
       // animation running alongside this physics block — the velocity stays
       // parked and whichever unpin releases the last reason flushes it then.
+      // A locked body takes its permanent pin first, so releasing NO_RUNNER
+      // never leaves it free for a moment. Nothing releases LOCKED; a position
+      // animation adds and removes POS_ANIM around it (physics design §6.6).
+      if (phIR.lockPosition) pinBody(container, this.world, "LOCKED");
       unpinBody(container, this.world, "FROZEN");
       unpinBody(container, this.world, "NO_RUNNER");
     }

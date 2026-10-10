@@ -1486,3 +1486,29 @@ describe("SceneRuntime · colour animation", () => {
     });
   });
 });
+
+describe("SceneRuntime · lockPosition", () => {
+  it("pins LOCKED before releasing NO_RUNNER, so the body is never free, and keeps it pinned", () => {
+    const locked: IRPhysics = {
+      ...PHYSICS,
+      gravity: { x: 0, y: 0 },
+      bounce: 0,
+      duration: "indefinitely",
+      lockPosition: true,
+    };
+    const c = makeContainer({ physics: locked });
+    const world = new RecordingWorld();
+    const rt = new SceneRuntime(world, makeRoot(c));
+    const id = c.__body!;
+
+    rt.advanceOneTick();
+
+    const lock = world.calls.indexOf(`pin:${id}:LOCKED`);
+    const release = world.calls.indexOf(`unpin:${id}:NO_RUNNER`);
+    expect(lock).toBeGreaterThanOrEqual(0);
+    expect(release).toBeGreaterThanOrEqual(0);
+    expect(lock).toBeLessThan(release);
+    expect(world.isPinned(id)).toBe(true);
+    expect(world.calls).not.toContain(`unpin:${id}:LOCKED`);
+  });
+});

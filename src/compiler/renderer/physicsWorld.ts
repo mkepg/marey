@@ -78,7 +78,7 @@ export function gravityToTickDelta(pxPerSecSq: number): number {
 }
 
 /** Why a body is currently pinned. Reason-counted, so two holds need two releases. */
-export type PinReason = "NO_RUNNER" | "POS_ANIM" | "FROZEN";
+export type PinReason = "NO_RUNNER" | "POS_ANIM" | "FROZEN" | "LOCKED";
 
 /**
  * A point in a body's own local space. Spelled inline rather than imported,
