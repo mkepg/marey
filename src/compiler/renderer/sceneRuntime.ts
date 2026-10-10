@@ -583,6 +583,11 @@ export class SceneRuntime {
         x: container.__pendingVelocity?.x ?? phIR.velocity.x,
         y: container.__pendingVelocity?.y ?? phIR.velocity.y,
       };
+      // Spin is parked beside the velocity and flushed with it. A handoff
+      // carries linear momentum only, so nothing else ever sets it, and this
+      // step's spin replaces any an earlier step never got to apply. A spin
+      // of 0 parks nothing, so it makes no world call at all.
+      container.__pendingSpin = phIR.spin !== 0 ? (phIR.spin * Math.PI) / 180 : undefined;
 
       // Unpin before flushing: setStatic(false) collapses the body back to rest,
       // so a velocity written first would be discarded. unpinBody flushes after

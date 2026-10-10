@@ -52,6 +52,9 @@ class RecordingWorld implements IPhysicsWorld {
     this.velocities.set(id, { x: vx, y: vy });
     this.calls.push(`setVelocity:${id}:${vx.toFixed(4)},${vy.toFixed(4)}`);
   }
+  setAngularVelocity(id: string, radiansPerSecond: number): void {
+    this.calls.push(`setAngularVelocity:${id}:${radiansPerSecond.toFixed(4)}`);
+  }
   setScale(id: string, sx: number, sy: number): void {
     this.calls.push(`setScale:${id}:${sx.toFixed(4)},${sy.toFixed(4)}`);
   }
@@ -1203,6 +1206,9 @@ describe("SceneRuntime · a bottom-origin polygon body under a scale animation",
           bounce: 0,
           collideBounds: false,
           duration: "indefinitely",
+          lockPosition: false,
+          lockRotation: false,
+          spin: 0,
         },
       } as unknown as IRObjectProps,
       children: [],
@@ -1510,5 +1516,34 @@ describe("SceneRuntime · lockPosition", () => {
     expect(lock).toBeLessThan(release);
     expect(world.isPinned(id)).toBe(true);
     expect(world.calls).not.toContain(`unpin:${id}:LOCKED`);
+  });
+});
+
+describe("SceneRuntime · spin", () => {
+  const spinning = (spin: number): IRPhysics => ({
+    ...PHYSICS,
+    gravity: { x: 0, y: 0 },
+    duration: "indefinitely",
+    spin,
+  });
+
+  it("starts the body turning at its spin, in radians per second, once its pin lifts", () => {
+    const c = makeContainer({ physics: spinning(90) });
+    const world = new RecordingWorld();
+    new SceneRuntime(world, makeRoot(c));
+    const id = c.__body!;
+
+    const release = world.calls.indexOf(`unpin:${id}:NO_RUNNER`);
+    const turn = world.calls.indexOf(`setAngularVelocity:${id}:1.5708`);
+    expect(release).toBeGreaterThanOrEqual(0);
+    expect(turn).toBeGreaterThan(release);
+  });
+
+  it("makes no setAngularVelocity call at all for a spin of 0", () => {
+    const c = makeContainer({ physics: spinning(0) });
+    const world = new RecordingWorld();
+    const rt = new SceneRuntime(world, makeRoot(c));
+    for (let i = 0; i < 10; i++) rt.advanceOneTick();
+    expect(world.calls.some((call) => call.startsWith("setAngularVelocity:"))).toBe(false);
   });
 });

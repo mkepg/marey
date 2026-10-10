@@ -104,6 +104,7 @@ const VACUUM: PhysicsParams = {
   airDrag: 0,
   bounce: 0,
   collideBounds: true,
+  lockRotation: false,
 };
 
 /** An isoceles triangle whose centroid sits well below its bbox centre. */
@@ -833,6 +834,198 @@ describe("roadmap cut: poly-decomp is not a dependency", () => {
       ...pkg.default.peerDependencies,
     };
     expect(Object.keys(allDeps)).not.toContain("poly-decomp");
+  });
+});
+
+describe("MatterWorld spin", () => {
+  const FREE = { ...VACUUM, collideBounds: false };
+
+  it("(a) turns a body given 2π rad/s through exactly 2π in one second of ticks", () => {
+    // Matter's angular velocity is radians per 1/60 s, scaled by
+    // deltaTime / _baseDelta exactly as linear velocity is (Body.js:598), so a
+    // missing ÷ 60 turns it 60 times too far.
+    const w = new MatterWorld(800, 600);
+    w.addBody("r", { kind: "rectangle", width: 40, height: 20 }, 400, 300, 0, FREE);
+    w.setAngularVelocity("r", 2 * Math.PI);
+    for (let i = 0; i < TICK_HZ; i++) w.step();
+    expect(Math.abs(w.readState("r", 1)!.angle - 2 * Math.PI)).toBeLessThan(1e-9);
+    w.destroy();
+  });
+
+  it("keeps a body that only spins awake and turning past tick 240", () => {
+    // Matter's sleeping pass counts a body turning in place below about
+    // 972°/s as still and puts it to sleep on tick 120, spin and all. A spun
+    // body is held to the speed of its rim instead (spec Phase 8 §5.4).
+    const w = new MatterWorld(800, 600);
+    w.addBody("r", { kind: "rectangle", width: 40, height: 20 }, 400, 300, 0, FREE);
+    w.setAngularVelocity("r", 2 * Math.PI);
+    for (let i = 0; i < 2 * TICK_HZ + 1; i++) {
+      w.step();
+      expect(w.isAsleep("r"), `tick ${i + 1}`).toBe(false);
+    }
+    const turned = 2 * Math.PI * (2 * TICK_HZ + 1) / TICK_HZ;
+    expect(Math.abs(w.readState("r", 1)!.angle - turned)).toBeLessThan(1e-9);
+    w.destroy();
+  });
+
+  it("(b) damps a spin by airDrag, as it damps a velocity", () => {
+    const w = new MatterWorld(800, 600);
+    w.addBody("r", { kind: "rectangle", width: 40, height: 20 }, 400, 300, 0,
+      { ...FREE, airDrag: 0.02 });
+    w.setAngularVelocity("r", 2 * Math.PI);
+    for (let i = 0; i < TICK_HZ; i++) w.step();
+    const angle = w.readState("r", 1)!.angle;
+    expect(angle).toBeLessThan(2 * Math.PI - 1);
+    expect(angle).toBeGreaterThan(Math.PI);
+    w.destroy();
+  });
+});
+
+describe("MatterWorld lockRotation", () => {
+  const FREE = { ...VACUUM, collideBounds: false };
+  const LOCKED = { ...FREE, lockRotation: true };
+  const BAR: BodyGeometry = { kind: "rectangle", width: 300, height: 20 };
+
+  /**
+   * Fire a ball straight down onto a bar floating at (400, 300), `lever` px
+   * right of its centre, and report the bar after a half second. An
+   * off-centre hit gives a free bar both a push and a turn.
+   */
+  function strikeOffCentre(w: MatterWorld, barId: string, lever: number): { angle: number; y: number } {
+    w.addBody("ball", { kind: "circle", radius: 20 }, 400 + lever, 230, 0, FREE);
+    w.setVelocity("ball", 0, 1200);
+    for (let i = 0; i < TICK_HZ / 2; i++) w.step();
+    const s = w.readState(barId, 1)!;
+    return { angle: s.angle, y: s.y };
+  }
+
+  it("the strike turns a bar that is not locked, so the tests below can tell", () => {
+    const w = new MatterWorld(800, 600);
+    w.addBody("bar", BAR, 400, 300, 0, FREE);
+    const hit = strikeOffCentre(w, "bar", 130);
+    expect(Math.abs(hit.angle)).toBeGreaterThan(0.1);
+    w.destroy();
+  });
+
+  it("(c) keeps a square dropped corner-first at exactly its angle, where an unlocked one tips", () => {
+    // π/6, not π/4: a square balanced exactly on its corner is symmetric and
+    // may never tip, which would leave nothing to contrast with.
+    const drop = (params: PhysicsParams) => {
+      const w = new MatterWorld(800, 600);
+      w.addBody("sq", { kind: "rectangle", width: 50, height: 50 }, 400, 100, Math.PI / 6,
+        { ...params, gravityY: 980, collideBounds: true });
+      const startY = w.readState("sq", 1)!.y;
+      const angles: number[] = [];
+      for (let i = 0; i < 600; i++) {
+        w.step();
+        angles.push(w.readState("sq", 1)!.angle);
+      }
+      const endY = w.readState("sq", 1)!.y;
+      w.destroy();
+      return { angles, fell: endY - startY };
+    };
+
+    const locked = drop(LOCKED);
+    expect(locked.fell).toBeGreaterThan(50);
+    for (const a of locked.angles) expect(a).toBe(Math.PI / 6);
+
+    const free = drop(FREE);
+    expect(free.fell).toBeGreaterThan(50);
+    expect(Math.abs(free.angles.at(-1)! - Math.PI / 6)).toBeGreaterThan(0.1);
+  });
+
+  it("(d) locks a dynamic body when setParams turns the lock on", () => {
+    const w = new MatterWorld(800, 600);
+    w.addBody("bar", BAR, 400, 300, 0, FREE);
+    w.setParams("bar", LOCKED);
+    const hit = strikeOffCentre(w, "bar", 130);
+    expect(hit.y).toBeGreaterThan(301);
+    expect(hit.angle).toBe(0);
+    w.destroy();
+  });
+
+  it("(e) locks a body on the unpin that frees it, when the lock arrived while it was pinned", () => {
+    // A sequence step's body is added with resting params and pinned, and its
+    // locked params arrive while it is still pinned. setStatic(true) saved its
+    // finite inertia, and setStatic(false) restores that.
+    const w = new MatterWorld(800, 600);
+    w.addBody("bar", BAR, 400, 300, 0, FREE);
+    w.pin("bar", "NO_RUNNER");
+    w.setParams("bar", LOCKED);
+    w.unpin("bar", "NO_RUNNER");
+    const hit = strikeOffCentre(w, "bar", 130);
+    expect(hit.y).toBeGreaterThan(301);
+    expect(hit.angle).toBe(0);
+    w.destroy();
+  });
+
+  it("(f) keeps a locked body locked through setScale, which recomputes its inertia", () => {
+    const w = new MatterWorld(800, 600);
+    w.addBody("bar", BAR, 400, 300, 0, LOCKED);
+    w.setScale("bar", 1.5, 1.5);
+    const hit = strikeOffCentre(w, "bar", 200);
+    expect(hit.y).toBeGreaterThan(301);
+    expect(hit.angle).toBe(0);
+    w.destroy();
+  });
+
+  it("(g) lets a body rotate again once setParams turns the lock off", () => {
+    const w = new MatterWorld(800, 600);
+    w.addBody("bar", BAR, 400, 300, 0, LOCKED);
+    for (let i = 0; i < 10; i++) w.step();
+    w.setParams("bar", FREE);
+    const hit = strikeOffCentre(w, "bar", 130);
+    expect(Math.abs(hit.angle)).toBeGreaterThan(0.1);
+    w.destroy();
+  });
+
+  it("restores the inertia setScale computed, not the one the body was added with", () => {
+    const strikeScaled = (lockFirst: boolean) => {
+      const w = new MatterWorld(800, 600);
+      w.addBody("bar", BAR, 400, 300, 0, lockFirst ? LOCKED : FREE);
+      w.setScale("bar", 1.5, 1.5);
+      if (lockFirst) w.setParams("bar", FREE);
+      const hit = strikeOffCentre(w, "bar", 200);
+      w.destroy();
+      return hit.angle;
+    };
+    const never = strikeScaled(false);
+    expect(Math.abs(never)).toBeGreaterThan(0.01);
+    expect(strikeScaled(true)).toBe(never);
+  });
+
+  it("leaves a pinned body's inertia infinite when it is scaled, so contacts with it are unchanged", () => {
+    // The ball's rebound off a pinned bar scaled while pinned must match its
+    // rebound off a bar added at that scale and then pinned. A finite inertia
+    // on the pinned bar would take a share of every contact impulse
+    // (Resolver.js:314) and send the ball off differently.
+    const strikePinned = (scaleWhilePinned: boolean) => {
+      const w = new MatterWorld(800, 600);
+      w.addBody("bar", BAR, 400, 300, 0, FREE, scaleWhilePinned ? undefined : { x: 1.5, y: 1.5 });
+      w.pin("bar", "FROZEN");
+      if (scaleWhilePinned) w.setScale("bar", 1.5, 1.5);
+      strikeOffCentre(w, "bar", 200);
+      const ball = w.readState("ball", 1)!;
+      w.destroy();
+      return ball;
+    };
+    const reference = strikePinned(false);
+    expect(reference.y).toBeLessThan(280);
+    expect(strikePinned(true)).toEqual(reference);
+  });
+
+  it("does not take a pinned body's infinite inertia for its free one when scaled while pinned", () => {
+    // Body.scale leaves a static body's inertia infinite. Recorded as the
+    // free inertia, it would hand an unlocked body infinite inertia for good.
+    const w = new MatterWorld(800, 600);
+    w.addBody("bar", BAR, 400, 300, 0, LOCKED);
+    w.pin("bar", "FROZEN");
+    w.setScale("bar", 1.5, 1.5);
+    w.unpin("bar", "FROZEN");
+    w.setParams("bar", FREE);
+    const hit = strikeOffCentre(w, "bar", 130);
+    expect(Math.abs(hit.angle)).toBeGreaterThan(0.01);
+    w.destroy();
   });
 });
 

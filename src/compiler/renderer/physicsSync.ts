@@ -120,6 +120,7 @@ export function physicsParamsFromIR(ph: IRPhysics): PhysicsParams {
     airDrag: ph.airDrag,
     bounce: ph.bounce,
     collideBounds: ph.collideBounds,
+    lockRotation: ph.lockRotation,
   };
 }
 
@@ -130,6 +131,7 @@ const RESTING_PARAMS: PhysicsParams = {
   airDrag: 0,
   bounce: 0,
   collideBounds: true,
+  lockRotation: false,
 };
 
 /**
@@ -221,21 +223,29 @@ export function pinBody(container: Container, world: IPhysicsWorld, reason: PinR
 }
 
 /**
- * Push a parked velocity into the world, if the body is free to take one.
+ * Push a parked velocity and spin into the world, if the body is free to take
+ * them.
  *
  * A Matter body owns its velocity and unpinning collapses it back to rest, so
- * the value can only be applied once the last pin has lifted. Until then it
- * waits on the container.
+ * the values can only be applied once the last pin has lifted. Until then they
+ * wait on the container.
  */
 export function flushPendingVelocity(container: Container, world: IPhysicsWorld): void {
   const id = container.__body;
+  if (!id || world.isPinned(id)) return;
   const pending = container.__pendingVelocity;
-  if (!id || !pending || world.isPinned(id)) return;
-  // A velocity is a direction and a magnitude, so it takes the ancestor's
-  // rotation and scale but never its translation.
-  const v = rotateScaleVector(bodyTransformOf(container), pending.x, pending.y);
-  world.setVelocity(id, v.x, v.y);
-  container.__pendingVelocity = undefined;
+  if (pending) {
+    // A velocity is a direction and a magnitude, so it takes the ancestor's
+    // rotation and scale but never its translation.
+    const v = rotateScaleVector(bodyTransformOf(container), pending.x, pending.y);
+    world.setVelocity(id, v.x, v.y);
+    container.__pendingVelocity = undefined;
+  }
+  const spin = container.__pendingSpin;
+  if (spin !== undefined) {
+    world.setAngularVelocity(id, spin);
+    container.__pendingSpin = undefined;
+  }
 }
 
 export function unpinBody(container: Container, world: IPhysicsWorld, reason: PinReason): void {

@@ -12,6 +12,9 @@ import type { IREdge, IRSceneNode } from "../sceneIR";
  *  - `Body.deltaTime`: the per-body delta Matter normalises velocity against;
  *    set once so the first tick after `Body.create` (which defaults it to
  *    1000/60) doesn't apply a spurious time-correction factor at 120Hz.
+ *  - `Sleeping._motionSleepThreshold` and `Body.sleepCounter`: the sleeping
+ *    pass's threshold and per-body count, which `holdSpunBodiesAwake` reads
+ *    and resets.
  * This augmentation is global, so the test file sees it without re-declaring.
  */
 declare module "matter-js" {
@@ -20,11 +23,13 @@ declare module "matter-js" {
     let _seed: number;
   }
   namespace Sleeping {
+    const _motionSleepThreshold: number;
     function update(bodies: Matter.Body[], delta: number): void;
     function afterCollisions(pairs: Matter.Pair[]): void;
   }
   interface Body {
     deltaTime: number;
+    sleepCounter: number;
   }
 }
 
@@ -59,6 +64,17 @@ export function airDragToFrictionAir(airDrag: number): number {
 /** px/s (Marey) → px per 1/60s (Matter's `Body.setVelocity`). */
 export function pxPerSecToMatter(pxPerSec: number): number {
   return pxPerSec / MATTER_BASE_HZ;
+}
+
+/**
+ * rad/s (Marey) → rad per 1/60s (Matter's `Body.setAngularVelocity`).
+ *
+ * The same unit as linear velocity: Matter 0.20 scales an angular velocity by
+ * `deltaTime / _baseDelta` exactly as it scales `setVelocity`'s
+ * (`matter-js/src/body/Body.js:598`), so it is per 1/60 s whatever the tick.
+ */
+export function radPerSecToMatter(radPerSec: number): number {
+  return radPerSec / MATTER_BASE_HZ;
 }
 
 /** px per 1/60s (Matter) → px/s (Marey). */
@@ -142,6 +158,8 @@ export interface PhysicsParams {
   readonly airDrag: number;
   readonly bounce: number;
   readonly collideBounds: boolean;
+  /** Contact and physics never turn the body; `overrideAngle` still does. */
+  readonly lockRotation: boolean;
 }
 
 export interface BodyState {
@@ -176,6 +194,8 @@ export interface IPhysicsWorld {
   setPosition(id: string, x: number, y: number): void;
   /** px/s, converted internally. */
   setVelocity(id: string, vx: number, vy: number): void;
+  /** Radians per second, positive clockwise on screen, converted internally. */
+  setAngularVelocity(id: string, radiansPerSecond: number): void;
   setScale(id: string, sx: number, sy: number): void;
   /** Radians to hold the angle at, or null to release it back to the solver. */
   overrideAngle(id: string, radians: number | null): void;
@@ -199,6 +219,23 @@ function safeScale(v: number): number {
   return Math.abs(v) < 1e-4 ? 1e-4 : Math.abs(v);
 }
 
+/**
+ * The distance from a body's centre of mass to its farthest vertex, which is
+ * the radius its fastest-moving point turns at. A compound's parent carries
+ * the hull of its parts, so its parts are measured instead.
+ */
+function farthestVertexDistance(body: Matter.Body): number {
+  const parts = body.parts.length > 1 ? body.parts.slice(1) : [body];
+  let max = 0;
+  for (const part of parts) {
+    for (const v of part.vertices) {
+      const d = Math.hypot(v.x - body.position.x, v.y - body.position.y);
+      if (d > max) max = d;
+    }
+  }
+  return max;
+}
+
 /** How far outside the scene the walls sit, and how thick they are. */
 const WALL_THICKNESS = 200;
 
@@ -211,6 +248,19 @@ interface BodyRecord {
   readonly offsetY: number;
   scaleX: number;
   scaleY: number;
+  lockRotation: boolean;
+  /**
+   * Whether the body has been given a non-zero spin. Only such a body is held
+   * to the rim-speed sleeping rule (`holdSpunBodiesAwake`); every other body
+   * sleeps exactly as Matter decides.
+   */
+  spun: boolean;
+  /**
+   * The moment of inertia the body has when it is free to rotate. A locked
+   * body carries `Infinity` instead, and Matter overwrites the field itself
+   * in places (see `applyRotationLock`), so the finite value is kept here.
+   */
+  freeInertia: number;
   /** Why this body is pinned, and how many holds each reason has. */
   readonly pinReasons: Map<PinReason, number>;
   angleOverride: number | null;
@@ -413,6 +463,11 @@ export class MatterWorld implements IPhysicsWorld {
       offsetY,
       scaleX,
       scaleY,
+      lockRotation: params.lockRotation,
+      spun: false,
+      // After the starting scale, which recomputes it, and before
+      // applyParams, which may lock it.
+      freeInertia: body.inertia,
       pinReasons: new Map(),
       angleOverride: null,
       prevX: body.position.x,
@@ -433,6 +488,34 @@ export class MatterWorld implements IPhysicsWorld {
     rec.body.collisionFilter.mask = params.collideBounds
       ? CATEGORY_OBJECT | CATEGORY_WALL
       : CATEGORY_OBJECT;
+    rec.lockRotation = params.lockRotation;
+    this.applyRotationLock(rec);
+  }
+
+  /**
+   * `lockRotation` is an infinite moment of inertia (spec Phase 8 §5.3): the
+   * contact solver then puts the whole impulse into linear motion
+   * (`matter-js/src/collision/Resolver.js:203` and `:355` scale every angular
+   * impulse by `inverseInertia`, which is 0) and `Body.update` adds no torque
+   * term (`Body.js:769`). That is computed for the body that exists, where
+   * D8's override would discard a rotation afterwards.
+   *
+   * Matter writes `inertia` itself in two places this world reaches, so the
+   * lock is reapplied after each, and after params change:
+   *  - `Body.setStatic(false)` restores the inertia `setStatic(true)` saved
+   *    (`Body.js:293`), finite if the lock arrived while the body was pinned;
+   *  - `Body.scale` recomputes it (`Body.js:703` for a single body,
+   *    `Body.js:723-725` for a compound's parent, and only when dynamic).
+   * A pinned body is skipped: `setStatic(true)` has already made its inertia
+   * infinite, and unpinning comes back through here.
+   */
+  private applyRotationLock(rec: BodyRecord): void {
+    if (rec.body.isStatic) return;
+    if (rec.lockRotation) {
+      Matter.Body.setInertia(rec.body, Infinity);
+    } else if (!Number.isFinite(rec.body.inertia)) {
+      Matter.Body.setInertia(rec.body, rec.freeInertia);
+    }
   }
 
   setParams(id: string, params: PhysicsParams): void {
@@ -506,6 +589,7 @@ export class MatterWorld implements IPhysicsWorld {
     // setStatic collapses positionPrev onto position, so the body resumes from
     // rest. Callers that want momentum carried across call setVelocity after.
     Matter.Body.setStatic(rec.body, false);
+    this.applyRotationLock(rec);
     Matter.Sleeping.set(rec.body, false);
   }
 
@@ -523,6 +607,40 @@ export class MatterWorld implements IPhysicsWorld {
     });
   }
 
+  setAngularVelocity(id: string, radiansPerSecond: number): void {
+    const rec = this.records.get(id);
+    if (!rec) return;
+    Matter.Body.setAngularVelocity(rec.body, radPerSecToMatter(radiansPerSecond));
+    if (radiansPerSecond !== 0) rec.spun = true;
+  }
+
+  /**
+   * A spun body sleeps only when its rim is as still as Matter requires a
+   * body's centre to be (spec Phase 8 §5.4).
+   *
+   * Matter's sleeping pass measures `speed² + angularSpeed²`
+   * (`matter-js/src/core/Sleeping.js:36`) against `_motionSleepThreshold`, 0.08
+   * (`Sleeping.js:18`), counting the body to sleep after `sleepThreshold`
+   * still ticks (`Sleeping.js:50-53`). Speed is px per 1/60 s but angular
+   * speed is rad per 1/60 s, the speed of a point 1 px from the centre, so a
+   * body turning in place below about 972°/s counts as still and sleeps after
+   * one second, throwing its spin away. Here the angular term is taken at the
+   * body's farthest vertex and added to its linear speed, which bounds the
+   * speed of its fastest point; while that is at or above the threshold the
+   * count is reset, so Matter's own pass cannot reach `sleepThreshold`. Once
+   * the rim is still, Matter's count runs as it does for every other body.
+   *
+   * Bodies never given a spin are skipped, so they sleep exactly as before.
+   */
+  private holdSpunBodiesAwake(): void {
+    for (const rec of this.records.values()) {
+      if (!rec.spun || rec.body.isStatic || rec.body.isSleeping) continue;
+      const rim = Matter.Body.getSpeed(rec.body)
+        + Matter.Body.getAngularSpeed(rec.body) * farthestVertexDistance(rec.body);
+      if (rim * rim >= Matter.Sleeping._motionSleepThreshold) rec.body.sleepCounter = 0;
+    }
+  }
+
   setScale(id: string, sx: number, sy: number): void {
     const rec = this.records.get(id);
     if (!rec) return;
@@ -532,6 +650,12 @@ export class MatterWorld implements IPhysicsWorld {
     Matter.Body.scale(rec.body, safeX / rec.scaleX, safeY / rec.scaleY);
     rec.scaleX = safeX;
     rec.scaleY = safeY;
+    // Only a dynamic body's new inertia is its free one. A static compound's
+    // parent keeps its infinite inertia through `Body.scale` (`Body.js:723`),
+    // and a static single body's is recomputed from its infinite mass; either
+    // would lock the body for good once restored.
+    if (!rec.body.isStatic) rec.freeInertia = rec.body.inertia;
+    this.applyRotationLock(rec);
   }
 
   /**
@@ -568,6 +692,7 @@ export class MatterWorld implements IPhysicsWorld {
       rec.prevAngle = rec.body.angle;
     }
 
+    this.holdSpunBodiesAwake();
     Matter.Sleeping.update(allBodies, MATTER_DELTA_MS);
 
     for (const rec of this.records.values()) {
