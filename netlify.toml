@@ -1,0 +1,10 @@
+# The playground moved to Cloudflare Pages (2026-10-10). This file only keeps
+# the old address working: every path on marey.netlify.app redirects to the
+# same path on marey.pages.dev. A share link keeps its scene in the URL
+# fragment, and browsers carry the fragment across a redirect, so links sent
+# before the move still open the same scene. Cloudflare ignores this file.
+[[redirects]]
+  from = "/*"
+  to = "https://marey.pages.dev/:splat"
+  status = 301
+  force = true

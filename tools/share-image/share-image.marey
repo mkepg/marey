@@ -148,6 +148,6 @@ scene {
     content: "Deterministic 2D motion\ngraphics, written as code."
   }
   text url {
-    position: (74, 520), origin: (0, 0), content: "marey.netlify.app", fontSize: 22, color: #a99bff
+    position: (74, 520), origin: (0, 0), content: "marey.pages.dev", fontSize: 22, color: #a99bff
   }
 }

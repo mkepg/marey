@@ -113,6 +113,21 @@ path-scoped `scoped rule files` split was tried in `b59d70a` and reverted in
 two agents ended up reading different guidance. One set everyone reads beats a
 smaller one only some agents get.
 
+## Hosting
+
+The playground is served by Cloudflare Pages at `https://marey.pages.dev/`.
+Cloudflare builds `main` with `npm run build` and serves `dist/`, so **pushing
+to `main` deploys the site**. `.node-version` pins the build's Node to CI's.
+`public/_headers` marks `/assets/*` immutable: Vite content-hashes those
+files, so a repeat visit needs no revalidation round trips for them.
+
+It moved from Netlify on 2026-10-10. Measured from the Philippines in cold
+headless loads, Netlify's Singapore edge delivered the same build at
+15–30 kB/s, so first paint came 74–85 s after navigation. Cloudflare's Hong
+Kong edge served it with first paint at 0.6–0.9 s. `netlify.toml` only keeps
+the old address working: it redirects every path to the same path on
+`marey.pages.dev`, and a share link's fragment survives the redirect.
+
 ## Process
 
 `docs/engineering-lessons.md` is the cross-phase record of *process*

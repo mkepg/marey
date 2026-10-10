@@ -1,0 +1,6 @@
+# Vite content-hashes every file under /assets/, so a changed file always has
+# a new name and the old one can be cached for good. Everything else (the page
+# itself, fonts, the link-preview image) keeps the host's default of
+# revalidating on each visit.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

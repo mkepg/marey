@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://marey.netlify.app/sitemap.xml
+Sitemap: https://marey.pages.dev/sitemap.xml
