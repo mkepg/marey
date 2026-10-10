@@ -220,6 +220,9 @@ export function parseObject(state: ParserState, depth: number = 0, allowWorld: b
           state.throwError(`In ${state.currentContext}: '${objType}' blocks cannot contain nested objects or blocks. Found '${bad.value as string}'.`, bad);
         }
         
+        // Shapes never reach the entry check in parseObject: the "cannot contain
+        // child objects" branch below would answer first with a less useful
+        // message. generate, use and template bodies reach that entry check instead.
         if (state.peek().value === "world") {
           state.throwError(`In ${state.currentContext}: 'world' blocks are only allowed directly inside the scene block.`, state.peek());
         }

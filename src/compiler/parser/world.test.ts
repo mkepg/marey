@@ -38,6 +38,13 @@ describe("world block", () => {
     );
   });
 
+  it("rejects a world block written before the scene", () => {
+    expect(messages(`world { }
+scene { size: (400, 300) }`)).toContain(
+      "A Marey program must begin with the 'scene' keyword, but found keyword 'world'. 'world' is an object keyword — objects must be placed inside a scene block.",
+    );
+  });
+
   it("rejects a second world block", () => {
     expect(messages(`scene { size: (400, 300) world { } world { } }`)).toContain(
       "In the scene: Only one 'world' block is allowed.",
