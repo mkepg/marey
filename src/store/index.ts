@@ -45,6 +45,8 @@ export interface AppState {
   sceneInfo: SceneInfo | null;
   playback: PlaybackState | null;
   playbackController: PlaybackController | null;
+  /** Goes up by one per scene entrance to play; the preview plays one on each change. */
+  entrance: number;
   setCode: (code: string) => void;
   toggleTheme: () => void;
   setLogs: (logs: LogEntry[]) => void;
@@ -60,6 +62,7 @@ export interface AppState {
   setSceneInfo: (info: SceneInfo | null) => void;
   setPlayback: (state: PlaybackState | null) => void;
   setPlaybackController: (controller: PlaybackController | null) => void;
+  playEntrance: () => void;
 }
 
 const THEME_STORAGE_KEY = "marey_theme";
@@ -99,6 +102,7 @@ export const useAppStore = create<AppState>((set) => ({
   sceneInfo: null,
   playback: null,
   playbackController: null,
+  entrance: 0,
   setCode: (code) =>
     set({ code, isTooLargeToShare: computeIsTooLarge(code) }),
   toggleTheme: () =>
@@ -153,4 +157,5 @@ export const useAppStore = create<AppState>((set) => ({
   setSceneInfo:   (sceneInfo) => set({ sceneInfo }),
   setPlayback:    (playback) => set({ playback }),
   setPlaybackController: (playbackController) => set({ playbackController }),
+  playEntrance: () => set((s) => ({ entrance: s.entrance + 1 })),
 }));

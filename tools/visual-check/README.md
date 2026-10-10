@@ -78,6 +78,14 @@ canvas returns a blank frame, because PixiJS does not set `preserveDrawingBuffer
 Playwright's `.screenshot()` composites properly and is what this script uses.
 An in-page pixel read will confidently report a working scene as blank.
 
+A screenshot is a crop of the composited page, though, so it also records what
+the page does around the canvas. The preview grows the scene in when it
+appears (`src/lib/entrance.ts`), and a capture inside those 400 ms catches the
+scene part-scaled and part-transparent. `check.mjs` passes
+`animations: "disabled"`, which finishes page animations before each capture
+and leaves the PixiJS ticker alone. Do the same in any new check that
+screenshots the preview.
+
 **`deterministic: true` is weaker than it looks for a scene that settles.** A
 pile converging on a stable resting configuration reaches the same fixed point
 even if the trajectory diverged, so at-rest equality can hide real

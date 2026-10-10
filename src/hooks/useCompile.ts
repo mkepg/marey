@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from "preact/hooks";
 import type { RefObject } from "preact";
 import { compile } from "../compiler";
 import { PlayheadMemory } from "../lib/playhead";
+import { playsEntrance } from "../lib/entrance";
 import { useAppStore } from "../store";
 
 export function useCompile(hostRef: RefObject<HTMLDivElement>): () => void {
@@ -15,6 +16,7 @@ export function useCompile(hostRef: RefObject<HTMLDivElement>): () => void {
   const setSceneInfo      = useAppStore((s) => s.setSceneInfo);
   const setPlayback       = useAppStore((s) => s.setPlayback);
   const setPlaybackController = useAppStore((s) => s.setPlaybackController);
+  const playEntrance      = useAppStore((s) => s.playEntrance);
   const fileId            = useAppStore((s) => s.fileId);
 
   const codeRef   = useRef(code);
@@ -37,12 +39,14 @@ export function useCompile(hostRef: RefObject<HTMLDivElement>): () => void {
   // populated even with auto-run off.
   const hasCompiledRef = useRef(false);
 
-  const runCompile = useCallback((): void => {
+  // `manual` is a Run or Ctrl+Enter, as opposed to auto-run.
+  const runCompile = useCallback((manual: boolean): void => {
     const host = hostRef.current;
     if (!host) return;
 
     const source = codeRef.current;
     hasCompiledRef.current = true;
+    const wasShowing = useAppStore.getState().compileStatus === "ok";
 
     setIsCompiling(true);
 
@@ -88,20 +92,23 @@ export function useCompile(hostRef: RefObject<HTMLDivElement>): () => void {
           : null,
       );
       setIsCompiling(false);
+      if (playsEntrance({ success, manual, wasShowing })) playEntrance();
     });
-  }, [hostRef, memory, setLogs, setErrors, setCompileStatus, setIsCompiling, setSceneInfo, setPlayback, setPlaybackController]);
+  }, [hostRef, memory, setLogs, setErrors, setCompileStatus, setIsCompiling, setSceneInfo, setPlayback, setPlaybackController, playEntrance]);
+
+  const run = useCallback((): void => runCompile(true), [runCompile]);
 
   // Handle Manual Execution (Ctrl+Enter)
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         e.preventDefault();
-        runCompile();
+        run();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [runCompile]);
+  }, [run]);
 
   // Unified Compilation Trigger (Fixes double-compile on boot)
   useEffect(() => {
@@ -116,7 +123,7 @@ export function useCompile(hostRef: RefObject<HTMLDivElement>): () => void {
     const delay = isFirst ? 300 : 800;
 
     setIsCompiling(true);
-    const id = setTimeout(runCompile, delay);
+    const id = setTimeout(() => runCompile(false), delay);
 
     return () => clearTimeout(id);
   }, [code, autoRun, runCompile, setIsCompiling]);
@@ -132,5 +139,5 @@ export function useCompile(hostRef: RefObject<HTMLDivElement>): () => void {
     setPlaybackController(null);
   }, [memory, setPlaybackController]);
 
-  return runCompile;
+  return run;
 }

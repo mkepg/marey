@@ -30,6 +30,13 @@
   }
 }
 
+// The scene and its plate, as one piece the entrance animation can scale.
+// It covers the whole pane, so the insets below measure from the pane's edges.
+.stage {
+  position: absolute;
+  inset: 0;
+}
+
 // The transport strip is 32 px tall and sits along the pane's bottom edge, so
 // the host and the plate layer end above it.
 .host {

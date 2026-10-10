@@ -74,6 +74,13 @@ const TAG_CANVAS = () => {
 };
 const PIXI_CANVAS = 'canvas[data-visual-check="pixi"]';
 
+// The preview scales the scene in when it first appears (src/lib/entrance.ts).
+// An element screenshot is a crop of the page, so one taken during that
+// entrance would capture the playground's chrome rather than the scene.
+// `animations: "disabled"` finishes the entrance first; the PixiJS ticker is
+// not a page animation and keeps its own time.
+const SHOT = { animations: "disabled" };
+
 const sha = (buf) => createHash("sha256").update(buf).digest("hex").slice(0, 16);
 
 /**
@@ -121,19 +128,19 @@ async function runOnce(browser, code, label) {
   for (const t of captureAt) {
     await page.waitForTimeout(Math.max(0, t - last));
     last = t;
-    const buf = await canvas.screenshot({ path: `${outDir}/${label}-${t}ms.png` });
+    const buf = await canvas.screenshot({ ...SHOT, path: `${outDir}/${label}-${t}ms.png` });
     captures.push({ atMs: t, bytes: buf.length, sha: sha(buf) });
   }
 
   await page.waitForTimeout(Math.max(0, settleMs - last));
-  const restBuf = await canvas.screenshot({ path: `${outDir}/${label}-rest.png` });
+  const restBuf = await canvas.screenshot({ ...SHOT, path: `${outDir}/${label}-rest.png` });
 
   // Two seconds later: identical pixels mean nothing is moving, and near-zero
   // CPU means the ticker genuinely stopped rather than spinning on a still frame.
   const cpuBefore = await cpuSeconds(cdp);
   await page.waitForTimeout(2000);
   const cpuAfter = await cpuSeconds(cdp);
-  const restBuf2 = await canvas.screenshot({ path: `${outDir}/${label}-rest+2s.png` });
+  const restBuf2 = await canvas.screenshot({ ...SHOT, path: `${outDir}/${label}-rest+2s.png` });
 
   const log = await readLog(page);
   await page.close();
