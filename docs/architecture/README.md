@@ -153,7 +153,9 @@ O6): the one ten-minute read was by a language model, not a person, and no
 human read was done; its answers meet the rubric, which shows the README
 carries both answers within the word budget, and the owner ruled that
 sufficient. Criterion 3 is closed by `check --export-ready` and the export
-matrix on the canonical scenes. The npm publish of 0.4.0 follows the merge.
+matrix on the canonical scenes. Version 0.4.0 is published on npm as
+`marey-lang` (2026-10-10; npm refused `marey` as too similar to existing
+names).
 Evidence is in `eval/RESULTS-PHASE-6.md`; `roadmap-and-process.md`'s Phase 6
 bullet carries the same status.
 

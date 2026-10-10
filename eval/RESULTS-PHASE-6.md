@@ -476,6 +476,34 @@ verification above could not give, and it closes criterion 1. The failure
 history and the local verification above stand as recorded. Step times are in
 "CI (O8)".
 
+### Published to npm (2026-10-10)
+
+The package is published as **`marey-lang`**, not `marey`. npm refused the
+unscoped name `marey` at upload time as too similar to the existing packages
+`marked` and `vary`; nothing was uploaded under it. Commit `844230a` renamed
+the package, and the README and `check:pack` with it. The command the package
+installs is still `marey`.
+
+`marey-lang@0.4.0` was built from `844230a`, so it includes Phase 7's colour
+animation as well as Phase 6. `check:pack` passed on that commit before the
+upload. The registry (`npm view marey-lang`) reports:
+
+| Field | Value |
+|---|---|
+| version, `latest` tag | 0.4.0 |
+| published | 2026-10-10T07:38:43Z |
+| shasum | `0148223f5d4194f6a49aac7aacc23cce973b52cc` (the tarball the publish printed) |
+| files, unpacked size | 57, 1,794,591 B |
+| maintainer | `mkepg` |
+
+Installed from the registry into an empty directory (`npm install
+marey-lang@0.4.0`): `npx marey --version` prints `0.4.0`; `npx marey check`
+passes on a copy of `eval/scenes-3b/radial-dots.marey`; `npx marey export ...
+--format lottie` writes 30 frames whose document sha256 is `5aba4b1a…`, the
+same bytes `check:pack` produced from the local tarball; `import { compile }
+from 'marey-lang'` compiles a scene. `npx marey-lang check` also works in a
+directory with nothing installed.
+
 ---
 
 ## Exit criterion 2: the ten-minute read

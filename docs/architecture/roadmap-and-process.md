@@ -273,8 +273,9 @@ explicitly rather than quietly deviating.
     answers within the word budget, and the owner ruled that sufficient. The
     third is closed by `check --export-ready` and `check:export` on the
     canonical scenes.
-    The npm publish of 0.4.0 follows the merge and the owner's sign-off. Evidence is
-    in `eval/RESULTS-PHASE-6.md`. Design:
+    Version 0.4.0 is published on npm as `marey-lang` (2026-10-10; npm refused
+    `marey` as too similar to existing names). Evidence is in
+    `eval/RESULTS-PHASE-6.md`. Design:
     `docs/specs/2026-09-27-marey-phase-6-packaging-and-legibility-design.md`,
     with 6B's and 6C's own designs and plans dated 2026-10-02 and 2026-10-03.
     Plan and execution notes:
