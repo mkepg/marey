@@ -11,7 +11,7 @@ import {
   PROP_TYPES,
   REQUIRED_PROPS,
 } from "../../../compiler/languageContract";
-import { KEYWORD_DOCS, physicsSnippet, propertyHoverMarkdown, VALUE_DOCS } from "./constants";
+import { KEYWORD_DOCS, physicsSnippet, propertyHoverMarkdown, TOKENIZER_KEYWORDS, VALUE_DOCS, worldSnippet } from "./constants";
 import { analyzeContext } from "./scanner";
 
 const namedColors = Object.keys(NAMED_COLORS);
@@ -31,7 +31,7 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
   monaco.languages.register({ id: "Marey" });
 
   monaco.languages.setMonarchTokensProvider("Marey", {
-    keywords:    ["scene", "circle", "rectangle", "polygon", "line", "text", "group", "generate", "template", "use", "animate", "physics", "sequence", "parallel"],
+    keywords:    [...TOKENIZER_KEYWORDS],
     letKeyword:  ["let"],
     booleanValues: [...BOOLEAN_VALUES],
     easingValues:  [...EASING_VALUES],
@@ -384,6 +384,17 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
             insertText: `use \${1:Template}(\${2:args}) \${3:instanceName} {\n\t$0\n}`,
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             detail: "Instantiate a template",
+            range,
+          });
+        }
+
+        if (currentBlock === "scene") {
+          suggestions.push({
+            label: "world",
+            kind: monaco.languages.CompletionItemKind.Class,
+            insertText: worldSnippet(),
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "Default gravity and which scene edges are walls",
             range,
           });
         }

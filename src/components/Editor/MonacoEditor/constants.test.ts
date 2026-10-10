@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { propertyHoverMarkdown, physicsSnippet } from "./constants";
+import { KEYWORD_DOCS, propertyHoverMarkdown, physicsSnippet, TOKENIZER_KEYWORDS, worldSnippet } from "./constants";
+import { PROP_TYPES } from "../../../compiler/languageContract";
 import { sequenceSnippet } from "./language";
 import { analyzeContext } from "./scanner";
 
@@ -55,5 +56,27 @@ describe("Marey editor guidance", () => {
     const hover = propertyHoverMarkdown("gravity", "physics")!;
     expect(hover.toLowerCase()).toContain("tick");
     expect(hover.toLowerCase()).not.toContain("applied each frame");
+  });
+
+  it("derives the tokenizer keywords from the lexer, so a new block cannot be missed", () => {
+    expect(TOKENIZER_KEYWORDS).toContain("world");
+    expect(TOKENIZER_KEYWORDS).toContain("physics");
+    expect(TOKENIZER_KEYWORDS).toContain("generate");
+    expect(TOKENIZER_KEYWORDS).not.toContain("let");
+  });
+
+  it("offers world at scene level, with its properties and docs from the contract", () => {
+    expect(worldSnippet()).toBe("world {\n\tgravity: ${1:(0, 980)}\n\tbounds: ${2:[left, right, bottom]}\n}");
+    expect(analyzeContext("scene { world {").at(-1)?.blockType).toBe("world");
+    expect(Object.keys(PROP_TYPES.world)).toEqual(["gravity", "bounds"]);
+    expect(KEYWORD_DOCS.world).toContain("which scene edges are walls");
+    expect(KEYWORD_DOCS.world).toContain("`gravity | bounds`");
+  });
+
+  it("hovers the new physics properties from the contract", () => {
+    expect(propertyHoverMarkdown("lockPosition", "physics")!).toContain("lockPosition");
+    expect(propertyHoverMarkdown("lockRotation", "physics")!).toContain("lockRotation");
+    expect(propertyHoverMarkdown("spin", "physics")!).toContain("spin");
+    expect(propertyHoverMarkdown("bounds", "world")!).toContain("wall");
   });
 });

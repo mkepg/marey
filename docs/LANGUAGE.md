@@ -667,12 +667,69 @@ and reaches `physics` later, the body already exists during that opening
 forces, and unaffected by impacts. So an object sliding into place shoves
 anything already in its path before its own physics step ever starts.
 
+### The world
+
+Every `physics` block runs in one world, and a `world` block written directly
+inside `scene` sets what that world looks like. It may appear at most once, and
+both of its properties are optional.
+
+**`gravity: (x, y)` is the default gravity for every physics block.** A block's
+gravity is its own `gravity` if it writes one, else the world's `gravity` if
+there is one, else `(0, 980)`. The rule applies to physics blocks in
+`sequence` and `parallel` steps as well, so one `world` line replaces a
+`gravity` copied into every block, and a block that does write its own still
+wins.
+
+**`bounds: [edge, …]` lists the scene edges that carry a wall.** The edges are
+`left`, `right`, `top` and `bottom`, in any order, each at most once. Leaving
+`bounds` out puts a wall on all four. `bounds: []` is legal and means no walls
+at all.
+
+**The edge words are special only inside `bounds`.** Everywhere else they are
+ordinary names, so `let top = 40` is legal and does not change what a `bounds`
+list means.
+
+An object's own `collideBounds: false` still means what it did: that object
+ignores whatever walls exist. Collision between objects is not affected by
+`bounds` in either direction.
+
+**An object that leaves through an open edge is not lost at once.** It keeps
+falling, and gravity can bring it back. Once it is 800 pixels beyond the scene
+it is removed from the simulation and its visual is hidden, so a scene with
+open edges still comes to rest.
+
+```marey
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  world {
+    gravity: (0, 600)
+    bounds: [left, right, bottom]
+  }
+
+  circle ball {
+    position: (400, 500)
+    radius: 14
+    color: cyan
+    physics {
+      velocity: (0, -900)
+      bounce: 0.5
+      duration: indefinitely
+    }
+  }
+}
+```
+
+The ball above rises past the open top at 900 px/s, slows under the world's
+gravity of 600, and lands back on the floor.
+
 ### Properties
 
 `gravity: (x, y)` is an acceleration in **pixels per second squared**,
-applied per object, not per scene — there is no scene-level gravity property.
-Positive `y` accelerates downward, matching the scene's y-down coordinate
-system. It defaults to `(0, 980)`.
+resolved per physics block: its own `gravity`, else the `world` block's
+`gravity`, else `(0, 980)` (see "The world"). Positive `y` accelerates
+downward, matching the scene's y-down coordinate system.
 
 `velocity: (x, y)` is an initial speed in **pixels per second**, applied at
 the moment the object's simulation starts — scene start for a top-level
@@ -695,12 +752,116 @@ are small — `0.006` to `0.02` covers most scenes, and the Monaco `physics`
 snippet suggests `0.006` as its placeholder. Confetti at `0.02` drifts
 down more like paper than stone.
 
-`collideBounds` governs collision with the scene's four edges only, and
-defaults to `true`. It has no bearing on collision between objects — that is
-always on and cannot be turned off. An object with `collideBounds: false`
-that drifts far enough past a scene edge is not stopped by anything; once it
-travels 800 pixels beyond the scene's bounds, it is removed from the
-simulation entirely and its visual is hidden.
+`collideBounds` governs collision with the scene's edge walls only, and
+defaults to `true`. Which edges carry a wall is set by `bounds` in the `world`
+block (all four by default), so `collideBounds: true` against an edge that
+`bounds` leaves out collides with nothing. It has no bearing on collision
+between objects — that is always on and cannot be turned off. An object with
+`collideBounds: false` that drifts far enough past a scene edge is not stopped
+by anything; once it travels 800 pixels beyond the scene's bounds, it is
+removed from the simulation entirely and its visual is hidden. The same
+removal applies to any object that leaves through an open edge.
+
+**`lockPosition: true` makes the body static for the whole scene.** Other
+bodies collide with it; nothing physical moves it. It needs no `duration` and
+cannot be given one, and besides `lockPosition` itself the only property the
+block may carry is `bounce`: the others (`velocity`, `gravity`, `airDrag`,
+`spin`, `lockRotation`, `collideBounds`, `duration`) describe motion a locked
+body does not have, so writing one is a compile error rather than a silent
+no-op (`TYPE_LOCK_IGNORED`). It defaults to `false`; writing `false`
+explicitly is the same as leaving it out.
+
+**An `animate` block still moves a locked object, and its body follows.** The
+lock stops physics from moving the body, not you. A position animation that
+loops therefore makes a moving paddle that shoves whatever sits in its path,
+and the body is static again once the animation ends.
+
+`lockPosition` belongs on an object's own top-level `physics` block, which
+includes a physics `group`'s: a locked group is a fixed compound. It is a
+compile error inside a `sequence` or `parallel` step (`TYPE_LOCK_IN_SEQUENCE`),
+because a locked step never ends and the steps after it could never start; and
+on an object that also has a `sequence` (`TYPE_LOCK_WITH_SEQUENCE`), for the
+same reason. `handoff: true` toward a locked body is rejected too
+(`TYPE_LOCK_HANDOFF`): physics never moves it, so there is nothing to carry the
+momentum into.
+
+```marey
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  rectangle ledge {
+    position: (300, 400)
+    size: (240, 16)
+    rotation: -12
+    color: white
+    physics { lockPosition: true }
+  }
+
+  rectangle paddle {
+    position: (560, 520)
+    size: (120, 16)
+    color: orange
+    physics { lockPosition: true, bounce: 0.3 }
+    animate {
+      property: position
+      to: (700, 520)
+      duration: 1.5
+      easing: easeInOut
+      loop: true
+      yoyo: true
+    }
+  }
+
+  circle ball {
+    position: (320, 100)
+    radius: 14
+    color: cyan
+    physics { bounce: 0.4, duration: indefinitely }
+  }
+}
+```
+
+**`lockRotation: true` stops contacts from rotating the body.** The body still
+moves under gravity and collisions, but every impact goes into its linear
+motion only, so a crate that is struck off-centre slides instead of tumbling.
+It is not a hold on the angle: an `animate` block on `rotation` still turns the
+object. It defaults to `false` and is allowed wherever `physics` is.
+
+**`spin` is an initial angular velocity in degrees per second.** Like
+`velocity`, it is applied at the moment the object's simulation starts — scene
+start for a top-level `physics` block, or the moment a `sequence` reaches that
+`physics` step. Positive spin is clockwise on screen, the same direction as a
+positive `rotation`. It defaults to `0`, and `airDrag` damps it as it damps
+`velocity`. A spun body that lands and settles falls asleep like any other, so the
+scene still comes to rest. `spin` together
+with `lockRotation: true` in one block is a compile error (`TYPE_SPIN_LOCKED`),
+since the lock would discard it. `handoff` carries linear momentum only: it
+never sets or replaces `spin`.
+
+```marey
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  rectangle tile {
+    position: (300, -40)
+    size: (50, 50)
+    color: magenta
+    physics { spin: 180, bounce: 0.3, duration: indefinitely }
+  }
+
+  rectangle crate {
+    position: (480, -40)
+    size: (50, 50)
+    color: yellow
+    physics { lockRotation: true, bounce: 0.3, duration: indefinitely }
+  }
+}
+```
+
+Both bodies are the same shape. The tile starts turning at 180 degrees per
+second; the crate does not turn at all, however it is struck.
 
 The collision shape a body gets depends on the object's kind: `circle` gets a
 circle at its declared radius; `rectangle` gets a rectangle at its declared
