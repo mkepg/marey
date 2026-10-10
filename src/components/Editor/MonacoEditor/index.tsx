@@ -3,10 +3,12 @@ import type { FunctionComponent } from "preact";
 import type { editor as MonacoEditorNS } from "monaco-editor";
 
 import { useMonaco } from "../../../hooks/useMonaco";
+import { FallbackEditor } from "../FallbackEditor";
 import { useAppStore } from "../../../store";
 import { lint } from "../../../compiler";
 import { defineThemes } from "./themes";
 import { registerLanguage } from "./language";
+import styles from "./MonacoEditor.module.scss";
 
 interface MonacoEditorProps {
   onReady: (editor: MonacoEditorNS.IStandaloneCodeEditor) => void;
@@ -40,7 +42,8 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
   const decorationsRef = useRef<MonacoEditorNS.IEditorDecorationsCollection | null>(null);
   const [isReady, setIsReady] = useState(false);
 
-  const monaco  = useMonaco();
+  const monacoState = useMonaco();
+  const monaco  = monacoState.status === "ready" ? monacoState.monaco : null;
   const code    = useAppStore((s) => s.code);
   const theme   = useAppStore((s) => s.theme);
   const fileId  = useAppStore((s) => s.fileId); // FIX 3: Pull down tracked fileId
@@ -161,5 +164,15 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
     };
   }, []);
 
-  return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
+  if (monacoState.status === "failed") return <FallbackEditor />;
+
+  // Until Monaco has loaded and created the editor, the source shows as plain
+  // text in the editor's place, so the pane is never empty while the preview
+  // already plays.
+  return (
+    <div className={styles.wrap}>
+      <div ref={containerRef} className={styles.host} />
+      {!isReady && <pre className={styles.placeholder} aria-busy="true">{code}</pre>}
+    </div>
+  );
 };

@@ -1,0 +1,29 @@
+.wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.host {
+  width: 100%;
+  height: 100%;
+}
+
+// Matches the editor's font, line height and top padding, and starts the text
+// where Monaco's first column will be, so the swap does not shift the code.
+.placeholder {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  overflow: hidden;
+  // 33px is where Monaco draws column 1 with `lineNumbersMinChars: 3`,
+  // measured in Chromium; the placeholder has no line numbers to fill it.
+  padding: 14px 0 0 33px;
+  background: var(--bg-editor);
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 22px;
+  white-space: pre;
+  tab-size: 2;
+}

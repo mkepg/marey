@@ -49,6 +49,17 @@ function initSharedApp(): Promise<Application> {
     );
 }
 
+/**
+ * Start Pixi's initialisation before there is a scene to draw. Creating the
+ * renderer fetches its WebGL chunk, and waiting for the first compile to ask
+ * for it put that download after the compile instead of beside it. A failure
+ * here is reported by the render that next awaits it, which also retries.
+ */
+export function prepareRenderer(): void {
+  sharedAppReady ??= initSharedApp();
+  sharedAppReady.catch(() => {});
+}
+
 export const pixiRendererAdapter: IRendererAdapter = {
   async render(
     scene: IRSceneNode,
@@ -56,8 +67,12 @@ export const pixiRendererAdapter: IRendererAdapter = {
     _isDark: boolean,
     start?: PlaybackStart,
   ): Promise<{ cleanup: () => void; playback: LivePlayback }> {
+    // Scene text is drawn in JetBrains Mono (builder.ts). Ask for that face
+    // rather than waiting on `document.fonts.ready`, which also waits for
+    // the interface's fonts and resolves at once if no face has been
+    // requested yet.
     await Promise.race([
-      document.fonts.ready,
+      document.fonts.load("16px 'JetBrains Mono'").catch(() => []),
       new Promise<void>((resolve) => setTimeout(resolve, 2000)),
     ]);
 

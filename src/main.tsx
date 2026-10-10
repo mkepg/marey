@@ -1,8 +1,10 @@
 import { render } from "preact";
 import { App } from "./components/App";
+import { prepareRenderer } from "./compiler";
 import "./styles/global.scss";
 
 render(<App />, document.getElementById("app")!);
+prepareRenderer();
 
 // Dev-only export seam for `tools/visual-check/export-check.mjs`.
 // No product UI ships a PNG-sequence export control, so the browser harness

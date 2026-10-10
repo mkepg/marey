@@ -128,6 +128,19 @@ Kong edge served it with first paint at 0.6–0.9 s. `netlify.toml` only keeps
 the old address working: it redirects every path to the same path on
 `marey.pages.dev`, and a share link's fragment survives the redirect.
 
+**The preview does not wait for the editor.** Monaco is about 900 kB of the
+page's gzipped JavaScript. `useMonaco` loads it with a dynamic import
+(`src/hooks/monacoSetup.ts` is the only runtime importer, which
+`monacoBoundary.test.ts` enforces), and the editor pane shows the source as
+plain text until it arrives. `prepareRenderer()` starts Pixi at boot so its
+WebGL chunk downloads beside the first compile rather than after it. On a
+slow-4G profile (1.6 Mbps, 150 ms) against a local production build, this
+took the preview's first drawn frame from 6.9–7.8 s to 3.5–3.9 s and first
+paint from 5.0–5.4 s to 1.5 s; the editor arrives at about the same time as
+before (5.9–6.3 s, now 6.2–6.5 s). Importing only the Monaco features the
+playground uses was measured too and dropped: it saved 13% of Monaco by
+importing its internal paths, which break on upgrades.
+
 ## Process
 
 `docs/engineering-lessons.md` is the cross-phase record of *process*

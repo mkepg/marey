@@ -13,4 +13,5 @@ export async function renderScene(
 }
 
 export { pixiRendererAdapter };
+export { prepareRenderer } from "./adapter";
 export type { LivePlayback };

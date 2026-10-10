@@ -148,4 +148,5 @@ export async function lint(source: string): Promise<LintResult> {
   });
 }
 
+export { prepareRenderer } from "./renderer";
 export type { CompileResult, LogEntry, LogKind, CompilerError, LintResult } from "./types";
