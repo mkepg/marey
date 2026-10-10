@@ -835,3 +835,33 @@ describe("roadmap cut: poly-decomp is not a dependency", () => {
     expect(Object.keys(allDeps)).not.toContain("poly-decomp");
   });
 });
+
+describe("MatterWorld walls", () => {
+  const FALLING = { ...VACUUM, gravityY: 2000 };
+
+  function dropFromAboveScene(w: MatterWorld): number {
+    w.addBody("c", { kind: "circle", radius: 20 }, 400, -150, 0, FALLING);
+    for (let i = 0; i < 600; i++) w.step();
+    return w.readState("c", 1)!.y;
+  }
+
+  it("lets a body enter through an edge that has no wall and rest on the floor", () => {
+    const w = new MatterWorld(800, 600, ["left", "right", "bottom"]);
+    const y = dropFromAboveScene(w);
+    expect(y).toBeGreaterThan(500);
+    expect(y).toBeLessThanOrEqual(600);
+    w.destroy();
+  });
+
+  it("keeps the same body above the scene when the top wall is there", () => {
+    const w = new MatterWorld(800, 600);
+    expect(dropFromAboveScene(w)).toBeLessThan(0);
+    w.destroy();
+  });
+
+  it("builds no walls for an empty list, so a body falls out the bottom", () => {
+    const w = new MatterWorld(800, 600, []);
+    expect(dropFromAboveScene(w)).toBeGreaterThan(600);
+    w.destroy();
+  });
+});

@@ -1,5 +1,7 @@
 import { TICK_HZ } from "./clock";
 import Matter from "matter-js";
+import { EDGE_VALUES } from "../languageContract";
+import type { IREdge, IRSceneNode } from "../sceneIR";
 
 /**
  * `@types/matter-js` omits several members this phase relies on that exist at
@@ -288,13 +290,18 @@ function createPartBody(p: BodyPart, originX: number, originY: number): Matter.B
   return polygonBodyAtBboxCentre(rotatePoints(p.points, p.angle), x, y);
 }
 
+/** The one place a scene's world is built, so every host honours `world { bounds }`. */
+export function createWorldForScene(ir: Pick<IRSceneNode, "width" | "height" | "walls">): MatterWorld {
+  return new MatterWorld(ir.width, ir.height, ir.walls);
+}
+
 export class MatterWorld implements IPhysicsWorld {
   private readonly engine: Matter.Engine;
   private readonly records = new Map<string, BodyRecord>();
   private readonly width: number;
   private readonly height: number;
 
-  constructor(width: number, height: number) {
+  constructor(width: number, height: number, walls: ReadonlyArray<IREdge> = EDGE_VALUES) {
     this.width = width;
     this.height = height;
 
@@ -308,10 +315,10 @@ export class MatterWorld implements IPhysicsWorld {
     // We run the sleeping pass ourselves; see step() and spec 6.4.
     this.engine.enableSleeping = false;
 
-    Matter.Composite.add(this.engine.world, this.createWalls());
+    Matter.Composite.add(this.engine.world, this.createWalls(walls));
   }
 
-  private createWalls(): Matter.Body[] {
+  private createWalls(edges: ReadonlyArray<IREdge>): Matter.Body[] {
     const t = WALL_THICKNESS;
     const w = this.width;
     const h = this.height;
@@ -319,12 +326,15 @@ export class MatterWorld implements IPhysicsWorld {
       isStatic: true,
       collisionFilter: { category: CATEGORY_WALL, mask: CATEGORY_OBJECT, group: 0 },
     };
-    return [
-      Matter.Bodies.rectangle(w / 2, -t / 2, w + t * 2, t, opts),
-      Matter.Bodies.rectangle(w / 2, h + t / 2, w + t * 2, t, opts),
-      Matter.Bodies.rectangle(-t / 2, h / 2, t, h + t * 2, opts),
-      Matter.Bodies.rectangle(w + t / 2, h / 2, t, h + t * 2, opts),
+    // Built in the order the world always had (top, bottom, left, right) so the
+    // contact order, and with it every existing scene's output, is unchanged.
+    const all: ReadonlyArray<readonly [IREdge, () => Matter.Body]> = [
+      ["top", () => Matter.Bodies.rectangle(w / 2, -t / 2, w + t * 2, t, opts)],
+      ["bottom", () => Matter.Bodies.rectangle(w / 2, h + t / 2, w + t * 2, t, opts)],
+      ["left", () => Matter.Bodies.rectangle(-t / 2, h / 2, t, h + t * 2, opts)],
+      ["right", () => Matter.Bodies.rectangle(w + t / 2, h / 2, t, h + t * 2, opts)],
     ];
+    return all.filter(([edge]) => edges.includes(edge)).map(([, make]) => make());
   }
 
   addBody(

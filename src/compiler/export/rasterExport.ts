@@ -8,7 +8,7 @@ import { createFrameRasterizer } from "./frameRaster";
 import { buildNode } from "../renderer/builder";
 import { sampleFrames, type FrameSnapshot } from "../renderer/frameSampler";
 import { SceneRuntime } from "../renderer/sceneRuntime";
-import { MatterWorld } from "../renderer/physicsWorld";
+import { createWorldForScene } from "../renderer/physicsWorld";
 import type { IRSceneNode } from "../sceneIR";
 
 /**
@@ -276,7 +276,7 @@ export async function withRasterExport<T>(
     // refusal here means no frame is ever sampled for the scene.
     await opts.afterBuild?.(root, ir, plan);
 
-    const world = new MatterWorld(ir.width, ir.height);
+    const world = createWorldForScene(ir);
     runtime = new SceneRuntime(world, root);
 
     // Sample the whole scene first, then hand off to `use`: `use` never

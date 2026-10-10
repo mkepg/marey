@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Container } from "pixi.js";
 import { buildNode } from "./builder";
-import { MatterWorld } from "./physicsWorld";
+import { createWorldForScene } from "./physicsWorld";
 import { SceneRuntime } from "./sceneRuntime";
 import { sampleFrames } from "./frameSampler";
 import { hashFrames } from "../export/frameHash";
@@ -33,7 +33,7 @@ function hasText(ir: IRSceneNode): boolean {
 function hashScene(ir: IRSceneNode): string {
   const root = new Container();
   for (const node of ir.children) root.addChild(buildNode(node));
-  const runtime = new SceneRuntime(new MatterWorld(ir.width, ir.height), root);
+  const runtime = new SceneRuntime(createWorldForScene(ir), root);
   const planned = planExport(ir, { fps: 30, durationSeconds: 4 });
   if (!planned.ok) throw new Error(planned.diagnostics.map((d) => d.message).join("; "));
   return hashFrames(sampleFrames(runtime, root, planned.plan));
