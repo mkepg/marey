@@ -27,7 +27,7 @@ export function contractBooleanDefault(block: string, key: string): boolean {
 
 export function contractPointDefault(block: string, key: string): IRPoint {
   const value = requireContractDefault(block, key);
-  return typeof value === "object"
+  return typeof value === "object" && "x" in value
     ? { x: value.x, y: value.y }
     : invalidContractDefault(block, key, "a point");
 }

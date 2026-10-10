@@ -110,7 +110,7 @@ export function buildIR(ast: AstNode): IRSceneNode {
   const registry: Record<IRObjectId, IRObjectNode> = {};
 
   function buildObjectNode(node: ObjectNode, scopePath: string): IRObjectNode {
-    if (node.type === "animate" || node.type === "physics" || node.type === "sequence" || node.type === "parallel") {
+    if (node.type === "animate" || node.type === "physics" || node.type === "sequence" || node.type === "parallel" || node.type === "world") {
       throw new Error(`[IR] '${node.type}' nodes should not be passed directly to buildObjectNode`);
     }
 

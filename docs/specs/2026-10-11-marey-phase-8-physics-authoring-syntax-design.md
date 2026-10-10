@@ -91,7 +91,7 @@ Every rule below has fixed wording, pinned by a test that asserts the full code-
 |---|---|
 | `world` anywhere but directly in `scene` | `In <context>: 'world' blocks are only allowed directly inside the scene block.` |
 | a second `world` in the scene | `In the scene: Only one 'world' block is allowed.` |
-| a nested block or object inside `world` | `In the 'world' block: 'world' blocks cannot contain nested objects or blocks. Found '<keyword>'.` |
+| a nested block or object inside `world` | `In 'world' block: 'world' blocks cannot contain nested objects or blocks. Found '<keyword>'.` |
 | a `bounds` list element that is not a bare word | `In <context>: 'bounds' lists scene edges by name (left, right, top, bottom), but found <token>.` |
 
 `<context>` is `state.currentContext`; `<token>` is `describeToken(tok)`.

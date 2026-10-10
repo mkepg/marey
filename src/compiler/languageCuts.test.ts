@@ -66,18 +66,15 @@ function posAt(source: string, needle: string): { line: number; col: number } {
 
 describe("roadmap cut: physics properties that never shipped", () => {
   // mass, friction, collisionCategory, collisionMask are spec §4's cut list.
-  // lockPosition, lockRotation, spin are Phase 7 deferrals — new names that
-  // do not exist yet. isStatic and angularVelocity are the *old* names those
-  // will replace; the roadmap is explicit that neither name has shipped, so
-  // both must be rejected identically today.
+  // isStatic and angularVelocity are the *old* names that lockPosition and
+  // spin replaced (both shipped in Phase 8, so they are no longer here); the
+  // roadmap is explicit that neither old name has shipped, so both must stay
+  // rejected.
   it.each([
     ["mass", "5"],
     ["friction", "0.5"],
     ["collisionCategory", "2"],
     ["collisionMask", "4"],
-    ["lockPosition", "true"],
-    ["lockRotation", "true"],
-    ["spin", "90"],
     ["isStatic", "true"],
     ["angularVelocity", "5"],
   ])("rejects physics property '%s' as unknown", (prop, value) => {
@@ -113,7 +110,7 @@ describe("roadmap cut: general mutable variables", () => {
   });
 });
 
-describe("roadmap cut: user-defined functions, scripting runtime, plugin system, world", () => {
+describe("roadmap cut: user-defined functions, scripting runtime, plugin system", () => {
   // None of these words are lexer keywords, so each is read as a bare
   // top-level identifier — which the file grammar only ever accepts as
   // 'let' or 'template', immediately before the single 'scene' block.
@@ -122,7 +119,6 @@ describe("roadmap cut: user-defined functions, scripting runtime, plugin system,
     ["import", "import foo"],
     ["while", "while true { }"],
     ["plugin", "plugin foo { }"],
-    ["world", "world { gravity: (0, 900) }"],
   ])("rejects top-level '%s' construct", (word, stmt) => {
     const source = `${stmt} scene { size:(10,10) }`;
     const diags = diagnosticsFor(source);
@@ -459,8 +455,8 @@ describe("Phase 3A permission neighbors", () => {
   // binding/object name and value reference.
   it.each([
     "mass", "friction", "collisionCategory", "collisionMask",
-    "lockPosition", "lockRotation", "spin", "isStatic", "angularVelocity",
-    "function", "import", "fetch", "while", "plugin", "world",
+    "isStatic", "angularVelocity",
+    "function", "import", "fetch", "while", "plugin",
   ])("keeps cut word '%s' usable as an ordinary identifier, not a reserved word", (word) => {
     const source = `
       let ${word} = 5
@@ -704,7 +700,7 @@ describe("Phase 3B line: data determines values, source structure determines sha
   // identifier before parsing can reach a function-definition or
   // list-mutation rule. They therefore asserted that unrelated gate's
   // message (the same one "roadmap cut: user-defined functions, scripting
-  // runtime, plugin system, world" above already pins) and would have stayed
+  // runtime, plugin system" above already pins) and would have stayed
   // green if a later phase added either construct *inside* a scene body.
   // Both now put the construct inside the scene, where ordinary Marey
   // content lives, so what is being rejected is the construct itself.

@@ -141,7 +141,15 @@ function parseSequenceBlock(state: ParserState, parentContext: string): ObjectNo
   };
 }
 
-export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
+/** Block-like object types: named from their position and described as a 'block', not an 'object'. */
+const NAMELESS_BLOCKS: ReadonlySet<string> = new Set(["animate", "physics", "world"]);
+
+/**
+ * `allowWorld` is true only for the scene loop in `index.ts`: a `world` block
+ * is legal directly inside `scene` and nowhere else, so every other caller
+ * (group and shape bodies, `generate`, `use`, template bodies) leaves it off.
+ */
+export function parseObject(state: ParserState, depth: number = 0, allowWorld: boolean = false): ObjectNode {
   if (depth > 50) {
     state.throwError(`In ${state.currentContext}: Maximum nesting depth exceeded. Object nesting is limited to 50 levels.`, state.peek());
   }
@@ -150,11 +158,15 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
     state.throwError(`In ${state.currentContext}: Global object limit exceeded. The scene contains too many objects (>15,000) and cannot be compiled.`, state.peek());
   }
 
+  if (state.peek().value === "world" && !allowWorld) {
+    state.throwError(`In ${state.currentContext}: 'world' blocks are only allowed directly inside the scene block.`, state.peek());
+  }
+
   const typeTok = state.consume("KEYWORD");
   const objType = typeTok.value as string;
 
   let objName = "";
-  if (objType === "animate" || objType === "physics") {
+  if (NAMELESS_BLOCKS.has(objType)) {
     objName = `${objType}_${typeTok.line}_${typeTok.col}`;
   } else {
     if (state.peek().type !== "IDENT") {
@@ -182,7 +194,7 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
   state.consume("LBRACE");
 
   const previousContext = state.currentContext;
-  state.currentContext = `'${objType}' ${objType === "animate" || objType === "physics" ? 'block' : `object '${objName}'`}`;
+  state.currentContext = `'${objType}' ${NAMELESS_BLOCKS.has(objType) ? 'block' : `object '${objName}'`}`;
 
   const prevEnv = state.env;
   state.env = Object.create(prevEnv);
@@ -203,11 +215,15 @@ export function parseObject(state: ParserState, depth: number = 0): ObjectNode {
           parseBinding(state);
           continue;
         }
-        if (objType === "animate" || objType === "physics") {
+        if (NAMELESS_BLOCKS.has(objType)) {
           const bad = state.peek();
           state.throwError(`In ${state.currentContext}: '${objType}' blocks cannot contain nested objects or blocks. Found '${bad.value as string}'.`, bad);
         }
         
+        if (state.peek().value === "world") {
+          state.throwError(`In ${state.currentContext}: 'world' blocks are only allowed directly inside the scene block.`, state.peek());
+        }
+
         if (state.peek().value === "parallel") {
           const bad = state.peek();
           state.throwError(`In ${state.currentContext}: Unexpected 'parallel' block. 'parallel' blocks are only allowed directly inside a 'sequence' block.`, bad);
