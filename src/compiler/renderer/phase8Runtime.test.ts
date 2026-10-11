@@ -441,3 +441,49 @@ describe("lockRotation", () => {
     for (const a of locked.angles) expect(a).toBe(locked.angles[0]);
   });
 });
+
+describe("exit criteria measured through the compiled pipeline", () => {
+  it("a locked paddle is at its animation's value on every tick and stays there afterwards", () => {
+    const { root, world, runtime } = build(`scene {
+  size: (400, 300)
+  rectangle paddle {
+    position: (100, 200)
+    size: (40, 20)
+    physics { lockPosition: true }
+    animate { property: position, to: (300, 200), duration: 1, easing: linear }
+  }
+  circle ball {
+    position: (300, 100)
+    radius: 10
+    physics { velocity: (0, 50), gravity: (0, 0), duration: indefinitely }
+  }
+}`);
+    const paddle = root.children[0] as Container;
+    let worst = 0;
+    for (let tick = 1; tick <= 300; tick++) {
+      advance(runtime, 1);
+      const expectedX = 100 + (200 * Math.min(tick, 120)) / 120;
+      const p = posOf(world, paddle);
+      worst = Math.max(worst, Math.abs(p.x - expectedX), Math.abs(p.y - 200));
+    }
+    expect(worst).toBeLessThan(1e-9);
+  });
+
+  it("bounds: [left, right, bottom] lets a body start above the scene, fall in and rest on the floor", () => {
+    const { root, world, runtime } = build(`scene {
+  size: (400, 300)
+  world { bounds: [left, right, bottom] }
+  circle c {
+    position: (200, -100)
+    radius: 10
+    physics { duration: indefinitely }
+  }
+}`);
+    const c = root.children[0] as Container;
+    advance(runtime, 1200);
+    const y = posOf(world, c).y;
+    expect(y).toBeGreaterThan(280);
+    expect(y).toBeLessThanOrEqual(300);
+    expect(runtime.isIdle()).toBe(true);
+  });
+});
