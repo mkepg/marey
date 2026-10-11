@@ -586,7 +586,8 @@ export class MatterWorld implements IPhysicsWorld {
 
   /**
    * Applies `move` to a body. If the body is pinned and the move changes it,
-   * every sleeping body it touches just before or just after the move is woken.
+   * every body it touches just before or just after the move is woken, and
+   * one already awake has its sleep count restarted.
    *
    * Matter never wakes a sleeper for a static body: its detector skips a pair
    * whose bodies are both static or asleep (`matter-js/src/collision/Detector.js:96`),
@@ -597,21 +598,36 @@ export class MatterWorld implements IPhysicsWorld {
    * before the move finds a sleeper the body leaves behind, even one the move
    * clears in a single tick (a paddle lowered faster than a resting body sinks
    * into it); the contact after finds one the body moves into, even on its
-   * last move. A pinned body that holds still wakes nothing, so a body asleep
-   * on a still ledge sleeps on.
+   * last move.
+   *
+   * Waking a sleeper is not enough on its own. A body riding a pinned body
+   * that moves slowly is carried by the solver's position correction, which
+   * Matter's motion estimate does not see, so it keeps counting to sleep while
+   * it rides. On a paddle lowered at 10 px/s it fell asleep on the tick a move
+   * had just opened a 0.058 px gap under it, which no contact test reaches, and
+   * hung there. Restarting the count of every body in contact keeps a rider
+   * awake for as long as its support moves; it sleeps by Matter's rule once the
+   * support stops. A pinned body that holds still wakes nothing, so a body
+   * asleep on a still ledge sleeps on.
    */
   private movePinned(rec: BodyRecord, moves: boolean, move: () => void): void {
     const wakes = moves && rec.body.isStatic;
-    if (wakes) this.wakeSleepersTouching(rec.body);
+    if (wakes) this.wakeBodiesTouching(rec.body);
     move();
-    if (wakes) this.wakeSleepersTouching(rec.body);
+    if (wakes) this.wakeBodiesTouching(rec.body);
   }
 
-  /** Wakes every sleeping body that overlaps `body`, part against part as Matter's own detector tests them. */
-  private wakeSleepersTouching(body: Matter.Body): void {
+  /**
+   * Wakes every body that overlaps `body`, part against part as Matter's own
+   * detector tests them, and restarts the sleep count of those already awake.
+   */
+  private wakeBodiesTouching(body: Matter.Body): void {
     for (const rec of this.records.values()) {
       const other = rec.body;
-      if (!other.isSleeping || other.isStatic) continue;
+      // Defensive: waking a static body is inert (the detector treats static
+      // and asleep alike, `isIdle` ignores static bodies, and `unpin` wakes the
+      // body it frees). It also keeps `body`, which is static, from testing itself.
+      if (other.isStatic) continue;
       if (touches(body, other)) Matter.Sleeping.set(other, false);
     }
   }

@@ -191,18 +191,13 @@ describe("a pinned body that moves wakes the bodies asleep against it", () => {
       `${WIDE}
     animate { property: position, to: (560, 400), duration: 3, easing: easeInOut, loop: true, yoyo: true }`
     ));
-    // Matter still puts the crate to sleep on the moving paddle on tick 182,
-    // and the paddle's next move wakes it. The wake touches only sleeping
-    // bodies: resetting an awake body's count as well would keep this crate
-    // awake for as long as the paddle moves under it, overriding Matter's
-    // sleeping rule, which bodies without spin keep.
-    advance(runtime, 182);
-    expect(world.isAsleep(crateId)).toBe(true);
-    advance(runtime, 1);
-    expect(world.isAsleep(crateId)).toBe(false);
-    // By tick 360 the paddle's left edge (x 360) is past the crate's right edge (x 320).
-    advance(runtime, 177);
-    expect(world.isAsleep(crateId)).toBe(false);
+    // A body touching a pinned body that moves is held awake, so the crate is
+    // awake on every tick until it has fallen. By tick 360 the paddle's left
+    // edge (x 360) is past the crate's right edge (x 320).
+    for (let t = 1; t <= 360; t++) {
+      advance(runtime, 1);
+      expect(world.isAsleep(crateId), `tick ${t}`).toBe(false);
+    }
     expect(posOf(world, crate).y).toBeGreaterThan(400);
     advance(runtime, 720);
     expect(Math.abs(posOf(world, crate).y - FLOOR_Y)).toBeLessThan(1);
@@ -243,6 +238,22 @@ describe("a pinned body that moves wakes the bodies asleep against it", () => {
     ));
     // On the paddle's top face: 500 - 7 - 20.
     expect(Math.abs(posOf(world, crate).y - 473)).toBeLessThan(1);
+  });
+
+  it("a crate riding a slowly lowered paddle rides it all the way down", () => {
+    // At 10 px/s the paddle drops 0.083 px a tick and the solver carries the
+    // crate down by position correction alone, so Matter reads the crate's
+    // motion as zero and counts it to sleep while it rides. Left to that
+    // count, it fell asleep on the tick a move had just opened a 0.058 px gap
+    // under it, out of reach of any contact test, and hung 30 px above the
+    // paddle's final top face.
+    const { world, crate, crateId } = afterSleeping(scene(
+      `${WIDE}
+    animate { property: position, to: (300, 440), duration: 4, delay: 2, easing: linear }`
+    ));
+    // On the paddle's top face: 440 - 7 - 20.
+    expect(Math.abs(posOf(world, crate).y - 413)).toBeLessThan(1);
+    expect(world.isAsleep(crateId)).toBe(true);
   });
 
   it("a paddle tilted away from under a sleeping crate lets it go", () => {
