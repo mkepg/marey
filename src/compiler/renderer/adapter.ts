@@ -2,7 +2,7 @@ import { Application, Container, Graphics, Ticker } from "pixi.js";
 import type { IRSceneNode } from "../sceneIR";
 import { buildNode } from "./builder";
 import { secondsToTicks } from "./clock";
-import { MatterWorld } from "./physicsWorld";
+import { createWorldForScene } from "./physicsWorld";
 import { Playback } from "./playback";
 import type { PlaybackController, PlaybackHost, PlaybackStart } from "./playback";
 import { SceneRuntime } from "./sceneRuntime";
@@ -152,7 +152,7 @@ export const pixiRendererAdapter: IRendererAdapter = {
       build() {
         const root = new Container();
         for (const node of scene.children) root.addChild(buildNode(node));
-        const runtime = new SceneRuntime(new MatterWorld(logicalWidth, logicalHeight), root);
+        const runtime = new SceneRuntime(createWorldForScene(scene), root);
         return { root, runtime };
       },
       attach(root) {

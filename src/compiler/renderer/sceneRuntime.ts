@@ -583,12 +583,25 @@ export class SceneRuntime {
         x: container.__pendingVelocity?.x ?? phIR.velocity.x,
         y: container.__pendingVelocity?.y ?? phIR.velocity.y,
       };
+      // Spin is parked beside the velocity and flushed with it. A handoff
+      // carries linear momentum only, so nothing else ever sets it, and this
+      // step's spin replaces any an earlier step never got to apply. A spin
+      // of 0 parks nothing, so it makes no world call at all.
+      // Unlike the velocity above, which keeps the earlier block's value
+      // (`??`), a later spin overwrites. That is acceptable: the two only meet
+      // when one `parallel` holds two physics blocks, and that already follows
+      // last-block-wins.
+      container.__pendingSpin = phIR.spin !== 0 ? (phIR.spin * Math.PI) / 180 : undefined;
 
       // Unpin before flushing: setStatic(false) collapses the body back to rest,
       // so a velocity written first would be discarded. unpinBody flushes after
       // each unpin, so if another reason still holds the pin — a position
       // animation running alongside this physics block — the velocity stays
       // parked and whichever unpin releases the last reason flushes it then.
+      // A locked body takes its permanent pin first, so releasing NO_RUNNER
+      // never leaves it free for a moment. Nothing releases LOCKED; a position
+      // animation adds and removes POS_ANIM around it (physics design §6.6).
+      if (phIR.lockPosition) pinBody(container, this.world, "LOCKED");
       unpinBody(container, this.world, "FROZEN");
       unpinBody(container, this.world, "NO_RUNNER");
     }

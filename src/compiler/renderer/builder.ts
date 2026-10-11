@@ -57,6 +57,11 @@ declare module "pixi.js" {
     __bodyTransform?: LocalTransform;
     /** Exit velocity written by a `handoff` animation, in px/s. */
     __pendingVelocity?: { x: number; y: number };
+    /**
+     * A physics step's `spin`, in radians per second, waiting for the body's
+     * last pin to lift. Never set for a spin of 0, which makes no world call.
+     */
+    __pendingSpin?: number;
     /** Collision shape, in local space with the origin at the bbox centre. */
     __bodyShape?: BodyGeometry;
     __sequences?: ReadonlyArray<IRSequence>;

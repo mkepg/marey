@@ -8,6 +8,7 @@ import {
   NAMED_COLORS,
   REQUIRED_PROPS,
 } from "../../../compiler/languageContract";
+import { KEYWORDS } from "../../../compiler/lexer/constants";
 import type { PropertySpec, ValueKind } from "../../../compiler/languageContract";
 
 type ContractBlockName = keyof typeof LANGUAGE_CONTRACT;
@@ -43,6 +44,7 @@ export const KEYWORD_DOCS: Record<string, string> = {
   line: `### \`line\`\nA renderable line object connecting a list of points.\n\n${propertySections("line")}\n\n**Example:**\n\`\`\`marey\nline myLine {\n  position: (0, 0)\n  points: [(10,10), (200,10), (200,200)]\n  thickness: 4\n  color: #f87171\n  alpha: 1.0\n  rotation: 0\n  scale: 1.0\n  origin: (0.5, 0.5)\n  layer: 1\n}\n\`\`\``,
   text: `### \`text\`\nA renderable text object.\n\n${propertySections("text")}\n\n**Example:**\n\`\`\`marey\ntext myText {\n  position: (400, 300)\n  content: "Marey UI"\n  fontSize: 24\n  color: #f8fafc\n  alpha: 1.0\n  rotation: 0\n  scale: 1.0\n  origin: (0.5, 0.5)\n  layer: 10\n}\n\`\`\``,
   group: `### \`group\`\nA container object that groups multiple child objects together.\n\n${propertySections("group")}\n\n**Example:**\n\`\`\`marey\ngroup myGroup {\n  position: (100, 100)\n  rotation: 45\n  scale: (1.5, 1.5)\n  alpha: 0.8\n  layer: 5\n\n  circle {\n    position: (0, 0)\n    radius: 20\n  }\n}\n\`\`\``,
+  world: `### \`world\`\nSettings for the whole simulated world: default gravity for every physics block, and which scene edges are walls.\n\n${propertySections("world")}\n\n**Example:**\n\`\`\`marey\nworld {\n  gravity: (0, 980)\n  bounds: [left, right, bottom]\n}\n\`\`\``,
   physics: `### \`physics\`\nA block that applies a 2D physics simulation to its parent object.\n\n${propertySections("physics")}\n\n**Example:**\n\`\`\`marey\nphysics {\n  duration: indefinitely\n  velocity: (200, -500)\n  gravity: (0, 980)\n  airDrag: 0.02\n  bounce: 0.65\n  collideBounds: true\n}\n\`\`\``,
   animate: `### \`animate\`\nA block that animates a specific property of its parent object over time.\n\n${propertySections("animate")}\n\n**Example:**\n\`\`\`marey\nanimate {\n  property: position\n  to: (500, 300)\n  duration: 2.5\n  delay: 0.25\n  easing: easeInOut\n  loop: true\n  yoyo: true\n  handoff: false\n}\n\`\`\``,
 };
@@ -102,6 +104,16 @@ export function physicsSnippet(inSequence: boolean): string {
     return `physics {\n\tduration: \${1:${propertyPlaceholder("animate", "duration")}}\n\tgravity: \${2:${propertyPlaceholder("physics", "gravity")}}\n\tairDrag: \${3:${propertyPlaceholder("physics", "airDrag")}}\n\tbounce: \${4:${propertyPlaceholder("physics", "bounce")}}\n\t$0\n}`;
   }
   return `physics {\n\tduration: \${1:${propertyPlaceholder("physics", "duration")}}\n\tvelocity: \${2:${propertyPlaceholder("physics", "velocity")}}\n\tgravity: \${3:${propertyPlaceholder("physics", "gravity")}}\n\tairDrag: \${4:${propertyPlaceholder("physics", "airDrag")}}\n\tbounce: \${5:${propertyPlaceholder("physics", "bounce")}}\n\t$0\n}`;
+}
+
+/**
+ * The tokenizer's block and macro words: the lexer's keyword set without `let`,
+ * which has its own token class. Derived so a new block cannot be missed here.
+ */
+export const TOKENIZER_KEYWORDS: readonly string[] = [...KEYWORDS].filter((word) => word !== "let");
+
+export function worldSnippet(): string {
+  return `world {\n\tgravity: \${1:${propertyPlaceholder("world", "gravity")}}\n\tbounds: \${2:${propertyPlaceholder("world", "bounds")}}\n}`;
 }
 
 export { namedColors };

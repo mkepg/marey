@@ -347,6 +347,12 @@ quietly make every visual object a collider.
 
 The language cuts in §4 remain in force throughout.
 
+> **Amended 2026-10-11:** Phase 8 is implemented on `phase-8` (not yet
+> merged): `world { gravity, bounds }`, `lockPosition`, `lockRotation` and
+> `spin`, with D13 unchanged, as `2026-10-11-marey-phase-8-physics-authoring-syntax-design.md`
+> records. A playground example (Ledges) and the 0.5.0 bump came with it by owner
+> decision O4. Evidence is in `eval/RESULTS-PHASE-8.md`.
+
 ---
 
 ## 12. The finish line
@@ -363,6 +369,13 @@ Concretely, at the finish line:
 5. The language expresses staggered reveal, baseline-anchored growth, and phase
    offset without workarounds.
 6. The project is installable, licensed, and explains itself to a reader.
+
+> **Amended 2026-10-11:** Phase 8 being done, every phase this section names is
+> done, and the six items above were each checked against a command or a file on
+> the Phase 8 tree in `eval/RESULTS-FINISH-LINE.md`. The finish line is reached
+> on that tree; it is declared on the merge of `phase-8`, which has not yet
+> happened. Item 6's ten-minute read stands on the owner's 2026-10-07 ruling
+> (spec §9.3), not on a human read.
 
 ---
 

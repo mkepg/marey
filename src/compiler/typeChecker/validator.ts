@@ -1,6 +1,7 @@
-import type { AstNode, ObjectNode, AstValue, CompilerError } from "../types";
+import type { AstNode, ObjectNode, SceneNode, AstValue, CompilerError } from "../types";
 import {
   ANIMATABLE_PROPERTIES,
+  EDGE_VALUES,
   KIND_LABEL,
   LANGUAGE_CONTRACT,
   LIST_ELEMENT_NOUN_PLURAL,
@@ -40,6 +41,20 @@ function formatPointCount(value: number): string {
 }
 
 type ErrPos = Pick<CompilerError, "line" | "col" | "endLine" | "endCol">;
+
+/**
+ * True only for the literal `lockPosition: true`. Every lock rule keys on this
+ * one predicate: `lockPosition: false` is the default behaviour spelled out and
+ * must trigger none of them, and a non-boolean value is already a kind
+ * mismatch that the property loop reports.
+ */
+function isLocked(physics: AstNode): boolean {
+  const v = physics.props["lockPosition"];
+  return v?.kind === "boolean" && v.value === true;
+}
+
+/** Properties that do nothing on a body `lockPosition: true` keeps static. */
+const LOCK_IGNORED_PROPS = ["velocity", "gravity", "airDrag", "spin", "lockRotation", "collideBounds", "duration"] as const;
 
 function errPosOf(val: AstValue): ErrPos {
   return { line: val.line, col: val.col, endLine: val.endLine, endCol: val.endCol };
@@ -353,7 +368,7 @@ export function collectErrors(ast: AstNode): CompilerError[] {
 
     const label = isScene
         ? "The scene block"
-        : typeName === "animate" || typeName === "physics" || typeName === "sequence" || typeName === "parallel"
+        : typeName === "animate" || typeName === "physics" || typeName === "sequence" || typeName === "parallel" || typeName === "world"
         ? `The '${typeName}' block`
         : `'${isUseBlock ? "use" : typeName}' ${isUseBlock ? "block" : "object"} '${nodeName}'`;
 
@@ -490,7 +505,14 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         }
         if (child.type === "physics") {
           const durVal = child.props["duration"];
-          if (!durVal) {
+          const lockVal = child.props["lockPosition"];
+          if (isLocked(child) && lockVal) {
+            errors.push({
+              phase: "TYPE",
+              message: `[TYPE_LOCK_IN_SEQUENCE] 'lockPosition' is not allowed inside a '${typeName}' block: a locked step never ends, so the steps after it could never start. Put it on the object's own 'physics' block.`,
+              ...errPosOf(lockVal),
+            });
+          } else if (!durVal) {
             errors.push({
               phase: "TYPE",
               message: `[TYPE_SEQ_PHYSICS_DUR] A 'physics' block inside a '${typeName}' requires a numeric 'duration'. Add 'duration: <seconds>'.`,
@@ -554,6 +576,42 @@ export function collectErrors(ast: AstNode): CompilerError[] {
             line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol,
           });
           break;
+        }
+      }
+
+      if (isLocked(node)) {
+        const lockVal = node.props["lockPosition"];
+        for (const prop of LOCK_IGNORED_PROPS) {
+          const written = node.props[prop];
+          if (written) {
+            errors.push({
+              phase: "TYPE",
+              message: `[TYPE_LOCK_IGNORED] ${label}: '${prop}' has no effect on a body with 'lockPosition: true'. Remove it; only 'bounce' applies to a locked body.`,
+              ...errPosOf(written),
+            });
+          }
+        }
+        // A step inside a timeline is reported by the enclosing sequence or
+        // parallel (TYPE_LOCK_IN_SEQUENCE); this is the object's own block.
+        const isStep = parentType === "sequence" || parentType === "parallel";
+        if (!isStep && lockVal && parentNode && parentNode.children.some(c => c.type === "sequence")) {
+          errors.push({
+            phase: "TYPE",
+            message: "[TYPE_LOCK_WITH_SEQUENCE] 'lockPosition: true' cannot be used on an object that also has a 'sequence' block, because the sequence waits for the object's physics to finish and a locked body's never does.",
+            ...errPosOf(lockVal),
+          });
+        }
+      } else {
+        // With a locked body 'spin' is already named by TYPE_LOCK_IGNORED, and
+        // the lock is the root cause, so a second diagnostic would only repeat it.
+        const spinVal = node.props["spin"];
+        const lockRotVal = node.props["lockRotation"];
+        if (spinVal && lockRotVal?.kind === "boolean" && lockRotVal.value === true) {
+          errors.push({
+            phase: "TYPE",
+            message: `[TYPE_SPIN_LOCKED] ${label}: 'spin' has no effect with 'lockRotation: true'. Remove one of them.`,
+            ...errPosOf(spinVal),
+          });
         }
       }
 
@@ -674,6 +732,15 @@ export function collectErrors(ast: AstNode): CompilerError[] {
             message: `[TYPE_HANDOFF_SCHEDULE_AMBIGUOUS] This object starts more than one 'property: position' animation at the same time as the handoff, so it is not clear which one releases the body last. 'handoff: true' requires the handoff animation to be the only concurrent position animation.`,
             line: handoffVal.line, col: handoffVal.col, endLine: handoffVal.endLine, endCol: handoffVal.endCol,
           });
+        } else if (isLocked(target.physics)) {
+          // A locked receiver is never moved by physics, so the checks below
+          // (initial velocity overwritten, duration outlasting the animation)
+          // have nothing to compare against. One diagnostic names the cause.
+          errors.push({
+            phase: "TYPE",
+            message: "[TYPE_LOCK_HANDOFF] 'handoff: true' cannot hand momentum to a body with 'lockPosition: true', which physics never moves.",
+            line: handoffVal.line, col: handoffVal.col, endLine: handoffVal.endLine, endCol: handoffVal.endCol,
+          });
         } else {
           const velNode = target.physics.props["velocity"];
           if (velNode !== undefined) {
@@ -728,7 +795,10 @@ export function collectErrors(ast: AstNode): CompilerError[] {
       }
     }
 
+    // A locked body runs for the whole scene, so it has no duration to require.
+    const waiveDuration = typeName === "physics" && isLocked(node);
     for (const prop of required) {
+      if (waiveDuration && prop === "duration") continue;
       if (!(prop in node.props)) {
         errors.push({ phase: "TYPE", message: `${label} is missing the required property '${prop}'.`, line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol });
       }
@@ -749,6 +819,20 @@ export function collectErrors(ast: AstNode): CompilerError[] {
       }
 
       const effectiveExpected: PropContract = expected;
+
+      if (typeName === "world" && key === "bounds" && val.kind === "edges") {
+        const seen = new Set<string>();
+        for (const word of val.value) {
+          const wordPos = { line: word.line, col: word.col, endLine: word.endLine, endCol: word.endCol };
+          if (!(EDGE_VALUES as readonly string[]).includes(word.name)) {
+            errors.push({ phase: "TYPE", message: `[TYPE_BOUNDS_EDGE] ${label}: 'bounds' lists '${word.name}', which is not a scene edge. The edges are ${EDGE_VALUES.slice(0, -1).join(", ")} and ${EDGE_VALUES[EDGE_VALUES.length - 1]}.`, ...wordPos });
+          } else if (seen.has(word.name)) {
+            errors.push({ phase: "TYPE", message: `[TYPE_BOUNDS_DUPLICATE] ${label}: 'bounds' lists '${word.name}' more than once.`, ...wordPos });
+          } else {
+            seen.add(word.name);
+          }
+        }
+      }
 
       const isExpected = Array.isArray(effectiveExpected)
         ? (effectiveExpected as readonly string[]).includes(val.kind)
@@ -809,6 +893,9 @@ export function collectErrors(ast: AstNode): CompilerError[] {
     if (!isScene && typeName !== "group" && hasVisualChildren) {
       errors.push({ phase: "TYPE", message: `${label} contains nested visual objects, but only 'group' blocks may have visual children.`, line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol });
     }
+
+    const world = isScene ? (node as SceneNode).world : undefined;
+    if (world) checkNode(world, node, "scene", []);
 
     const childAncestors = isScene ? ancestors : [...ancestors, node as ObjectNode];
     for (const c of node.children) {

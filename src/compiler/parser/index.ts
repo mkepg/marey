@@ -46,6 +46,7 @@ export function parse(tokens: Token[]): ParseResult {
     const sceneChildren: ObjectNode[]          = [];
     const seenSceneProps = new Set<string>();
     const seenSceneNames = new Set<string>();
+    let worldNode: ObjectNode | undefined;
 
     while (state.peek().type !== "RBRACE" && state.peek().type !== "EOF") {
       try {
@@ -79,6 +80,14 @@ export function parse(tokens: Token[]): ParseResult {
             }
             seenSceneNames.add(usedNode.name);
             sceneChildren.push(usedNode);
+            continue;
+          }
+
+          if (state.peek().value === "world") {
+            if (worldNode !== undefined) {
+              state.throwError(`In ${state.currentContext}: Only one 'world' block is allowed.`, state.peek());
+            }
+            worldNode = parseObject(state, 1, true);
             continue;
           }
 
@@ -137,7 +146,7 @@ export function parse(tokens: Token[]): ParseResult {
       state.throwError(`Unexpected ${describeToken(trailing)} after the scene block closed.${hint}`, trailing);
     }
 
-    const ast: SceneNode = { type: "scene", props: sceneProps, children: sceneChildren, line: sceneTok.line, col: sceneTok.col, endLine: endTok.line, endCol: endTok.endCol };
+    const ast: SceneNode = { type: "scene", props: sceneProps, children: sceneChildren, ...(worldNode ? { world: worldNode } : {}), line: sceneTok.line, col: sceneTok.col, endLine: endTok.line, endCol: endTok.endCol };
     return { ast, errors: state.errors, env: state.env, templates: state.templates };
 
   } catch (e) {

@@ -1,9 +1,14 @@
 /** The value categories understood by the Marey type checker. */
 export type ValueKind =
   | "number" | "color" | "string" | "point" | "list"
-  | "fit" | "boolean" | "easing" | "animProperty" | "indefinitely";
+  | "fit" | "boolean" | "easing" | "animProperty" | "indefinitely" | "edges";
 
-export type ContractDefault = number | string | boolean | Readonly<{ x: number; y: number }>;
+export type ContractDefault =
+  | number
+  | string
+  | boolean
+  | Readonly<{ x: number; y: number }>
+  | ReadonlyArray<string>;
 
 export type LocalConstraint =
   | Readonly<{ kind: "range"; min: number; max: number }>
@@ -47,12 +52,17 @@ export type DerivedDefaultStrategy = "polygonMinPoint";
  * `derivedDefault` would compute one, which for a physics scene is not
  * statically knowable at all.
  *
+ *
+ * `world.gravity` is the second: absent, each physics block keeps its own
+ * `gravity` (itself defaulting to (0, 980)), so a world-level number would
+ * override blocks that never asked for one.
+ *
  * Declared here rather than left implicit so `languageContract.test.ts`'s gap
  * check keeps enumerating structurally: every optional property still has a
  * documented fallback, and this is a third kind of one rather than an
  * exception to the rule.
  */
-export type AbsentMeaning = "indefinite";
+export type AbsentMeaning = "indefinite" | "physicsGravity";
 
 export interface PropertySpec {
   readonly kinds: ValueKind | readonly ValueKind[];
@@ -74,6 +84,8 @@ export const FIT_VALUES = ["contain", "cover", "fill", "none"] as const;
 export const BOOLEAN_VALUES = ["true", "false"] as const;
 export const EASING_VALUES = ["linear", "easeIn", "easeOut", "easeInOut"] as const;
 export const DURATION_VALUES = ["indefinitely"] as const;
+/** The scene edges `world { bounds }` can wall off, in canonical order. */
+export const EDGE_VALUES = ["left", "right", "top", "bottom"] as const;
 export const ANIMATABLE_PROPERTIES = ["position", "rotation", "scale", "alpha", "color"] as const;
 
 export const NAMED_COLORS = {
@@ -384,12 +396,50 @@ const physicsProperties = Object.freeze({
     "true",
     { default: true },
   ),
+  lockPosition: property(
+    "boolean",
+    "Holds the body still for the whole scene. Other objects collide with it; 'animate' can still move it. Takes no 'duration'.",
+    "lockPosition: true",
+    "true",
+    { default: false },
+  ),
+  lockRotation: property(
+    "boolean",
+    "Stops collisions and physics from rotating the body. An 'animate' on rotation still turns it.",
+    "lockRotation: true",
+    "true",
+    { default: false },
+  ),
+  spin: property(
+    "number",
+    "Initial angular velocity in degrees per second, applied when the physics step starts. Positive is clockwise.",
+    "spin: 90",
+    "90",
+    { default: 0 },
+  ),
   duration: property(
     ["number", "indefinitely"],
     "How long the physics simulation runs in seconds. Top-level physics may also run indefinitely.",
     "duration: 2.5 or duration: indefinitely",
     "indefinitely",
     { required: true, constraint: { kind: "positive" } },
+  ),
+});
+
+const worldProperties = Object.freeze({
+  gravity: property(
+    "point",
+    "The gravity every physics block uses unless it writes its own 'gravity', in pixels per second squared. Leave it out and each block keeps its own gravity, else (0, 980).",
+    "gravity: (0, 980)",
+    "(0, 980)",
+    { absentMeans: "physicsGravity" },
+  ),
+  bounds: property(
+    "edges",
+    "The scene edges that carry a wall, from left, right, top and bottom. Defaults to all four; [] means no walls.",
+    "bounds: [left, right, bottom]",
+    "[left, right, bottom]",
+    { default: EDGE_VALUES },
   ),
 });
 
@@ -429,6 +479,7 @@ export const LANGUAGE_CONTRACT = Object.freeze({
   text: block(textProperties),
   animate: block(animateProperties),
   physics: block(physicsProperties),
+  world: block(worldProperties),
   group: block(groupProperties),
   sequence: block(emptyProperties),
   parallel: block(emptyProperties),
@@ -445,6 +496,7 @@ export const KIND_LABEL: Readonly<Record<ValueKind, string>> = {
   easing: "an easing keyword (e.g. easeInOut, linear)",
   animProperty: `an animatable property name (${ANIMATABLE_PROPERTIES.join(", ")})`,
   indefinitely: "the keyword 'indefinitely'",
+  edges: "a list of scene edges, such as [left, right, bottom]",
 };
 
 /**
@@ -471,6 +523,7 @@ export const LIST_ELEMENT_NOUN_PLURAL: Readonly<Record<ValueKind, string>> = {
   easing: "easing keywords",
   animProperty: "animatable property names",
   indefinitely: "'indefinitely' keywords",
+  edges: "scene edges",
 };
 
 /**
@@ -517,7 +570,8 @@ export function propertyDefault(blockName: string, propertyName: string): Contra
   const contract = LANGUAGE_CONTRACT[blockName as keyof typeof LANGUAGE_CONTRACT];
   const configured = contract?.properties[propertyName]?.default;
   if (configured === undefined) return undefined;
-  if (typeof configured === "object") {
+  if (Array.isArray(configured)) return Object.freeze([...(configured as readonly string[])]);
+  if (typeof configured === "object" && "x" in configured) {
     return Object.freeze({ x: configured.x, y: configured.y });
   }
   return configured;

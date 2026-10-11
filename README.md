@@ -1,9 +1,10 @@
 # Marey
 
 Marey is a small language and a compiler for 2D motion graphics. A scene is
-written as text: shapes, animations, an optional physics simulation and a
-timeline. The compiler turns it into files that play without Marey: Lottie
-JSON, MP4 and WebM video, animated PNG, or one PNG per frame. It is not a game
+written as text: shapes, animations, an optional physics simulation (a `world`
+block for gravity and walls, locked bodies, spin) and a timeline. The compiler
+turns it into files that play without Marey: Lottie JSON, MP4 and WebM video,
+animated PNG, or one PNG per frame. It is not a game
 engine or a general-purpose animation library. PixiJS (drawing) and Matter.js
 (physics) are used internally and are not part of its interface.
 
@@ -225,9 +226,9 @@ is not in CI: it needs a real browser and a person to read the captures.
 
 ## Status
 
-Version 0.4.0. The CLI has two commands, `check` and `export`, and every
+Version 0.5.0. The CLI has two commands, `check` and `export`, and every
 format above is implemented. Below 1.0, a minor release may change the
-language and the Scene IR, and the remaining phases of the roadmap will. Breaking
+language and the Scene IR, and work past the roadmap's finish line may. Breaking
 syntax changes are weighed on which language is better to live with.
 
 Development runs in numbered phases against a written roadmap with an explicit

@@ -537,7 +537,7 @@ describe("LANGUAGE.md · Physics · the collision shape a group gets", () => {
     const shape = buildNode(ir.registry["scene.off"]).__bodyShape!;
     const world = new MatterWorld(800, 600);
     world.addBody("g", shape, 200, 300, 0, {
-      gravityX: 0, gravityY: 0, airDrag: 0, bounce: 0, collideBounds: true,
+      gravityX: 0, gravityY: 0, airDrag: 0, bounce: 0, collideBounds: true, lockRotation: false,
     });
     const state = world.readState("g", 1)!;
     expect(state.x).toBeCloseTo(200, 6);

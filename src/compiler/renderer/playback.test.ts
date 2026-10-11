@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Container } from "pixi.js";
 import { buildNode } from "./builder";
-import { MatterWorld } from "./physicsWorld";
+import { createWorldForScene } from "./physicsWorld";
 import { SceneRuntime } from "./sceneRuntime";
 import { Playback, type PlaybackHost, type PlaybackState } from "./playback";
 import { compileSource } from "../compileSource";
@@ -96,7 +96,7 @@ class TestHost implements PlaybackHost {
     this.builds++;
     const root = new Container();
     for (const n of this.ir.children) root.addChild(buildNode(n));
-    const runtime = new SceneRuntime(new MatterWorld(this.ir.width, this.ir.height), root);
+    const runtime = new SceneRuntime(createWorldForScene(this.ir), root);
     this.built.set(root, runtime);
     return { root, runtime };
   }

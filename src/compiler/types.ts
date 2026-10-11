@@ -132,6 +132,23 @@ export interface IndefinitelyValue {
   readonly endCol: number;
 }
 
+export interface EdgeWord {
+  readonly name: string;
+  readonly line: number;
+  readonly col: number;
+  readonly endLine: number;
+  readonly endCol: number;
+}
+
+export interface EdgesValue {
+  readonly kind: "edges";
+  readonly value: ReadonlyArray<EdgeWord>;
+  readonly line: number;
+  readonly col: number;
+  readonly endLine: number;
+  readonly endCol: number;
+}
+
 export type AstValue =
   | NumberValue
   | ColorValue
@@ -142,7 +159,8 @@ export type AstValue =
   | BooleanValue
   | EasingValue
   | AnimPropertyValue
-  | IndefinitelyValue;
+  | IndefinitelyValue
+  | EdgesValue;
 
 export type ObjectType =
   | "circle"
@@ -153,6 +171,7 @@ export type ObjectType =
   | "group"
   | "animate"
   | "physics"
+  | "world"
   | "sequence"
   | "parallel"; // ADDED: parallel block support
 
@@ -172,6 +191,8 @@ export interface SceneNode {
   readonly type: "scene";
   readonly props: Record<string, AstValue>;
   readonly children: ObjectNode[];
+  /** The scene's `world` block. Kept out of `children` so nothing that walks scene objects sees it. */
+  readonly world?: ObjectNode;
   readonly line: number;
   readonly col: number;
   readonly endLine: number;

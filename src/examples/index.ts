@@ -2,9 +2,10 @@ import duskHills from "./dusk-hills.marey?raw";
 import physicsPile from "./physics-pile.marey?raw";
 import barChartReveal from "./bar-chart-reveal.marey?raw";
 import logoReveal from "./logo-reveal.marey?raw";
+import ledges from "./ledges.marey?raw";
 
 export type ExampleId =
-  | "dusk-hills" | "physics-pile" | "bar-chart-reveal" | "logo-reveal";
+  | "dusk-hills" | "physics-pile" | "bar-chart-reveal" | "logo-reveal" | "ledges";
 
 export interface Example {
   readonly id: ExampleId;
@@ -37,6 +38,12 @@ export const EXAMPLES: ReadonlyArray<Example> = [
     title: "Logo reveal",
     description: "A logo assembles from its parts in sequence.",
     source: logoReveal,
+  },
+  {
+    id: "ledges",
+    title: "Ledges",
+    description: "Tiles fall in from above, glance off ledges and a sweeping paddle.",
+    source: ledges,
   },
 ];
 

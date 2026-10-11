@@ -50,6 +50,7 @@ const EXAMPLES = [
   { id: "physics-pile", index: 1 },
   { id: "bar-chart-reveal", index: 2 },
   { id: "logo-reveal", index: 3 },
+  { id: "ledges", index: 4 },
   { id: "dusk-hills", index: 0 },
 ];
 const FIXTURE = readFileSync(resolve("tools/visual-check/scenes/color-sequence.marey"), "utf8");
