@@ -255,6 +255,22 @@ Before any publish with `--ignore-scripts`, run `npm run build:package` and
 `npm run check:pack` last, after every other build, and confirm
 `npm pack --dry-run` reports 57 files.
 
+### Published
+
+The registry (`https://registry.npmjs.org/marey-lang`, read 2026-10-11) lists
+0.5.0 with 5 files and 0.5.1 with 57, and `latest` is 0.5.1. Each version was
+installed from the registry into an empty project and run:
+
+| Step | 0.5.0 | 0.5.1 |
+|---|---|---|
+| `npx marey --version` | `0.5.0` | `0.5.1` |
+| `marey check` | ok | ok, on a scene with `world { gravity, bounds }` and `spin` |
+| `marey export --format lottie` | fails: `dist/export-page/index.html is missing` | writes 30 frames |
+| `import { compile } from "marey-lang"` | fails: `ERR_MODULE_NOT_FOUND` for `dist/lib/marey.mjs` | imports and compiles |
+
+0.5.0 is deprecated with "Incomplete package: library and export page missing.
+Use 0.5.1."; installing it prints that warning.
+
 ## Other checks run on this tree
 
 | Command | Result |

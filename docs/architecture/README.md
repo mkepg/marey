@@ -163,9 +163,8 @@ proposing anything the old roadmap justified by adoption.
 and with it the roadmap's finish line is declared. It adds
 `world { gravity, bounds }`, `lockPosition`, `lockRotation` and `spin`, with
 named diagnostics for every misuse, the editor and reference support, and the
-Ledges example. 0.5.0 was published without its library and export page and
-is superseded; 0.5.1 is bumped and `check:pack` passes, and `npm publish` is
-the owner's step. Evidence is in `eval/RESULTS-PHASE-8.md`;
+Ledges example. It is published on npm as `marey-lang@0.5.1` (2026-10-11);
+0.5.0 went out without its library and export page and is deprecated. Evidence is in `eval/RESULTS-PHASE-8.md`;
 `eval/RESULTS-FINISH-LINE.md` checks roadmap §12's six items. Design:
 `docs/specs/2026-10-11-marey-phase-8-physics-authoring-syntax-design.md`; plan:
 `docs/plans/2026-10-11-phase-8-physics-authoring-syntax.md`.

@@ -317,9 +317,9 @@ explicitly rather than quietly deviating.
     sampled-frame hashes (the 17 scenes with text are not hash compared, a
     recorded limit) and the determinism snapshot gained only the new defaulted
     IR fields. An independent whole-branch review found three issues, all
-    fixed before the merge. 0.5.0 was published without its library and
-    export page and is superseded by 0.5.1, which is bumped and passes
-    `check:pack`; publishing is the owner's step. Evidence is in
+    fixed before the merge. Published on npm as `marey-lang@0.5.1`
+    (2026-10-11); 0.5.0 went out without its library and export page and
+    is deprecated. Evidence is in
     `eval/RESULTS-PHASE-8.md`, and `eval/RESULTS-FINISH-LINE.md` checks
     roadmap §12's six items. Design:
     `docs/specs/2026-10-11-marey-phase-8-physics-authoring-syntax-design.md`.
