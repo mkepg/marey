@@ -138,6 +138,14 @@ and is published by the owner after the merge.
 
 - Whether a person can state what Marey is within ten minutes (item 6): the
   evidence is a language-model read and the owner's ruling, as Phase 6 records.
-- Phase 8 is not merged and 0.5.0 is not published; those are the owner's steps.
-- The independent whole-branch review of `phase-8` that spec E5 requires has not
-  run at the time of this file.
+- 0.5.0 is not published; that is the owner's step.
+
+## After this file
+
+The independent whole-branch review that spec E5 requires ran after this file
+was written. It returned three issues, each fixed before the merge: a
+`lockRotation` body kept a spin a sibling block in the same `parallel` had
+already started (`13b0fa1`); the `bounds` value completion of spec section 6 was
+missing (`e36e006`); and `docs/architecture/renderer.md` was stale (`212fe3c`).
+Phase 8 was merged into `main` on 2026-10-11 (`2caf55c`), which declares the
+finish line.

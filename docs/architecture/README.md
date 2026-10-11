@@ -159,13 +159,13 @@ for a **complete, provable engineering artifact with a declarable finish
 line**, and acquisition work moved past that line. Read its §1 before
 proposing anything the old roadmap justified by adoption.
 
-**8 — physics authoring syntax is implemented on `phase-8` and not yet merged**
-(status 2026-10-11). It adds `world { gravity, bounds }`, `lockPosition`,
-`lockRotation` and `spin`, with named diagnostics for every misuse, the editor
-and reference support, and the Ledges example. Version 0.5.0 is bumped and
-`check:pack` passes; merging and `npm publish` are the owner's steps. Evidence
-is in `eval/RESULTS-PHASE-8.md`; `eval/RESULTS-FINISH-LINE.md` checks roadmap
-§12's six items on this tree. Design:
+**8 — physics authoring syntax is merged into `main`** (2026-10-11, `2caf55c`),
+and with it the roadmap's finish line is declared. It adds
+`world { gravity, bounds }`, `lockPosition`, `lockRotation` and `spin`, with
+named diagnostics for every misuse, the editor and reference support, and the
+Ledges example. Version 0.5.0 is bumped and `check:pack` passes; `npm publish`
+is the owner's step. Evidence is in `eval/RESULTS-PHASE-8.md`;
+`eval/RESULTS-FINISH-LINE.md` checks roadmap §12's six items. Design:
 `docs/specs/2026-10-11-marey-phase-8-physics-authoring-syntax-design.md`; plan:
 `docs/plans/2026-10-11-phase-8-physics-authoring-syntax.md`.
 `roadmap-and-process.md`'s Phase 8 bullet carries the same status.

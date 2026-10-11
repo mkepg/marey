@@ -243,5 +243,17 @@ typechecks report 0 errors; no pixi in the installed library bundle.
 - Frame hashes of the 17 text scenes are not compared (E3 coverage limit above).
 - `ledges` is checked in Chromium through lottie-web; no other third-party
   player was run on it this phase.
-- The independent whole-branch review that spec E5 requires has not run at the
-  time of this file; it follows the commit.
+- One case the review below left open: when `spin` and `lockRotation` come from
+  sibling physics blocks in one `parallel` while another pin (a position
+  animation) spans both spawns, the code applies the spin after the lock, so
+  the body may still turn (read from the code, not measured). Rejecting that combination in `TYPE_SPIN_LOCKED` is the
+  fix, left for later.
+
+## E5: the independent review
+
+The whole-branch review ran after this file was first written, over
+`2098f40..bf80ed7`. It re-ran 59 non-text scenes, and 24 text scenes with
+their text removed, for 15 s at base and head: every hash identical. It
+returned three issues, each fixed before the merge (`13b0fa1`, `e36e006`,
+`212fe3c`), and a re-review of those fixes found nothing open. Merged into
+`main` on 2026-10-11 (`2caf55c`).

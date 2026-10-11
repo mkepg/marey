@@ -304,7 +304,7 @@ explicitly rather than quietly deviating.
     Plan: `docs/plans/2026-10-07-phase-7-motion-graphics-core.md`.
 - **Phase 8 — remaining physics syntax.** `world`, `lockPosition`,
   `lockRotation`, and `spin`; D13's explicit-body rule remains in force.
-  - **Status (2026-10-11): implemented on branch `phase-8`, not yet merged.**
+  - **Status (2026-10-11): merged into `main` (`2caf55c`).**
     It shipped `world { gravity, bounds }` (world gravity is the default for
     every physics block, and `bounds` picks which scene edges are walls, built
     by one factory, `createWorldForScene`, for the playground and every
@@ -316,13 +316,15 @@ explicitly rather than quietly deviating.
     and fixed it. Existing output is unchanged: 25 headless scenes keep their
     sampled-frame hashes (the 17 scenes with text are not hash compared, a
     recorded limit) and the determinism snapshot gained only the new defaulted
-    IR fields. Version 0.5.0 is bumped and `check:pack` passes; publishing is
-    the owner's step after the merge. Evidence is in
+    IR fields. An independent whole-branch review found three issues, all
+    fixed before the merge. Version 0.5.0 is bumped and `check:pack` passes;
+    publishing is the owner's step. Evidence is in
     `eval/RESULTS-PHASE-8.md`, and `eval/RESULTS-FINISH-LINE.md` checks
     roadmap §12's six items. Design:
     `docs/specs/2026-10-11-marey-phase-8-physics-authoring-syntax-design.md`.
     Plan: `docs/plans/2026-10-11-phase-8-physics-authoring-syntax.md`.
-- **Finish line.** Phases 3C–8 complete (checked against `eval/RESULTS-FINISH-LINE.md` on the Phase 8 tree; it is declared on the merge). Everything after — the documentation
+- **Finish line.** Phases 3C–8 complete (checked against `eval/RESULTS-FINISH-LINE.md`; declared with the Phase 8
+  merge on 2026-10-11). Everything after — the documentation
   site, distribution and integrations, semantic layout, spring easing, derived
   accessibility artifacts, embedded runtimes — is catalogued as further
   capability with no commitment.
