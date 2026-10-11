@@ -66,9 +66,9 @@ describe("Phase 8 diagnostics", () => {
     const body = kind === "sequence"
       ? `sequence { ${step} }`
       : `sequence { parallel { ${step} } }`;
-    expect(errorsOf(scene(`  rectangle r {\n position: (200, 200)\n size: (50, 50)\n ${body}\n }`))).toContain(
+    expect(errorsOf(scene(`  rectangle r {\n position: (200, 200)\n size: (50, 50)\n ${body}\n }`))).toEqual([
       `[TYPE_LOCK_IN_SEQUENCE] 'lockPosition' is not allowed inside a '${kind}' block: a locked step never ends, so the steps after it could never start. Put it on the object's own 'physics' block.`,
-    );
+    ]);
   });
 
   it("TYPE_LOCK_WITH_SEQUENCE fires for a locked physics beside a sequence", () => {
@@ -91,6 +91,13 @@ describe("Phase 8 diagnostics", () => {
   it("TYPE_SPIN_LOCKED fires for spin with lockRotation: true", () => {
     expect(errorsOf(scene(crate("spin: 90, lockRotation: true, duration: 1")))).toEqual([
       "[TYPE_SPIN_LOCKED] The 'physics' block: 'spin' has no effect with 'lockRotation: true'. Remove one of them.",
+    ]);
+  });
+
+  it("lockPosition with spin and lockRotation names each in TYPE_LOCK_IGNORED and adds no TYPE_SPIN_LOCKED", () => {
+    expect(errorsOf(scene(crate("lockPosition: true, spin: 90, lockRotation: true")))).toEqual([
+      LOCK_IGNORED("spin"),
+      LOCK_IGNORED("lockRotation"),
     ]);
   });
 
