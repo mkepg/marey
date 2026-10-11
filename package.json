@@ -1,6 +1,6 @@
 {
   "name": "marey-lang",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "A text-first compiler for generative, deterministic 2D motion graphics.",
   "license": "MIT",
   "repository": {

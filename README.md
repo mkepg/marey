@@ -226,7 +226,7 @@ is not in CI: it needs a real browser and a person to read the captures.
 
 ## Status
 
-Version 0.5.0. The CLI has two commands, `check` and `export`, and every
+Version 0.5.1. The CLI has two commands, `check` and `export`, and every
 format above is implemented. Below 1.0, a minor release may change the
 language and the Scene IR, and work past the roadmap's finish line may. Breaking
 syntax changes are weighed on which language is better to live with.

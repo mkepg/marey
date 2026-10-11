@@ -131,14 +131,16 @@ criterion 2 by the owner's ruling of 2026-10-07 (`eval/RESULTS-PHASE-6.md`, "Exi
 criterion 2": one read by a language model, no human read). That ruling is
 unchanged and not re-run here.
 
-Version 0.4.0 was published on npm on 2026-10-10; 0.5.0 is packed and checked
-and is published by the owner after the merge.
+Version 0.4.0 was published on npm on 2026-10-10. The version checked above is
+0.5.0; it was published on 2026-10-11 without its library and export page (see
+`eval/RESULTS-PHASE-8.md`, E6) and is superseded by 0.5.1, which carries the
+same tree and passes `check:pack`.
 
 ## What this does not show
 
 - Whether a person can state what Marey is within ten minutes (item 6): the
   evidence is a language-model read and the owner's ruling, as Phase 6 records.
-- 0.5.0 is not published; that is the owner's step.
+- 0.5.1 is not yet published; that is the owner's step.
 
 ## After this file
 

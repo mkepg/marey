@@ -227,6 +227,34 @@ typechecks report 0 errors; no pixi in the installed library bundle.
 `package.json` and `package-lock.json` both read 0.5.0. Nothing was published:
 `npm publish` is the owner's step after the merge.
 
+### The 0.5.0 package was incomplete; 0.5.1 replaces it
+
+0.5.0 was published on 2026-10-11 with `npm publish --ignore-scripts`. Its
+tarball held 5 files, 124.8 kB unpacked: `bin/`, `dist/cli/marey.mjs`, the
+README, the licence and `package.json`. `dist/lib/` and `dist/export-page/` were
+missing, so `import "marey-lang"` and `marey export` cannot work from it.
+`--ignore-scripts` skips `prepublishOnly`, which builds the package, so the
+tarball is whatever `dist/` holds at that moment; the site build
+(`npm run build`) had run after the last `build:package` and left only the site
+and `dist/cli/` there. npm does not allow a version to be published twice, so
+the fix is a new version:
+
+```
+npm version 0.5.1 --no-git-tag-version
+npm run build:package
+npm run check:pack
+```
+
+`check:pack: all passed`: 57 files, 586,012 B packed, 1,814,736 B unpacked;
+`npx marey --version` prints `0.5.1` from the installed tarball; `marey check`
+and `marey export --format lottie` run on the installed copy; a consumer
+imports `marey-lang` and both consumer typechecks report 0 errors; no pixi in
+the installed library bundle.
+
+Before any publish with `--ignore-scripts`, run `npm run build:package` and
+`npm run check:pack` last, after every other build, and confirm
+`npm pack --dry-run` reports 57 files.
+
 ## Other checks run on this tree
 
 | Command | Result |
