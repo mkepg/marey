@@ -1,0 +1,62 @@
+// Ledges: tiles fall in through the open top, glance off three fixed ledges and a sweeping paddle.
+// A world block sets gravity and walls; each tile spins its own way, and the crates never turn.
+
+let amber   = #feb93e
+let cream   = #f5e6d3
+let plum    = #6b4a7a
+let tan     = #d9b48f
+let colors  = [#e8846f, #b8608a, #a99be0, #f5b36b]
+let spins   = [240, -180, 360, -300, 120, -420]   // degrees per second; positive is clockwise
+let slope   = 30          // degrees; each ledge falls away from its wall, towards the middle
+let ledgeAt = [(190, 150), (620, 230), (190, 400)]
+let entry   = 210         // tiles enter across x = entry to entry + span
+let span    = 480
+let rise    = 30          // how much higher each tile starts than the one before
+let drag    = 0.03        // holds the fall near 540 px/s, so a higher start arrives later
+let crateAt = [(420, -100), (450, -380), (390, -620)]
+
+scene {
+  size: (800, 600)
+  duration: 9
+  background: #1a1b41
+
+  world {
+    gravity: (0, 980)
+    bounds: [left, right, bottom]
+  }
+
+  generate p, i in ledgeAt {
+    rectangle ledge {
+      position: p, size: (260, 14), rotation: slope * [1, -1, 1][i], color: plum
+      physics { lockPosition: true, bounce: 0.5 }
+    }
+  }
+
+  rectangle paddle {
+    position: (330, 350), size: (120, 14), rotation: -12, color: amber
+    physics { lockPosition: true, bounce: 0.6 }
+    animate {
+      property: position, to: (500, 350), duration: 1, easing: easeInOut, loop: true, yoyo: true
+    }
+  }
+
+  // 197 shares no factor with the span, so the 24 entry points scatter without repeating.
+  generate i in 0 to 23 {
+    let side = 18 + (i % 3) * 5
+    rectangle tile {
+      position: (entry + (i * 197) % span, -40 - i * rise)
+      size: (side, side), rotation: (i * 29) % 90, color: colors[i % 4]
+      physics { spin: spins[i % 6], bounce: 0.35, airDrag: drag, duration: indefinitely }
+    }
+  }
+
+  // The crates drop into the paddle's path. However they are struck, they stay level.
+  generate p in crateAt {
+    group crate {
+      position: p
+      rectangle frame { position: (0, 0), size: (44, 44), color: tan }
+      rectangle face  { position: (0, 0), size: (32, 32), color: cream }
+      physics { lockRotation: true, bounce: 0.1, duration: indefinitely }
+    }
+  }
+}

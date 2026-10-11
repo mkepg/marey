@@ -11,6 +11,7 @@ describe("the examples registry", () => {
       ["physics-pile", "Physics pile", "Shapes tumble, collide and settle under gravity."],
       ["bar-chart-reveal", "Bar chart reveal", "A list of numbers grows into bars, one after another."],
       ["logo-reveal", "Logo reveal", "A logo assembles from its parts in sequence."],
+      ["ledges", "Ledges", "Tiles fall in from above, glance off ledges and a sweeping paddle."],
     ]);
     expect(DEFAULT_EXAMPLE.id).toBe("dusk-hills");
   });
