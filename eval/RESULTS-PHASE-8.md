@@ -19,7 +19,7 @@ Command:
 npx vitest run src/compiler/renderer/phase8Runtime.test.ts src/compiler/renderer/physicsWorld.test.ts
 ```
 
-`phase8Runtime.test.ts` alone: 24 tests pass (`npx vitest run
+`phase8Runtime.test.ts` alone: 25 tests pass (`npx vitest run
 src/compiler/renderer/phase8Runtime.test.ts`). Each test below compiles source
 with `compileSource` and runs it through `buildNode`, `createWorldForScene` and
 `SceneRuntime`, as the sampler's callers do.
@@ -28,11 +28,11 @@ with `compileSource` and runs it through `buildNode`, `createWorldForScene` and
 |---|---|---|
 | 1. World gravity `(0, 980)` gives 980 px/s after 1 s; an own `gravity: (0, -200)` gives -200 | `world gravity > is the gravity of a physics block that has none of its own`, `... > gives way to a block's own gravity` | Both pass: speed over the last tick of the first second is within 0.5 px/s of 980 and of -200 |
 | 2. `spin: 360` in a vacuum turns exactly 2 pi in 120 ticks, tolerance 1e-9 | `spin > spin: 360 in a vacuum has turned exactly 2π after 120 ticks` | Passes: `abs(rotation - 2 pi) < 1e-9` |
-| 3. A `lockRotation` box dropped corner-first onto a locked ramp keeps its angle exactly for 600 ticks while its position changes | `lockRotation > a locked crate keeps its angle exactly for 600 ticks ...`, with the control `an unlocked crate tips on the ramp, so the locked cases below can tell` | Passes: all 600 sampled angles equal the first, which is within 1e-12 of the 30 degree start; the crate fell more than 50 px. The unlocked control turns by more than 0.1 rad. Three more tests hold the lock through a sequence step, a scale animation, and a second physics block in a parallel step |
+| 3. A `lockRotation` box dropped corner-first onto a locked ramp keeps its angle exactly for 600 ticks while its position changes | `lockRotation > a locked crate keeps its angle exactly for 600 ticks ...`, with the control `an unlocked crate tips on the ramp, so the locked cases below can tell` | Passes: all 600 sampled angles equal the first, which is within 1e-12 of the 30 degree start; the crate fell more than 50 px. The unlocked control turns by more than 0.1 rad. Four more tests hold the lock through a sequence step, a scale animation, a second physics block in a parallel step, and a lock that arrives after a sibling block's spin was flushed (it fails without the angular-velocity reset) |
 | 4. A locked body struck by a falling body does not move (1e-9); a locked body under `animate position` is at the animation's value at every tick and stays there | `lockPosition > (a)`, `(b)`, `(c)`, `(d)`, and `exit criteria measured through the compiled pipeline > a locked paddle is at its animation's value on every tick ...` | (a) ledge at (200, 200) within 5e-10 after 600 ticks with a circle resting on it; (c) the same for a locked group. The last test samples the paddle on each of 300 ticks against the closed form `100 + 200 * min(tick, 120) / 120`: worst deviation under 1e-9, a ball striking it after the animation ends |
 | 5. `bounds: [left, right, bottom]` lets a body from `y = -100` fall in and rest on the floor; `bounds: []` lets a body fall out, be culled, and the runtime go idle | `exit criteria measured ... > bounds: [left, right, bottom] lets a body start above the scene ...`, `world bounds > a scene with bounds: [] lets its body fall out ...`, and `MatterWorld walls` in `physicsWorld.test.ts` | Compiled pipeline: after 1200 ticks the circle rests with y between 280 and 300 in a 300 px scene and the runtime is idle. `bounds: []`: the body is gone from the world after 2400 ticks and the runtime is idle. `MatterWorld` level: a body from y = -150 rests above 500 with the three walls, stays above the scene with all four, and ends below 600 with none |
 
-**Two gaps this task closed.** Spec item 4 asks for the paddle at the animation's value on every tick to 1e-9, and the existing test `(b)` sampled ticks 60, 120 and 600 to 1e-6. Item 5's first half was pinned at the `MatterWorld` level only. `14cf66d` adds the two tests in the `exit criteria measured through the compiled pipeline` block. Each was shown load-bearing: moving the paddle's expected plateau from tick 120 to 119 fails the first, and changing the world to `bounds: []` fails the second.
+**Two gaps closed by `14cf66d`.** Spec item 4 asks for the paddle at the animation's value on every tick to 1e-9, and the existing test `(b)` sampled ticks 60, 120 and 600 to 1e-6. Item 5's first half was pinned at the `MatterWorld` level only. `14cf66d` adds the two tests in the `exit criteria measured through the compiled pipeline` block. Each was shown load-bearing: moving the paddle's expected plateau from tick 120 to 119 fails the first, and changing the world to `bounds: []` fails the second.
 
 ### Finding: a body asleep on a moving pinned body hung in mid-air
 
@@ -57,7 +57,7 @@ asleep", still passes, as it should. The tree was clean afterwards.
 ### A spec decision taken during execution
 
 A body given a nonzero `spin` may sleep only when its rim speed plus linear
-speed is below Matter's linear sleep threshold (spec section 5.4, ruling R6).
+speed is below Matter's linear sleep threshold (spec section 5.4).
 Matter measures `speed^2 + angularSpeed^2` against one threshold, in different
 units, so a body turning in place below about 972 degrees per second counted as
 still, and `spin: 360` in a vacuum slept on tick 120, one tick short of a full
@@ -73,7 +73,7 @@ Command:
 npx vitest run src/compiler/parser/world.test.ts src/compiler/typeChecker/phase8Diagnostics.test.ts
 ```
 
-Result: 13 and 18 tests pass (31 in total). The type-error tests assert the
+Result: 13 and 19 tests pass (32 in total). The type-error tests assert the
 whole `[CODE] sentence` string from spec section 2.2; the parse-error tests
 assert the whole message of section 2.1.
 
@@ -231,7 +231,7 @@ typechecks report 0 errors; no pixi in the installed library bundle.
 
 | Command | Result |
 |---|---|
-| `npm test` | 73 files, 1475 tests passed |
+| `npm test` | 74 files, 1479 tests passed |
 | `npx vitest run --config eval/vitest.config.ts` | 1 file, 5 tests passed |
 | `npm run build` | built (typecheck included; Vite's chunk size notice only) |
 | `npm run build:cli && node bin/marey.mjs check $(git ls-files '*.marey')` | 86 files, every one `ok`, exit 0 |

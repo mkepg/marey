@@ -834,9 +834,8 @@ start for a top-level `physics` block, or the moment a `sequence` reaches that
 `physics` step. Positive spin is clockwise on screen, the same direction as a
 positive `rotation`. It defaults to `0`, and `airDrag` damps it as it damps
 `velocity`. A spun body that lands and settles falls asleep like any other, so the
-scene still comes to rest. `spin` together
-with `lockRotation: true` in one block is a compile error (`TYPE_SPIN_LOCKED`),
-since the lock would discard it. `handoff` carries linear momentum only: it
+scene still comes to rest. `spin` together with `lockRotation: true` in one
+block is a compile error (`TYPE_SPIN_LOCKED`), since the lock would discard it. `handoff` carries linear momentum only: it
 never sets or replaces `spin`.
 
 ```marey

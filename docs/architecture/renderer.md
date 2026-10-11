@@ -89,6 +89,18 @@ only thing enforcing it; check it by grepping the six files above for
   `physicsWorld.test.ts` deliberately, not trusting them. Reference sources
   are checked out at `../matter-js-master` and `../poly-decomp-es-main`.
   `poly-decomp` is **not** a dependency; polygons use a convex hull (spec §3).
+  Three more sleeping rules live here. A body given a non-zero `spin` sleeps
+  only when its rim is still: linear speed plus angular speed times the
+  distance to its farthest vertex must fall below Matter's threshold, because
+  Matter compares `speed² + angularSpeed²` in different units and would put a
+  body turning below about 972°/s to sleep mid-turn (Phase 8 spec §5.4).
+  Matter never wakes a sleeper for a static body, so a pinned body (any pin
+  reason) that moves, turns or scales wakes the sleeping bodies it touches
+  before and after the move, and holds awake the bodies resting on it for as
+  long as it moves (`movePinned`); one that holds still wakes nothing. Walls
+  come from `world { bounds }` through `createWorldForScene`, the only
+  production constructor of `MatterWorld`; `adapter.ts` and `rasterExport.ts`
+  both use it.
 
 `renderer/physicsSync.ts` is the only place containers and bodies meet. It
 imports `pixi.js` for types **only**, so it is headlessly testable too. Its
@@ -157,7 +169,7 @@ animation would settle a frame-rate-dependent distance from its baseline.
 because it paints and never feeds the world. An
 object gets a body iff it declares `physics` directly or in a `sequence` (D13);
 animate-only objects are not colliders. Pinning is reason-counted — `NO_RUNNER`,
-`POS_ANIM`, `FROZEN` — and pinned means container → body, so a frozen object
+`POS_ANIM`, `FROZEN`, `LOCKED` — and pinned means container → body, so a frozen object
 still tracks a sibling animation instead of drifting off its collision shape.
 
 The loop is: `pump` → advance N ticks → **paint once** at the sub-tick `alpha`.
