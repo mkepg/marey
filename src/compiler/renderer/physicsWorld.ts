@@ -219,21 +219,40 @@ function safeScale(v: number): number {
   return Math.abs(v) < 1e-4 ? 1e-4 : Math.abs(v);
 }
 
+/** A body's own shapes: a compound's parts, since its parent carries only their hull, or else the body itself. */
+function collisionParts(body: Matter.Body): Matter.Body[] {
+  return body.parts.length > 1 ? body.parts.slice(1) : [body];
+}
+
 /**
  * The distance from a body's centre of mass to its farthest vertex, which is
  * the radius its fastest-moving point turns at. A compound's parent carries
  * the hull of its parts, so its parts are measured instead.
  */
 function farthestVertexDistance(body: Matter.Body): number {
-  const parts = body.parts.length > 1 ? body.parts.slice(1) : [body];
   let max = 0;
-  for (const part of parts) {
+  for (const part of collisionParts(body)) {
     for (const v of part.vertices) {
       const d = Math.hypot(v.x - body.position.x, v.y - body.position.y);
       if (d > max) max = d;
     }
   }
   return max;
+}
+
+/**
+ * Whether two bodies overlap, by the test Matter's detector applies to each
+ * pair of parts (`Collision.collides`). Called without Matter's pair table, so
+ * it reads the bodies and writes nothing the engine keeps.
+ */
+function touches(a: Matter.Body, b: Matter.Body): boolean {
+  if (!Matter.Bounds.overlaps(a.bounds, b.bounds)) return false;
+  for (const pa of collisionParts(a)) {
+    for (const pb of collisionParts(b)) {
+      if (Matter.Bounds.overlaps(pa.bounds, pb.bounds) && Matter.Collision.collides(pa, pb)) return true;
+    }
+  }
+  return false;
 }
 
 /** How far outside the scene the walls sit, and how thick they are. */
@@ -560,7 +579,41 @@ export class MatterWorld implements IPhysicsWorld {
     const rec = this.records.get(id);
     if (!rec) return;
     const off = this.rotatedOffset(rec);
-    Matter.Body.setPosition(rec.body, { x: x - off.x, y: y - off.y });
+    const to = { x: x - off.x, y: y - off.y };
+    const moves = to.x !== rec.body.position.x || to.y !== rec.body.position.y;
+    this.movePinned(rec, moves, () => Matter.Body.setPosition(rec.body, to));
+  }
+
+  /**
+   * Applies `move` to a body. If the body is pinned and the move changes it,
+   * every sleeping body it touches just before or just after the move is woken.
+   *
+   * Matter never wakes a sleeper for a static body: its detector skips a pair
+   * whose bodies are both static or asleep (`matter-js/src/collision/Detector.js:96`),
+   * and `Sleeping.afterCollisions` skips any pair with a static body
+   * (`Sleeping.js:83`). A pinned body is static, so a body that fell asleep on a
+   * pinned body the runtime then moved, turned or scaled hung where it slept,
+   * and a pinned body moved into a sleeper passed through it. The contact
+   * before the move finds a sleeper the body leaves behind, even one the move
+   * clears in a single tick (a paddle lowered faster than a resting body sinks
+   * into it); the contact after finds one the body moves into, even on its
+   * last move. A pinned body that holds still wakes nothing, so a body asleep
+   * on a still ledge sleeps on.
+   */
+  private movePinned(rec: BodyRecord, moves: boolean, move: () => void): void {
+    const wakes = moves && rec.body.isStatic;
+    if (wakes) this.wakeSleepersTouching(rec.body);
+    move();
+    if (wakes) this.wakeSleepersTouching(rec.body);
+  }
+
+  /** Wakes every sleeping body that overlaps `body`, part against part as Matter's own detector tests them. */
+  private wakeSleepersTouching(body: Matter.Body): void {
+    for (const rec of this.records.values()) {
+      const other = rec.body;
+      if (!other.isSleeping || other.isStatic) continue;
+      if (touches(body, other)) Matter.Sleeping.set(other, false);
+    }
   }
 
   pin(id: string, reason: PinReason): void {
@@ -647,7 +700,7 @@ export class MatterWorld implements IPhysicsWorld {
     const safeX = safeScale(sx);
     const safeY = safeScale(sy);
     if (safeX === rec.scaleX && safeY === rec.scaleY) return;
-    Matter.Body.scale(rec.body, safeX / rec.scaleX, safeY / rec.scaleY);
+    this.movePinned(rec, true, () => Matter.Body.scale(rec.body, safeX / rec.scaleX, safeY / rec.scaleY));
     rec.scaleX = safeX;
     rec.scaleY = safeY;
     // Only a dynamic body's new inertia is its free one. A static compound's
@@ -711,7 +764,8 @@ export class MatterWorld implements IPhysicsWorld {
     // Matter has no such mode, so force it back after the solver has run.
     for (const rec of this.records.values()) {
       if (rec.angleOverride === null) continue;
-      Matter.Body.setAngle(rec.body, rec.angleOverride);
+      const angle = rec.angleOverride;
+      this.movePinned(rec, angle !== rec.body.angle, () => Matter.Body.setAngle(rec.body, angle));
       Matter.Body.setAngularVelocity(rec.body, 0);
     }
 
