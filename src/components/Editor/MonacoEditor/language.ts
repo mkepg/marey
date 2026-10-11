@@ -4,6 +4,7 @@ import {
   BOOLEAN_VALUES,
   DURATION_VALUES,
   EASING_VALUES,
+  EDGE_VALUES,
   FIT_VALUES,
   KIND_LABEL,
   LANGUAGE_CONTRACT,
@@ -281,6 +282,25 @@ export function registerLanguage(monaco: typeof import("monaco-editor")): void {
                 kind: monaco.languages.CompletionItemKind.Enum,
                 insertText: needsLeadingSpace ? ` ${val}` : val,
                 detail: "fit mode",
+                range,
+              });
+            }
+          }
+
+          if (expectedTypes.includes("edges")) {
+            // Walls are opt-out: the common ask is a floor and two sides, so that
+            // list leads; the full set and the empty list follow.
+            const edgeLists = [
+              "[left, right, bottom]",
+              `[${EDGE_VALUES.join(", ")}]`,
+              "[]",
+            ];
+            for (const list of edgeLists) {
+              suggestions.push({
+                label: list,
+                kind: monaco.languages.CompletionItemKind.Enum,
+                insertText: needsLeadingSpace ? ` ${list}` : list,
+                detail: "scene edges",
                 range,
               });
             }
