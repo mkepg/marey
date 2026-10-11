@@ -12,7 +12,7 @@ const guardSources = import.meta.glob(["./adapter.ts", "../export/rasterExport.t
 }) as Record<string, string>;
 
 /** Compile a scene and build its runtime the way the sampler's callers do. */
-export function build(source: string) {
+function build(source: string) {
   const out = compileSource(source);
   if (!out.ir) throw new Error("scene did not compile");
   const ir = out.ir;
@@ -23,7 +23,7 @@ export function build(source: string) {
   return { ir, root, world, runtime };
 }
 
-export function advance(runtime: SceneRuntime, ticks: number): void {
+function advance(runtime: SceneRuntime, ticks: number): void {
   for (let i = 0; i < ticks; i++) {
     runtime.advanceOneTick();
     runtime.paintExactTick();
@@ -152,7 +152,7 @@ describe("lockPosition", () => {
     expect(posOf(world, ball).y).toBeLessThan(200);
   });
 
-  it("(d) the runtime goes idle once the circle sleeps", () => {
+  it("(d) a locked body does not keep the runtime awake: it goes idle once the circle sleeps", () => {
     const { runtime } = build(LEDGE);
     advance(runtime, 600);
     expect(runtime.isIdle()).toBe(true);
@@ -436,6 +436,18 @@ describe("lockRotation", () => {
     // params land on a dynamic body and no unpin follows them.
     const locked = dropCrate(
       "sequence { parallel { physics { duration: 5 } physics { lockRotation: true, duration: 5 } } }"
+    );
+    expect(locked.fell).toBeGreaterThan(50);
+    for (const a of locked.angles) expect(a).toBe(locked.angles[0]);
+  });
+
+  it("a lock that arrives after a sibling block's spin has been flushed stops the turning", () => {
+    // The first block's spawn flushes its spin into the free body; the second
+    // block then makes the inertia infinite. Without zeroing the angular
+    // velocity the body kept turning at 360 degrees a second, and contacts
+    // could not stop it.
+    const locked = dropCrate(
+      "sequence { parallel { physics { spin: 360, duration: 5 } physics { lockRotation: true, duration: 5 } } }"
     );
     expect(locked.fell).toBeGreaterThan(50);
     for (const a of locked.angles) expect(a).toBe(locked.angles[0]);

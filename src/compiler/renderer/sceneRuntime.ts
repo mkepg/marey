@@ -587,6 +587,10 @@ export class SceneRuntime {
       // carries linear momentum only, so nothing else ever sets it, and this
       // step's spin replaces any an earlier step never got to apply. A spin
       // of 0 parks nothing, so it makes no world call at all.
+      // Unlike the velocity above, which keeps the earlier block's value
+      // (`??`), a later spin overwrites. That is acceptable: the two only meet
+      // when one `parallel` holds two physics blocks, and that already follows
+      // last-block-wins.
       container.__pendingSpin = phIR.spin !== 0 ? (phIR.spin * Math.PI) / 180 : undefined;
 
       // Unpin before flushing: setStatic(false) collapses the body back to rest,
