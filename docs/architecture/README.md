@@ -128,6 +128,18 @@ Kong edge served it with first paint at 0.6–0.9 s. `netlify.toml` only keeps
 the old address working: it redirects every path to the same path on
 `marey.pages.dev`, and a share link's fragment survives the redirect.
 
+`netlify.toml` has no `[build]` block, so if builds are on in the Netlify
+dashboard, Netlify still runs its dashboard build on every push to `main`, only
+to serve a redirect. Not needed while those builds are off. If they are turned
+back on, make Netlify forward without building: move the rule into
+`deploy/netlify-forward/_redirects` (`/*  https://marey.pages.dev/:splat  301!`)
+and give `netlify.toml` a `[build]` block that publishes that folder, with an
+`echo` as its command and
+`ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- netlify.toml deploy/netlify-forward"`.
+Exit 0 from `ignore` skips the deploy, so only a change to the forwarding
+files deploys. Check Netlify's current credit rules for skipped builds before
+relying on them costing nothing.
+
 **The preview does not wait for the editor.** Monaco is about 900 kB of the
 page's gzipped JavaScript. `useMonaco` loads it with a dynamic import
 (`src/hooks/monacoSetup.ts` is the only runtime importer, which
