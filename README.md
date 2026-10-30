@@ -155,6 +155,8 @@ edit: a file the element fetches, or the scene written inline.
 </marey-player>
 ```
 
+The player is part of `marey-lang` from 0.6.0.
+
 From a bundler, the import is `import "marey-lang/player";`. That module
 defines the element and has no other side effects.
 
@@ -166,15 +168,15 @@ element is connected is not observed.
 |---|---|
 | `autoplay` | Start playing once the scene is ready, unless the reader prefers reduced motion. |
 | `loop` | A bounded scene restarts from tick 0 when it reaches its end. No effect on an indefinite scene. |
-| `controls` | Show the control bar: play and pause, a seek range, the time, and an "Open in playground" link. |
+| `controls` | Show the control bar: play and pause, a seek range, the time, and an "Open in playground" link (omitted when the source is too long to share). |
 
 The element has no `muted` or other `<video>` attributes, since Marey has no
 audio. It offers `play()`, `pause()`, `restart()`, a read-write `currentTime`
 in seconds, and read-only `duration`, `paused` and `errors`.
 
-**Poster frame and reduced motion.** A scene that is drawn and not playing
-shows its poster frame: the last tick of a bounded scene, tick 0 of an
-indefinite one. When the reader's system asks for reduced motion
+**Poster frame and reduced motion.** When a scene first loads without
+playing, it shows its poster frame: the last tick of a bounded scene, tick 0 of
+an indefinite one. When the reader's system asks for reduced motion
 (`prefers-reduced-motion: reduce`), `autoplay` is ignored and the poster frame
 stays up until the reader presses play.
 
@@ -187,7 +189,7 @@ On any error the element draws a diagnostic box in place of the canvas: the
 code, then each compiler error as `line:col CODE message`.
 
 **The 16-context limit.** Browsers cap live WebGL contexts per page (Chromium's
-cap is 16) and drop the oldest without warning. Each player therefore holds a
+cap is 16) and the browser drops the oldest context. Each player therefore holds a
 context only while it is near the viewport. When it leaves, it records its
 playhead and releases the context; when it returns, it replays from tick 0 to
 that tick, and because playback is deterministic it shows the same frame it
@@ -297,7 +299,8 @@ is not in CI: it needs a real browser and a person to read the captures.
 
 ## Status
 
-Version 0.6.0. The CLI has two commands, `check` and `export`, and every
+Version 0.6.0 (the player first ships in this version). The CLI has two
+commands, `check` and `export`, and every
 format above is implemented. Below 1.0, a minor release may change the
 language and the Scene IR, and work past the roadmap's finish line may. Breaking
 syntax changes are weighed on which language is better to live with.

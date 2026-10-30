@@ -600,26 +600,24 @@ Measured on `phase-9a-player`; numbers are in `eval/RESULTS-PHASE-9A.md`.
   canvas. One request at load is expected, because the first players are in
   view at load. The harness measured it: first near view at +9 ms, one request
   at +41 ms.
-- **T3-1.** `CompilerError` has optional `line` and `col` (not `column`). The
-  diagnostic text is `line:col message`, with `col` defaulting to 1, and the
-  message alone when there is no line. The plan named the wrong field before
-  `types.ts` was read.
-- **T3-2.** A reviewer asked that an indefinite scene keep its old reached tick
-  after leaving view. Spec section 4.4 says it restarts from tick 0, so the
-  spec wins: detaching an indefinite scene stores tick 0. The cost is that a
-  `currentTime` set while out of view clamps to 0.
+- **T3-1.** `CompilerError`'s column field is `col`, not `column`, and `line` is
+  optional. The diagnostic text is `line:col message`, with `col` defaulting
+  to 1, and the message alone when there is no line.
+- **T3-2.** An indefinite scene's stored `reachedTick` is reset to 0 on detach,
+  so a later seek cannot force a long replay (spec section 4.4: it restarts
+  from tick 0 on return). The cost is that a `currentTime` set while out of
+  view clamps to 0.
 - **T3-3.** A non-finite `currentTime` is ignored, with no throw. `<video>`
   throws a `TypeError`; ignoring cannot corrupt the stored tick and needs no
   try/catch in page code.
-- **T7-1.** The pending-seek defect and the double `loseContext` were routed as
-  one fix round on the harness work, since that held the evidence. The
-  controller fix got unit tests whose fake mount models a pending seek, and the
-  harness asserts zero WebGL warnings.
+- **T7-1.** The pending-seek defect and the double `loseContext` were fixed
+  together in `8db3201`. The controller fix has unit tests whose fake mount
+  models a pending seek, and the harness asserts zero WebGL warnings.
 
 ### What review found
 
-- **Position conversions, extraction:** clean. The one citation the reviewer
-  questioned (spec section 3.3) was right.
+- **Position conversions, extraction:** clean. The spec section 3.3 citation
+  in the position conversions was checked and is correct.
 - **Controller (`6b333ee`):** two Important findings. A nested notification in
   `play()` during a resume-after-seek left a stale paused state, so `ended` or
   `loop` could be missed; and no test pinned a mount resolving after a newer
@@ -646,8 +644,8 @@ Measured on `phase-9a-player`; numbers are in `eval/RESULTS-PHASE-9A.md`.
   `EXPECTED_FILE_COUNT` is 127).
 - The harness found the controller's pending-seek defect. The unit tests
   passed because the fake mount did not model a pending seek.
-- Some of the harness brief's own agreement checks still passed with the
-  guarded change reverted, so they could not fail. Stronger ones were added (a
+- The harness's first agreement checks still passed with the guarded change
+  reverted, so they could not fail. Stronger ones were added (a
   shifted-ticks control for each scene, and checks on the element's state after
   the debug hook) and they did fail under the revert.
 - The README HTML snippet needs a `text` fence: `languageDocs.test.ts` accepts

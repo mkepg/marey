@@ -187,6 +187,6 @@ resolves only after that.
   `play()` during a resume, left stale state (`966d160`).
 - An upgraded element that already carried `src` fetched twice (`ab49cd6`).
 - The no-PixiJS check covered only the entry file (`fb8b394`).
-- Some of the harness's first agreement checks still passed with the change
+- The harness's first agreement checks still passed with the change
   they guard reverted, so they could not fail; stronger ones were added (the
   shifted-ticks control column above) and those did fail under the revert.
