@@ -47,8 +47,10 @@
  *    library's boundary (spec §2.3, enforced in-repo by
  *    `src/package/boundary.test.ts`) also holds in the shipped bundle.
  * 7. `marey-lang/player` resolves through the package `exports` to
- *    `dist/player/marey-player.mjs`, and that entry chunk holds no "pixi"
- *    (the renderer loads lazily, from a separate chunk).
+ *    `dist/player/marey-player.mjs`. The entry's static import closure (not
+ *    the entry file alone) must hold no `render-*.mjs` and no "pixi", and the
+ *    lazy-only closure (reached through `import()`) must be non-empty: the
+ *    two-stage split, proved on the built bundle.
  * 8. The installed `dist/player/` is served over HTTP to headless Chromium
  *    with a page holding `<marey-player autoplay>` and an inline scene. The
  *    element must fire `ready`, mount a `<canvas>` in its shadow root, raise
@@ -174,6 +176,47 @@ function check(label, fn) {
     stop.alreadyReported = true;
     throw stop;
   }
+}
+
+/**
+ * The player's module graph in the installed `dist/player/`. `staticFiles` is
+ * the closure of `marey-player.mjs` over static imports (`from "./x.mjs"` and
+ * `import "./x.mjs"`) only: what a page loads before any scene mounts.
+ * `lazyFiles` is everything else reachable once `import("./x.mjs")` is
+ * followed. Rolldown puts shared modules in chunks, so the PixiJS boundary has
+ * to be checked over the whole static closure, not the entry file alone.
+ */
+function playerClosures(dir) {
+  const STATIC = /\b(?:import|export)\s*(?:[\w$*{}\s,]*?\bfrom\s*)?["']\.\/([^"']+)["']/g;
+  const DYNAMIC = /\bimport\(\s*["']\.\/([^"']+)["']\s*\)/g;
+  const edges = (file) => {
+    const text = readFileSync(join(dir, file), "utf8");
+    return {
+      static: [...text.matchAll(STATIC)].map((m) => m[1]),
+      dynamic: [...text.matchAll(DYNAMIC)].map((m) => m[1]),
+    };
+  };
+  const walk = (start, kinds) => {
+    const seen = new Set([start]);
+    const queue = [start];
+    while (queue.length > 0) {
+      const e = edges(queue.pop());
+      for (const next of kinds.flatMap((k) => e[k])) {
+        if (!seen.has(next)) {
+          seen.add(next);
+          queue.push(next);
+        }
+      }
+    }
+    return seen;
+  };
+  const entry = "marey-player.mjs";
+  const staticSet = walk(entry, ["static"]);
+  const all = walk(entry, ["static", "dynamic"]);
+  return {
+    staticFiles: [...staticSet].sort(),
+    lazyFiles: [...all].filter((f) => !staticSet.has(f)).sort(),
+  };
 }
 
 /** `check` for an async body. */
@@ -348,10 +391,19 @@ try {
 
   const playerDir = join(installDir, "node_modules", "marey-lang", "dist", "player");
   check("player entry chunk holds no PixiJS", () => {
-    const text = readFileSync(join(playerDir, "marey-player.mjs"), "utf8");
-    const count = (text.match(/pixi/g) ?? []).length;
-    if (count !== 0) throw new Error(`grep -c pixi: ${count}`);
-    return "grep -c pixi: 0";
+    const { staticFiles, lazyFiles } = playerClosures(playerDir);
+    const bytes = (names) => names.reduce((n, f) => n + statSync(join(playerDir, f)).size, 0);
+    const problems = [];
+    for (const f of staticFiles) {
+      if (/^render-.*\.mjs$/.test(f)) problems.push(`${f} is in the static closure`);
+      if (readFileSync(join(playerDir, f), "utf8").includes("pixi")) problems.push(`${f} contains "pixi"`);
+    }
+    if (lazyFiles.length === 0) problems.push("the lazy closure is empty: the renderer is not split out");
+    if (problems.length > 0) throw new Error(problems.join("; "));
+    return (
+      `static ${staticFiles.length} files ${bytes(staticFiles)} B [${staticFiles.join(", ")}]; ` +
+      `lazy-only ${lazyFiles.length} files ${bytes(lazyFiles)} B [${lazyFiles.join(", ")}]`
+    );
   });
 
   await checkAsync("player draws an inline scene in Chromium", async () => {
