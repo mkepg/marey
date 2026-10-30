@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { tickToTime } from "../compiler/sceneIR";
 import {
   PlayerController,
   PlayerError,
@@ -21,10 +22,16 @@ class FakeMount implements PlayerMount {
   constructor(state: PlayheadState) {
     this.state = state;
   }
-  play() { this.calls.push("play"); }
-  pause() { this.calls.push("pause"); }
+  // Like Playback, play/pause/restart notify synchronously. seek only records;
+  // tests push the state the next frame would report.
+  play() {
+    this.calls.push("play");
+    const atEnd = this.state.endTick !== null && this.state.tick === this.state.endTick;
+    this.push(atEnd ? { tick: 0, playing: true } : { playing: true });
+  }
+  pause() { this.calls.push("pause"); this.push({ playing: false }); }
   seek(tick: number) { this.calls.push(`seek:${tick}`); }
-  restart() { this.calls.push("restart"); }
+  restart() { this.calls.push("restart"); this.push({ tick: 0, playing: true }); }
   subscribe(l: (s: PlayheadState) => void) {
     this.listeners.add(l);
     return () => this.listeners.delete(l);
@@ -162,6 +169,25 @@ describe("PlayerController: race guards", () => {
     expect(t.controller.mounted).toBeNull();
   });
 
+  it("a mount that resolves after a newer load is destroyed", async () => {
+    const t = setup();
+    const gate = deferred<void>();
+    const late: MountFn = async (ir, start) => {
+      await gate.promise;
+      return t.mountFn(ir, start);
+    };
+    await t.controller.load(text(BOUNDED));
+    const attaching = t.controller.attach(late);
+    const slow = deferred<string>();
+    const reloading = t.controller.load(() => slow.promise);
+    gate.resolve();
+    await attaching;
+    expect(t.mounts[0].destroyed).toBe(1);
+    expect(t.controller.mounted).toBeNull();
+    slow.resolve(OTHER_SIZE);
+    await reloading;
+  });
+
   it("a superseded load is discarded", async () => {
     const t = setup();
     const first = deferred<string>();
@@ -210,6 +236,29 @@ describe("PlayerController: currentTime", () => {
     expect(t.controller.currentTime).toBe(2);
   });
 
+  it("a detached indefinite scene clamps currentTime to its restart at tick 0", async () => {
+    const t = setup();
+    await t.controller.load(text(INDEFINITE));
+    await t.controller.attach(t.mountFn);
+    t.mounts[0].push({ tick: 500, reachedTick: 500 });
+    t.controller.detach();
+    t.controller.currentTime = 3;
+    expect(t.controller.currentTime).toBe(0);
+    await t.controller.attach(t.mountFn);
+    expect(t.starts[1].tick).toBe(0);
+  });
+
+  it("a non-finite currentTime is ignored", async () => {
+    const t = setup();
+    await t.controller.load(text(BOUNDED));
+    await t.controller.attach(t.mountFn);
+    for (const v of [NaN, Infinity, -Infinity]) {
+      expect(() => { t.controller.currentTime = v; }).not.toThrow();
+    }
+    expect(t.mounts[0].calls.filter((c) => c.startsWith("seek"))).toEqual([]);
+    expect(t.controller.currentTime).toBe(0);
+  });
+
   it("currentTime set while detached updates the stored playhead", async () => {
     const t = setup({ reducedMotion: true });
     await t.controller.load(text(BOUNDED));
@@ -235,6 +284,29 @@ describe("PlayerController: ended and loop", () => {
     const t = setup({ loop: true });
     await t.controller.load(text(BOUNDED));
     await t.controller.attach(t.mountFn);
+    t.mounts[0].push({ tick: 240, playing: false });
+    expect(t.mounts[0].calls).toContain("restart");
+    expect(t.events.ended).not.toHaveBeenCalled();
+  });
+
+  it("a seek resumed just before the end still ends, and the last state says playing", async () => {
+    const t = setup();
+    await t.controller.load(text(BOUNDED));
+    await t.controller.attach(t.mountFn);
+    t.controller.currentTime = tickToTime(239);
+    t.mounts[0].push({ tick: 239, playing: false });
+    expect(t.mounts[0].calls).toContain("play");
+    expect(t.events.state.mock.calls.at(-1)![0]).toMatchObject({ tick: 239, playing: true });
+    t.mounts[0].push({ tick: 240, playing: false });
+    expect(t.events.ended).toHaveBeenCalledTimes(1);
+  });
+
+  it("with loop, a seek resumed just before the end restarts", async () => {
+    const t = setup({ loop: true });
+    await t.controller.load(text(BOUNDED));
+    await t.controller.attach(t.mountFn);
+    t.controller.currentTime = tickToTime(239);
+    t.mounts[0].push({ tick: 239, playing: false });
     t.mounts[0].push({ tick: 240, playing: false });
     expect(t.mounts[0].calls).toContain("restart");
     expect(t.events.ended).not.toHaveBeenCalled();

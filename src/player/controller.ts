@@ -78,7 +78,7 @@ interface Playhead {
  */
 export class PlayerController {
   private loadGen = 0;
-  /** Bumped by every attach, detach and load: identifies one mount attempt. */
+  /** Bumped by every mountNow, detach and load: identifies one mount attempt. */
   private mountGen = 0;
   private _ir: IRSceneNode | null = null;
   private _source: string | null = null;
@@ -159,7 +159,11 @@ export class PlayerController {
     // An indefinite scene has no position worth keeping: its physics cannot
     // be resumed from a tick without replaying it (spec §4.4).
     this.stored = { tick: s.endTick === null ? 0 : s.tick, playing: s.playing };
-    this.shown = { ...s, tick: this.stored.tick };
+    this.shown = {
+      ...s,
+      tick: this.stored.tick,
+      reachedTick: s.endTick === null ? 0 : s.reachedTick,
+    };
     this.teardownMount();
     this.options.onState(this.shown);
   }
@@ -191,7 +195,7 @@ export class PlayerController {
   }
 
   set currentTime(seconds: number) {
-    if (!this._ir) return;
+    if (!this._ir || !Number.isFinite(seconds)) return;
     const end = this.endTick;
     const target = Math.min(Math.max(timeToTick(seconds), 0), end ?? this.shown.reachedTick);
     const wasPlaying = this._mount
@@ -279,13 +283,17 @@ export class PlayerController {
 
   private onMountState(s: PlayheadState): void {
     this.shown = s;
+    // Settle ending detection and tell the UI before resuming: the real
+    // playback notifies synchronously from play(), so resuming first would
+    // re-enter this method and then overwrite its fresher state with this
+    // stale one.
+    const ended = s.endTick !== null && s.tick === s.endTick && !s.playing && this.wasPlaying;
+    this.wasPlaying = s.playing;
+    this.options.onState(s);
     if (this.resumeAt !== null && s.tick === this.resumeAt) {
       this.resumeAt = null;
       this._mount?.play();
     }
-    const ended = s.endTick !== null && s.tick === s.endTick && !s.playing && this.wasPlaying;
-    this.wasPlaying = s.playing;
-    this.options.onState(s);
     if (!ended) return;
     if (this.options.loop()) this._mount?.restart();
     else this.options.onEnded();
