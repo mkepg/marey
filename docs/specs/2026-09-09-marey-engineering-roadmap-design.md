@@ -388,6 +388,14 @@ Anything here may be started if it becomes interesting; nothing here is owed.
 MDX, Docusaurus or VitePress integrations; an embeddable player or web
 component; a gallery; the adoption ladder and its Gate C.
 
+> **Amended 2026-10-30:** the owner started this group as **Phase 9**, in
+> three sub-phases: 9A, the embeddable player; 9B, the GitHub Action and
+> Gate C; 9C, the documentation site and gallery. Per-framework integrations
+> and adoption metrics are dropped. A custom element already works in MDX,
+> Docusaurus and VitePress. Design:
+> `2026-10-30-marey-phase-9a-embeddable-player-design.md` §0 and §7. The
+> finish line (§12) stands. This is work past it.
+
 **Language and motion** — spring easing; semantic layout primitives (`row`,
 `grid`, `radial`, `distribute`, `align`), still governed by R11; `from` on
 `animate` if 3C left it out.
