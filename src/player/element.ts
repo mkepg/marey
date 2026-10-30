@@ -47,6 +47,8 @@ export class MareyPlayerElement extends HTMLElement {
   private timeEl!: HTMLSpanElement;
   private observer: IntersectionObserver | null = null;
   private visible = false;
+  /** True from connectedCallback, which starts the first load, until disconnectedCallback. */
+  private loading = false;
   private shown: PlayheadState = { tick: 0, playing: false, endTick: null, reachedTick: 0 };
 
   constructor() {
@@ -157,6 +159,7 @@ export class MareyPlayerElement extends HTMLElement {
       { rootMargin: "200px 0px" },
     );
     this.observer.observe(this);
+    this.loading = true;
     void this.controller.load(() => this.loadSource());
   }
 
@@ -164,13 +167,18 @@ export class MareyPlayerElement extends HTMLElement {
     this.observer?.disconnect();
     this.observer = null;
     this.visible = false;
+    this.loading = false;
     this.controller.detach();
   }
 
   attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null): void {
     if (oldValue === newValue) return;
     if (name === "controls") this.syncControls();
-    if (name === "src" && this.isConnected) {
+    // An upgrade delivers attributeChangedCallback("src") before
+    // connectedCallback, with isConnected already true, so isConnected cannot
+    // tell it from a real change: only reload once connectedCallback has
+    // started the first load, or an embed would fetch twice.
+    if (name === "src" && this.loading) {
       this.controller.detach();
       void this.controller.load(() => this.loadSource());
       // detach() cleared the controller's wish to be mounted; restore it if
