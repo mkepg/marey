@@ -108,7 +108,17 @@ export function mountScene(
   const endTick = scene.duration === null ? null : secondsToTicks(scene.duration);
   // A scene with nothing remembered plays from 0, as the preview always has.
   const from = start ?? { tick: 0, playing: true };
-  const playback = new Playback(playbackHost, endTick, from);
+  let playback: Playback;
+  try {
+    playback = new Playback(playbackHost, endTick, from);
+  } catch (error) {
+    // Building the first frame failed (a bad node, say). Undo what this call
+    // added so a caller that tears its application down does not leave an
+    // observer that would resize it afterwards.
+    resizeObserver.disconnect();
+    sceneRoot.destroy({ children: true, texture: true, context: true });
+    throw error;
+  }
 
   // `ticker.deltaMS` still appears exactly once in the renderer: here.
   const tickerCallback = (ticker: Ticker): void => {
