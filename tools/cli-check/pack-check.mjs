@@ -4,7 +4,7 @@
  * (spec Phase 6 §2.1-2.4, §9.2 — exit criterion 1, "the package builds and
  * installs from a clean checkout").
  *
- * 1. `npm run build:package` (`build:lib`, `build:export-page`, `build:cli`).
+ * 1. `npm run build:package` (`build:lib`, `build:player`, `build:export-page`, `build:cli`).
  * 2. `npm pack --json` into a temporary directory. The tarball's file list
  *    must hold nothing under `docs/`, `eval/`, `tools/`, `src/` or `public/`
  *    — a leak past the `files` allowlist.
@@ -46,6 +46,16 @@
  * 6. `node_modules/marey-lang/dist/lib/marey.mjs` must not contain "pixi": the
  *    library's boundary (spec §2.3, enforced in-repo by
  *    `src/package/boundary.test.ts`) also holds in the shipped bundle.
+ * 7. `marey-lang/player` resolves through the package `exports` to
+ *    `dist/player/marey-player.mjs`, and that entry chunk holds no "pixi"
+ *    (the renderer loads lazily, from a separate chunk).
+ * 8. The installed `dist/player/` is served over HTTP to headless Chromium
+ *    with a page holding `<marey-player autoplay>` and an inline scene. The
+ *    element must fire `ready`, mount a `<canvas>` in its shadow root, raise
+ *    no page error or console error, and the server must answer 200 for the
+ *    scene font at `fonts/JetBrainsMono-Regular.ttf`, which catches a wrong
+ *    font path in the render chunk.
+ * 9. The tarball's file count equals `EXPECTED_FILE_COUNT`.
  *
  * Each check prints one line; the script stops and exits 1 at the first
  * failure. Both temporary directories are removed in `finally`.
@@ -54,10 +64,12 @@
  *   npm run check:pack
  */
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { chromium } from "playwright-core";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const PACKAGE_VERSION = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8")).version;
@@ -102,6 +114,22 @@ function resolveNpmCli(name) {
 
 const NPM_CLI = resolveNpmCli("npm");
 const NPX_CLI = resolveNpmCli("npx");
+
+/**
+ * The tarball's file count. It must change whenever `files` in package.json or
+ * a build's outputs change (a new chunk, a new asset): it is the tarball's own
+ * list from `npm pack --json`, measured and not predicted.
+ */
+const EXPECTED_FILE_COUNT = 127;
+
+/**
+ * Chromium flags for headless WebGL. A literal copy of `EXPORT_LAUNCH_ARGS`
+ * in `src/cli/exportDriver.ts`: this script is plain JS and cannot import the
+ * TypeScript source. Keep the two in step.
+ */
+const PLAYER_LAUNCH_ARGS = ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--use-gl=angle"];
+
+const PLAYER_FONT_PATH = "/fonts/JetBrainsMono-Regular.ttf";
 
 /** A files-allowlist leak: nothing packed may come from these directories. */
 const FORBIDDEN_PREFIXES = ["docs/", "eval/", "tools/", "src/", "public/"];
@@ -148,6 +176,49 @@ function check(label, fn) {
   }
 }
 
+/** `check` for an async body. */
+async function checkAsync(label, fn) {
+  const started = Date.now();
+  let detail;
+  let ok;
+  try {
+    detail = await fn();
+    ok = true;
+  } catch (e) {
+    detail = e instanceof Error ? e.message : String(e);
+    ok = false;
+  }
+  const seconds = ((Date.now() - started) / 1000).toFixed(1).padStart(6);
+  console.log(`${ok ? "ok  " : "FAIL"}  ${label.padEnd(42)} ${seconds} s  ${detail}`);
+  if (!ok) {
+    const stop = new Error(`stopped after: ${label}`);
+    stop.alreadyReported = true;
+    throw stop;
+  }
+}
+
+const CONTENT_TYPES = { ".mjs": "text/javascript", ".html": "text/html", ".ttf": "font/ttf", ".txt": "text/plain" };
+
+/** Serves `playerDir` plus a generated index.html on a free port. */
+async function serveStatic(playerDir, indexHtml) {
+  const server = createServer((req, res) => {
+    const path = new URL(req.url ?? "/", "http://localhost").pathname;
+    if (path === "/" || path === "/index.html") {
+      res.writeHead(200, { "content-type": "text/html" }).end(indexHtml);
+      return;
+    }
+    const file = resolve(playerDir, `.${path}`);
+    if (!file.startsWith(playerDir) || !existsSync(file) || !statSync(file).isFile()) {
+      res.writeHead(404).end("not found");
+      return;
+    }
+    const ext = file.slice(file.lastIndexOf("."));
+    res.writeHead(200, { "content-type": CONTENT_TYPES[ext] ?? "application/octet-stream" }).end(readFileSync(file));
+  });
+  await new Promise((done) => server.listen(0, "127.0.0.1", done));
+  return { server, port: server.address().port };
+}
+
 let packDir = null;
 let installDir = null;
 
@@ -155,10 +226,11 @@ try {
   check("build:package", () => {
     const r = runNpm(["run", "build:package"], { cwd: ROOT });
     if (r.status !== 0) throw new Error(describe(r));
-    return "built dist/lib, dist/export-page, dist/cli";
+    return "built dist/lib, dist/player, dist/export-page, dist/cli";
   });
 
   let tarballPath;
+  let entryCount = 0;
   packDir = mkdtempSync(join(tmpdir(), "marey-pack-"));
   check("npm pack --json", () => {
     const r = runNpm(["pack", "--json", "--pack-destination", packDir], { cwd: ROOT });
@@ -169,6 +241,7 @@ try {
     if (leaked.length > 0) {
       throw new Error(`${leaked.length} path(s) outside the files allowlist: ${leaked.map((f) => f.path).join(", ")}`);
     }
+    entryCount = info.entryCount;
     return `${info.entryCount} files, ${info.size} B packed, ${info.unpackedSize} B unpacked`;
   });
 
@@ -258,6 +331,72 @@ try {
     const count = (text.match(/pixi/g) ?? []).length;
     if (count !== 0) throw new Error(`grep -c pixi: ${count}`);
     return "grep -c pixi: 0";
+  });
+
+  check("marey-lang/player resolves through exports", () => {
+    const r = run(
+      process.execPath,
+      ["--input-type=module", "-e", "console.log(import.meta.resolve('marey-lang/player'))"],
+      { cwd: installDir },
+    );
+    const url = r.stdout.trim();
+    if (r.status !== 0 || !url.startsWith("file:") || !url.endsWith("node_modules/marey-lang/dist/player/marey-player.mjs")) {
+      throw new Error(`resolved '${url}' (${describe(r)})`);
+    }
+    return "dist/player/marey-player.mjs";
+  });
+
+  const playerDir = join(installDir, "node_modules", "marey-lang", "dist", "player");
+  check("player entry chunk holds no PixiJS", () => {
+    const text = readFileSync(join(playerDir, "marey-player.mjs"), "utf8");
+    const count = (text.match(/pixi/g) ?? []).length;
+    if (count !== 0) throw new Error(`grep -c pixi: ${count}`);
+    return "grep -c pixi: 0";
+  });
+
+  await checkAsync("player draws an inline scene in Chromium", async () => {
+    const page =
+      "<!doctype html><meta charset=utf-8>" +
+      "<style>body{margin:0}marey-player{display:block;width:320px;height:180px}</style>" +
+      '<marey-player id="p" autoplay><script type="text/marey">' +
+      "scene { size: (320, 180) duration: 2 circle c { position: (160, 90), radius: 30 } }" +
+      "</script></marey-player>" +
+      // The listener is attached before the module can run, so `ready` cannot be missed.
+      '<script>window.__ready = new Promise((ok) => document.getElementById("p").addEventListener("ready", () => ok(true), { once: true }));</script>' +
+      '<script type="module" src="./marey-player.mjs"></script>';
+    const { server, port } = await serveStatic(playerDir, page);
+    let browser;
+    try {
+      browser = await chromium.launch({ args: [...PLAYER_LAUNCH_ARGS] });
+      const tab = await browser.newPage();
+      const problems = [];
+      tab.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
+      tab.on("console", (m) => {
+        if (m.type() === "error") problems.push(`console error: ${m.text()}`);
+      });
+      await tab.goto(`http://127.0.0.1:${port}/`);
+      await Promise.race([
+        tab.evaluate(() => window.__ready),
+        new Promise((_, no) => setTimeout(() => no(new Error("no ready event within 20 s")), 20_000)),
+      ]);
+      await tab.waitForFunction(() => document.getElementById("p").shadowRoot.querySelector("canvas") !== null, null, {
+        timeout: 20_000,
+      });
+      const font = await tab.evaluate(async (path) => (await fetch(path)).status, PLAYER_FONT_PATH);
+      if (font !== 200) throw new Error(`GET ${PLAYER_FONT_PATH} answered ${font}`);
+      if (problems.length > 0) throw new Error(problems.join("; "));
+      return "ready, canvas mounted, font 200";
+    } finally {
+      if (browser) await browser.close();
+      await new Promise((done) => server.close(done));
+    }
+  });
+
+  check("tarball file count", () => {
+    if (entryCount !== EXPECTED_FILE_COUNT) {
+      throw new Error(`${entryCount} files, expected ${EXPECTED_FILE_COUNT}`);
+    }
+    return `${entryCount} files`;
   });
 
   console.log("\ncheck:pack: all passed");

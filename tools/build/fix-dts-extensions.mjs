@@ -1,5 +1,5 @@
 // Rewrites the relative specifiers in the library's emitted declarations
-// (dist/lib/types/**/*.d.ts) so they carry an explicit extension: `./x`
+// (dist/lib/types/**/*.d.ts, or the root given as argv) so they carry an explicit extension: `./x`
 // becomes `./x.js`, or `./x/index.js` when `x` is a directory with an
 // `index.d.ts`. `tsc` emits them extensionless, as written in the source
 // under `moduleResolution: "bundler"`, and a consumer compiling with
@@ -8,7 +8,11 @@ import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../dist/lib/types");
+// An optional argv names another declaration root (the player build passes
+// dist/player/types); the default is the library's.
+const ROOT = process.argv[2] !== undefined
+  ? resolve(process.argv[2])
+  : resolve(dirname(fileURLToPath(import.meta.url)), "../../dist/lib/types");
 
 // `from "./x"`, `import("./x")` and bare `import "./x"`, with either quote.
 const SPECIFIER = /((?:from|import)\s*\(?\s*)(["'])(\.{1,2}\/[^"']*)\2/g;

@@ -18,21 +18,27 @@
     ".": {
       "types": "./dist/lib/types/package/index.d.ts",
       "import": "./dist/lib/marey.mjs"
+    },
+    "./player": {
+      "types": "./dist/player/types/player/index.d.ts",
+      "import": "./dist/player/marey-player.mjs"
     }
   },
   "files": [
     "bin/",
     "dist/cli/marey.mjs",
     "dist/lib/",
-    "dist/export-page/"
+    "dist/export-page/",
+    "dist/player/"
   ],
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:cli": "vite build --config vite.cli.config.ts",
     "build:lib": "node -e \"require('node:fs').rmSync('dist/lib',{recursive:true,force:true})\" && vite build --config vite.lib.config.ts && tsc -p tsconfig.lib.json && node tools/build/fix-dts-extensions.mjs",
+    "build:player": "vite build --config vite.player.config.ts && tsc -p tsconfig.player.json && node tools/build/fix-dts-extensions.mjs dist/player/types",
     "build:export-page": "vite build --config vite.exportpage.config.ts",
-    "build:package": "npm run build:lib && npm run build:export-page && npm run build:cli",
+    "build:package": "npm run build:lib && npm run build:player && npm run build:export-page && npm run build:cli",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
