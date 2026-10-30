@@ -133,6 +133,77 @@ if (!result.ok) {
 `ir` is the Scene IR, the compiler's typed output, and its types are exported
 too. It is the same structure every exporter consumes.
 
+## Embed a scene
+
+`marey-lang/player` defines a custom element, `<marey-player>`, that plays a
+`.marey` scene on a web page. The source stays the text a reader can open and
+edit: a file the element fetches, or the scene written inline.
+
+```text
+<script type="module" src="https://cdn.jsdelivr.net/npm/marey-lang@0.6.0/dist/player/marey-player.mjs"></script>
+
+<marey-player src="bars-reveal.marey" autoplay loop controls></marey-player>
+
+<marey-player controls>
+  <script type="text/marey">
+    scene {
+      size: (400, 300)
+      duration: 2
+      circle dot { position: (200, 150) radius: 30 color: #38bdf8 }
+    }
+  </script>
+</marey-player>
+```
+
+From a bundler, the import is `import "marey-lang/player";`. That module
+defines the element and has no other side effects.
+
+With `src`, the text is fetched and compiled; `src` wins if both exist.
+Changing `src` loads the new scene. Changing the inline script's text after the
+element is connected is not observed.
+
+| Attribute | Effect |
+|---|---|
+| `autoplay` | Start playing once the scene is ready, unless the reader prefers reduced motion. |
+| `loop` | A bounded scene restarts from tick 0 when it reaches its end. No effect on an indefinite scene. |
+| `controls` | Show the control bar: play and pause, a seek range, the time, and an "Open in playground" link. |
+
+The element has no `muted` or other `<video>` attributes, since Marey has no
+audio. It offers `play()`, `pause()`, `restart()`, a read-write `currentTime`
+in seconds, and read-only `duration`, `paused` and `errors`.
+
+**Poster frame and reduced motion.** A scene that is drawn and not playing
+shows its poster frame: the last tick of a bounded scene, tick 0 of an
+indefinite one. When the reader's system asks for reduced motion
+(`prefers-reduced-motion: reduce`), `autoplay` is ignored and the poster frame
+stays up until the reader presses play.
+
+**Events and errors.** The element fires `ready` (once per load, with
+`detail.width`, `detail.height` and `detail.duration`), `ended` (a bounded
+scene reached its end with `loop` off) and `error` (with `detail.code` and
+`detail.errors`). The code is one of `PLAYER_NO_SOURCE`, `PLAYER_FETCH_FAILED`,
+`PLAYER_COMPILE_FAILED`, `PLAYER_FONT_UNAVAILABLE` and `PLAYER_RENDER_FAILED`.
+On any error the element draws a diagnostic box in place of the canvas: the
+code, then each compiler error as `line:col CODE message`.
+
+**The 16-context limit.** Browsers cap live WebGL contexts per page (Chromium's
+cap is 16) and drop the oldest without warning. Each player therefore holds a
+context only while it is near the viewport. When it leaves, it records its
+playhead and releases the context; when it returns, it replays from tick 0 to
+that tick, and because playback is deterministic it shows the same frame it
+left on. An indefinite scene that leaves view restarts from tick 0 on return.
+A page with more than 16 players in view at once still exceeds the cap.
+
+**Agreement with export.** The frame the player shows at tick *t* is the frame
+`marey export` samples at *t*: both run the same tick loop over the same
+Scene IR. That holds in Chromium-family browsers. `docs/determinism.md` records
+two V8 builds disagreeing on the last bit of `Math.sin`, so in Firefox or
+Safari an embed can differ from a Chromium export on a scene that uses `sin`
+or `cos`.
+
+**Frameworks.** A custom element works as-is; Vue-based tools such as VitePress
+need the tag declared as a custom element.
+
 ## What's actually hard about this
 
 ### Determinism, and checking it
@@ -226,7 +297,7 @@ is not in CI: it needs a real browser and a person to read the captures.
 
 ## Status
 
-Version 0.5.1. The CLI has two commands, `check` and `export`, and every
+Version 0.6.0. The CLI has two commands, `check` and `export`, and every
 format above is implemented. Below 1.0, a minor release may change the
 language and the Scene IR, and work past the roadmap's finish line may. Breaking
 syntax changes are weighed on which language is better to live with.

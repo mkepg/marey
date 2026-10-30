@@ -329,6 +329,22 @@ explicitly rather than quietly deviating.
   site, distribution and integrations, semantic layout, spring easing, derived
   accessibility artifacts, embedded runtimes — is catalogued as further
   capability with no commitment.
+- **Phase 9A — embeddable player** (roadmap §13, past the finish line).
+  - **Status (2026-10-30): done on `phase-9a-player`, merged when the branch
+    merges.** It ships `<marey-player>` as `marey-lang/player`: a custom
+    element with `src` or inline-script sources, `autoplay`, `loop` and
+    `controls`, a poster frame and reduced-motion handling, `ready`,
+    `ended` and `error` events with five `PLAYER_*` codes, and a WebGL
+    context budget that releases a context out of view and restores the exact
+    frame on return. The playground and the player share one mounting path
+    (`mountScene`). Measured in Chromium, the player's frames hash equal to
+    `marey export`'s on a physics, a reveal and a text scene. Version 0.6.0
+    is bumped but not published: it awaits the owner's
+    `npm publish --ignore-scripts` after `npm run build:package && npm run
+    check:pack` (the tarball holds 127 files). Evidence is in
+    `eval/RESULTS-PHASE-9A.md`. Design:
+    `docs/specs/2026-10-30-marey-phase-9a-embeddable-player-design.md`.
+    Plan: `docs/plans/2026-10-30-phase-9a-embeddable-player.md`.
 
 ## Reference docs
 

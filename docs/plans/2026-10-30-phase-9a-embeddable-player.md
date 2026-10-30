@@ -570,4 +570,124 @@ No unit test. This module needs WebGL and is proven by Task 7's criteria 2, 3 an
 
 ## Execution notes
 
-(Filled in during execution: rulings, deferrals, measured numbers that differ from the plan's expectations.)
+Measured on `phase-9a-player`; numbers are in `eval/RESULTS-PHASE-9A.md`.
+
+### What shipped
+
+| Commits | Change |
+|---|---|
+| `2f82285` | Position conversions (`timeToTick`, `tickToTime`) and `buildShareURLFor` with an explicit base |
+| `2147444` | `mountScene` extracted so the playground and the player share one IR-to-stage path (playground transport check 25 of 25 afterwards) |
+| `6b333ee`, `966d160` | `PlayerController` |
+| `39192b8` | Per-element renderer chunk |
+| `9a5bc51`, `ab49cd6` | The `<marey-player>` element |
+| `32216bf`, `fb8b394` | Build and packaging as `marey-lang/player`; `check:pack` loads it in Chromium and checks the static closure and the file count |
+| `2490a42`, `8db3201` | Browser harness (41 checks); pending-seek fix in the controller; redundant `loseContext` removed |
+| this commit | README section, evidence, 0.6.0 |
+
+### Rulings
+
+- **P-1.** The "nothing under `src/player/` imports the renderer" rule covers
+  the graph reachable from `src/player/index.ts` without following a dynamic
+  `import()`. `render.ts` is the lazily loaded target and may import the
+  renderer. This is what spec section 4.3 describes, and what the boundary test
+  enforces.
+- **P-2.** `tsconfig.player.json` may set `skipLibCheck: true` if third-party
+  declaration files fail under `false`. The published types are ours, and
+  `tsc -b` still checks the application code.
+- **P-3.** The harness requirement "no render chunk request until a player
+  intersects" means players far from view trigger no extra request and get no
+  canvas. One request at load is expected, because the first players are in
+  view at load. The harness measured it: first near view at +9 ms, one request
+  at +41 ms.
+- **T3-1.** `CompilerError` has optional `line` and `col` (not `column`). The
+  diagnostic text is `line:col message`, with `col` defaulting to 1, and the
+  message alone when there is no line. The plan named the wrong field before
+  `types.ts` was read.
+- **T3-2.** A reviewer asked that an indefinite scene keep its old reached tick
+  after leaving view. Spec section 4.4 says it restarts from tick 0, so the
+  spec wins: detaching an indefinite scene stores tick 0. The cost is that a
+  `currentTime` set while out of view clamps to 0.
+- **T3-3.** A non-finite `currentTime` is ignored, with no throw. `<video>`
+  throws a `TypeError`; ignoring cannot corrupt the stored tick and needs no
+  try/catch in page code.
+- **T7-1.** The pending-seek defect and the double `loseContext` were routed as
+  one fix round on the harness work, since that held the evidence. The
+  controller fix got unit tests whose fake mount models a pending seek, and the
+  harness asserts zero WebGL warnings.
+
+### What review found
+
+- **Position conversions, extraction:** clean. The one citation the reviewer
+  questioned (spec section 3.3) was right.
+- **Controller (`6b333ee`):** two Important findings. A nested notification in
+  `play()` during a resume-after-seek left a stale paused state, so `ended` or
+  `loop` could be missed; and no test pinned a mount resolving after a newer
+  load. `966d160` fixed both, plus the non-finite and indefinite-detach rulings
+  above. The re-review found nothing open.
+- **Renderer chunk (`39192b8`):** clean.
+- **Element (`9a5bc51`):** one Important finding. An upgraded element that
+  carried `src` loaded twice, once from `attributeChangedCallback` and once from
+  `connectedCallback`. `ab49cd6` loads once.
+- **Packaging (`32216bf`):** one Important finding. The no-PixiJS check read only
+  `marey-player.mjs`, not its static imports, and its "pixi" marker was absent
+  from 6 of the 11 PixiJS chunks. `fb8b394` checks the whole static closure and
+  is shown to fail when a static `pixi.js` import is added.
+- **Harness (`2490a42`):** two defects in product code, both fixed in
+  `8db3201`. `play()` or `pause()` while a seek was pending: the `currentTime`
+  getter reverted after `pause()`, and set-then-`play()` on a paused embed ended
+  paused, against spec section 3.3. And 42 WebGL `INVALID_OPERATION: loseContext:
+  context already lost` warnings for 42 releases, because Pixi's own destroy
+  already loses the context.
+
+### Numbers that differed from the plan
+
+- The tarball holds 127 files, not the 57 of 0.5.1 (`check:pack`'s
+  `EXPECTED_FILE_COUNT` is 127).
+- The harness found the controller's pending-seek defect. The unit tests
+  passed because the fake mount did not model a pending seek.
+- Some of the harness brief's own agreement checks still passed with the
+  guarded change reverted, so they could not fail. Stronger ones were added (a
+  shifted-ticks control for each scene, and checks on the element's state after
+  the debug hook) and they did fail under the revert.
+- The README HTML snippet needs a `text` fence: `languageDocs.test.ts` accepts
+  only `marey` and `text`.
+- Size: 29.4 kB gzipped up front, 200.9 kB more on first near view.
+
+### Deferred minor findings still open
+
+- `renderer.md` (lines 3, 102, 184-185, 647, 665, 674) and `plateGeometry.ts:3`
+  point at `adapter.ts` for code that now lives in `mountScene.ts`;
+  `exportApp.ts:7` names the removed `sharedApp`. The `plateGeometry.ts`
+  pointer should be fixed before the merge.
+- `mountScene.ts:57` keeps a vestigial `!app.canvas` guard. The playground no
+  longer repaints a failed scene's background.
+- Controller: a re-entrant `load()` from `onReady` sends a stale `onState`; a
+  stale loader rejection is untested; a detach with a pending mount sends no
+  `onState`; the `mountGen` comment is inaccurate; several tests cannot fail
+  (indefinite-ended with a fake `endTick` of null, the restart test checks the
+  fake). Branches without a test: play with a pending seek to `endTick`,
+  detach storing `playing` from `resumeAt`, indefinite detach with a pending
+  seek. The test hook leaves `resumeAt` dangling, so `paused` can misread
+  after the hook is used.
+- `liveFramesHash` clamps beyond the reached tick on an indefinite scene yet
+  labels the requested tick, and has no destroyed guard (hook only; the harness
+  uses bounded scenes).
+- Element: a DOM move reloads and loses the playhead; the controls and share
+  link go stale after a failed reload; the seek range has no `aria-label`; the
+  diagnostics fill while hidden and are then announced.
+- Packaging: about 45 unreachable `.d.ts` files ship (the compiler and renderer
+  declarations import PixiJS) and no player consumer typecheck runs in
+  `check:pack`; the 20 s race timer is never cleared and the timeout drops the
+  collected problems; a comment overstates the font-path coverage; the check
+  label still says "entry chunk" for the closure; the lazy-only-file assertion
+  is vacuous by construction; the request pathname is not
+  `decodeURIComponent`-ed.
+- Harness: the render-chunk timing check would also pass for a top-level
+  `import("./render")`, and compares a page clock to a Node clock; the
+  init-failure path in `render.ts` (lines 83-88) still loses the context twice,
+  so that path logs one `INVALID_OPERATION` warning; scratch directory and
+  server cleanup have gaps when the harness throws early.
+- `playback.test.ts`'s `snapshot()` test is near-tautological (suggest asserting
+  `snapshotHash()` against the reference hash); `share.test.ts` keeps dense
+  one-liners, and the `buildShareURL` wrapper is untested (needs `window`).
