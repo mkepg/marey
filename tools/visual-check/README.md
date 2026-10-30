@@ -793,7 +793,9 @@ which seeks the live playback and hashes the tree on screen the way
    the same `liveFramesHash([200])`. At the bottom every player in view has a
    canvas, its pixels in the screenshot are the scene's background and not
    magenta, and no `webglcontextlost` fired on a player in view. No sample
-   may find a canvas far from view.
+   may find a canvas far from view, and every canvas the page released must
+   have fired `webglcontextlost`: the player leaves the context loss to
+   PixiJS's own destroy, and the run must log no `WebGL:` console warning.
 3. **Reduced motion**: with `prefers-reduced-motion: reduce` emulated, an
    `autoplay` bounded scene is paused on `currentTime === duration`.
 4. **Errors** (`player/errors.html`): a type error, a 404 `src`, a text scene

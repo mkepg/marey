@@ -95,6 +95,7 @@ export async function mountPlayer(
     play: () => playback.play(),
     pause: () => playback.pause(),
     seek: (tick) => playback.seek(tick),
+    hasPendingSeek: () => playback.inner.hasPendingSeek(),
     restart: () => playback.restart(),
     subscribe: (l) => playback.subscribe(l),
     getState: () => playback.getState(),
@@ -112,8 +113,12 @@ export async function mountPlayer(
       if (destroyed) return;
       destroyed = true;
       mounted.cleanup();
+      // No loseContext() here: app.destroy() already loses the context, in
+      // PixiJS 8.16's GlContextSystem.destroy()
+      // (node_modules/pixi.js/lib/rendering/renderers/gl/context/GlContextSystem.mjs:198).
+      // A second call only logs "WebGL: INVALID_OPERATION: loseContext:
+      // context already lost".
       app.destroy({ removeView: true }, { children: true, texture: true });
-      lose?.loseContext();
     },
   };
 }

@@ -13,25 +13,34 @@ const BOUNDED = `scene { size: (400, 300) duration: 2 circle c { position: (1, 2
 const INDEFINITE = `scene { size: (400, 300) circle c { position: (1, 2), radius: 3 } }`;
 const OTHER_SIZE = `scene { size: (640, 360) duration: 2 circle c { position: (1, 2), radius: 3 } }`;
 
-/** Records calls and lets a test push states, imitating the renderer's playback. */
+/**
+ * Records calls and lets a test push states, imitating the renderer's playback.
+ *
+ * Like `Playback`, play/pause/restart notify synchronously, and `seek` only
+ * records its target. `performSeek()` is the next frame performing it: the
+ * playhead lands on the target, paused, and listeners hear it. `restart`
+ * drops a recorded target, as `Playback.restart` does. A state a test
+ * `push`es stands for a frame, and a frame performs any recorded seek before
+ * anything else, so `push` drops the record too.
+ */
 class FakeMount implements PlayerMount {
   calls: string[] = [];
   destroyed = 0;
+  pendingSeek: number | null = null;
   private listeners = new Set<(s: PlayheadState) => void>();
   state: PlayheadState;
   constructor(state: PlayheadState) {
     this.state = state;
   }
-  // Like Playback, play/pause/restart notify synchronously. seek only records;
-  // tests push the state the next frame would report.
   play() {
     this.calls.push("play");
     const atEnd = this.state.endTick !== null && this.state.tick === this.state.endTick;
-    this.push(atEnd ? { tick: 0, playing: true } : { playing: true });
+    this.emit(atEnd ? { tick: 0, playing: true } : { playing: true });
   }
-  pause() { this.calls.push("pause"); this.push({ playing: false }); }
-  seek(tick: number) { this.calls.push(`seek:${tick}`); }
-  restart() { this.calls.push("restart"); this.push({ tick: 0, playing: true }); }
+  pause() { this.calls.push("pause"); this.emit({ playing: false }); }
+  seek(tick: number) { this.calls.push(`seek:${tick}`); this.pendingSeek = tick; }
+  hasPendingSeek() { return this.pendingSeek !== null; }
+  restart() { this.calls.push("restart"); this.pendingSeek = null; this.emit({ tick: 0, playing: true }); }
   subscribe(l: (s: PlayheadState) => void) {
     this.listeners.add(l);
     return () => this.listeners.delete(l);
@@ -39,7 +48,18 @@ class FakeMount implements PlayerMount {
   getState() { return this.state; }
   async liveFramesHash() { return "hash"; }
   destroy() { this.destroyed++; }
+  /** The next frame performs the recorded seek and leaves playback paused. */
+  performSeek() {
+    const target = this.pendingSeek;
+    if (target === null) throw new Error("no seek recorded");
+    this.pendingSeek = null;
+    this.emit({ tick: target, playing: false, reachedTick: Math.max(this.state.reachedTick, target) });
+  }
   push(s: Partial<PlayheadState>) {
+    this.pendingSeek = null;
+    this.emit(s);
+  }
+  private emit(s: Partial<PlayheadState>) {
     this.state = { ...this.state, ...s };
     for (const l of [...this.listeners]) l(this.state);
   }
@@ -266,6 +286,90 @@ describe("PlayerController: currentTime", () => {
     expect(t.controller.currentTime).toBe(0.5);
     await t.controller.attach(t.mountFn);
     expect(t.starts[0].tick).toBe(60);
+  });
+});
+
+describe("PlayerController: play, pause and restart while a seek is pending (spec §3.3)", () => {
+  it("a pause() before the seek is performed does not revert the getter", async () => {
+    const t = setup();
+    await t.controller.load(text(BOUNDED));
+    await t.controller.attach(t.mountFn);
+    t.mounts[0].push({ tick: 90, playing: true });
+    t.controller.currentTime = 1;
+    expect(t.controller.currentTime).toBe(1);
+    t.controller.pause();
+    expect(t.controller.currentTime).toBe(1);
+    expect(t.events.state.mock.calls.at(-1)![0]).toMatchObject({ tick: 120, playing: false });
+  });
+
+  it("currentTime = x then play() on a paused embed plays from x", async () => {
+    const t = setup({ autoplay: false });
+    await t.controller.load(text(BOUNDED));
+    await t.controller.attach(t.mountFn);
+    expect(t.controller.paused).toBe(true);
+    t.controller.currentTime = 0.5;
+    t.controller.play();
+    expect(t.controller.paused).toBe(false);
+    expect(t.controller.currentTime).toBe(0.5);
+    // Playing from the old tick now would be undone when the seek lands.
+    expect(t.mounts[0].calls).not.toContain("play");
+    t.mounts[0].performSeek();
+    expect(t.mounts[0].calls.at(-1)).toBe("play");
+    expect(t.mounts[0].getState()).toMatchObject({ tick: 60, playing: true });
+    expect(t.controller.paused).toBe(false);
+  });
+
+  it("currentTime = x then pause() on a playing embed ends paused at x, with no resume", async () => {
+    const t = setup();
+    await t.controller.load(text(BOUNDED));
+    await t.controller.attach(t.mountFn);
+    t.mounts[0].push({ tick: 90, playing: true });
+    t.controller.currentTime = 1;
+    t.controller.pause();
+    t.mounts[0].performSeek();
+    expect(t.mounts[0].calls).toEqual(["seek:120", "pause"]);
+    expect(t.mounts[0].getState()).toMatchObject({ tick: 120, playing: false });
+    expect(t.controller.currentTime).toBe(1);
+    expect(t.controller.paused).toBe(true);
+  });
+
+  it("restart() drops the pending target and the getter follows the restart from tick 0", async () => {
+    const t = setup();
+    await t.controller.load(text(BOUNDED));
+    await t.controller.attach(t.mountFn);
+    t.mounts[0].push({ tick: 90, playing: true });
+    t.controller.currentTime = 1;
+    t.controller.restart();
+    expect(t.mounts[0].hasPendingSeek()).toBe(false);
+    expect(t.controller.currentTime).toBe(0);
+    expect(t.controller.paused).toBe(false);
+    t.mounts[0].push({ tick: 12, playing: true });
+    expect(t.controller.currentTime).toBe(tickToTime(12));
+    expect(t.mounts[0].calls).toEqual(["seek:120", "restart"]);
+  });
+
+  it("a pause() that stops on the target tick is not taken for the performed seek", async () => {
+    const t = setup();
+    await t.controller.load(text(BOUNDED));
+    await t.controller.attach(t.mountFn);
+    t.mounts[0].push({ tick: 120, playing: true });
+    t.controller.currentTime = 1;
+    t.controller.pause();
+    t.controller.play();
+    expect(t.mounts[0].calls).toEqual(["seek:120", "pause"]);
+    t.mounts[0].performSeek();
+    expect(t.mounts[0].getState()).toMatchObject({ tick: 120, playing: true });
+  });
+
+  it("leaving view with a seek pending stores the target, not the old tick", async () => {
+    const t = setup();
+    await t.controller.load(text(BOUNDED));
+    await t.controller.attach(t.mountFn);
+    t.mounts[0].push({ tick: 90, playing: true });
+    t.controller.currentTime = 1;
+    t.controller.detach();
+    await t.controller.attach(t.mountFn);
+    expect(t.starts[1]).toEqual({ tick: 120, playing: true });
   });
 });
 

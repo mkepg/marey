@@ -623,6 +623,12 @@ async function checkMany(browser) {
   };
   report.measurements.many.contextLost = end.lost;
   console.log(`contexts: ${end.created} created, ${liveAtEnd} live at the end, ${end.lost.length} webglcontextlost events`);
+  // render.ts leaves the context loss to PixiJS's own destroy; this event on
+  // every canvas the page let go of is the proof that it happened.
+  const released = end.created - liveAtEnd;
+  record(req, "every released canvas fired webglcontextlost",
+    released > 0 && end.lost.length === released,
+    `${end.created} created, ${liveAtEnd} live at the end, ${released} released, ${end.lost.length} webglcontextlost events`);
   record(req, `player 0 came back on a new canvas, still paused on tick ${P0_TICK}`,
     p0After.canvas !== p0Before.canvas && returned.paused === true && returned.currentTime === P0_TICK / TICK_HZ,
     `canvas #${p0Before.canvas} -> #${p0After.canvas}; currentTime ${returned.currentTime}, paused ${returned.paused}`);
@@ -688,6 +694,9 @@ record("server", `the static server on port ${port} is closed`, closed);
 record("page", "no page errors and no unexpected console errors",
   consoleLog.pageErrors.length === 0 && consoleLog.errors.length === 0,
   [...consoleLog.pageErrors, ...consoleLog.errors].map((e) => `[${e.phase}] ${e.text}`).join(" | ").slice(0, 600));
+const webglWarnings = consoleLog.warnings.filter((w) => w.text.startsWith("WebGL:"));
+record("page", "no WebGL: console warnings", webglWarnings.length === 0,
+  webglWarnings.length ? `${webglWarnings.length} x, first: ${webglWarnings[0].text}` : "0");
 const warningCounts = {};
 for (const w of consoleLog.warnings) warningCounts[`[${w.phase}] ${w.text}`] = (warningCounts[`[${w.phase}] ${w.text}`] ?? 0) + 1;
 console.log(`console warnings: ${consoleLog.warnings.length}${consoleLog.warnings.length ? "" : " (none)"}`);

@@ -34,7 +34,10 @@ export interface PlayheadState {
 export interface PlayerMount {
   play(): void;
   pause(): void;
+  /** Recorded only; the mount performs it on its next frame and leaves playback paused. */
   seek(tick: number): void;
+  /** Whether a recorded seek is still waiting for that frame. */
+  hasPendingSeek(): boolean;
   restart(): void;
   subscribe(listener: (s: PlayheadState) => void): () => void;
   getState(): PlayheadState;
@@ -94,6 +97,12 @@ export class PlayerController {
   private shown: PlayheadState = { tick: 0, playing: false, endTick: null, reachedTick: 0 };
   /** A seek that should resume playing once the mount reports reaching its tick. */
   private resumeAt: number | null = null;
+  /**
+   * The tick of the last seek sent to the mount, until the mount performs it.
+   * While the mount reports a pending seek, its own tick is the one from
+   * before the seek, so this is what the getter and the UI show instead.
+   */
+  private seekTarget: number | null = null;
 
   private readonly options: ControllerOptions;
 
@@ -156,9 +165,11 @@ export class PlayerController {
     const m = this._mount;
     if (!m) return;
     const s = m.getState();
+    // A seek not yet performed is where the reader asked to be.
+    const tick = this.seekPending() ? this.seekTarget! : s.tick;
     // An indefinite scene has no position worth keeping: its physics cannot
     // be resumed from a tick without replaying it (spec §4.4).
-    this.stored = { tick: s.endTick === null ? 0 : s.tick, playing: s.playing };
+    this.stored = { tick: s.endTick === null ? 0 : tick, playing: s.playing || this.resumeAt !== null };
     this.shown = {
       ...s,
       tick: this.stored.tick,
@@ -169,6 +180,21 @@ export class PlayerController {
   }
 
   play(): void {
+    if (this._mount && this.seekPending()) {
+      const target = this.seekTarget!;
+      if (target === this.endTick) {
+        // Play at the end starts again from tick 0 (spec §3.4); restart()
+        // also drops the recorded seek.
+        return this.restart();
+      }
+      // The recorded seek will leave playback paused when the next frame
+      // performs it, so playing from the old tick now would be undone. Resume
+      // once the seek lands, as a set on a playing embed does.
+      this.resumeAt = target;
+      this.shown = { ...this.shown, tick: target, playing: true };
+      this.options.onState(this.shown);
+      return;
+    }
     this.resumeAt = null;
     if (this._mount) return this._mount.play();
     const end = this.endTick;
@@ -185,6 +211,8 @@ export class PlayerController {
 
   restart(): void {
     this.resumeAt = null;
+    // Playback.restart() drops its own recorded seek; the getter follows tick 0.
+    this.seekTarget = null;
     if (this._mount) return this._mount.restart();
     this.stored = { tick: 0, playing: true };
     this.syncShownFromStored();
@@ -205,6 +233,7 @@ export class PlayerController {
     this.shown = { ...this.shown, tick: target, reachedTick: Math.max(this.shown.reachedTick, target) };
     if (this._mount) {
       this._mount.seek(target);
+      this.seekTarget = target;
       // A seek leaves playback paused; a video keeps playing through a seek.
       // Landing on the end is the exception: play() there would replay.
       if (wasPlaying && target !== end) this.resumeAt = target;
@@ -218,7 +247,8 @@ export class PlayerController {
   }
 
   get paused(): boolean {
-    return this._mount ? !this._mount.getState().playing : !this.stored.playing;
+    // A play() armed to resume after a pending seek counts as playing.
+    return this._mount ? !(this._mount.getState().playing || this.resumeAt !== null) : !this.stored.playing;
   }
 
   get errors(): ReadonlyArray<CompilerError> {
@@ -252,6 +282,16 @@ export class PlayerController {
     this._mount?.destroy();
     this._mount = null;
     this.resumeAt = null;
+    this.seekTarget = null;
+  }
+
+  /**
+   * Whether the seek this controller last sent is still unperformed. Asked of
+   * the mount rather than guessed from a state: a pause() that happens to stop
+   * on the target tick reports the same state as the performed seek would.
+   */
+  private seekPending(): boolean {
+    return this.seekTarget !== null && this._mount !== null && this._mount.hasPendingSeek();
   }
 
   private async mountNow(): Promise<void> {
@@ -282,6 +322,17 @@ export class PlayerController {
   }
 
   private onMountState(s: PlayheadState): void {
+    if (this.seekPending()) {
+      // A play() or pause() notified before the next frame performs the seek:
+      // its tick is the old one. Keep the target on show (spec §3.3: the getter
+      // returns the new time until the seek is performed) and take the rest.
+      const target = this.seekTarget!;
+      this.shown = { ...s, tick: target, playing: s.playing || this.resumeAt !== null, reachedTick: Math.max(s.reachedTick, target) };
+      this.wasPlaying = s.playing;
+      this.options.onState(this.shown);
+      return;
+    }
+    this.seekTarget = null;
     this.shown = s;
     // Settle ending detection and tell the UI before resuming: the real
     // playback notifies synchronously from play(), so resuming first would
