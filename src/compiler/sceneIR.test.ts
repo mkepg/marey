@@ -8,7 +8,7 @@
  * it rather than keeping a second copy.
  */
 import { describe, it, expect } from "vitest";
-import { TICK_HZ, secondsToTicks } from "./sceneIR";
+import { TICK_HZ, secondsToTicks, timeToTick, tickToTime } from "./sceneIR";
 import {
   TICK_HZ as clockTickHz,
   TICK_MS,
@@ -47,5 +47,22 @@ describe("sceneIR tick math (pipeline-neutral home)", () => {
     // import the conversion from the pipeline-neutral sceneIR.ts instead.
     expect(validatorSource).not.toMatch(/from\s+["']\.\.\/renderer\/clock["']/);
     expect(validatorSource).toMatch(/secondsToTicks/);
+  });
+});
+
+describe("playhead position conversions", () => {
+  it("maps 0 s to tick 0, where secondsToTicks floors at 1", () => {
+    expect(timeToTick(0)).toBe(0);
+    expect(secondsToTicks(0)).toBe(1);
+  });
+  it("rounds to the nearest tick", () => {
+    expect(timeToTick(1)).toBe(120);
+    expect(timeToTick(0.004)).toBe(0);
+    expect(timeToTick(0.0045)).toBe(1);
+  });
+  it("clamps negatives to 0", () => { expect(timeToTick(-3)).toBe(0); });
+  it("tickToTime inverts timeToTick on whole ticks", () => {
+    for (const t of [0, 1, 37, 120, 840]) expect(timeToTick(tickToTime(t))).toBe(t);
+    expect(tickToTime(240)).toBe(2);
   });
 });

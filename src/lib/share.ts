@@ -108,11 +108,20 @@ export function resolveInitialCode(fallback: string): {
   return { code: fallback, source: "default" };
 }
 
-export function buildShareURL(code: string): string | null {
+/**
+ * Build a share link against an explicit base URL. Used by callers that
+ * must not depend on the page they run in, such as the embeddable player,
+ * which links to the playground rather than to itself.
+ */
+export function buildShareURLFor(base: string, code: string): string | null {
   const encoded = encodeCode(code);
   if (encoded === null) return null;
+  return `${base}#${HASH_PREFIX}${encoded}`;
+}
+
+export function buildShareURL(code: string): string | null {
   const { origin, pathname } = window.location;
-  return `${origin}${pathname}#${HASH_PREFIX}${encoded}`;
+  return buildShareURLFor(`${origin}${pathname}`, code);
 }
 
 export async function copyToClipboard(text: string): Promise<void> {

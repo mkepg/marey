@@ -15,9 +15,30 @@ import type { EDGE_VALUES } from "./languageContract";
  */
 export const TICK_HZ = 120;
 
-/** Convert a duration in seconds to whole simulation ticks. */
+/**
+ * Convert a duration in seconds to whole simulation ticks.
+ *
+ * This converts a *duration*, so it floors at one tick: a zero-length
+ * duration still occupies a tick. Positions need the other pair below,
+ * `timeToTick` and `tickToTime`, because tick 0 is a real position
+ * (spec §3.3).
+ */
 export function secondsToTicks(seconds: number): number {
   return Math.max(1, Math.round(seconds * TICK_HZ));
+}
+
+/**
+ * Convert a playhead position in seconds to the tick it falls on. Unlike
+ * `secondsToTicks`, this does not floor at one: 0 s is tick 0. Negative
+ * positions clamp to tick 0.
+ */
+export function timeToTick(seconds: number): number {
+  return Math.max(0, Math.round(seconds * TICK_HZ));
+}
+
+/** Convert a tick index back to a playhead position in seconds. */
+export function tickToTime(tick: number): number {
+  return tick / TICK_HZ;
 }
 
 export type IRColor = string;
