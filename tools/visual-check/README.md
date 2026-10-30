@@ -770,6 +770,73 @@ resolves if the scene is replaced mid-seek, so do not await one across an
 edit. Look at the two screenshots. The recorded run is in
 `eval/RESULTS-PHASE-7.md`.
 
+## Checking the player
+
+`player-check.mjs` measures the embeddable `<marey-player>` (Phase 9A, spec
+§6 criteria 2 to 6) against the built `dist/player/`. It reads frames through
+the element's test hook, `el[Symbol.for("marey.player.debug")].liveFramesHash(ticks)`,
+which seeks the live playback and hashes the tree on screen the way
+`sampleFrames` does. That makes the result comparable with the `frames` hash
+`marey export` prints, and every requirement is such a comparison:
+
+1. **Agreement** (`player/agreement.html`): for a physics scene, a staggered
+   reveal and a text scene, `liveFramesHash` over the ticks
+   `marey export --fps 30` samples (0, 4, 8, ...) equals the `frames` hash of
+   `marey export --format lottie --fps 30`. A control with every tick shifted
+   by one must hash differently, and the text scene must fetch the player's
+   own font with a 200.
+2. **Context budget** (`player/many.html`): 24 autoplay players, 400 px tall,
+   over a magenta page. At load no player more than two screens down holds a
+   canvas, and no `render-*.mjs` request precedes the first player coming near
+   view. Player 0 is paused on tick 200, the page is scrolled to the bottom
+   and back in 400 px steps, and player 0 must come back on a new canvas with
+   the same `liveFramesHash([200])`. At the bottom every player in view has a
+   canvas, its pixels in the screenshot are the scene's background and not
+   magenta, and no `webglcontextlost` fired on a player in view. No sample
+   may find a canvas far from view.
+3. **Reduced motion**: with `prefers-reduced-motion: reduce` emulated, an
+   `autoplay` bounded scene is paused on `currentTime === duration`.
+4. **Errors** (`player/errors.html`): a type error, a 404 `src`, a text scene
+   whose font request the script aborts, and no source each fire `error` with
+   their code. The type error's box must show the `line:col [CODE]` that
+   `marey check` reports for the same text.
+5. **`currentTime`**: a set on a playing embed reads back at once and keeps it
+   playing; `currentTime = 0` then `pause()` gives the CLI's frame-0 hash (a
+   one-frame export, `--duration 0.25 --fps 4`). Following `<video>` (spec
+   §3.3), the getter must still read 0 straight after that `pause()`, and on
+   a paused embed a set followed by `play()` must play from the new time.
+
+```bash
+node tools/visual-check/player-check.mjs --out .visual-check/phase9a/player
+```
+
+| Flag | Meaning |
+|---|---|
+| `--out <dir>` | Where `report.json` and the screenshots go (default `.visual-check/phase9a/player`) |
+| `--only <list>` | A comma-separated subset of `agreement`, `currentTime`, `reducedMotion`, `errors`, `many` |
+| `--headed` | Show the browser window |
+
+It needs no dev server. It runs `npm run build:player` (and
+`build:export-page` and `build:cli` for the references), then serves the
+repository root from its own `node:http` server on a free port, prints the
+port, and closes it before exiting. `npm run build` empties `dist/`, so
+a run after an app build rebuilds the player first anyway.
+
+`report.json` holds every check, the reference export lines, the many-player
+page's request order, the canvases held at each scroll step, every
+`webglcontextlost` event with whether its player was in view, and console
+warnings counted apart from errors. Exit code is non-zero if any check failed,
+a page raised an error, or the console logged an error other than the 404 and
+the aborted font request the script causes on purpose. Look at the two
+screenshots: `agreement.png` shows each scene on its last sampled frame, and
+`many-bottom.png` the last two players drawing over the magenta page.
+
+Two traps. A player only mounts near the viewport, and the hook rejects with
+`not mounted` until it has, including for a while after `ready`: the script
+retries it for up to 30 s, so scroll a player into view before asking. And
+`ready` and `error` do not bubble and fire once per load, so the pages attach
+their listeners in a classic script before the module defines the element.
+
 ## Forcing a device-limit refusal
 
 `videoContract.ts`'s `deviceLimitDiagnostic` refuses a coded size larger than

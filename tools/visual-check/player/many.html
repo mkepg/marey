@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>marey-player: 24 players</title>
+<!--
+  Twenty-four autoplay players, 400 px tall, alternating a physics scene and a
+  reveal, which is more than Chromium's 16 live WebGL contexts. player-check.mjs
+  scrolls this page to the bottom and back. The page background is magenta,
+  a colour neither scene uses, so a player that draws nothing shows up as
+  magenta in a screenshot.
+-->
+<style>
+  body { margin: 0; background: #ff00ff; }
+  /* display: block before the element is defined, so the layout (and the page's own
+     IntersectionObserver below) is final from the first frame. */
+  marey-player { display: block; width: calc(400px * 4 / 3); height: 400px; }
+</style>
+</head>
+<body>
+<marey-player id="p0" autoplay src="/src/examples/physics-pile.marey"></marey-player>
+<marey-player id="p1" autoplay src="/docs/media/bars-reveal.marey"></marey-player>
+<marey-player id="p2" autoplay src="/src/examples/physics-pile.marey"></marey-player>
+<marey-player id="p3" autoplay src="/docs/media/bars-reveal.marey"></marey-player>
+<marey-player id="p4" autoplay src="/src/examples/physics-pile.marey"></marey-player>
+<marey-player id="p5" autoplay src="/docs/media/bars-reveal.marey"></marey-player>
+<marey-player id="p6" autoplay src="/src/examples/physics-pile.marey"></marey-player>
+<marey-player id="p7" autoplay src="/docs/media/bars-reveal.marey"></marey-player>
+<marey-player id="p8" autoplay src="/src/examples/physics-pile.marey"></marey-player>
+<marey-player id="p9" autoplay src="/docs/media/bars-reveal.marey"></marey-player>
+<marey-player id="p10" autoplay src="/src/examples/physics-pile.marey"></marey-player>
+<marey-player id="p11" autoplay src="/docs/media/bars-reveal.marey"></marey-player>
+<marey-player id="p12" autoplay src="/src/examples/physics-pile.marey"></marey-player>
+<marey-player id="p13" autoplay src="/docs/media/bars-reveal.marey"></marey-player>
+<marey-player id="p14" autoplay src="/src/examples/physics-pile.marey"></marey-player>
+<marey-player id="p15" autoplay src="/docs/media/bars-reveal.marey"></marey-player>
+<marey-player id="p16" autoplay src="/src/examples/physics-pile.marey"></marey-player>
+<marey-player id="p17" autoplay src="/docs/media/bars-reveal.marey"></marey-player>
+<marey-player id="p18" autoplay src="/src/examples/physics-pile.marey"></marey-player>
+<marey-player id="p19" autoplay src="/docs/media/bars-reveal.marey"></marey-player>
+<marey-player id="p20" autoplay src="/src/examples/physics-pile.marey"></marey-player>
+<marey-player id="p21" autoplay src="/docs/media/bars-reveal.marey"></marey-player>
+<marey-player id="p22" autoplay src="/src/examples/physics-pile.marey"></marey-player>
+<marey-player id="p23" autoplay src="/docs/media/bars-reveal.marey"></marey-player>
+<script>
+  window.__events = [];
+  window.__canvases = [];
+  window.__contextLost = [];
+  window.__firstIntersection = null;
+  const players = [...document.querySelectorAll("marey-player")];
+  for (const el of players) {
+    for (const type of ["ready", "error", "ended"]) {
+      el.addEventListener(type, (e) => window.__events.push({ id: el.id, type, detail: e.detail ?? null, t: performance.now() }));
+    }
+  }
+  // The element's own observer uses this root margin; this one only records
+  // when the first player came near view, as an absolute time the harness can
+  // compare with the network log.
+  const near = new IntersectionObserver((entries) => {
+    const hit = entries.find((e) => e.isIntersecting);
+    if (hit && window.__firstIntersection === null) {
+      window.__firstIntersection = { id: hit.target.id, epochMs: performance.timeOrigin + hit.time };
+      near.disconnect();
+    }
+  }, { rootMargin: "200px 0px" });
+  for (const el of players) near.observe(el);
+</script>
+<script type="module">
+  import "/dist/player/marey-player.mjs";
+  // The element is defined and every player upgraded, so each shadow root
+  // exists. A canvas only appears after a fetch, a compile and the renderer
+  // import, so this observer is in place before the first one.
+  let serial = 0;
+  const inView = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.bottom > 0 && r.top < innerHeight;
+  };
+  for (const el of document.querySelectorAll("marey-player")) {
+    new MutationObserver((records) => {
+      for (const rec of records) {
+        for (const node of rec.addedNodes) {
+          if (node.nodeName !== "CANVAS" || node.dataset.serial) continue;
+          const canvas = node;
+          canvas.dataset.serial = String(++serial);
+          window.__canvases.push({ id: el.id, serial: canvas.dataset.serial, t: performance.now(), scrollY });
+          canvas.addEventListener("webglcontextlost", () => {
+            window.__contextLost.push({
+              id: el.id,
+              serial: canvas.dataset.serial,
+              t: performance.now(),
+              scrollY,
+              playerInView: inView(el),
+              canvasConnected: canvas.isConnected,
+            });
+          });
+        }
+      }
+    }).observe(el.shadowRoot, { childList: true, subtree: true });
+  }
+</script>
+</body>
+</html>

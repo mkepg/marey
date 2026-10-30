@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>marey-player: agreement with export</title>
+<!--
+  Three bounded scenes, one per kind the exit criterion names: physics, a
+  staggered reveal, and text (which also loads the scene font). Served from the
+  repository root by player-check.mjs, which drives the players through the
+  test hook. Also used for the reduced-motion and currentTime checks.
+-->
+<style>
+  body { margin: 0; padding: 16px; display: flex; gap: 16px; background: #e9e7e2; font: 13px system-ui, sans-serif; color: #222; }
+  figure { margin: 0; }
+  figcaption { margin-top: 6px; }
+  marey-player { display: block; width: 400px; height: 300px; }
+</style>
+</head>
+<body>
+<figure><marey-player id="pile" autoplay src="/src/examples/physics-pile.marey"></marey-player><figcaption>physics: src/examples/physics-pile.marey</figcaption></figure>
+<figure><marey-player id="bars" autoplay src="/docs/media/bars-reveal.marey"></marey-player><figcaption>reveal: docs/media/bars-reveal.marey</figcaption></figure>
+<figure><marey-player id="text" autoplay src="/src/examples/bar-chart-reveal.marey"></marey-player><figcaption>text: src/examples/bar-chart-reveal.marey</figcaption></figure>
+<script>
+  // Attached before the element is defined: `ready` and `error` do not bubble
+  // and fire once per load, so a late listener would miss them.
+  window.__events = [];
+  for (const el of document.querySelectorAll("marey-player")) {
+    for (const type of ["ready", "error", "ended"]) {
+      el.addEventListener(type, (e) => window.__events.push({ id: el.id, type, detail: e.detail ?? null, t: performance.now() }));
+    }
+  }
+</script>
+<script type="module" src="/dist/player/marey-player.mjs"></script>
+</body>
+</html>

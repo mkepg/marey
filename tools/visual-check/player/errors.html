@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>marey-player: errors</title>
+<!--
+  One player per failure the element reports. player-check.mjs aborts the
+  font request before loading this page, so the text scene cannot load
+  JetBrains Mono. The type-error scene starts on the script tag's own line so
+  its line numbers are the file's: the harness checks them against
+  `marey check` run on the same text.
+-->
+<style>
+  body { margin: 0; padding: 16px; display: grid; grid-template-columns: repeat(2, 400px); gap: 16px; background: #e9e7e2; font: 13px system-ui, sans-serif; color: #222; }
+  figure { margin: 0; }
+  figcaption { margin-top: 6px; }
+  marey-player { display: block; width: 400px; height: 300px; }
+</style>
+</head>
+<body>
+<figure><marey-player id="compile"><script type="text/marey">scene {
+  size: (320, 180)
+  duration: 1
+  circle c {
+    position: (160, 90), radius: 30
+    animate { property: alpha, to: (1, 1), duration: 1 }
+  }
+}
+</script></marey-player><figcaption>type error: PLAYER_COMPILE_FAILED</figcaption></figure>
+<figure><marey-player id="fetch" src="missing.marey"></marey-player><figcaption>404 src: PLAYER_FETCH_FAILED</figcaption></figure>
+<figure><marey-player id="font" src="/src/examples/bar-chart-reveal.marey"></marey-player><figcaption>text scene, font blocked: PLAYER_FONT_UNAVAILABLE</figcaption></figure>
+<figure><marey-player id="none"></marey-player><figcaption>no source: PLAYER_NO_SOURCE</figcaption></figure>
+<script>
+  window.__events = [];
+  for (const el of document.querySelectorAll("marey-player")) {
+    for (const type of ["ready", "error", "ended"]) {
+      el.addEventListener(type, (e) => window.__events.push({ id: el.id, type, detail: e.detail ?? null, t: performance.now() }));
+    }
+  }
+</script>
+<script type="module" src="/dist/player/marey-player.mjs"></script>
+</body>
+</html>
