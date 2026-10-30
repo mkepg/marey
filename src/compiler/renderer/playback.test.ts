@@ -7,6 +7,7 @@ import { Playback, type PlaybackHost, type PlaybackState } from "./playback";
 import { compileSource } from "../compileSource";
 import { secondsToTicks, type IRAnimation, type IRObjectProps, type IRSceneNode } from "../sceneIR";
 import { TICK_MS } from "./clock";
+import { hashFrames } from "../export/frameHash";
 
 /*
  * The corpus is pulled in through `import.meta.glob`, not `node:fs`:
@@ -268,6 +269,16 @@ describe("Playback · seek", () => {
     expect(host.builds).toBe(2);
     expect(pb.getState().tick).toBe(40);
     expect(pb.snapshotHash()).toBe(pb.referenceHash(40));
+  });
+
+  it("snapshot() reads the tree on screen, and agrees with snapshotHash", () => {
+    const host = new TestHost(compile(FIXTURE));
+    const pb = new Playback(host, 480);
+    pb.seek(37);
+    pb.frame(0);
+    expect(pb.getState().tick).toBe(37);
+    expect(pb.snapshot().length).toBeGreaterThan(0);
+    expect(hashFrames([{ index: 0, tick: 37, objects: pb.snapshot() }])).toBe(pb.snapshotHash());
   });
 
   it("performs only the latest of a burst of seeks, as one replay", () => {

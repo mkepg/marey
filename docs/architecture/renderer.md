@@ -694,6 +694,23 @@ with real compiled scenes. The ticker stays in `adapter.ts`; its owner calls
   output file. Spec §3.5 keeps the playhead across recompiles for indefinite
   scenes too, so this is recorded rather than bounded.
 
+`renderer/mountScene.ts` is the single path from an IR to a stage:
+`mountScene(app, scene, host, start?)` builds the scene root with its
+background and bounds mask, the `fit` layout that follows `host`'s size
+(through a `ResizeObserver`), the `Playback` and the ticker callback that
+drives it and stops the ticker once the scene is paused with no seek pending.
+It takes the `Application` as a parameter and owns nothing outside what it
+adds, so `cleanup()` removes only its own scene root, observer and callback.
+`adapter.ts` calls it with the playground's one shared application and keeps
+what is specific to that: the font race, the lazy `init`, attaching the canvas,
+clearing the previous render's stage children, and a render counter so that a
+stale render's cleanup does not stop a newer render's ticker. Any other host of
+a scene, such as an embedded player with one application per element, mounts
+through the same function rather than copying the layout and ticker code.
+`LivePlayback` is defined there and re-exported from `adapter.ts`. `Playback`
+also exposes `snapshot()`, the on-screen tree's `ObjectSnapshot[]`, which
+`snapshotHash()` hashes.
+
 `snapshotHash()` and `referenceHash(tick)` are the check. The first is
 `hashFrames` over the live tree's snapshot. The second builds a fresh tree,
 runs the sampler's loop for `tick` ticks and hashes that. `playback.test.ts`

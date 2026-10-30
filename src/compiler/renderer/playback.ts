@@ -2,6 +2,7 @@ import type { Container } from "pixi.js";
 import type { SceneRuntime } from "./sceneRuntime";
 import { LiveDriver } from "./clock";
 import { snapshotFor } from "./frameSampler";
+import type { ObjectSnapshot } from "./frameSampler";
 import { hashFrames } from "../export/frameHash";
 
 export interface PlaybackState {
@@ -166,9 +167,14 @@ export class Playback implements PlaybackController {
     this.notify();
   }
 
+  /** The live tree's current snapshot: what is on screen. */
+  snapshot(): ObjectSnapshot[] {
+    return snapshotFor(this.root);
+  }
+
   /** `hashFrames` over the live tree's current snapshot. */
   snapshotHash(): string {
-    return hashFrames([{ index: 0, tick: this.tick, objects: snapshotFor(this.root) }]);
+    return hashFrames([{ index: 0, tick: this.tick, objects: this.snapshot() }]);
   }
 
   /** The same hash for a fresh build replayed `tick` ticks with the sampler's loop. */

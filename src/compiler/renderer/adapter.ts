@@ -1,14 +1,10 @@
-import { Application, Container, Graphics, Ticker } from "pixi.js";
+import { Application } from "pixi.js";
 import type { IRSceneNode } from "../sceneIR";
-import { buildNode } from "./builder";
-import { secondsToTicks } from "./clock";
-import { createWorldForScene } from "./physicsWorld";
-import { Playback } from "./playback";
-import type { PlaybackController, PlaybackHost, PlaybackStart } from "./playback";
-import { SceneRuntime } from "./sceneRuntime";
+import { mountScene } from "./mountScene";
+import type { LivePlayback, MountedScene } from "./mountScene";
+import type { PlaybackStart } from "./playback";
 
-/** The controller the playground drives; `inner` is for the dev seam's hashes. */
-export type LivePlayback = PlaybackController & { readonly inner: Playback };
+export type { LivePlayback };
 
 export interface IRendererAdapter {
   render(
@@ -19,12 +15,14 @@ export interface IRendererAdapter {
   ): Promise<{ cleanup: () => void; playback: LivePlayback }>;
 }
 
-let sharedApp: Application | null = null;
 // One initialisation shared by every render: a render that starts while an
 // earlier one is still inside `init()` waits for it rather than using an
 // application that is not ready yet.
 let sharedAppReady: Promise<Application> | null = null;
-let activeTickerCallback: ((ticker: Ticker) => void) | null = null;
+// The mount the shared application currently shows, and a counter that tells a
+// stale render's cleanup from the latest one's.
+let activeMount: MountedScene | null = null;
+let renderGeneration = 0;
 
 function initSharedApp(): Promise<Application> {
   const app = new Application();
@@ -37,10 +35,7 @@ function initSharedApp(): Promise<Application> {
       autoDensity:     true,
     })
     .then(
-      () => {
-        sharedApp = app;
-        return app;
-      },
+      () => app,
       (error: unknown) => {
         // Let the next render try again instead of failing forever.
         sharedAppReady = null;
@@ -83,132 +78,27 @@ export const pixiRendererAdapter: IRendererAdapter = {
       hostElement.appendChild(app.canvas);
     }
 
-    if (activeTickerCallback) {
-      app.ticker.remove(activeTickerCallback);
-      activeTickerCallback = null;
-    }
+    // The previous render's callback must stop before its stage is torn down.
+    activeMount?.cleanup();
+    activeMount = null;
 
     const oldChildren = app.stage.removeChildren();
     oldChildren.forEach(c => c.destroy({ children: true, texture: true, context: true }));
 
-    const sceneRoot = new Container();
-    app.stage.addChild(sceneRoot);
-
-    const bgRect = new Graphics()
-      .rect(0, 0, scene.width, scene.height)
-      .fill(scene.background);
-    sceneRoot.addChild(bgRect);
-
-    const boundsMask = new Graphics()
-      .rect(0, 0, scene.width, scene.height)
-      .fill(0xffffff);
-    sceneRoot.addChild(boundsMask);
-    sceneRoot.mask = boundsMask;
-
-    const objectsLayer = new Container();
-    sceneRoot.addChild(objectsLayer);
-
-    const logicalWidth  = scene.width;
-    const logicalHeight = scene.height;
-    const fit           = scene.fit;
-
-    function updateLayout(): void {
-      if (!sharedApp?.canvas) return;
-      const sw = hostElement.clientWidth;
-      const sh = hostElement.clientHeight;
-
-      if (fit === "contain") {
-        const s = Math.min(sw / logicalWidth, sh / logicalHeight);
-        sceneRoot.scale.set(s);
-        sceneRoot.position.set((sw - logicalWidth  * s) / 2, (sh - logicalHeight * s) / 2);
-      } else if (fit === "cover") {
-        const s = Math.max(sw / logicalWidth, sh / logicalHeight);
-        sceneRoot.scale.set(s);
-        sceneRoot.position.set((sw - logicalWidth  * s) / 2, (sh - logicalHeight * s) / 2);
-      } else if (fit === "fill") {
-        sceneRoot.scale.set(sw / logicalWidth, sh / logicalHeight);
-        sceneRoot.position.set(0, 0);
-      } else {
-        sceneRoot.scale.set(1);
-        sceneRoot.position.set(0, 0);
-      }
-    }
-
-    const resizeObserver = new ResizeObserver(() => {
-      sharedApp?.resize();
-      updateLayout();
-      // Resizing clears the canvas, and a paused or ended scene has no ticker
-      // running to draw it again.
-      sharedApp?.render();
-    });
-    resizeObserver.observe(hostElement);
-
-    if (sharedApp) {
-      sharedApp.resizeTo = hostElement;
-    }
-    updateLayout();
-
-    const host: PlaybackHost = {
-      build() {
-        const root = new Container();
-        for (const node of scene.children) root.addChild(buildNode(node));
-        const runtime = new SceneRuntime(createWorldForScene(scene), root);
-        return { root, runtime };
-      },
-      attach(root) {
-        for (const old of objectsLayer.removeChildren()) old.destroy({ children: true, context: true });
-        objectsLayer.addChild(root);
-      },
-      render() {
-        // While the ticker runs, the application's own render step draws every
-        // frame; drawing here as well would paint each playing frame twice.
-        if (sharedApp && !sharedApp.ticker.started) sharedApp.render();
-      },
-    };
-
-    const endTick = scene.duration === null ? null : secondsToTicks(scene.duration);
-    // A scene with nothing remembered plays from 0, as the preview always has.
-    const from = start ?? { tick: 0, playing: true };
-    const playback = new Playback(host, endTick, from);
-
-    // `ticker.deltaMS` still appears exactly once in the renderer: here.
-    const tickerCallback = (ticker: Ticker): void => {
-      playback.frame(ticker.deltaMS);
-      if (!playback.getState().playing && !playback.hasPendingSeek()) sharedApp?.ticker.stop();
-    };
-    activeTickerCallback = tickerCallback;
-    app.ticker.add(tickerCallback);
-    const wake = (): void => { sharedApp?.ticker.start(); };
-
-    const control: LivePlayback = {
-      inner: playback,
-      play: () => { playback.play(); wake(); },
-      pause: () => playback.pause(),
-      seek: (tick) => { playback.seek(tick); wake(); },
-      restart: () => { playback.restart(); wake(); },
-      subscribe: (l) => playback.subscribe(l),
-      getState: () => playback.getState(),
-    };
-
-    if (playback.getState().playing) wake();
+    const mounted = mountScene(app, scene, hostElement, start);
+    activeMount = mounted;
+    const generation = ++renderGeneration;
 
     const cleanup = (): void => {
-      resizeObserver.disconnect();
-      playback.destroy();
-      if (sharedApp) {
-        // Only this render's own tree: a newer render may already own the stage.
-        sceneRoot.destroy({ children: true, texture: true, context: true });
-
-        // Only this render's own callback: a stale render's cleanup must not
-        // remove a newer one's.
-        sharedApp.ticker.remove(tickerCallback);
-        if (activeTickerCallback === tickerCallback) {
-          activeTickerCallback = null;
-          sharedApp.ticker.stop();
-        }
+      mounted.cleanup();
+      // Only the latest render stops the ticker: a stale render's cleanup must
+      // not stop a newer one's.
+      if (generation === renderGeneration) {
+        activeMount = null;
+        app.ticker.stop();
       }
     };
 
-    return { cleanup, playback: control };
+    return { cleanup, playback: mounted.playback };
   },
 };

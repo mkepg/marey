@@ -5,7 +5,7 @@ import { createWorldForScene } from "./physicsWorld";
 import { SceneRuntime } from "./sceneRuntime";
 import { compileSource } from "../compileSource";
 
-const guardSources = import.meta.glob(["./adapter.ts", "../export/rasterExport.ts"], {
+const guardSources = import.meta.glob(["./mountScene.ts", "../export/rasterExport.ts"], {
   query: "?raw",
   import: "default",
   eager: true,
@@ -51,7 +51,7 @@ describe("world bounds", () => {
 });
 
 describe("one world factory", () => {
-  it("both the live adapter and the raster export build their world through createWorldForScene", () => {
+  it("both the live mount and the raster export build their world through createWorldForScene", () => {
     const entries = Object.entries(guardSources);
     expect(entries).toHaveLength(2);
     for (const [path, text] of entries) {
