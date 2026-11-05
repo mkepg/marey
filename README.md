@@ -274,7 +274,7 @@ npm run build:export-page && npm run build:cli
 node bin/marey.mjs check path/to/scene.marey
 ```
 
-The suite is over 1,300 tests; run `npm test` for the current figure.
+The suite is over 1,500 tests; run `npm test` for the current figure.
 [CI](.github/workflows/ci.yml) runs it on every push to `main` and every pull
 request, along with the build, `marey check` on every tracked `.marey` file, a
 pack-and-install of the package, and `marey export` of every canonical scene
@@ -306,8 +306,10 @@ language and the Scene IR, and work past the roadmap's finish line may. Breaking
 syntax changes are weighed on which language is better to live with.
 
 Development runs in numbered phases against a written roadmap with an explicit
-finish line; the project is complete when the language, the export pipeline
-and the packaging work are done.
+finish line: Marey is complete when Phases 3C through 8 are done. Phase 8
+merged on 2026-10-11, and with it the finish line was declared. Work since
+then, starting with Phase 9A's embeddable player, is past the finish line.
+Nothing in it was owed.
 
 ## License
 
