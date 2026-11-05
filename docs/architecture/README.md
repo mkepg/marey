@@ -171,15 +171,15 @@ for a **complete, provable engineering artifact with a declarable finish
 line**, and acquisition work moved past that line. Read its §1 before
 proposing anything the old roadmap justified by adoption.
 
-**9A — the embeddable player is done on `phase-9a-player`** (status 2026-10-30,
-merged when the branch merges). It adds `<marey-player>`, a custom element
+**9A — the embeddable player is merged into `main`** (fast-forward,
+2026-11-06). It adds `<marey-player>`, a custom element
 shipped as `marey-lang/player`: it plays a `.marey` scene from a `src` or an
 inline script, releases its WebGL context when out of view and restores the
 exact frame on return, and shows the frame `marey export` samples at the same
 tick (checked by hash in Chromium). It sits past the finish line; nothing in it
-was owed. Version 0.6.0 is bumped but not published: it awaits the owner's
-`npm publish --ignore-scripts` after `npm run build:package && npm run
-check:pack` (the tarball holds 127 files). Evidence is in
+was owed. It is published on npm as `marey-lang@0.6.0` (2026-11-06; the
+registry lists 127 files, and the jsDelivr URL in the README's embed snippet
+resolves). Evidence is in
 `eval/RESULTS-PHASE-9A.md`. Design:
 `docs/specs/2026-10-30-marey-phase-9a-embeddable-player-design.md`; plan:
 `docs/plans/2026-10-30-phase-9a-embeddable-player.md`.
