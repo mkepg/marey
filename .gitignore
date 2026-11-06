@@ -36,6 +36,9 @@ CLAUDE.md
 CLAUDE.local.md
 AGENTS.md
 
+# Local demo page for the embeddable player. Kept on disk, never committed.
+demo/
+
 # Output from the visual-check harness (PNGs and reports)
 .visual-check/
 
