@@ -344,6 +344,11 @@ explicitly rather than quietly deviating.
     `eval/RESULTS-PHASE-9A.md`. Design:
     `docs/specs/2026-10-30-marey-phase-9a-embeddable-player-design.md`.
     Plan: `docs/plans/2026-10-30-phase-9a-embeddable-player.md`.
+- **Proposed, not scheduled — Lottie keyframe recovery.** Export animated
+  tracks as a few keyframes with Bézier easing instead of one linear keyframe
+  per frame, so files shrink and timing is editable in Lottie editors.
+  Problem, baseline measurements, approach and open decisions:
+  `docs/specs/2026-11-06-marey-lottie-keyframe-recovery-design.md`.
 
 ## Reference docs
 
