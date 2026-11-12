@@ -1,6 +1,6 @@
-# Runs this repository's own checks. Deliberately *not* a published action for
-# other people's pipelines — roadmap §9.2 puts that past the finish line, and
-# nothing here is meant to be consumed from outside.
+# Runs this repository's own checks. The action that other repositories use is
+# `action.yml` at the repository root, and `.github/workflows/action.yml` tests
+# that action. This workflow is not meant to be consumed from outside.
 #
 # Five gates, in increasing order of what they prove:
 #

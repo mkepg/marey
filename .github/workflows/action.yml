@@ -1,0 +1,92 @@
+# Runs the action at the repository root against examples/starter/, the way a
+# new repository would use it, so Gate C (spec
+# docs/specs/2026-11-12-marey-phase-9b-github-action-design.md §4) is measured
+# on every pull request. Both jobs install the branch's own package from an
+# `npm pack` tarball through the action's `package` input, so the run tests
+# this commit's CLI by the same install path a user's run takes, short of the
+# registry fetch.
+name: Action
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: action-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  starter:
+    name: the starter checks and exports
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Pack this commit's package
+        id: pack
+        run: |
+          npm run build:package
+          file=$(npm pack --silent | tail -n 1)
+          echo "tarball=$GITHUB_WORKSPACE/$file" >> "$GITHUB_OUTPUT"
+      - id: marey
+        uses: ./
+        with:
+          files: examples/starter/*.marey
+          export: apng lottie
+          artifact-name: starter-export
+          package: ${{ steps.pack.outputs.tarball }}
+      - name: One scene checked, no errors, an APNG and a Lottie file
+        env:
+          CHECKED: ${{ steps.marey.outputs.checked }}
+          ERRORS: ${{ steps.marey.outputs.errors }}
+        run: |
+          test "$CHECKED" = 1
+          test "$ERRORS" = 0
+          node -e '
+            const fs = require("node:fs");
+            const png = fs.readFileSync("marey-export/examples/starter/hello.png");
+            if (!png.includes(Buffer.from("acTL"))) throw new Error("hello.png has no acTL chunk, so it is not an APNG");
+            const lottie = JSON.parse(fs.readFileSync("marey-export/examples/starter/hello.json", "utf8"));
+            if (!Array.isArray(lottie.layers)) throw new Error("hello.json has no layers array");
+          '
+
+  broken-scene:
+    name: a broken scene fails with an annotation and exports nothing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Pack this commit's package
+        id: pack
+        run: |
+          npm run build:package
+          file=$(npm pack --silent | tail -n 1)
+          echo "tarball=$GITHUB_WORKSPACE/$file" >> "$GITHUB_OUTPUT"
+      # The edit replaces the scene's `background:` line (line 6) with
+      # `  background: missing`, an undeclared name. The check reports it at
+      # line 6, column 15, so the annotation on examples/starter/hello.marey
+      # must carry line=6 and col=15.
+      - name: Edit the scene so it no longer compiles
+        run: sed -i 's/^  background: .*/  background: missing/' examples/starter/hello.marey
+      - id: marey
+        continue-on-error: true
+        uses: ./
+        with:
+          files: examples/starter/*.marey
+          export: apng
+          package: ${{ steps.pack.outputs.tarball }}
+      - name: The action failed and exported nothing
+        env:
+          OUTCOME: ${{ steps.marey.outcome }}
+        run: |
+          test "$OUTCOME" = failure
+          test ! -e marey-export

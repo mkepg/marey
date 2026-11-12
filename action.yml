@@ -1,0 +1,97 @@
+name: Marey
+description: Check Marey scenes, annotate each diagnostic on its line, and export the scenes as APNG, video, Lottie or PNG frames.
+branding:
+  icon: film
+  color: blue
+
+inputs:
+  files:
+    description: Git pathspecs of the scenes to check, separated by whitespace or newlines. Only tracked files are listed.
+    default: "*.marey"
+  export:
+    description: "Formats to export when every scene passes: png, apng, webm, mp4, lottie, separated by whitespace or commas. Empty means check only."
+    default: ""
+  export-dir:
+    description: Directory the exports go into, mirroring each scene's path.
+    default: marey-export
+  upload:
+    description: Upload the export directory as a workflow artifact after a fully successful export.
+    default: "true"
+  artifact-name:
+    description: Name of the uploaded artifact.
+    default: marey-export
+  package:
+    description: An npm install spec to use instead of marey-lang at this action's own version, such as a tarball path.
+    default: ""
+
+outputs:
+  checked:
+    description: How many files were checked.
+    value: ${{ steps.run.outputs.checked }}
+  errors:
+    description: Diagnostics reported by the check plus exports that failed.
+    value: ${{ steps.run.outputs.errors }}
+  export-dir:
+    description: The export directory, or empty when nothing was exported.
+    value: ${{ steps.run.outputs.export-dir }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate the inputs
+      shell: bash
+      env:
+        INPUT_EXPORT: ${{ inputs.export }}
+      run: node "$GITHUB_ACTION_PATH/action/run.mjs" validate
+
+    # marey-lang needs Node 22. setup-node changes PATH for the rest of the
+    # job, so it only runs when the runner's Node is older.
+    - name: Check the Node version
+      id: node
+      shell: bash
+      run: |
+        major=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
+        if [ "$major" -lt 22 ]; then echo "setup=true" >> "$GITHUB_OUTPUT"; else echo "setup=false" >> "$GITHUB_OUTPUT"; fi
+    - if: steps.node.outputs.setup == 'true'
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Install marey-lang
+      shell: bash
+      env:
+        INPUT_PACKAGE: ${{ inputs.package }}
+      run: |
+        spec="$INPUT_PACKAGE"
+        if [ -z "$spec" ]; then
+          version=$(node -p 'require(process.argv[1]).version' "$GITHUB_ACTION_PATH/package.json")
+          spec="marey-lang@$version"
+          if ! npm view "$spec" version >/dev/null 2>&1; then
+            echo "::error title=marey action::$spec is not published to npm yet. Pin this action to a commit whose version is published, or set the 'package' input."
+            exit 1
+          fi
+        fi
+        npm install --no-save --ignore-scripts --no-audit --no-fund --prefix "$RUNNER_TEMP/marey-cli" "$spec"
+
+    - name: Install the export browser
+      if: inputs.export != ''
+      shell: bash
+      run: node "$RUNNER_TEMP/marey-cli/node_modules/playwright-core/cli.js" install --with-deps chromium-headless-shell
+
+    - name: Check and export
+      id: run
+      shell: bash
+      env:
+        MAREY_CLI: ${{ runner.temp }}/marey-cli/node_modules/marey-lang/bin/marey.mjs
+        INPUT_FILES: ${{ inputs.files }}
+        INPUT_EXPORT: ${{ inputs.export }}
+        INPUT_EXPORT_DIR: ${{ inputs.export-dir }}
+      run: node "$GITHUB_ACTION_PATH/action/run.mjs"
+
+    - name: Upload the exports
+      if: inputs.upload == 'true' && inputs.export != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.export-dir }}
+        if-no-files-found: error
