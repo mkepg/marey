@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseArgs, formatDiagnostic, checkOne } from "./check";
+import { parseArgs, formatDiagnostic, checkOne, escapeData, escapeProperty, formatGithubAnnotation } from "./check";
 
 describe("parseArgs", () => {
   it("collects file arguments", () => {
@@ -130,5 +130,90 @@ describe("checkOne", () => {
     const withFps = checkOne("x.marey", longScene, at30);
     expect(withFps.ok).toBe(false);
     expect(withFps.lines.join("\n")).toContain("EXPORT_FRAME_BUDGET");
+  });
+});
+
+describe("--reporter", () => {
+  it("defaults to text", () => {
+    expect(parseArgs(["a.marey"]).reporter).toBe("text");
+  });
+
+  it("reads --reporter github", () => {
+    const a = parseArgs(["--reporter", "github", "a.marey"]);
+    expect(a.reporter).toBe("github");
+    expect(a.error).toBeNull();
+    expect(a.files).toEqual(["a.marey"]);
+  });
+
+  it("rejects an unknown reporter", () => {
+    expect(parseArgs(["--reporter", "xml", "a.marey"]).error).toBe(
+      "Unrecognized reporter 'xml'. Usage: marey check  [--export-ready] [--fps <n>] [--reporter <text|github>] <file...>"
+    );
+  });
+
+  it("rejects --reporter with no value", () => {
+    expect(parseArgs(["--reporter"]).error).toContain("Unrecognized reporter 'nothing'");
+  });
+});
+
+describe("workflow-command escaping", () => {
+  it("escapes %, CR and LF in data", () => {
+    expect(escapeData("100% a\r\nb")).toBe("100%25 a%0D%0Ab");
+  });
+
+  it("also escapes : and , in a property", () => {
+    expect(escapeProperty("a:b,c%")).toBe("a%3Ab%2Cc%25");
+  });
+});
+
+describe("formatGithubAnnotation", () => {
+  it("puts file, line and column on an error command", () => {
+    expect(formatGithubAnnotation("scenes/a.marey", { line: 4, col: 7, message: "[TYPE_X] bad" })).toBe(
+      "::error file=scenes/a.marey,line=4,col=7,title=marey check::[TYPE_X] bad"
+    );
+  });
+
+  it("leaves the position out when the diagnostic has none", () => {
+    expect(formatGithubAnnotation("a.marey", { message: "unbounded" })).toBe(
+      "::error file=a.marey,title=marey check::unbounded"
+    );
+  });
+
+  it("escapes the file as a property and the message as data", () => {
+    expect(formatGithubAnnotation("x,y.marey", { message: "50%\nmore" })).toBe(
+      "::error file=x%2Cy.marey,title=marey check::50%25%0Amore"
+    );
+  });
+
+  it("takes another title", () => {
+    expect(formatGithubAnnotation("a.marey", { message: "m" }, "marey export")).toBe(
+      "::error file=a.marey,title=marey export::m"
+    );
+  });
+});
+
+describe("checkOne with the github reporter", () => {
+  const broken = "scene {\n  size: (100, 100)\n  circle c { radius: oops }\n}\n";
+
+  it("reports a compile error as an annotation on its line and column", () => {
+    const r = checkOne("b.marey", broken, parseArgs(["--reporter", "github", "b.marey"]));
+    expect(r.ok).toBe(false);
+    expect(r.lines[0]).toMatch(/^::error file=b\.marey,line=3,col=22,title=marey check::In 'circle' object 'c': Undefined variable 'oops'\./);
+  });
+
+  it("keeps the text reporter's output unchanged", () => {
+    const r = checkOne("b.marey", broken, parseArgs(["b.marey"]));
+    expect(r.lines[0]).toMatch(/^b\.marey:3:22: In 'circle' object 'c'/);
+  });
+
+  it("reports an export-ready diagnostic as a file-level annotation", () => {
+    const r = checkOne(
+      "x.marey",
+      `scene { size: (8, 6) }`,
+      parseArgs(["--export-ready", "--reporter", "github", "x.marey"])
+    );
+    expect(r.ok).toBe(false);
+    expect(r.lines[0].startsWith("::error file=x.marey,title=marey check::")).toBe(true);
+    expect(r.lines[0]).not.toContain("line=");
   });
 });

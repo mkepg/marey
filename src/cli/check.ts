@@ -7,8 +7,12 @@ export interface CheckArgs {
   readonly files: readonly string[];
   readonly exportReady: boolean;
   readonly fps: number | null;
+  readonly reporter: Reporter;
   readonly error: string | null;
 }
+
+export type Reporter = "text" | "github";
+const REPORTERS: readonly Reporter[] = ["text", "github"];
 
 /**
  * The rate `--export-ready` probes with when the caller gave no `--fps`.
@@ -39,13 +43,41 @@ const RATE_DEPENDENT_CODES: ReadonlySet<ExportDiagnosticCode> = new Set([
  * `main.ts`'s combined listing supplies just one heading for every command
  * instead.
  */
-export const CHECK_USAGE = "marey check  [--export-ready] [--fps <n>] <file...>";
+export const CHECK_USAGE =
+  "marey check  [--export-ready] [--fps <n>] [--reporter <text|github>] <file...>";
+
+/** Workflow-command data escaping, as GitHub's runner decodes it. */
+export function escapeData(s: string): string {
+  return s.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+}
+
+/** A property value is data with `:` and `,` escaped as well. */
+export function escapeProperty(s: string): string {
+  return escapeData(s).replace(/:/g, "%3A").replace(/,/g, "%2C");
+}
+
+/**
+ * One `::error` workflow command. GitHub shows it as an annotation on the
+ * file, and on the line when the diagnostic has a position. Position-less
+ * diagnostics (every `--export-ready` one) get a file-level annotation.
+ */
+export function formatGithubAnnotation(
+  file: string,
+  e: { readonly line?: number; readonly col?: number; readonly message: string },
+  title = "marey check"
+): string {
+  const props = [`file=${escapeProperty(file)}`];
+  if (e.line !== undefined && e.col !== undefined) props.push(`line=${e.line}`, `col=${e.col}`);
+  props.push(`title=${escapeProperty(title)}`);
+  return `::error ${props.join(",")}::${escapeData(e.message)}`;
+}
 
 /** Pure. Never touches argv beyond what is passed in. */
 export function parseArgs(argv: readonly string[]): CheckArgs {
   const files: string[] = [];
   let exportReady = false;
   let fps: number | null = null;
+  let reporter: Reporter = "text";
   let error: string | null = null;
 
   for (let i = 0; i < argv.length; i++) {
@@ -64,6 +96,17 @@ export function parseArgs(argv: readonly string[]): CheckArgs {
         } else {
           fps = parsed;
         }
+      }
+      continue;
+    }
+    if (arg === "--reporter") {
+      const raw = argv[i + 1];
+      i++;
+      const known = REPORTERS.find((r) => r === raw);
+      if (known !== undefined) {
+        reporter = known;
+      } else if (error === null) {
+        error = `Unrecognized reporter '${raw ?? "nothing"}'. Usage: ${CHECK_USAGE}`;
       }
       continue;
     }
@@ -94,7 +137,7 @@ export function parseArgs(argv: readonly string[]): CheckArgs {
     error = `no files given. Usage: ${CHECK_USAGE}`;
   }
 
-  return { files, exportReady, fps, error };
+  return { files, exportReady, fps, reporter, error };
 }
 
 /**
@@ -115,10 +158,13 @@ export function checkOne(
   source: string,
   args: CheckArgs
 ): { readonly ok: boolean; readonly lines: readonly string[] } {
+  const render = (e: CompilerError): string =>
+    args.reporter === "github" ? formatGithubAnnotation(file, e) : formatDiagnostic(file, e);
+
   const outcome = compileSource(source);
 
   if (!outcome.ok) {
-    return { ok: false, lines: outcome.errors.map((e) => formatDiagnostic(file, e)) };
+    return { ok: false, lines: outcome.errors.map(render) };
   }
 
   if (!args.exportReady) {
@@ -148,7 +194,7 @@ export function checkOne(
 
   return {
     ok: false,
-    lines: diagnostics.map((d) => formatDiagnostic(file, { phase: "EXPORT", message: d.message })),
+    lines: diagnostics.map((d) => render({ phase: "EXPORT", message: d.message })),
   };
 }
 
@@ -171,7 +217,9 @@ export async function runCheck(rest: readonly string[]): Promise<number> {
     try {
       source = readFileSync(file, "utf8");
     } catch (err) {
-      console.error(`${file}: ${err instanceof Error ? err.message : String(err)}`);
+      const message = err instanceof Error ? err.message : String(err);
+      if (args.reporter === "github") console.log(formatGithubAnnotation(file, { message }));
+      else console.error(`${file}: ${message}`);
       allOk = false;
       continue;
     }
