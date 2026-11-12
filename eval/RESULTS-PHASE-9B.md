@@ -22,7 +22,8 @@ conclusion `success`.
 | a broken scene fails with an annotation and exports nothing | 131272460386 | success | 46 s |
 
 The second job succeeds because its asserted failure happened: its action step
-failed (`continue-on-error`) and no export directory existed afterwards.
+failed (`continue-on-error`), and the job's final step asserted that no export
+directory existed afterwards.
 
 Workflow "CI" on the same PR head: run 43244229571, `success`.
 
@@ -104,7 +105,7 @@ script on the page.
 |---|---|
 | 1. Reporter unit tests, text output unchanged | Passed at `801b111` |
 | 2. `action/run.test.ts` | Passed, 14 tests |
-| 3. Four repository checks, `check:pack` 127 files | Passed at the commit that bumped the version; rerun for the commit carrying this file |
+| 3. Four repository checks, `check:pack` 127 files | At `3f528ab`, CI run 43244229571 (`success`) passed the main suite, the build, every first-party scene's check, and `check:pack` (version 0.7.0, 127 files). CI does not run the eval suite. |
 | 4. Both jobs `success` | Section 1: runs 43244229157 (both jobs success) |
 | 5. Annotation at the injected line and column | Section 2: `examples/starter/hello.marey`, line 6, column 15 |
 | 6. `frames` hash match and frame count | Section 3: `4f102241` on both OSes; `num_frames` 60 = 2 s x 30 fps; bytes also equal |

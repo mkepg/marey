@@ -576,7 +576,7 @@ Replace the two `<…>` placeholders with the comment and `sed -i` command that 
     2. `npm install --no-save --ignore-scripts --prefix <tmp>/marey-cli <tarball>`;
     3. `MAREY_CLI=<tmp>/marey-cli/node_modules/marey-lang/bin/marey.mjs INPUT_FILES='examples/starter/*.marey' INPUT_EXPORT='apng lottie' INPUT_EXPORT_DIR=<tmp>/out node action/run.mjs` from the repository root.
 
-  Record in the report:
+  The run must show:
   - the `wrote` lines;
   - that `<tmp>/out/examples/starter/hello.png` and `hello.json` exist;
   - the exit code.
@@ -618,12 +618,12 @@ Replace the two `<…>` placeholders with the comment and `sed -i` command that 
 ### Task 5: Gate C evidence
 
 Run after the branch's pull-request run has finished. The data comes from the
-GitHub API and the downloaded artifact. The dispatch brief carries it as a
-file, and this task writes it up.
+GitHub API and the downloaded artifact, and this task writes it up from those
+two sources.
 
 **Files:**
 - Create: `eval/RESULTS-PHASE-9B.md`
 - Modify: the 9B status lines from Task 4, to say the evidence is recorded
 
-- [ ] **Step 1: Write `eval/RESULTS-PHASE-9B.md`.** It has one section per spec §4.3 item, plus a table mapping each spec §6 exit criterion to its evidence. Every number in it comes from the data file. It states which of the bytes and the `frames` hash matched across operating systems, as measured.
+- [ ] **Step 1: Write `eval/RESULTS-PHASE-9B.md`.** It has one section per spec §4.3 item, plus a table mapping each spec §6 exit criterion to its evidence. Every number in it comes from the PR run's API data and the downloaded artifact. It states which of the bytes and the `frames` hash matched across operating systems, as measured.
 - [ ] **Step 2: Run the four checks and commit** as `docs(9b): record the Gate C evidence from the pull-request run`.

@@ -158,16 +158,28 @@ jobs:
   scenes:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: mkepg/marey@<commit-sha>
         with:
           export: apng lottie
 ```
 
 Every tracked file that matches `files` is checked, not only the files a push
-changed. A pattern that matches no file fails the run. Each diagnostic becomes
-an error annotation on its file and line, in the run and in the pull request's
-diff. When every file passes, each one is exported in each format. If any file
+changed. A pattern that matches no file fails the run. Give file globs such as
+`scenes/*.marey` rather than a directory: `scenes` alone lists every tracked
+file under it, images included, and the check tries to compile each. A pattern
+cannot contain a space, because `files` is split on whitespace; match one with
+`?`. Run the action from a checkout at the repository root: it lists files with
+`git ls-files` in the workspace, so a checkout into a subdirectory (`path:` on
+`actions/checkout`) is not found.
+
+Each diagnostic becomes an error annotation on its file and line, in the run
+and in the pull request's diff. GitHub shows only a limited number of
+annotations per step (10 errors per step and 50 annotations per job, by the
+figures in the actions/toolkit problem-matcher documentation); every
+diagnostic is always in the run's log. A check that fails without a diagnostic
+of its own, such as a CLI that cannot start, still leaves one annotation saying
+why. When every file passes, each one is exported in each format. If any file
 fails, nothing is exported.
 
 | Input | Default | Meaning |
@@ -195,11 +207,16 @@ ref you use. Pin the action to a full commit SHA. The repository's old `v0.x`
 tags date from before the npm versions and do not match them, so there is no
 release tag to pin. Until `marey-lang@0.7.0` is published, a ref whose version
 is not on npm fails at the install step with a message saying so. Pin a commit
-from after the publish, or set `package`.
+from after the publish, or set `package`. The starter workflow uses `@main`,
+and `examples/starter/README.md` says the same about it.
+
+`marey-lang` needs Node 22. When the runner's Node is older, the action sets
+up Node 22 with `actions/setup-node`, and that Node stays on `PATH` for the
+rest of the job.
 
 The action is tested on `ubuntu-latest` only. `examples/starter/` is a
-complete repository root with a scene, a workflow and a README that embeds the
-exported APNG. [`.github/workflows/action.yml`](.github/workflows/action.yml)
+complete repository root with a scene, a workflow, and a README that shows how
+to embed the exported APNG. [`.github/workflows/action.yml`](.github/workflows/action.yml)
 runs the action against it on every pull request.
 
 ## Embed a scene

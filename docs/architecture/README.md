@@ -199,7 +199,8 @@ resolves). Evidence is in
 `roadmap-and-process.md`'s Phase 9A bullet carries the same status.
 
 **9B (GitHub Action and Gate C) implemented on a branch (not yet merged); Gate C measured on the PR #2 run; evidence in `eval/RESULTS-PHASE-9B.md`.** Design:
-`docs/specs/2026-11-12-marey-phase-9b-github-action-design.md`. It adds
+`docs/specs/2026-11-12-marey-phase-9b-github-action-design.md`; plan:
+`docs/plans/2026-11-12-phase-9b-github-action.md`. It adds
 `action.yml` and `action/` at the repository root, `marey check --reporter
 github`, `examples/starter/` and `.github/workflows/action.yml`. It ships as
 `marey-lang@0.7.0`, once that version is published.

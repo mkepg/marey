@@ -44,7 +44,7 @@ jobs:
   scenes:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: mkepg/marey@<commit-sha>
         with:
           export: apng lottie
@@ -117,7 +117,7 @@ message lists the five valid formats.
    passed as environment variables and the CLI's entry file
    (`<prefix>/node_modules/marey-lang/bin/marey.mjs`) as `MAREY_CLI`.
 5. **Upload**, when `upload` is `true`, `export` is set and step 4 succeeded,
-   with `actions/upload-artifact@v4` (B7).
+   with `actions/upload-artifact@v7` (B7).
 
 ### 3.3 `action/run.mjs`
 
@@ -130,11 +130,14 @@ executed directly.
 2. List the files with `git ls-files -z -- <pathspecs>`. Fail with
    `::error title=marey check::No tracked file matches <patterns>` when the
    list is empty (B3).
-3. Run `node $MAREY_CLI check --reporter github [--export-ready] <files…>`,
+3. Run `node $MAREY_CLI check --reporter github [--export-ready --fps 30] <files…>`,
    streaming its stdout into the log. Count the lines that start with
-   `::error`.
+   `::error`. 30 is `marey export`'s default rate, so the frame budget is
+   judged at the rate the export uses.
 4. When the check failed, write the outputs and exit 1. Nothing is exported
-   (B6).
+   (B6). A failed check that printed no `::error` line of its own (a crash, a
+   usage error) gets one `::error title=marey check::` annotation with what it
+   printed. With no formats, write the outputs and stop here.
 5. For each file and each format, run `node $MAREY_CLI export <absolute file>
    --format <f>`, with the working directory set to `<export-dir>/<the file's
    directory>`, created first (B5). On a non-zero exit, print

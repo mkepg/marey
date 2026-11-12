@@ -349,6 +349,7 @@ explicitly rather than quietly deviating.
     root, `marey check --reporter github`, `examples/starter/` and
     `.github/workflows/action.yml`. Design:
     `docs/specs/2026-11-12-marey-phase-9b-github-action-design.md`.
+    Plan: `docs/plans/2026-11-12-phase-9b-github-action.md`.
 - **Proposed, not scheduled — Lottie keyframe recovery.** Export animated
   tracks as a few keyframes with Bézier easing instead of one linear keyframe
   per frame, so files shrink and timing is editable in Lottie editors.
