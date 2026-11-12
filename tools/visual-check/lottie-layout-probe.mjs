@@ -16,6 +16,15 @@
  * `dotlottie-web`, at frames 0, 7, 15, 15.5, 30, 44 and 59, and compared pixel
  * by pixel. A row passes when the maximum channel delta is 2 or less.
  *
+ * Two verdicts are printed. The primary one compares against the per-frame
+ * reference, which draws a straight chord between samples and so is wrong at
+ * the fractional frame 15.5. The deciding one compares against a reference
+ * keyed every half frame, which is what separates a layout error from chord
+ * error. The exit code follows the deciding verdict: 0 when every
+ * non-diagnostic row passes against the half-frame reference, 1 when any
+ * fails or errors. A player that really misreads a layout (dotlottie-web on
+ * per-component easing) therefore makes the exit code 1.
+ *
  * Questions:
  *   split-position      p: {s: true, x: {...}, y: {...}}, x and y keyframed at
  *                       different times.
@@ -296,7 +305,9 @@ function questions() {
   const qShared2 = sharedQuestion("shared-ease/one-element-arrays", "array1");
   const qShared3 = sharedQuestion("shared-ease/per-component-arrays", "per-component");
 
-  // 3. Overshoot handles: o.y = 1.4, i.y = 1.2.
+  // 3. Overshoot handles: o.y = 1.4, i.y = 1.2. The handles are per-component
+  // on a position whose y and z do not move, so this tests overshoot, not
+  // per-component easing (question 2 does that).
   const OVERSHOOT = { ox: 1 / 3, oy: 1.4, ix: 2 / 3, iy: 1.2 };
   const overKeys = [
     { t: 0, s: [30, 100, 0], seg: [OVERSHOOT, LINEAR, LINEAR] },
@@ -487,4 +498,4 @@ for (const r of rows) {
     `${pad(r.question, 38)}${pad(r.renderer, 15)}${pad(r.maxDelta ?? "-", 11)}${pad(r.maxDeltaWholeFrames ?? "-", 14)}${pad(r.maxDeltaDenseReference ?? "-", 11)}${r.verdict} (${r.verdictDenseReference ?? "-"})${r.error ? `  ${r.error}` : ""}`,
   );
 }
-process.exit(rows.filter((r) => !r.diagnostic).every((r) => r.verdict === "pass") ? 0 : 1);
+process.exit(rows.filter((r) => !r.diagnostic).every((r) => r.verdictDenseReference === "pass") ? 0 : 1);

@@ -27,6 +27,13 @@ identical and the half-frame reference is identical at 15.5 too, so the delta
 is chord error. dotlottie-web draws 15.5 as a whole frame (its delta there is
 0 in every row).
 
+The half-frame reference decides the layout, not the plan's per-frame one: the
+per-frame reference draws a straight chord between samples, which is wrong at
+fractional frames, so a delta at 15.5 against it is not evidence about the
+layout. The probe's exit code follows the half-frame verdict, so it is 1 today: the only failing non-diagnostic row is dotlottie-web per-component easing. dotlottie-web
+cannot render fractional frames (it draws 15.5 as a whole frame), so
+fractional-frame behaviour is established for lottie-web only.
+
 The four rows the plan asks for, plus diagnostics for the one real failure:
 
 | Question | Renderer | Max delta (per-frame reference) | Max delta, whole frames only | Max delta (half-frame reference) | Verdict | Verdict (half-frame reference) |
@@ -88,7 +95,9 @@ fraction of pixels that differ at all. The six fixtures use the plan's frames;
 the examples use frames spread over each scene's own duration (12 s, 9 s, 5 s,
 5 s and 7 s). Every run exited 0 with no page, console or lottie errors. On the
 examples these deltas are mostly antialiasing and text differences between the
-two rasterizers, not motion error.
+two rasterizers, not motion error. The example-scene maximum channel delta
+(77 to 140) saturates on rasterizer and text antialiasing, so the share of
+differing pixels is the usable baseline signal for Task 4.
 
 | Scene | Frames | Renderer | Max channel delta | Share of differing pixels (worst frame) |
 |---|---|---|---|---|

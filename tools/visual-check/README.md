@@ -346,7 +346,9 @@ node tools/visual-check/lottie-layout-probe.mjs --out .visual-check/lottie-probe
 
 A row passes at a maximum channel delta of 2 or less. The report also gives
 the delta against a reference keyed every half frame, which separates a layout
-error at frame 15.5 from the chord of the per-frame line. The
+error at frame 15.5 from the chord of the per-frame line. The half-frame
+verdict decides, and the exit code follows it: 0 when every non-diagnostic row
+passes against that reference, 1 otherwise. The
 `scenes/lottie-ease-*.marey` files are the six easing fixtures the per-frame
 baseline in `eval/RESULTS-LOTTIE-FITTED.md` was measured on.
 
