@@ -185,6 +185,57 @@ Every Marey easing is an exact cubic, so `animate` tracks still fit to within
 float noise and are unaffected. Physics, composed opacity and colour fit
 shorter runs. The new keyframe counts are recorded beside the old ones.
 
+### Correction, 2026-11-13: dotlottie-web's easing cache, and a pixel bound the rasterizers cannot resolve
+
+Tighter tolerances still left four rows over §6.2's bound. A diagnosis
+evaluated every layer in Node and read lottie-web's live `finalTransform`
+matrices. It found that every property at every failing frame is within
+tolerance, so the fitter's arithmetic is not the cause. There were two
+separate causes.
+
+- **dotlottie-web (ThorVG) caches easing curves under a rounded key.** When
+  a keyframe has no `n` name, ThorVG's parser keys the interpolator it builds
+  by `"%.2f_%.2f_%.2f_%.2f"` of the handles. The format string ships in
+  `dotlottie-player.wasm`. Every later keyframe whose handles agree to two
+  decimals reuses the first curve. Fitted handles are full-precision, so
+  distinct curves collided. Objects were drawn up to 0.96 px off, and the
+  physics-pile 206 and logo-reveal 81 misses came from this. That is a real
+  defect in the file as ThorVG reads it. **Fix: a keyframe whose ThorVG key
+  collides with a different handle tuple in the same document carries an `n`
+  name. The name is derived from the handle values, not from a counter.** It
+  is spelled the way lottie-web builds its own default cache key
+  (`'bez_' + o.x + '_' + o.y + '_' + i.x + '_' + i.y`, with `.` replaced by
+  `p`). lottie-web also uses `n` as a cache key (`BezierFactory.getBezierEasing`),
+  and that cache is shared by every animation on a page. A counter such as
+  `m1` would make two Marey files on one page reuse each other's curves. A
+  name derived from the values keeps lottie-web's behaviour identical to
+  having no name, and gives ThorVG a unique key. Keyframes with no collision
+  get no name.
+- **lottie-web's two misses are measurement artifacts.** Chromium's canvas
+  and ThorVG both turn sub-pixel position into a step function. As a control,
+  shifting the *per-frame* file's positions by 0.001 px, a quarter of the
+  position tolerance, moves single edge pixels by up to 46 levels in
+  lottie-web and 63 in dotlottie-web. Shifting one object of the per-frame
+  file by +0.0015 px reproduces the fitted render of physics-pile frame 70
+  exactly. No encoding that is not byte-identical can reliably meet "max ≤
+  per-frame max + 2".
+
+**§6.2's acceptance is restated, not loosened.** A pixel maximum on edges
+cannot tell a correct encoding from a wrong one at this scale, so it is
+replaced by measurements that can:
+
+1. **Geometry in the player.** In lottie-web, every layer's `finalTransform`
+   at every compared frame of the fitted file is within F3's tolerances of
+   the per-frame file's, translated to pixels the way the tolerance table
+   states.
+2. **Pixels with a calibrated bound.** In both players, the fitted file's
+   maximum delta does not exceed the worst maximum over the per-frame file
+   and its copies with positions shifted by ±0.001 px, plus 2. The share of
+   differing pixels stays within the same calibrated range.
+
+The original bound and its misses stay recorded in
+`eval/RESULTS-LOTTIE-FITTED.md`, beside the restated measurements.
+
 ## 5. Tests
 
 - **Unit tests on the fitter** (pure functions, no IR):
