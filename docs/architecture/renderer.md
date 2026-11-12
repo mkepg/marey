@@ -1,13 +1,14 @@
 # Renderer
 
-`renderer/adapter.ts` owns the PixiJS app, the canvas, `fit` layout and
-the ticker — and nothing else. `renderer/sceneRuntime.ts` owns the runner
+`renderer/adapter.ts` owns the playground's shared PixiJS app and its canvas;
+`renderer/mountScene.ts` mounts a scene on an app it is given, with the `fit`
+layout and the ticker callback — and nothing else. `renderer/sceneRuntime.ts` owns the runner
 lifecycle: the tick phase, the paint phase and the idle test. Lifting it out of
 `render()`'s closure in Phase 2 is what gives Phase 5's export driver something
 to call, since `advanceOneTick()` takes no time argument and now nothing but a
 caller stands between it and a bare loop.
 
-Six pure modules sit under `adapter.ts` and **must not import `pixi.js`** at
+Six pure modules sit under `mountScene.ts` and **must not import `pixi.js`** at
 runtime, so they stay testable headlessly in Node: `sceneRuntime.ts`,
 `physicsSync.ts`, `transform.ts`, `clock.ts`, (Phase 4) `frameSampler.ts`
 and (Phase 7) `playback.ts`.
@@ -99,7 +100,7 @@ only thing enforcing it; check it by grepping the six files above for
   before and after the move, and holds awake the bodies resting on it for as
   long as it moves (`movePinned`); one that holds still wakes nothing. Walls
   come from `world { bounds }` through `createWorldForScene`, the only
-  production constructor of `MatterWorld`; `adapter.ts` and `rasterExport.ts`
+  production constructor of `MatterWorld`; `mountScene.ts` and `rasterExport.ts`
   both use it.
 
 `renderer/physicsSync.ts` is the only place containers and bodies meet. It
@@ -181,7 +182,7 @@ Three invariants that are easy to break, each of which has caused a real bug:
    a bare loop with no wall clock. A frame's wall-clock delta reaches the
    renderer at one entry point per loop, and that entry point hands it to
    `driver.pump()` and nothing else; scene state then changes only through
-   the `advanceOneTick()` calls `pump` counts out. In `adapter.ts`'s loop that
+   the `advanceOneTick()` calls `pump` counts out. In `mountScene.ts`'s ticker callback that
    is `ticker.deltaMS`, which appears exactly once in the whole renderer.
    In `playback.ts` it is `Playback.frame(deltaMS)`: the one method that
    takes a time argument and mutates scene state, and the argument goes to
@@ -644,8 +645,8 @@ them, are collected in `docs/determinism.md`.
 seek, restart and the end of a scene. It is headless. It owns no ticker,
 imports `pixi.js` for types only, and reaches the stage through a
 `PlaybackHost` (`build`, `attach`, `render`), so its tests drive it in Node
-with real compiled scenes. The ticker stays in `adapter.ts`; its owner calls
-`frame(deltaMS)` once per animation frame.
+with real compiled scenes. The ticker callback lives in `mountScene.ts`, on the caller's application; it
+calls `frame(deltaMS)` once per animation frame.
 
 - **Seek is replay.** Every jump in time runs the frame sampler's own loop,
   `advanceOneTick(); paintExactTick();` per tick, from tick 0 on a fresh tree
@@ -662,7 +663,7 @@ with real compiled scenes. The ticker stays in `adapter.ts`; its owner calls
   followed by `play()` would be undone by the seek's pause on the next
   frame.
 - **A paused frame is an exact frame.** Playing paints at the driver's
-  sub-tick `alpha`, as `adapter.ts`'s loop does. `pause()` and reaching the
+  sub-tick `alpha`, as `mountScene.ts`'s ticker callback does. `pause()` and reaching the
   end both repaint with `paintExactTick()`, so what stays on screen is the
   exported frame at that tick (§3.1).
 - **A declared `duration` bounds playback** (§3.3). `endTick` is
@@ -671,7 +672,7 @@ with real compiled scenes. The ticker stays in `adapter.ts`; its owner calls
 - **An indefinite scene's bar is how far it has got.** With no `duration`,
   `endTick` is null and seeks clamp to `reachedTick`, the furthest tick
   played or sought. Playback pauses on the first frame `isIdle()` holds,
-  the moment `adapter.ts`'s loop stops its ticker. That test runs *after*
+  the moment `mountScene.ts`'s ticker callback stops the ticker. That test runs *after*
   the frame's paint, because a completed runner is spliced in the paint
   phase; asked before it, the pause would come a frame late. `play()` from
   there continues forward rather than restarting.
@@ -695,7 +696,7 @@ with real compiled scenes. The ticker stays in `adapter.ts`; its owner calls
   scenes too, so this is recorded rather than bounded.
 
 `renderer/mountScene.ts` is the single path from an IR to a stage:
-`mountScene(app, scene, host, start?)` builds the scene root with its
+`mountScene(app, scene, host, start?, options?)` builds the scene root with its
 background and bounds mask, the `fit` layout that follows `host`'s size
 (through a `ResizeObserver`), the `Playback` and the ticker callback that
 drives it and stops the ticker once the scene is paused with no seek pending.
@@ -707,6 +708,12 @@ clearing the previous render's stage children, and a render counter so that a
 stale render's cleanup does not stop a newer render's ticker. Any other host of
 a scene, such as an embedded player with one application per element, mounts
 through the same function rather than copying the layout and ticker code.
+An optional fifth argument, `{ fontFamily }`, names the family `text` asks
+for (`builder.ts`'s `TEXT_FONT_FAMILY`, "JetBrains Mono", by default). The
+embeddable player registers the same font file under a family of its own and
+passes it here, so it never shares a family with the page it is embedded in;
+the widths, and so the frame hash, are unchanged
+(`tools/visual-check/player/font-host.html`).
 `LivePlayback` is defined there and re-exported from `adapter.ts`. `Playback`
 also exposes `snapshot()`, the on-screen tree's `ObjectSnapshot[]`, which
 `snapshotHash()` hashes.

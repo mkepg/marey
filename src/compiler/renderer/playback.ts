@@ -156,8 +156,8 @@ export class Playback implements PlaybackController {
       this.runtime.paint(this.driver.alpha);
       // After the paint, not before it: a completed runner is spliced in the
       // paint phase, so `isIdle()` only turns true once a paint has run. Asked
-      // before, it would pause a frame late. This is the moment the adapter's
-      // loop stops its ticker (§3.3), and an indefinite scene pauses there.
+      // before, it would pause a frame late. This is the moment mountScene.ts's
+      // ticker callback stops the ticker (§3.3), and an indefinite scene pauses there.
       if (this.endTick === null && this.runtime.isIdle()) {
         this.playing = false;
         this.runtime.paintExactTick();

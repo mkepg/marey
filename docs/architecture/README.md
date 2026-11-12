@@ -103,6 +103,19 @@ backwards into `renderer/clock.ts`, which now just re-exports both.
 - **`src/compiler/languageContract.ts` and its compiler/editor consumers** —
   read `language-contract.md`.
 - **`src/lib/share.ts`** — read `share-links.md`.
+- **`src/player/`** (`<marey-player>`, shipped as `marey-lang/player`) —
+  read `docs/specs/2026-10-30-marey-phase-9a-embeddable-player-design.md`
+  and `renderer.md`'s `mountScene.ts` paragraph. The controller's rules (the
+  generation guards, the pending seek, `resumeAt`, and reconciling input made
+  while a mount is pending) are documented where they live, in
+  `controller.ts`. `boundary.test.ts` keeps PixiJS out of everything but the
+  lazily loaded `render.ts`; `tools/visual-check/player-check.mjs` is the
+  browser check.
+- **`action.yml`, `action/`, `examples/starter/` and
+  `.github/workflows/action.yml`** (the GitHub Action) — read
+  `docs/specs/2026-11-12-marey-phase-9b-github-action-design.md`.
+  `action/run.mjs` is plain ESM on Node built-ins with no build step, and the
+  workflow runs the action against `examples/starter/` on every pull request.
 - **`docs/` and `docs/LANGUAGE.md`** — read
   `roadmap-and-process.md`.
 

@@ -167,9 +167,12 @@ poster frame and reduced-motion behaviour, the events and the five error
 codes, the 16-context note, the Chromium scope of agreement with export, and
 one sentence on frameworks. It makes no claim about a framework that this phase
 did not run. The HTML snippet uses a `text` fence because
-`languageDocs.test.ts` accepts only `marey` and `text`. Version `0.6.0` is not
-on npm until the owner runs `npm publish --ignore-scripts`; the CDN snippet
-resolves only after that.
+`languageDocs.test.ts` accepts only `marey` and `text`. When this phase
+merged, version `0.6.0` was not yet on npm, so the CDN snippet did not resolve.
+
+2026-11-06: `marey-lang@0.6.0` is published (registry time 2026-11-05 18:33
+UTC). The registry lists 127 files, the count `check:pack` pins, and the
+jsDelivr URL in the README's snippet resolves.
 
 ## What review found
 
@@ -190,3 +193,32 @@ resolves only after that.
 - The harness's first agreement checks still passed with the change
   they guard reverted, so they could not fail; stronger ones were added (the
   shifted-ticks control column above) and those did fail under the revert.
+
+## Fixed after the publish (ships in 0.7.0)
+
+A whole-phase review after 0.6.0 found two defects a reader could hit; both
+are fixed in `c73ed75`.
+
+- Input made while a mount was pending was lost. On the first near view the
+  renderer chunk, the font and `app.init` take a while, and the controls bar
+  is live the whole time: a play pressed then left the button saying "Pause"
+  over a paused scene, a pause on an `autoplay` embed was ignored, and a
+  `currentTime` set read back but was never shown. The controller now
+  reconciles the stored intent with the mount once it resolves. Controller
+  tests with a deferred mount cover play, pause, restart and `currentTime`
+  in that window; 7 of them fail with the reconciliation removed.
+- On a page that declares its own `JetBrains Mono` `@font-face` and has not
+  used it yet, a text scene was refused with `PLAYER_FONT_UNAVAILABLE`, and
+  the player's face took over the page's own text in that family. Both
+  reproduced on `tools/visual-check/player/font-host.html` (the page's text
+  measured 480.00 px, the width of the player's file, against 412.31 px for
+  its own). The player now registers the same file under a family of its own
+  and judges the face by its own status. On the same page the scene mounts,
+  its `liveFramesHash` equals the export's `frames` hash (`af368f92`), and the
+  page's text measures 412.31 px.
+
+`player-check.mjs` gained the font-host requirement. Of three full runs on
+the code committed as `c73ed75`, two passed 44 of 44 and one passed 43 of 44:
+one released canvas of 45 (serial 22) never fired `webglcontextlost`. Three runs of
+`--only many` afterwards each counted 42 events for 42 releases, so this is
+recorded as an intermittent harness observation, not reproduced.

@@ -1,7 +1,5 @@
 # Phase 9A — Embeddable Player Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Ship `<marey-player>`, a custom element that compiles and plays Marey source in any page, as the `marey-lang/player` entry of the package.
 
 **Architecture:**
@@ -321,7 +319,7 @@ export class PlayerController {
 - [ ] **Step 3: Implement `controller.ts` and `format.ts`** to the interface and rules above.
 - [ ] **Step 4: Run the tests and confirm they pass.**
   - Run: `npx vitest run src/player`
-  - Expected: PASS. Also revert the generation guard temporarily and confirm that Review Focus tests 1 and 2 fail (lesson §2). Record that in the report.
+  - Expected: PASS. Also revert the generation guard temporarily and confirm that Review Focus tests 1 and 2 fail (lesson §2), then restore it.
 - [ ] **Step 5: Run the four checks and commit.** Commit with `feat(9a): headless player controller with poster frames, generation guards and video-like currentTime`.
 
 ---
@@ -469,7 +467,7 @@ No unit test. This module needs WebGL and is proven by Task 7's criteria 2, 3 an
   - Close the browser and the server in `finally`.
 - `tarball file count`:
   - `EXPECTED_FILE_COUNT` is a constant, with a comment saying it must change whenever `files` or a build's outputs change.
-  - Set it to the count measured on this task's own run, and record that count in the report. The tarball's own file list is the reference, and the number is not decided in advance.
+  - Set it to the count measured on this task's own run. The tarball's own file list is the reference, and the number is not decided in advance. `eval/RESULTS-PHASE-9A.md` records it.
 
 - [ ] **Step 1: Implement the configs, scripts and `package.json`.**
 - [ ] **Step 2: Build.**
@@ -499,7 +497,7 @@ No unit test. This module needs WebGL and is proven by Task 7's criteria 2, 3 an
 
 **What the script does:**
 - It builds the player.
-- It serves the repository root through a `node:http` static server on an ephemeral port that the script starts and closes itself. No Vite server is involved, and the report prints the port it used and freed.
+- It serves the repository root through a `node:http` static server on an ephemeral port that the script starts and closes itself. No Vite server is involved, and the script prints the port it used and checks that the port is free again before it exits.
 - It launches Playwright Chromium with `--use-angle=swiftshader --enable-unsafe-swiftshader --use-gl=angle`.
 - It writes `report.json` to `--out`, default `.visual-check/phase9a/player`.
 - It exits 1 on any failed requirement or page error.
@@ -528,8 +526,8 @@ No unit test. This module needs WebGL and is proven by Task 7's criteria 2, 3 an
 - [ ] **Step 2: Run the harness.**
   - Run: `node tools/visual-check/player-check.mjs`
   - Expected: exit 0, every requirement `pass: true`.
-  - If a requirement fails, debug it with superpowers:systematic-debugging. Do not weaken the requirement.
-  - Look at the screenshots the script saves: one of the agreement page and one of the bottom of the many-player page. Describe what they show in the report.
+  - If a requirement fails, find the root cause; do not weaken the requirement.
+  - Look at the screenshots the script saves: one of the agreement page and one of the bottom of the many-player page. `agreement.png` should show each scene on its last sampled frame, and `many-bottom.png` the last two players drawing over the magenta page.
 - [ ] **Step 3: Revert-check one requirement.** Temporarily make `render.ts`'s `destroy()` skip `loseContext()` and the app destroy. Re-run requirement 2 and confirm it fails, or record exactly why it does not. Then restore the code (lesson §2).
 - [ ] **Step 4: Run the four checks and commit.** Commit with `test(9a): browser harness for the player's agreement with export, context budget, reduced motion and errors`.
 
@@ -654,38 +652,43 @@ Measured on `phase-9a-player`; numbers are in `eval/RESULTS-PHASE-9A.md`.
 
 ### Deferred minor findings still open
 
-- `renderer.md` (lines 3, 102, 184-185, 647, 665, 674) and `plateGeometry.ts:3`
-  point at `adapter.ts` for code that now lives in `mountScene.ts`;
-  `exportApp.ts:7` names the removed `sharedApp`. The `plateGeometry.ts`
-  pointer should be fixed before the merge.
-- `mountScene.ts:57` keeps a vestigial `!app.canvas` guard. The playground no
-  longer repaints a failed scene's background.
+Updated for 0.7.0. Its fix wave closed these: the stale `adapter.ts` pointers
+(`renderer.md`, `plateGeometry.ts`, `exportApp.ts`, `playback.ts`); input made
+while a mount is pending, which was lost; a text scene refused on a page that
+declares its own JetBrains Mono, with the player's face taking over the page's
+(`tools/visual-check/player/font-host.html`); the untested stale loader
+rejection, paused `currentTime` set and 8db3201 branches, and the
+indefinite-ended test that could not fail; the hook leaving `resumeAt` armed;
+the stale controls and share link after a failed load; the diagnostic box
+outliving a successful remount; the seek range's missing `aria-label`; the box
+filled while hidden; check:pack's uncleared race timer, its overstated
+font-path comment (its page now has a `text` scene) and its "entry chunk"
+label; and the init-failure path's double `loseContext`. The `mountGen`
+comment and the `mountScene` failure path were already right (`966d160`,
+`mountScene.ts`'s `catch`).
+
+Still open:
+
+- `mountScene.ts`'s vestigial `!app.canvas` guard. The playground no longer
+  repaints a failed scene's background.
 - Controller: a re-entrant `load()` from `onReady` sends a stale `onState`; a
-  stale loader rejection is untested; a detach with a pending mount sends no
-  `onState`; the `mountGen` comment is inaccurate; several tests cannot fail
-  (indefinite-ended with a fake `endTick` of null, the restart test checks the
-  fake). Branches without a test: play with a pending seek to `endTick`,
-  detach storing `playing` from `resumeAt`, indefinite detach with a pending
-  seek. The test hook leaves `resumeAt` dangling, so `paused` can misread
-  after the hook is used.
+  detach with a pending mount sends no `onState`; the restart test checks the
+  fake.
+- By ruling, not by oversight: `play()` or `pause()` called before `ready` is
+  dropped (spec §3.3 acts after the load); an indefinite scene that had come
+  to rest returns paused on tick 0; the bundler path (as opposed to the CDN
+  path) is not exercised by any check.
 - `liveFramesHash` clamps beyond the reached tick on an indefinite scene yet
   labels the requested tick, and has no destroyed guard (hook only; the harness
   uses bounded scenes).
-- Element: a DOM move reloads and loses the playhead; the controls and share
-  link go stale after a failed reload; the seek range has no `aria-label`; the
-  diagnostics fill while hidden and are then announced.
+- Element: a DOM move reloads and loses the playhead.
 - Packaging: about 45 unreachable `.d.ts` files ship (the compiler and renderer
   declarations import PixiJS) and no player consumer typecheck runs in
-  `check:pack`; the 20 s race timer is never cleared and the timeout drops the
-  collected problems; a comment overstates the font-path coverage; the check
-  label still says "entry chunk" for the closure; the lazy-only-file assertion
-  is vacuous by construction; the request pathname is not
-  `decodeURIComponent`-ed.
+  `check:pack`; the lazy-only-file assertion is vacuous by construction; the
+  request pathname is not `decodeURIComponent`-ed.
 - Harness: the render-chunk timing check would also pass for a top-level
-  `import("./render")`, and compares a page clock to a Node clock; the
-  init-failure path in `render.ts` (lines 83-88) still loses the context twice,
-  so that path logs one `INVALID_OPERATION` warning; scratch directory and
-  server cleanup have gaps when the harness throws early.
+  `import("./render")`, and compares a page clock to a Node clock; scratch
+  directory and server cleanup have gaps when the harness throws early.
 - `playback.test.ts`'s `snapshot()` test is near-tautological (suggest asserting
   `snapshotHash()` against the reference hash); `share.test.ts` keeps dense
   one-liners, and the `buildShareURL` wrapper is untested (needs `window`).

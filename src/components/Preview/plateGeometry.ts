@@ -1,6 +1,6 @@
 /**
  * Where the scene lands inside the preview's host box, computed with the same
- * formula as `updateLayout` in src/compiler/renderer/adapter.ts, so the frame
+ * formula as `updateLayout` in src/compiler/renderer/mountScene.ts, so the frame
  * the UI draws sits exactly on the scene the renderer draws. Returns null
  * when the scene fills the box (`cover`, `fill`) or overflows it (`none`),
  * because then there is no bounded plate to frame (spec 6B §3).
