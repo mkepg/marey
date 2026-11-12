@@ -77,8 +77,10 @@ describe("main (end to end)", () => {
       mkdirSync(dirname(p), { recursive: true });
       writeFileSync(p, "scene\n");
     }
-    spawnSync("git", ["init", "-q"], { cwd: tmp });
-    spawnSync("git", ["add", ...files], { cwd: tmp });
+    for (const args of [["init", "-q"], ["add", ...files]]) {
+      const r = spawnSync("git", args, { cwd: tmp, encoding: "utf8" });
+      if (r.status !== 0) throw new Error(`git ${args[0]} failed: ${r.error?.message ?? r.stderr}`);
+    }
   };
 
   beforeEach(() => {
@@ -157,6 +159,30 @@ describe("main (end to end)", () => {
     const code = await main([], { ...env, INPUT_FILES: "nothing/*.marey" }, tmp, (s: string) => log.push(s));
     expect(code).toBe(1);
     expect(log).toContain("::error title=marey check::No tracked file matches nothing/*.marey");
+  });
+
+  it("reports a failed listing and still writes outputs", async () => {
+    // tmp is not a git repository
+    const code = await main([], { ...env, INPUT_FILES: "*.marey" }, tmp, (s: string) => log.push(s));
+    expect(code).toBe(1);
+    expect(log[0]).toMatch(/^::error title=marey check::git ls-files failed: /);
+    expect(outputs()).toEqual({ checked: "0", errors: "1", "export-dir": "" });
+  });
+
+  it("survives a spawn that fails outright", async () => {
+    // A working directory that does not exist makes spawnSync return error, status null.
+    const code = await main([], { ...env, INPUT_FILES: "*.marey" }, join(tmp, "missing"), (s: string) => log.push(s));
+    expect(code).toBe(1);
+    expect(log[0]).toMatch(/^::error title=marey check::git ls-files failed: /);
+    expect(outputs().errors).toBe("1");
+  });
+
+  it("counts a crashing CLI as at least one error", async () => {
+    setup(["a.marey"]);
+    const code = await main([], { ...env, MAREY_CLI: join(tmp, "nope.mjs"), INPUT_FILES: "*.marey", INPUT_EXPORT: "apng" }, tmp, (s: string) => log.push(s));
+    expect(code).toBe(1);
+    expect(Number(outputs().errors)).toBeGreaterThanOrEqual(1);
+    expect(outputs().checked).toBe("1");
   });
 
   it("validate rejects unknown formats without calling the CLI", async () => {

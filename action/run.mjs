@@ -37,8 +37,22 @@ export function countErrors(stdout) {
   return stdout.split(/\r?\n/).filter((l) => l.startsWith("::error")).length;
 }
 
+// The merge keeps PATH and the rest of the runner's environment for the children,
+// while letting tests inject extra variables through `env`.
+// A spawn that fails outright (missing binary, ENOBUFS) yields status null, an
+// `error`, and possibly null output, so normalise the result here.
 function run(cmd, args, cwd, env) {
-  return spawnSync(cmd, args, { cwd, env: { ...process.env, ...env }, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const r = spawnSync(cmd, args, { cwd, env: { ...process.env, ...env }, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  return { status: r.status, error: r.error, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
+}
+
+function logLines(text, log) {
+  for (const line of text.split(/\r?\n/)) if (line !== "") log(line);
+}
+
+function failureDetail(r) {
+  if (r.error) return r.error.message;
+  return r.stderr.trim() || r.stdout.trim().split(/\r?\n/).slice(-3).join("\n") || `exit ${r.status}`;
 }
 
 function writeOutputs(env, outputs) {
@@ -63,8 +77,9 @@ export async function main(argv, env, cwd, log) {
   const cli = env.MAREY_CLI;
 
   const listed = run("git", ["ls-files", "-z", "--", ...patterns], cwd, env);
-  if (listed.status !== 0) {
-    log(`::error title=marey check::git ls-files failed: ${escapeData(listed.stderr.trim())}`);
+  if (listed.error || listed.status !== 0) {
+    log(`::error title=marey check::git ls-files failed: ${escapeData(failureDetail(listed))}`);
+    writeOutputs(env, { checked: 0, errors: 1, "export-dir": "" });
     return 1;
   }
   const files = listed.stdout.split("\0").filter(Boolean);
@@ -76,24 +91,24 @@ export async function main(argv, env, cwd, log) {
 
   const checkArgs = [cli, "check", "--reporter", "github", ...(formats.length > 0 ? ["--export-ready"] : []), ...files];
   const checked = run(process.execPath, checkArgs, cwd, env);
-  for (const line of checked.stdout.split(/\r?\n/)) if (line !== "") log(line);
-  for (const line of (checked.stderr ?? "").split(/\r?\n/)) if (line !== "") log(line);
-  let errors = countErrors(checked.stdout);
-  if (checked.status !== 0) {
+  logLines(checked.stdout, log);
+  logLines(checked.stderr, log);
+  if (checked.error) log(`::error title=marey check::${escapeData(checked.error.message)}`);
+  let errors = countErrors(checked.stdout) + (checked.error ? 1 : 0);
+  if (checked.error || checked.status !== 0) {
     writeOutputs(env, { checked: files.length, errors: Math.max(errors, 1), "export-dir": "" });
     return 1;
   }
 
   for (const file of files) {
+    const dir = resolve(cwd, exportCwd(exportDir, file));
+    mkdirSync(dir, { recursive: true });
     for (const format of formats) {
-      const dir = resolve(cwd, exportCwd(exportDir, file));
-      mkdirSync(dir, { recursive: true });
       const r = run(process.execPath, [cli, "export", resolve(cwd, file), "--format", format], dir, env);
-      for (const line of r.stdout.split(/\r?\n/)) if (line !== "") log(line);
-      if (r.status !== 0) {
+      logLines(r.stdout, log);
+      if (r.error || r.status !== 0) {
         errors++;
-        const detail = (r.stderr ?? "").trim() || `exit ${r.status}`;
-        log(`::error file=${escapeProperty(file)},title=marey export::${escapeData(detail)}`);
+        log(`::error file=${escapeProperty(file)},title=marey export::${escapeData(failureDetail(r))}`);
       }
     }
   }
