@@ -349,6 +349,12 @@ Design: `docs/specs/2026-11-13-marey-lottie-fitted-keyframes-design.md`.
   | opacity | 0 to 100 | 0.05 |
   | colour | 0 to 1 per channel | 0.25 / 255 |
 
+  dotlottie-web caches an easing curve under its handles rounded to two
+  decimals, so a keyframe whose rounded key is shared with a different handle
+  tuple anywhere in the document carries an `n` name (`nameCollidingEasings`).
+  The name is a 17-character hash of the exact handle values: derived from the
+  values, never a counter (lottie-web's curve cache is per page), and under the
+  20 characters ThorVG compares.
   A track that never varies, exactly, still collapses to a static property.
 - **Separated position.** When either coordinate moves, `ks.p` is
   `{s: true, x, y}` and each axis is fitted on its own; a fully static

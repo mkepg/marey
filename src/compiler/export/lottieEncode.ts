@@ -84,6 +84,11 @@ export interface LottieKeyframe {
   /** Absent only on the last keyframe, which starts no segment. */
   readonly i?: LottieBezierHandle;
   readonly o?: LottieBezierHandle;
+  /**
+   * An easing name, written only when dotlottie-web would otherwise draw this
+   * keyframe with another keyframe's curve (see `nameCollidingEasings`).
+   */
+  readonly n?: string;
 }
 
 /** An animatable scalar: `{a: 0, k: value}` static, `{a: 1, k: [...]}` animated. */
@@ -487,6 +492,106 @@ function shapeItemsFor(shape: LottieShapeSpec, color: LottieColorProperty | null
   return items;
 }
 
+/** C's `%.2f`, which rounds an exact binary tie to even where `toFixed` rounds it up. */
+function cFixed2(v: number): string {
+  const negative = v < 0 || Object.is(v, -0);
+  const a = Math.abs(v);
+  // An exact binary tie is an odd multiple of 1/8; everything else rounds the same way in both.
+  if (Number.isInteger(a * 8) && (a * 8) % 2 === 1) {
+    const lo = Math.floor(a * 100);
+    const even = lo % 2 === 0 ? lo : lo + 1;
+    return `${negative ? "-" : ""}${Math.floor(even / 100)}.${String(even % 100).padStart(2, "0")}`;
+  }
+  return (negative && !a.toFixed(2).startsWith("-") ? "-" : "") + a.toFixed(2);
+}
+
+/**
+ * The cache key dotlottie-web's ThorVG gives a keyframe that has no `n`:
+ * `"%.2f_%.2f_%.2f_%.2f"` of `i.x, i.y, o.x, o.y` (the first element of each
+ * handle), cut to the 19 characters its 20-byte buffer holds. Exported for the
+ * test that models the cache.
+ */
+export function thorvgEasingKey(kf: LottieKeyframe): string {
+  const i = kf.i!;
+  const o = kf.o!;
+  return `${cFixed2(i.x[0])}_${cFixed2(i.y[0])}_${cFixed2(o.x[0])}_${cFixed2(o.y[0])}`.slice(0, 19);
+}
+
+/**
+ * A short name derived from the keyframe's exact handle values: "e" and 16 hex
+ * digits of two FNV-1a hashes of the full-precision tuple, 17 characters.
+ * ThorVG compares easing names over their first 20 characters, so a longer
+ * name (lottie-web's own default key is about 70) would make every name equal.
+ */
+export function easingName(kf: LottieKeyframe): string {
+  const text = `${kf.i!.x[0]}_${kf.i!.y[0]}_${kf.o!.x[0]}_${kf.o!.y[0]}`;
+  const fnv = (seed: number): string => {
+    let h = seed;
+    for (let c = 0; c < text.length; c++) h = Math.imul(h ^ text.charCodeAt(c), 16777619);
+    return (h >>> 0).toString(16).padStart(8, "0");
+  };
+  return `e${fnv(2166136261)}${fnv(0x9747b28c)}`;
+}
+
+/** The exact handle tuple, at full precision. */
+function easingTuple(kf: LottieKeyframe): string {
+  return `${kf.i!.x[0]}_${kf.i!.y[0]}_${kf.o!.x[0]}_${kf.o!.y[0]}`;
+}
+
+/**
+ * dotlottie-web's ThorVG caches the easing curve it builds for a keyframe
+ * under a key rounded to two decimals, and every later keyframe with the same
+ * key reuses the first curve. Fitted handles are full-precision, so distinct
+ * curves can share a key and be drawn up to a pixel off (spec §4, "Correction,
+ * 2026-11-13: dotlottie-web's easing cache"). A keyframe whose key is shared
+ * with a different handle tuple anywhere in the document gets an `n`; ThorVG
+ * then keys on the name instead.
+ *
+ * The name is derived from the values, never from a counter: lottie-web keeps
+ * its curve cache per page and keys it by `n` on its spatial path, so a counter
+ * would make two Marey files on one page share curves. It is short because
+ * ThorVG compares names over 20 characters.
+ */
+export function nameCollidingEasings<T>(root: T): T {
+  const tuplesByKey = new Map<string, Set<string>>();
+  const visit = (node: unknown, fn: (kf: LottieKeyframe) => void): void => {
+    if (Array.isArray(node)) {
+      for (const v of node) visit(v, fn);
+      return;
+    }
+    if (node === null || typeof node !== "object") return;
+    const rec = node as Record<string, unknown>;
+    if (rec.a === 1 && Array.isArray(rec.k)) {
+      for (const kf of rec.k as LottieKeyframe[]) if (kf.i && kf.o) fn(kf);
+      return;
+    }
+    for (const v of Object.values(rec)) visit(v, fn);
+  };
+  visit(root, (kf) => {
+    const key = thorvgEasingKey(kf);
+    const set = tuplesByKey.get(key) ?? new Set<string>();
+    set.add(easingTuple(kf));
+    tuplesByKey.set(key, set);
+  });
+  const rewrite = (node: unknown): unknown => {
+    if (Array.isArray(node)) return node.map(rewrite);
+    if (node === null || typeof node !== "object") return node;
+    const rec = node as Record<string, unknown>;
+    if (rec.a === 1 && Array.isArray(rec.k)) {
+      return {
+        ...rec,
+        k: (rec.k as LottieKeyframe[]).map((kf) =>
+          kf.i && kf.o && tuplesByKey.get(thorvgEasingKey(kf))!.size > 1
+            ? { ...kf, n: easingName(kf) }
+            : kf,
+        ),
+      };
+    }
+    return Object.fromEntries(Object.entries(rec).map(([k, v]) => [k, rewrite(v)]));
+  };
+  return rewrite(root) as T;
+}
+
 /**
  * Encode a planned scene's layer specs and sampled frames into one Lottie
  * document.
@@ -661,6 +766,6 @@ export function encodeLottie(
     h: scene.height,
     nm: scene.name,
     assets: Object.freeze([]),
-    layers: Object.freeze([...encoded].reverse().concat(background)),
+    layers: Object.freeze(nameCollidingEasings([...encoded].reverse().concat(background))),
   });
 }

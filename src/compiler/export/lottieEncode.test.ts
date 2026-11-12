@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { encodeLottie, type LottieDoc } from "./lottieEncode";
+import { encodeLottie, nameCollidingEasings, easingName, thorvgEasingKey, type LottieDoc, type LottieKeyframe } from "./lottieEncode";
 import { evaluateProperty } from "./lottieEvaluate";
 import { planExport, type SamplerPlan } from "./exportContract";
 import { hexToRgb01, rgb01OfInt, type LayerSpec } from "./lottieGeometry";
@@ -736,5 +736,54 @@ describe("encodeLottie · colour", () => {
     const layer = layerNamed(doc, "g");
     expect(layer.shapes).toBeUndefined();
     expect(JSON.stringify(doc)).not.toContain("null");
+  });
+});
+
+describe("encodeLottie · easing names", () => {
+  const kf = (t: number, oy: number, iy: number): LottieKeyframe => ({
+    t,
+    s: [t],
+    o: { x: [1 / 3], y: [oy] },
+    i: { x: [2 / 3], y: [iy] },
+  });
+  const named = (...frames: LottieKeyframe[]): LottieKeyframe[] =>
+    (nameCollidingEasings({ a: 1 as const, k: frames }) as { k: LottieKeyframe[] }).k;
+
+  it("names keyframes whose handles agree to two decimals but differ beyond", () => {
+    const k = named(kf(0, 0.3301, 0.7001), kf(5, 0.3304, 0.7004), kf(9, 0.9, 0.2));
+    expect(thorvgEasingKey(k[0])).toBe(thorvgEasingKey(k[1]));
+    expect(k[0].n).toBeDefined();
+    expect(k[1].n).toBeDefined();
+    expect(k[0].n).not.toBe(k[1].n);
+    expect(k[2].n).toBeUndefined();
+  });
+
+  it("leaves a lone tuple, and repeats of one tuple, unnamed", () => {
+    const k = named(kf(0, 0.25, 0.75), kf(4, 0.25, 0.75), kf(8, 0.6, 0.9));
+    expect(k.map((x) => x.n)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("derives the name from the values, so equal tuples in two documents agree", () => {
+    const a = named(kf(0, 0.3301, 0.7001), kf(5, 0.3304, 0.7004));
+    const b = named(kf(2, 0.3301, 0.7001), kf(7, 0.3304, 0.7004), kf(9, 0.3302, 0.7002));
+    expect(a[0].n).toBe(b[0].n);
+    expect(a[0].n).toBe(easingName(a[0]));
+    // ThorVG compares the first 20 characters of a name.
+    for (const x of [...a, ...b]) expect(x.n!.length).toBeLessThan(20);
+  });
+
+  it("rounds an exact binary tie the way C's %.2f does", () => {
+    // 0.125 prints as 0.12 and 0.375 as 0.38 under round-half-to-even.
+    expect(thorvgEasingKey({ t: 0, s: [0], o: { x: [0.125], y: [0.375] }, i: { x: [-0.125], y: [0] } }))
+      .toBe("-0.12_0.00_0.12_0.3"); // 0.38 cut to the 19 characters ThorVG keeps
+  });
+
+  it("encodes deterministically", () => {
+    const doc = () => encodeLottie(
+      [circle("scene.c")],
+      framesOf(...Array.from({ length: 12 }, (_, f) => [snap("scene.c", { x: f * f * 0.37, y: Math.sin(f) * 9 })])),
+      planFor(12, 30), SCENE,
+    );
+    expect(JSON.stringify(doc())).toBe(JSON.stringify(doc()));
   });
 });

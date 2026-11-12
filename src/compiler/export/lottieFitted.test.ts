@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Container } from "pixi.js";
-import { encodeLottie, type LottieDoc } from "./lottieEncode";
+import { encodeLottie, thorvgEasingKey, type LottieDoc, type LottieKeyframe } from "./lottieEncode";
 import { evaluateProperty } from "./lottieEvaluate";
 import { LOTTIE_FIT_TOLERANCE } from "./lottieFit";
 import { planLottie, hexToRgb01, rgb01OfInt, type LayerSpec } from "./lottieGeometry";
@@ -143,6 +143,34 @@ describe("lottieFitted · canonical scenes", () => {
             }
           }
         }
+      });
+
+      it("no two distinct easings resolve to one cached curve in either player", () => {
+        // ThorVG: a named keyframe is cached by its name, any other by the
+        // two-decimal key. lottie-web: by name, else by the full-precision key.
+        const thorvg = new Map<string, string>();
+        const lottieWeb = new Map<string, string>();
+        const claim = (cache: Map<string, string>, key: string, tuple: string, player: string) => {
+          const prior = cache.get(key);
+          expect(prior === undefined || prior === tuple, `${name} ${player} key ${key}: ${prior} vs ${tuple}`).toBe(true);
+          cache.set(key, tuple);
+        };
+        const visit = (node: unknown): void => {
+          if (Array.isArray(node)) return void node.forEach(visit);
+          if (node === null || typeof node !== "object") return;
+          const rec = node as Record<string, unknown>;
+          if (rec.a === 1 && Array.isArray(rec.k)) {
+            for (const kf of rec.k as LottieKeyframe[]) {
+              if (!kf.i || !kf.o) continue;
+              const tuple = `${kf.i.x[0]}_${kf.i.y[0]}_${kf.o.x[0]}_${kf.o.y[0]}`;
+              claim(thorvg, kf.n !== undefined ? `n:${kf.n.slice(0, 20)}` : `k:${thorvgEasingKey(kf)}`, tuple, "thorvg");
+              claim(lottieWeb, kf.n ?? `bez_${kf.o.x}_${kf.o.y}_${kf.i.x}_${kf.i.y}`.replace(/\./g, "p"), tuple, "lottie-web");
+            }
+            return;
+          }
+          Object.values(rec).forEach(visit);
+        };
+        visit(runOf(name).doc.layers);
       });
 
       it("keyframe counts stay under their ceilings", () => {
