@@ -10,10 +10,19 @@
  *     --renderer lottie-web|dotlottie-web [--out <dir>]
  *
  * 1. Geometry (lottie-web only). Every layer's transform properties, as the
- *    player resolves them (`finalTransform.mProp`), at every frame, are within
- *    F3's tolerances of the per-frame file's: position px, scale percentage
- *    points, rotation degrees, opacity on 0-100. Reported as the worst
- *    difference per property and whether it is inside the tolerance.
+ *    player evaluates them from the file (`finalTransform.mProp`), at every
+ *    frame, are within F3's tolerances of the per-frame file's: position px,
+ *    scale percentage points, rotation degrees, opacity on 0-100. Reported as
+ *    the worst difference per property and whether it is inside the
+ *    tolerance. The value read is each property's evaluated value `pv`, in
+ *    the file's units, not the drawn value `v`: lottie-web updates `v` only
+ *    when the new value differs from the held one by more than 1e-5 of its
+ *    internal units (radians and ratios: 5.7e-4 degrees of rotation, 1e-3
+ *    points of scale), so `v` can hold an earlier frame's value. That holds
+ *    for any file, so it measures the player, not the encoding. The 1e-4 px
+ *    of position slack covers lottie-web storing a combined position in a
+ *    `Float32Array`, which rounds the per-frame file's samples by up to about
+ *    1e-5 px at these coordinates.
  * 2. Pixels, in the chosen player. The fitted file's maximum channel delta
  *    against Marey's own PNG export, per frame, must not exceed the worst
  *    maximum over the per-frame file and its copies with every animated
@@ -42,8 +51,8 @@ import { resolve, join } from "node:path";
 // `LOTTIE_FIT_TOLERANCE` in `src/compiler/export/lottieFit.ts`, in the file's own units:
 // position px, scale percentage points, rotation degrees, opacity on 0-100.
 const TOL = { p: 0.004, s: 0.0004, r: 0.0002, o: 0.05 };
-// Slack on the geometry check for lottie-web's own Newton/float32 easing solver.
-const SOLVER_SLACK_PX = 1e-4;
+// Slack on the position check for lottie-web's Float32Array storage of a combined position.
+const POSITION_SLACK_PX = 1e-4;
 // Position shifts that calibrate the pixel bound: the whole position tolerance.
 const JITTER_PX = [0.001, 0.002, 0.004];
 const SLACK = 2;
@@ -153,16 +162,17 @@ if (renderer === "lottie-web") {
     for (const f of frames) {
       out[f] = await page.evaluate((f) => {
         window.__go(f);
-        // lottie-web stores rotation in radians (built with `degToRads`) and
-        // scale and opacity as ratios (multiplier 0.01). Convert all three back
-        // to the file's units so they compare with `TOL`.
+        // `pv` is the value evaluated from the file, before lottie-web applies
+        // its multiplier (`degToRads` for rotation, 0.01 for scale and
+        // opacity), so it is already in the file's units. A layer without an
+        // `o` property gets a stand-in with only `v` (1, a ratio).
         const m = (e) => e.finalTransform.mProp;
         return window.__anim.renderer.elements.map((e) => e && {
           nm: e.data.nm,
-          p: m(e).p ? Array.from(m(e).p.v) : [m(e).px.v, m(e).py.v],
-          s: Array.from(m(e).s.v).map((v) => v * 100),
-          r: m(e).r ? (m(e).r.v * 180) / Math.PI : 0,
-          o: m(e).o.v * 100,
+          p: m(e).p ? Array.from(m(e).p.pv) : [m(e).px.pv, m(e).py.pv],
+          s: Array.from(m(e).s.pv),
+          r: m(e).r ? m(e).r.pv : 0,
+          o: m(e).o.pv === undefined ? m(e).o.v * 100 : m(e).o.pv,
         });
       }, f);
     }
@@ -195,7 +205,7 @@ if (renderer === "lottie-web") {
         }
         geometry.worst[k] = Math.max(geometry.worst[k], d);
         overshoot[k] = Math.max(overshoot[k], d - TOL[k]);
-        if (d > TOL[k] + (k === "p" ? SOLVER_SLACK_PX : 0)) geometry.fails.push({ frame: f, layer: ea.nm, prop: k, diff: d, perFrame: ea[k], fitted: eb[k] });
+        if (d > TOL[k] + (k === "p" ? POSITION_SLACK_PX : 0)) geometry.fails.push({ frame: f, layer: ea.nm, prop: k, diff: d, perFrame: ea[k], fitted: eb[k] });
       }
     });
   }
@@ -275,14 +285,14 @@ const rows = frames.map((f) => {
 const geometryOk = !geometry.checked || geometry.fails.length === 0;
 const pixelsOk = rows.every((r) => r.maxOk && r.shareOk) && errors.length === 0;
 geometry.worstOvershoot = Object.fromEntries(Object.entries(overshoot).map(([k, v]) => [k, Math.max(0, v)]));
-const report = { renderer, frames, tolerance: TOL, solverSlackPx: SOLVER_SLACK_PX, jitterPx: JITTER_PX, shareSlack: SHARE_SLACK, geometry, rows, errors, geometryOk, pixelsOk };
+const report = { renderer, frames, tolerance: TOL, positionSlackPx: POSITION_SLACK_PX, jitterPx: JITTER_PX, shareSlack: SHARE_SLACK, geometry, rows, errors, geometryOk, pixelsOk };
 writeFileSync(join(outDir, "fit-check.json"), JSON.stringify(report, null, 2));
 
 console.log(`renderer ${renderer}, frames ${frames.join(",")}`);
 if (geometry.checked) {
   const w = geometry.worst;
   const o = geometry.worstOvershoot;
-  console.log(`geometry: worst |fitted - per-frame| p ${w.p.toExponential(2)} px, s ${w.s.toExponential(2)} points, r ${w.r.toExponential(2)} deg, o ${w.o.toExponential(2)} (of 100); worst overshoot of the bare tolerance p ${o.p.toExponential(2)}, s ${o.s.toExponential(2)}, r ${o.r.toExponential(2)}, o ${o.o.toExponential(2)} (position slack ${SOLVER_SLACK_PX}) -> ${geometryOk ? "within tolerance" : "FAIL " + JSON.stringify(geometry.fails.slice(0, 5))}`);
+  console.log(`geometry: worst |fitted - per-frame| p ${w.p.toExponential(2)} px, s ${w.s.toExponential(2)} points, r ${w.r.toExponential(2)} deg, o ${w.o.toExponential(2)} (of 100); worst overshoot of the bare tolerance p ${o.p.toExponential(2)}, s ${o.s.toExponential(2)}, r ${o.r.toExponential(2)}, o ${o.o.toExponential(2)} (position slack ${POSITION_SLACK_PX}) -> ${geometryOk ? "within tolerance" : "FAIL " + JSON.stringify(geometry.fails.slice(0, 5))}`);
 } else console.log("geometry: not checked (lottie-web only)");
 console.log("frame | per-frame max | calibrated max | fitted max | verdict | share per-frame | share calibrated range | share fitted | share verdict");
 for (const r of rows) {
