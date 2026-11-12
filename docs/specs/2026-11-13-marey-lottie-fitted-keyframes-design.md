@@ -202,15 +202,16 @@ separate causes.
   physics-pile 206 and logo-reveal 81 misses came from this. That is a real
   defect in the file as ThorVG reads it. **Fix: a keyframe whose ThorVG key
   collides with a different handle tuple in the same document carries an `n`
-  name. The name is derived from the handle values, not from a counter.** It
-  is spelled the way lottie-web builds its own default cache key
-  (`'bez_' + o.x + '_' + o.y + '_' + i.x + '_' + i.y`, with `.` replaced by
-  `p`). lottie-web also uses `n` as a cache key (`BezierFactory.getBezierEasing`),
+  name. The name is derived from the handle values, not from a counter.**
+  lottie-web also uses `n` as a cache key (`BezierFactory.getBezierEasing`),
   and that cache is shared by every animation on a page. A counter such as
-  `m1` would make two Marey files on one page reuse each other's curves. A
-  name derived from the values keeps lottie-web's behaviour identical to
-  having no name, and gives ThorVG a unique key. Keyframes with no collision
-  get no name.
+  `m1` would make two Marey files on one page reuse each other's curves. The
+  name is `e` followed by 16 hex digits: two FNV-1a hashes of the
+  full-precision handle values, 17 characters in all. The first draft spelled
+  it like lottie-web's own default key (`bez_0p3333…`). That was measured to
+  fail, because ThorVG compares names over their first 20 characters and
+  every such name shares its first 20. Keyframes with no collision get no
+  name.
 - **lottie-web's two misses are measurement artifacts.** Chromium's canvas
   and ThorVG both turn sub-pixel position into a step function. As a control,
   shifting the *per-frame* file's positions by 0.001 px, a quarter of the
@@ -227,11 +228,18 @@ replaced by measurements that can:
 1. **Geometry in the player.** In lottie-web, every layer's `finalTransform`
    at every compared frame of the fitted file is within F3's tolerances of
    the per-frame file's, translated to pixels the way the tolerance table
-   states.
+   states, plus 1e-4 px. The extra 1e-4 px is lottie-web's own easing solver
+   (four Newton steps from a float32 table), which a fitter checked against
+   the exact curve cannot see. One translation was measured 9e-6 px over the
+   bare tolerance.
 2. **Pixels with a calibrated bound.** In both players, the fitted file's
    maximum delta does not exceed the worst maximum over the per-frame file
-   and its copies with positions shifted by ±0.001 px, plus 2. The share of
-   differing pixels stays within the same calibrated range.
+   and its copies with positions shifted by ±0.001, ±0.002 and ±0.004 px,
+   plus 2. The shifts span the position tolerance, because a fitted position
+   anywhere inside the tolerance is correct by F3, and a pixel result that a
+   tolerance-sized shift of the reference also produces cannot count against
+   it. The share of differing pixels stays within the same calibrated
+   range.
 
 The original bound and its misses stay recorded in
 `eval/RESULTS-LOTTIE-FITTED.md`, beside the restated measurements.
