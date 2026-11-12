@@ -106,16 +106,56 @@ script on the page.
 | 1. Reporter unit tests, text output unchanged | Passed at `801b111` |
 | 2. `action/run.test.ts` | Passed, 14 tests |
 | 3. Four repository checks, `check:pack` 127 files | At `3f528ab`, CI run 43244229571 (`success`) passed the main suite, the build, every first-party scene's check, and `check:pack` (version 0.7.0, 127 files). CI does not run the eval suite. |
-| 4. Both jobs `success` | Section 1: runs 43244229157 (both jobs success) |
+| 4. Both jobs `success` | Section 1: run 43244229157 (both jobs success). Section 5: run 43253771354 at `be690d4` (all four jobs success) |
 | 5. Annotation at the injected line and column | Section 2: `examples/starter/hello.marey`, line 6, column 15 |
 | 6. `frames` hash match and frame count | Section 3: `4f102241` on both OSes; `num_frames` 60 = 2 s x 30 fps; bytes also equal |
 | 7. Results file, README section, status lines | This file; the README section from `1e6a3ff`; status lines in `docs/architecture/README.md` and `docs/architecture/roadmap-and-process.md` |
 
 ## Observed issues
 
-- The runner annotates the check run with a Node 20 deprecation warning for
-  `actions/checkout@v4` and `actions/setup-node@v4`, and with an
-  `ubuntu-latest` label migration notice. Neither failed a job. The warning is
-  recorded here as observed; this phase makes no claim that it is resolved.
-- The first push was rejected as an invalid workflow file (section 1); it was a
+- On the first run, the runner annotated the check run with a Node 20
+  deprecation warning for `actions/checkout@v4` and `actions/setup-node@v4`, and
+  with an `ubuntu-latest` label migration notice. Neither failed a job. Section
+  5 records the run after every `actions/*` reference moved to `@v7`.
+- The first push was rejected as an invalid workflow file (section 1). It was a
   YAML defect, fixed in `3f528ab`.
+
+## 5. Re-verification after the review fixes
+
+The review fixes changed several things:
+- the Gate C workflow: a `pack` job, starter and broken-scene jobs with no
+  setup-node of their own, a new `old-node` job, and a chunk-walking APNG
+  assertion;
+- the action: it now checks at `--fps 30`, writes an annotation for a check
+  that fails without one, drives its conditions from the parsed formats, and
+  separates an unpublished version from other `npm view` failures;
+- every `actions/*` reference, which moved from `@v4` to `@v7`.
+
+Gate C was measured again on the same PR at `be690d4`.
+
+- Run https://github.com/mkepg/marey/actions/runs/43253771354, workflow
+  "Action", conclusion `success`. All four jobs succeeded:
+  - `pack` (131306387281);
+  - `starter` (131306670203);
+  - `broken-scene` (131306670159);
+  - `old-node` (131306670215).
+- CI run 43253771632, on the same head: `success`.
+- **The annotation.** `broken-scene`'s annotation is again on
+  `examples/starter/hello.marey`, at line 6, column 15, with the title
+  `marey check`. The job now also asserts the outputs: `checked` 1 and `errors`
+  1, plus one recorded annotation at that position.
+- **The artifact.** `starter-export` downloaded with the same hashes as section
+  3:
+  - `hello.png` sha256 `b1a3078c…cd775`;
+  - `hello.json` sha256 `ee8781e5…8b064f`.
+
+  The CI log's `wrote` lines carry `frames 4f102241` for both files.
+- **The action's own Node setup.** In `old-node`, the runner starts on Node 20,
+  and the action's own `actions/setup-node@v7` step ran and succeeded,
+  installing 22.23.4 from the tool cache. In `starter`, that step was
+  `skipped`, because `ubuntu-latest` already provides Node 22.23.4.
+
+  So the default runner never needs the step, and `old-node` is the job that
+  exercises it.
+- **Annotations.** No job carries a Node 20 deprecation warning any more. Each
+  job's only remaining notice is the `ubuntu-latest` label migration notice.
