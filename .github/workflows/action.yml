@@ -76,7 +76,8 @@ jobs:
       # line 6, column 15, so the annotation on examples/starter/hello.marey
       # must carry line=6 and col=15.
       - name: Edit the scene so it no longer compiles
-        run: sed -i 's/^  background: .*/  background: missing/' examples/starter/hello.marey
+        run: |
+          sed -i 's/^  background: .*/  background: missing/' examples/starter/hello.marey
       - id: marey
         continue-on-error: true
         uses: ./
