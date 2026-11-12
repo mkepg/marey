@@ -16,19 +16,24 @@
  *    difference per property and whether it is inside the tolerance.
  * 2. Pixels, in the chosen player. The fitted file's maximum channel delta
  *    against Marey's own PNG export, per frame, must not exceed the worst
- *    maximum over the per-frame file and its two copies with every animated
+ *    maximum over the per-frame file and its copies with every animated
  *    position shifted by +-0.001, +-0.002 and +-0.004 px (the whole
- *    position tolerance; alternating sign by layer, then the opposite), plus 2. The share of differing pixels is reported against the
- *    same calibrated range. The shifted copies are the calibration: a
- *    quarter of the position tolerance already moves single edge pixels by
- *    tens of levels, so a bound tighter than that cannot tell a correct
- *    encoding from a wrong one.
+ *    position tolerance; alternating sign by layer, then the opposite),
+ *    plus 2. The shifted copies are the calibration: a quarter of the
+ *    position tolerance already moves single edge pixels by tens of levels,
+ *    so a bound tighter than that cannot tell a correct encoding from a
+ *    wrong one. The share of differing pixels is reported beside the same
+ *    calibrated range, per frame, and fails when it exceeds the range's
+ *    highest share by more than 0.5 percentage points.
  *
  * The per-frame doc is the pre-change encoder's output (one linear keyframe
  * per frame); `README.md` ("Exporting Lottie") gives the recipe. The PNG
  * directory is the output of `lottie-check.mjs --compare-png` for the same
  * scene, fps and frames. Needs no dev server. Exit code 1 when either check
- * fails. Writes `<out>/fit-check.json`.
+ * fails; exit code 2 when the inputs cannot be compared (a missing argument,
+ * or a player canvas whose size differs from the reference PNG's). A geometry
+ * difference that is NaN, or two documents whose layer names or counts
+ * differ, fail the geometry check. Writes `<out>/fit-check.json`.
  */
 import { chromium } from "playwright";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
@@ -42,6 +47,9 @@ const SOLVER_SLACK_PX = 1e-4;
 // Position shifts that calibrate the pixel bound: the whole position tolerance.
 const JITTER_PX = [0.001, 0.002, 0.004];
 const SLACK = 2;
+// The share gate: sub-pixel noise moves the share by hundredths of a point, a
+// systematic error by whole points.
+const SHARE_SLACK = 0.005;
 
 function arg(name, fallback = null) {
   const i = process.argv.indexOf(`--${name}`);
@@ -129,17 +137,18 @@ const rgbaOf = (page) => page.evaluate(() => {
   const data = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
   let s = "";
   for (let i = 0; i < data.length; i += 0x8000) s += String.fromCharCode.apply(null, data.subarray(i, i + 0x8000));
-  return btoa(s);
-}).then((b64) => Buffer.from(b64, "base64"));
+  return { w: cv.width, h: cv.height, b64: btoa(s) };
+}).then(({ w, h, b64 }) => ({ w, h, data: Buffer.from(b64, "base64") }));
 
 // --- 1. geometry, in lottie-web ---------------------------------------------
+const errors = [];
 const geometry = { checked: false, worst: { p: 0, s: 0, r: 0, o: 0 }, fails: [] };
 // Worst amount by which a property exceeds its bare F3 tolerance (0 when none does).
 const overshoot = { p: 0, s: 0, r: 0, o: 0 };
 if (renderer === "lottie-web") {
   geometry.checked = true;
   const read = async (doc) => {
-    const { page } = await openPlayer(doc, "lottie-web");
+    const { page, errors: e } = await openPlayer(doc, "lottie-web");
     const out = {};
     for (const f of frames) {
       out[f] = await page.evaluate((f) => {
@@ -157,18 +166,33 @@ if (renderer === "lottie-web") {
         });
       }, f);
     }
+    errors.push(...e);
     await page.close();
     return out;
   };
   const a = await read(perFrame);
   const b = await read(fitted);
-  const diff = (x, y) => Math.max(...[].concat(x).map((v, i) => Math.abs(v - [].concat(y)[i])));
+  const diff = (x, y) => {
+    const xs = [].concat(x), ys = [].concat(y);
+    if (xs.length !== ys.length) return NaN;
+    return Math.max(...xs.map((v, i) => Math.abs(v - ys[i])));
+  };
   for (const f of frames) {
+    const names = (els) => els.map((e) => (e ? e.nm : null));
+    if (JSON.stringify(names(a[f])) !== JSON.stringify(names(b[f]))) {
+      geometry.fails.push({ frame: f, layers: "layer names or counts differ", perFrame: names(a[f]), fitted: names(b[f]) });
+      continue;
+    }
     a[f].forEach((ea, i) => {
       const eb = b[f][i];
       if (!ea) return;
       for (const k of ["p", "s", "r", "o"]) {
         const d = diff(ea[k], eb[k]);
+        // NaN compares false with everything, so it is a failure of its own.
+        if (Number.isNaN(d)) {
+          geometry.fails.push({ frame: f, layer: ea.nm, prop: k, diff: "NaN", perFrame: ea[k], fitted: eb[k] });
+          continue;
+        }
         geometry.worst[k] = Math.max(geometry.worst[k], d);
         overshoot[k] = Math.max(overshoot[k], d - TOL[k]);
         if (d > TOL[k] + (k === "p" ? SOLVER_SLACK_PX : 0)) geometry.fails.push({ frame: f, layer: ea.nm, prop: k, diff: d, perFrame: ea[k], fitted: eb[k] });
@@ -194,13 +218,18 @@ for (const f of frames) {
     const data = ctx.getImageData(0, 0, cv.width, cv.height).data;
     let s = "";
     for (let i = 0; i < data.length; i += 0x8000) s += String.fromCharCode.apply(null, data.subarray(i, i + 0x8000));
-    return btoa(s);
+    return { w: cv.width, h: cv.height, b64: btoa(s) };
   }, png);
-  refRaw[f] = Buffer.from(b64, "base64");
+  refRaw[f] = { w: b64.w, h: b64.h, data: Buffer.from(b64.b64, "base64") };
 }
 await refPage.close();
 
-function compare(a, b) {
+function compare(img, ref) {
+  if (img.w !== ref.w || img.h !== ref.h || img.data.length !== ref.data.length) {
+    console.error(`canvas ${img.w}x${img.h} does not match the reference ${ref.w}x${ref.h}`);
+    process.exit(2);
+  }
+  const a = img.data, b = ref.data;
   let max = 0, n = 0;
   for (let i = 0; i < a.length; i += 4) {
     let m = 0;
@@ -212,7 +241,6 @@ function compare(a, b) {
 }
 
 const pixels = {};
-const errors = [];
 for (const v of variants) {
   const { page, errors: e } = await openPlayer(v.doc, renderer);
   pixels[v.name] = {};
@@ -240,13 +268,14 @@ const rows = frames.map((f) => {
     perFrameShare: pixels["per-frame"][f].share,
     calibratedShare: calShare,
     fittedShare: fit.share,
+    shareOk: fit.share <= calShare[1] + SHARE_SLACK,
   };
 });
 
 const geometryOk = !geometry.checked || geometry.fails.length === 0;
-const pixelsOk = rows.every((r) => r.maxOk) && errors.length === 0;
+const pixelsOk = rows.every((r) => r.maxOk && r.shareOk) && errors.length === 0;
 geometry.worstOvershoot = Object.fromEntries(Object.entries(overshoot).map(([k, v]) => [k, Math.max(0, v)]));
-const report = { renderer, frames, tolerance: TOL, solverSlackPx: SOLVER_SLACK_PX, jitterPx: JITTER_PX, geometry, rows, errors, geometryOk, pixelsOk };
+const report = { renderer, frames, tolerance: TOL, solverSlackPx: SOLVER_SLACK_PX, jitterPx: JITTER_PX, shareSlack: SHARE_SLACK, geometry, rows, errors, geometryOk, pixelsOk };
 writeFileSync(join(outDir, "fit-check.json"), JSON.stringify(report, null, 2));
 
 console.log(`renderer ${renderer}, frames ${frames.join(",")}`);
@@ -255,9 +284,9 @@ if (geometry.checked) {
   const o = geometry.worstOvershoot;
   console.log(`geometry: worst |fitted - per-frame| p ${w.p.toExponential(2)} px, s ${w.s.toExponential(2)} points, r ${w.r.toExponential(2)} deg, o ${w.o.toExponential(2)} (of 100); worst overshoot of the bare tolerance p ${o.p.toExponential(2)}, s ${o.s.toExponential(2)}, r ${o.r.toExponential(2)}, o ${o.o.toExponential(2)} (position slack ${SOLVER_SLACK_PX}) -> ${geometryOk ? "within tolerance" : "FAIL " + JSON.stringify(geometry.fails.slice(0, 5))}`);
 } else console.log("geometry: not checked (lottie-web only)");
-console.log("frame | per-frame max | calibrated max | fitted max | verdict | share per-frame | share calibrated range | share fitted");
+console.log("frame | per-frame max | calibrated max | fitted max | verdict | share per-frame | share calibrated range | share fitted | share verdict");
 for (const r of rows) {
-  console.log(`${r.frame} | ${r.perFrameMax} | ${r.calibratedMax} | ${r.fittedMax} | ${r.maxOk ? "met" : "MISSED"} | ${(r.perFrameShare * 100).toFixed(4)}% | ${(r.calibratedShare[0] * 100).toFixed(4)}-${(r.calibratedShare[1] * 100).toFixed(4)}% | ${(r.fittedShare * 100).toFixed(4)}%`);
+  console.log(`${r.frame} | ${r.perFrameMax} | ${r.calibratedMax} | ${r.fittedMax} | ${r.maxOk ? "met" : "MISSED"} | ${(r.perFrameShare * 100).toFixed(4)}% | ${(r.calibratedShare[0] * 100).toFixed(4)}-${(r.calibratedShare[1] * 100).toFixed(4)}% | ${(r.fittedShare * 100).toFixed(4)}% | ${r.shareOk ? "met" : "MISSED"}`);
 }
 if (errors.length) console.log("page errors:", errors);
 console.log(geometryOk && pixelsOk ? "PASS" : "FAIL");
