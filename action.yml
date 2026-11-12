@@ -39,6 +39,7 @@ runs:
   using: composite
   steps:
     - name: Validate the inputs
+      id: validate
       shell: bash
       env:
         INPUT_EXPORT: ${{ inputs.export }}
@@ -52,10 +53,13 @@ runs:
       run: |
         major=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
         if [ "$major" -lt 22 ]; then echo "setup=true" >> "$GITHUB_OUTPUT"; else echo "setup=false" >> "$GITHUB_OUTPUT"; fi
+    # No automatic caching: it keys on the calling repository's package.json
+    # and lockfile, which this setup has nothing to do with.
     - if: steps.node.outputs.setup == 'true'
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v7
       with:
         node-version: 22
+        package-manager-cache: false
 
     - name: Install marey-lang
       shell: bash
@@ -66,15 +70,24 @@ runs:
         if [ -z "$spec" ]; then
           version=$(node -p 'require(process.argv[1]).version' "$GITHUB_ACTION_PATH/package.json")
           spec="marey-lang@$version"
-          if ! npm view "$spec" version >/dev/null 2>&1; then
-            echo "::error title=marey action::$spec is not published to npm yet. Pin this action to a commit whose version is published, or set the 'package' input."
+          if ! out=$(npm view "$spec" version 2>&1); then
+            # E404 means the registry answered and has no such version. Any
+            # other failure (no network, a registry outage, an auth error) is
+            # reported with npm's own words.
+            if grep -q 'code E404' <<<"$out"; then
+              echo "::error title=marey action::$spec is not published to npm yet. Pin this action to a commit whose version is published, or set the 'package' input."
+            else
+              detail=$(sed -nE 's/^npm (error|ERR!) +//p' <<<"$out" | grep -vE '^(A complete log|syscall |errno )' | head -n 2 | paste -sd ';' - | sed 's/;/; /g') || true
+              detail="${detail:-npm view failed with no message}"
+              echo "::error title=marey action::Could not look up $spec on the npm registry: ${detail//%/%25}"
+            fi
             exit 1
           fi
         fi
         npm install --no-save --ignore-scripts --no-audit --no-fund --prefix "$RUNNER_TEMP/marey-cli" "$spec"
 
     - name: Install the export browser
-      if: inputs.export != ''
+      if: steps.validate.outputs.export == 'true'
       shell: bash
       run: node "$RUNNER_TEMP/marey-cli/node_modules/playwright-core/cli.js" install --with-deps chromium-headless-shell
 
@@ -86,12 +99,17 @@ runs:
         INPUT_FILES: ${{ inputs.files }}
         INPUT_EXPORT: ${{ inputs.export }}
         INPUT_EXPORT_DIR: ${{ inputs.export-dir }}
+        # The outputs and every annotation as JSON. The action's own workflow
+        # reads it after a failed run to assert why the run failed.
+        MAREY_SUMMARY: ${{ runner.temp }}/marey-summary.json
       run: node "$GITHUB_ACTION_PATH/action/run.mjs"
 
+    # export-dir is empty unless something was exported, and is the directory
+    # run.mjs actually used (it defaults an empty input).
     - name: Upload the exports
-      if: inputs.upload == 'true' && inputs.export != ''
-      uses: actions/upload-artifact@v4
+      if: inputs.upload == 'true' && steps.run.outputs.export-dir != ''
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ inputs.artifact-name }}
-        path: ${{ inputs.export-dir }}
+        path: ${{ steps.run.outputs.export-dir }}
         if-no-files-found: error

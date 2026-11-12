@@ -4,8 +4,9 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { escapeData as cliData, escapeProperty as cliProp } from "../src/cli/check";
+import { EXPORT_FPS as CLI_EXPORT_FPS } from "../src/compiler/export/exportDefaults";
 // @ts-expect-error plain ESM without type declarations
-import { countErrors, escapeData, escapeProperty, exportCwd, main, parseFiles, parseFormats } from "./run.mjs";
+import { EXPORT_FPS, countErrors, escapeData, escapeProperty, exportCwd, failureDetail, main, parseFiles, parseFormats } from "./run.mjs";
 
 describe("parsing helpers", () => {
   it("parseFiles defaults and splits on whitespace", () => {
@@ -28,6 +29,17 @@ describe("parsing helpers", () => {
     expect(countErrors("a: ok\n::error file=b::x\n::error file=c::y\n")).toBe(2);
   });
 
+  it("checks at the rate marey export uses by default", () => {
+    expect(EXPORT_FPS).toBe(CLI_EXPORT_FPS);
+  });
+
+  it("failureDetail names the signal that killed a child", () => {
+    const killed = { status: null, signal: "SIGKILL", error: undefined, stdout: "", stderr: "" };
+    expect(failureDetail(killed)).toBe("killed by SIGKILL");
+    expect(failureDetail({ ...killed, stderr: "half a line" })).toBe("half a line (killed by SIGKILL)");
+    expect(failureDetail({ ...killed, signal: null, status: 3 })).toBe("exit 3");
+  });
+
   it("escapes identically to the CLI's copies", () => {
     for (const s of ["", "plain", "100%", "a\r\nb", "x:y,z", "%0A literal"]) {
       expect(escapeData(s)).toBe(cliData(s));
@@ -41,6 +53,7 @@ import { appendFileSync } from "node:fs";
 const argv = process.argv.slice(2);
 appendFileSync(process.env.STUB_LOG, JSON.stringify({ argv, cwd: process.cwd() }) + "\\n");
 if (argv[0] === "check") {
+  if (process.env.STUB_CHECK_USAGE) { console.error("Unrecognized option '--reporter'"); process.exit(2); }
   const files = argv.filter((a) => a.endsWith(".marey"));
   let bad = false;
   for (const f of files) {
@@ -105,6 +118,7 @@ describe("main (end to end)", () => {
     const c = calls();
     expect(c).toHaveLength(1);
     expect(c[0].argv).toEqual(["check", "--reporter", "github", "a.marey", "scenes/b.marey"]);
+    expect(existsSync(join(tmp, "marey-export"))).toBe(false);
   });
 
   it("stops before exporting when the check fails", async () => {
@@ -115,7 +129,8 @@ describe("main (end to end)", () => {
     const c = calls();
     expect(c).toHaveLength(1);
     expect(c[0].argv[0]).toBe("check");
-    expect(c[0].argv).toContain("--export-ready");
+    // The frame budget is rate-dependent, so the check asks at the export's rate.
+    expect(c[0].argv.slice(0, 6)).toEqual(["check", "--reporter", "github", "--export-ready", "--fps", "30"]);
     expect(existsSync(join(tmp, "marey-export"))).toBe(false);
   });
 
@@ -177,12 +192,49 @@ describe("main (end to end)", () => {
     expect(outputs().errors).toBe("1");
   });
 
-  it("counts a crashing CLI as at least one error", async () => {
+  it("annotates a CLI that cannot start, and counts it as one error", async () => {
     setup(["a.marey"]);
     const code = await main([], { ...env, MAREY_CLI: join(tmp, "nope.mjs"), INPUT_FILES: "*.marey", INPUT_EXPORT: "apng" }, tmp, (s: string) => log.push(s));
     expect(code).toBe(1);
-    expect(Number(outputs().errors)).toBeGreaterThanOrEqual(1);
-    expect(outputs().checked).toBe("1");
+    expect(outputs()).toEqual({ checked: "1", errors: "1", "export-dir": "" });
+    const annotations = log.filter((l) => l.startsWith("::error"));
+    expect(annotations).toHaveLength(1);
+    expect(annotations[0]).toMatch(/^::error title=marey check::.*nope\.mjs/);
+  });
+
+  it("annotates a check that fails without a diagnostic of its own", async () => {
+    setup(["a.marey"]);
+    const code = await main([], { ...env, STUB_CHECK_USAGE: "1", INPUT_FILES: "*.marey" }, tmp, (s: string) => log.push(s));
+    expect(code).toBe(1);
+    expect(log.filter((l) => l.startsWith("::error"))).toEqual(["::error title=marey check::Unrecognized option '--reporter'"]);
+    expect(outputs().errors).toBe("1");
+  });
+
+  it("adds no annotation of its own when the check already reported its diagnostics", async () => {
+    setup(["bad.marey"]);
+    await main([], { ...env, INPUT_FILES: "*.marey" }, tmp, (s: string) => log.push(s));
+    expect(log.filter((l) => l.startsWith("::error"))).toEqual(["::error file=bad.marey,line=1,col=1,title=marey check::boom"]);
+  });
+
+  it("writes a summary file with the outputs and every annotation, when MAREY_SUMMARY names one", async () => {
+    setup(["a.marey", "bad.marey"]);
+    const summary = join(tmp, "summary.json");
+    const code = await main([], { ...env, MAREY_SUMMARY: summary, INPUT_FILES: "*.marey", INPUT_EXPORT: "apng" }, tmp, (s: string) => log.push(s));
+    expect(code).toBe(1);
+    expect(JSON.parse(readFileSync(summary, "utf8"))).toEqual({
+      checked: 2,
+      errors: 1,
+      "export-dir": "",
+      annotations: ["::error file=bad.marey,line=1,col=1,title=marey check::boom"],
+    });
+  });
+
+  it("validate writes export=true only when the parsed formats are not empty", async () => {
+    for (const [raw, want] of [["apng", "true"], [" , ", "false"], ["", "false"], ["lottie,webm", "true"]]) {
+      writeFileSync(env.GITHUB_OUTPUT, "");
+      expect(await main(["validate"], { ...env, INPUT_EXPORT: raw }, tmp, (s: string) => log.push(s))).toBe(0);
+      expect(outputs()).toEqual({ export: want });
+    }
   });
 
   it("validate rejects unknown formats without calling the CLI", async () => {
