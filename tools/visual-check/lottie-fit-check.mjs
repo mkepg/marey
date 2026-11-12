@@ -34,7 +34,8 @@ import { chromium } from "playwright";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve, join } from "node:path";
 
-// `LOTTIE_FIT_TOLERANCE` in `src/compiler/export/lottieFit.ts`, in the file's own units.
+// `LOTTIE_FIT_TOLERANCE` in `src/compiler/export/lottieFit.ts`, in the file's own units:
+// position px, scale percentage points, rotation degrees, opacity on 0-100.
 const TOL = { p: 0.004, s: 0.0004, r: 0.0002, o: 0.05 };
 // Slack on the geometry check for lottie-web's own Newton/float32 easing solver.
 const SOLVER_SLACK_PX = 1e-4;
@@ -143,12 +144,16 @@ if (renderer === "lottie-web") {
     for (const f of frames) {
       out[f] = await page.evaluate((f) => {
         window.__go(f);
+        // lottie-web stores rotation in radians (built with `degToRads`) and
+        // scale and opacity as ratios (multiplier 0.01). Convert all three back
+        // to the file's units so they compare with `TOL`.
+        const m = (e) => e.finalTransform.mProp;
         return window.__anim.renderer.elements.map((e) => e && {
           nm: e.data.nm,
-          p: e.finalTransform.mProp.p ? Array.from(e.finalTransform.mProp.p.v) : [e.finalTransform.mProp.px.v, e.finalTransform.mProp.py.v],
-          s: Array.from(e.finalTransform.mProp.s.v),
-          r: e.finalTransform.mProp.r ? e.finalTransform.mProp.r.v : 0,
-          o: e.finalTransform.mProp.o.v,
+          p: m(e).p ? Array.from(m(e).p.v) : [m(e).px.v, m(e).py.v],
+          s: Array.from(m(e).s.v).map((v) => v * 100),
+          r: m(e).r ? (m(e).r.v * 180) / Math.PI : 0,
+          o: m(e).o.v * 100,
         });
       }, f);
     }
@@ -162,12 +167,11 @@ if (renderer === "lottie-web") {
     a[f].forEach((ea, i) => {
       const eb = b[f][i];
       if (!ea) return;
-      // lottie-web keeps opacity on 0-100 in `o.v` (checked against the document).
       for (const k of ["p", "s", "r", "o"]) {
         const d = diff(ea[k], eb[k]);
         geometry.worst[k] = Math.max(geometry.worst[k], d);
         overshoot[k] = Math.max(overshoot[k], d - TOL[k]);
-        if (d > TOL[k] + (k === "p" ? SOLVER_SLACK_PX : 0)) geometry.fails.push({ frame: f, layer: ea.nm, prop: k, diff: d });
+        if (d > TOL[k] + (k === "p" ? SOLVER_SLACK_PX : 0)) geometry.fails.push({ frame: f, layer: ea.nm, prop: k, diff: d, perFrame: ea[k], fitted: eb[k] });
       }
     });
   }
@@ -241,14 +245,15 @@ const rows = frames.map((f) => {
 
 const geometryOk = !geometry.checked || geometry.fails.length === 0;
 const pixelsOk = rows.every((r) => r.maxOk) && errors.length === 0;
-geometry.worstOvershootPx = Math.max(0, overshoot.p);
+geometry.worstOvershoot = Object.fromEntries(Object.entries(overshoot).map(([k, v]) => [k, Math.max(0, v)]));
 const report = { renderer, frames, tolerance: TOL, solverSlackPx: SOLVER_SLACK_PX, jitterPx: JITTER_PX, geometry, rows, errors, geometryOk, pixelsOk };
 writeFileSync(join(outDir, "fit-check.json"), JSON.stringify(report, null, 2));
 
 console.log(`renderer ${renderer}, frames ${frames.join(",")}`);
 if (geometry.checked) {
   const w = geometry.worst;
-  console.log(`geometry: worst |fitted - per-frame| p ${w.p.toExponential(2)} px, s ${w.s.toExponential(2)}, r ${w.r.toExponential(2)} deg, o ${w.o.toExponential(2)} (worst position overshoot of 0.004: ${Math.max(0, overshoot.p).toExponential(2)} px, slack ${SOLVER_SLACK_PX}) -> ${geometryOk ? "within tolerance" : "FAIL " + JSON.stringify(geometry.fails.slice(0, 5))}`);
+  const o = geometry.worstOvershoot;
+  console.log(`geometry: worst |fitted - per-frame| p ${w.p.toExponential(2)} px, s ${w.s.toExponential(2)} points, r ${w.r.toExponential(2)} deg, o ${w.o.toExponential(2)} (of 100); worst overshoot of the bare tolerance p ${o.p.toExponential(2)}, s ${o.s.toExponential(2)}, r ${o.r.toExponential(2)}, o ${o.o.toExponential(2)} (position slack ${SOLVER_SLACK_PX}) -> ${geometryOk ? "within tolerance" : "FAIL " + JSON.stringify(geometry.fails.slice(0, 5))}`);
 } else console.log("geometry: not checked (lottie-web only)");
 console.log("frame | per-frame max | calibrated max | fitted max | verdict | share per-frame | share calibrated range | share fitted");
 for (const r of rows) {
