@@ -1,6 +1,6 @@
 /**
  * `npm run check:pack`: packs the publishable package, installs the tarball
- * into an empty directory, and exercises the CLI and the library from there
+ * into an empty directory, and exercises the CLI, the library and the player from there
  * (spec Phase 6 §2.1-2.4, §9.2 — exit criterion 1, "the package builds and
  * installs from a clean checkout").
  *
@@ -52,11 +52,12 @@
  *    lazy-only closure (reached through `import()`) must be non-empty: the
  *    two-stage split, proved on the built bundle.
  * 8. The installed `dist/player/` is served over HTTP to headless Chromium
- *    with a page holding `<marey-player autoplay>` and an inline scene. The
- *    element must fire `ready`, mount a `<canvas>` in its shadow root, raise
- *    no page error or console error, and the server must answer 200 for the
- *    scene font at `fonts/JetBrainsMono-Regular.ttf`, which catches a wrong
- *    font path in the render chunk.
+ *    with a page holding `<marey-player autoplay>` and an inline scene that
+ *    has `text`. The element must fire `ready`, mount a `<canvas>` in its
+ *    shadow root and raise no page error or console error, and the page must
+ *    itself have requested the scene font at `fonts/JetBrainsMono-Regular.ttf`
+ *    and got a 200. The request comes from the render chunk's own font URL,
+ *    so a wrong font path there fails this check.
  * 9. The tarball's file count equals `EXPECTED_FILE_COUNT`.
  *
  * Each check prints one line; the script stops and exits 1 at the first
@@ -390,7 +391,7 @@ try {
   });
 
   const playerDir = join(installDir, "node_modules", "marey-lang", "dist", "player");
-  check("player entry chunk holds no PixiJS", () => {
+  check("player's static import closure holds no PixiJS", () => {
     const { staticFiles, lazyFiles } = playerClosures(playerDir);
     const bytes = (names) => names.reduce((n, f) => n + statSync(join(playerDir, f)).size, 0);
     const problems = [];
@@ -411,7 +412,8 @@ try {
       "<!doctype html><meta charset=utf-8>" +
       "<style>body{margin:0}marey-player{display:block;width:320px;height:180px}</style>" +
       '<marey-player id="p" autoplay><script type="text/marey">' +
-      "scene { size: (320, 180) duration: 2 circle c { position: (160, 90), radius: 30 } }" +
+      "scene { size: (320, 180) duration: 2 circle c { position: (160, 90), radius: 30 } " +
+      'text t { position: (20, 20), content: "marey", fontSize: 24 } }' +
       "</script></marey-player>" +
       // The listener is attached before the module can run, so `ready` cannot be missed.
       '<script>window.__ready = new Promise((ok) => document.getElementById("p").addEventListener("ready", () => ok(true), { once: true }));</script>' +
@@ -422,22 +424,37 @@ try {
       browser = await chromium.launch({ args: [...PLAYER_LAUNCH_ARGS] });
       const tab = await browser.newPage();
       const problems = [];
+      const fontResponses = [];
       tab.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
       tab.on("console", (m) => {
         if (m.type() === "error") problems.push(`console error: ${m.text()}`);
       });
-      await tab.goto(`http://127.0.0.1:${port}/`);
-      await Promise.race([
-        tab.evaluate(() => window.__ready),
-        new Promise((_, no) => setTimeout(() => no(new Error("no ready event within 20 s")), 20_000)),
-      ]);
-      await tab.waitForFunction(() => document.getElementById("p").shadowRoot.querySelector("canvas") !== null, null, {
-        timeout: 20_000,
+      tab.on("response", (r) => {
+        if (new URL(r.url()).pathname === PLAYER_FONT_PATH) fontResponses.push(r.status());
       });
-      const font = await tab.evaluate(async (path) => (await fetch(path)).status, PLAYER_FONT_PATH);
-      if (font !== 200) throw new Error(`GET ${PLAYER_FONT_PATH} answered ${font}`);
+      let timer;
+      try {
+        await tab.goto(`http://127.0.0.1:${port}/`);
+        await Promise.race([
+          tab.evaluate(() => window.__ready),
+          new Promise((_, no) => {
+            timer = setTimeout(() => no(new Error("no ready event within 20 s")), 20_000);
+          }),
+        ]);
+        await tab.waitForFunction(() => document.getElementById("p").shadowRoot.querySelector("canvas") !== null, null, {
+          timeout: 20_000,
+        });
+      } catch (e) {
+        // What the page reported is usually why it never got ready.
+        throw new Error([e instanceof Error ? e.message : String(e), ...problems].join("; "));
+      } finally {
+        clearTimeout(timer);
+      }
+      if (fontResponses.join() !== "200") {
+        throw new Error(`the player's requests for ${PLAYER_FONT_PATH} answered [${fontResponses.join(", ")}], expected one 200`);
+      }
       if (problems.length > 0) throw new Error(problems.join("; "));
-      return "ready, canvas mounted, font 200";
+      return "ready, canvas mounted, the player fetched its font (200)";
     } finally {
       if (browser) await browser.close();
       await new Promise((done) => server.close(done));
