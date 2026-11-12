@@ -75,8 +75,8 @@ Editor smoke test. Glaxnimate 0.6.0 (`winget install --id KDE.Glaxnimate`)
 installed and ran. Opening the question 1 candidate showed an "Issues"
 dialog, `Invalid value for box.Transform.position`, and the rectangle
 appeared at a fixed place. Opening the question 4 candidate (combined position,
-bare final keyframe) raised no dialog and showed the rectangle. I did not
-scrub the timeline, so this run does not show whether the layer moves or how
+bare final keyframe) raised no dialog and showed the rectangle. The timeline
+was not scrubbed, so this run does not show whether the layer moves or how
 the position track appears in the editor. The cause of the question 1
 warning is not isolated: it may be the split layout itself or a field
 Glaxnimate expects that the probe document leaves out. Spec §4 says an
@@ -144,9 +144,11 @@ Keyframes and bytes, as proposal §1 measured them
 
 ## 3. After: real players
 
-Head: the commit after `aabd370` (encoder with tolerances 0.004 px, 0.0004
-points, 0.0002 degrees, 0.05 opacity, 0.25/255 colour, and `n` easing names).
-All runs exit 0 with no page, console or lottie errors.
+Fitted documents exported at `aabd370` (encoder with tolerances 0.004 px,
+0.0004 points, 0.0002 degrees, 0.05 opacity, 0.25/255 colour, and `n` easing
+names). The encoder is unchanged through `2e0dc41`, whose
+`lottie-fit-check.mjs` produced the restated tables below. No run raised a
+page, console or lottie error.
 
 ### Original pixel bound and the two superseded fitted runs
 
@@ -216,7 +218,9 @@ Two separate causes:
    1e-4 px on position for lottie-web's own Newton/float32 easing solver.
 2. Pixels, both players: fitted maximum at most the worst maximum over the
    per-frame file and its copies shifted by +-0.001, +-0.002 and +-0.004 px,
-   plus 2, per compared frame. Share compared with the same calibrated range.
+   plus 2, per compared frame. The share of differing pixels fails when it
+   exceeds the same calibrated range's highest share by more than 0.5
+   percentage points, per compared frame.
 
 ```
 node tools/visual-check/lottie-fit-check.mjs --per-frame <section 2 doc.json> --fitted <this head's doc.json> \
@@ -226,40 +230,105 @@ node tools/visual-check/lottie-fit-check.mjs --per-frame <section 2 doc.json> --
 The per-frame document is the export at base commit `cd14c3d`
 (`git worktree add <dir> cd14c3d`, `npm run build:export-page`, `marey export
 ... --format lottie --fps 30`); the PNG frames are `frame_<n>_pngexport.png`
-from `lottie-check.mjs --compare-png` on this head. Worst values over each
-row's frames (the verdict is per frame):
+from `lottie-check.mjs --compare-png` on this head.
 
-| Scene | Renderer | Max, per-frame | Max, calibrated | Max, fitted | Verdict | Share, per-frame | Share, calibrated (highest) | Share, fitted | Worst position difference (px) |
-|---|---|---|---|---|---|---|---|---|---|
-| lottie-ease-linear | lottie-web | 0 | 2 | 0 | met | 0.0000% | 0.0216% | 0.0000% | 6.8e-13 |
-| lottie-ease-linear | dotlottie-web | 0 | 0 | 0 | met | 0.0000% | 0.0000% | 0.0000% | n/a |
-| lottie-ease-in | lottie-web | 0 | 2 | 0 | met | 0.0000% | 0.0216% | 0.0000% | 1.9e-12 |
-| lottie-ease-in | dotlottie-web | 0 | 0 | 0 | met | 0.0000% | 0.0000% | 0.0000% | n/a |
-| lottie-ease-out | lottie-web | 0 | 2 | 0 | met | 0.0000% | 0.0216% | 0.0000% | 5.8e-12 |
-| lottie-ease-out | dotlottie-web | 0 | 0 | 0 | met | 0.0000% | 0.0000% | 0.0000% | n/a |
-| lottie-ease-inout | lottie-web | 0 | 2 | 0 | met | 0.0000% | 0.0216% | 0.0000% | 6.8e-13 |
-| lottie-ease-inout | dotlottie-web | 0 | 0 | 0 | met | 0.0000% | 0.0000% | 0.0000% | n/a |
-| lottie-ease-handoff | lottie-web | 0 | 2 | 1 | met | 0.0000% | 0.0216% | 0.0216% | 1.2e-3 |
-| lottie-ease-handoff | dotlottie-web | 0 | 0 | 0 | met | 0.0000% | 0.0000% | 0.0000% | n/a |
-| lottie-ease-handoff-yoyo | lottie-web | 3 | 4 | 3 | met | 0.0108% | 0.0216% | 0.0108% | 2.7e-10 |
-| lottie-ease-handoff-yoyo | dotlottie-web | 0 | 0 | 0 | met | 0.0000% | 0.0000% | 0.0000% | n/a |
-| dusk-hills | lottie-web | 91 | 91 | 91 | met | 0.9725% | 0.9731% | 0.9725% | 5.5e-4 |
-| dusk-hills | dotlottie-web | 77 | 78 | 77 | met | 1.0910% | 1.0910% | 1.0985% | n/a |
-| ledges | lottie-web | 88 | 113 | 109 | met | 1.0456% | 1.0481% | 1.0454% | 4.0e-3 |
-| ledges | dotlottie-web | 128 | 129 | 128 | met | 1.1671% | 1.1671% | 1.1671% | n/a |
-| bar-chart-reveal | lottie-web | 140 | 140 | 140 | met | 0.8400% | 0.8400% | 0.8400% | 0 |
-| bar-chart-reveal | dotlottie-web | 139 | 139 | 139 | met | 0.8410% | 0.8410% | 0.8410% | n/a |
-| logo-reveal | lottie-web | 103 | 103 | 103 | met | 2.4646% | 2.4650% | 2.4646% | 1.7e-3 |
-| logo-reveal | dotlottie-web | 109 | 112 | 109 | met | 3.9712% | 3.9719% | 1.9537% | n/a |
-| physics-pile | lottie-web | 102 | 102 | 102 | met | 0.9623% | 0.9692% | 0.9660% | 3.9e-3 |
-| physics-pile | dotlottie-web | 96 | 96 | 96 | met | 1.0471% | 1.0481% | 1.0473% | n/a |
+Pixels. The maximum columns are the worst over each row's frames; the
+verdict is per frame. The share columns are taken at the frame where the
+fitted share stands highest above that frame's calibrated range, which is the
+frame the share verdict turns on; "excess" is the fitted share minus the
+range's highest share, in percentage points.
 
-Geometry: every layer property is inside tolerance at every compared frame.
-The worst position overshoot of the bare 0.004 px tolerance is 9.4e-6 px
-(ledges `tile_5`, frame 180, lottie-web), far inside the 1e-4 px allowed for
-the player's solver. Scale, rotation and opacity never exceed tolerance (worst
-0 points, 7.6e-6 degrees, 4.3e-4). Geometry is not read from dotlottie-web,
-which exposes no transform matrices.
+| Scene | Renderer | Max, per-frame | Max, calibrated | Max, fitted | Max verdict | Share frame | Share, per-frame | Share, calibrated range | Share, fitted | Excess (points) | Share verdict |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| lottie-ease-linear | lottie-web | 0 | 2 | 0 | met | 30 | 0.0000% | 0.0000% to 0.0108% | 0.0000% | -0.0108 | met |
+| lottie-ease-linear | dotlottie-web | 0 | 0 | 0 | met | 0 | 0.0000% | 0.0000% to 0.0000% | 0.0000% | +0.0000 | met |
+| lottie-ease-in | lottie-web | 0 | 2 | 0 | met | 0 | 0.0000% | 0.0000% to 0.0216% | 0.0000% | -0.0216 | met |
+| lottie-ease-in | dotlottie-web | 0 | 0 | 0 | met | 0 | 0.0000% | 0.0000% to 0.0000% | 0.0000% | +0.0000 | met |
+| lottie-ease-out | lottie-web | 0 | 2 | 0 | met | 15 | 0.0000% | 0.0000% to 0.0108% | 0.0000% | -0.0108 | met |
+| lottie-ease-out | dotlottie-web | 0 | 0 | 0 | met | 0 | 0.0000% | 0.0000% to 0.0000% | 0.0000% | +0.0000 | met |
+| lottie-ease-inout | lottie-web | 0 | 2 | 0 | met | 30 | 0.0000% | 0.0000% to 0.0108% | 0.0000% | -0.0108 | met |
+| lottie-ease-inout | dotlottie-web | 0 | 0 | 0 | met | 0 | 0.0000% | 0.0000% to 0.0000% | 0.0000% | +0.0000 | met |
+| lottie-ease-handoff | lottie-web | 0 | 2 | 1 | met | 15 | 0.0000% | 0.0000% to 0.0108% | 0.0108% | +0.0000 | met |
+| lottie-ease-handoff | dotlottie-web | 0 | 0 | 0 | met | 0 | 0.0000% | 0.0000% to 0.0000% | 0.0000% | +0.0000 | met |
+| lottie-ease-handoff-yoyo | lottie-web | 3 | 4 | 3 | met | 75 | 0.0108% | 0.0108% to 0.0108% | 0.0108% | +0.0000 | met |
+| lottie-ease-handoff-yoyo | dotlottie-web | 0 | 0 | 0 | met | 0 | 0.0000% | 0.0000% to 0.0000% | 0.0000% | +0.0000 | met |
+| dusk-hills | lottie-web | 91 | 91 | 91 | met | 120 | 0.8425% | 0.8421% to 0.8425% | 0.8425% | +0.0000 | met |
+| dusk-hills | dotlottie-web | 77 | 78 | 77 | met | 330 | 1.0517% | 1.0508% to 1.0527% | 1.0698% | +0.0171 | met |
+| ledges | lottie-web | 88 | 113 | 109 | met | 135 | 0.9542% | 0.9494% to 0.9550% | 0.9542% | -0.0008 | met |
+| ledges | dotlottie-web | 128 | 129 | 128 | met | 90 | 1.1671% | 1.1644% to 1.1671% | 1.1671% | +0.0000 | met |
+| bar-chart-reveal | lottie-web | 140 | 140 | 140 | met | 0 | 0.7135% | 0.7135% to 0.7135% | 0.7135% | +0.0000 | met |
+| bar-chart-reveal | dotlottie-web | 139 | 139 | 139 | met | 0 | 0.7123% | 0.7123% to 0.7123% | 0.7123% | +0.0000 | met |
+| logo-reveal | lottie-web | 103 | 103 | 103 | met | 0 | 0.0000% | 0.0000% to 0.0000% | 0.0000% | +0.0000 | met |
+| logo-reveal | dotlottie-web | 109 | 112 | 109 | met | 25 | 0.2298% | 0.2290% to 0.2302% | 0.8171% | +0.5869 | MISSED |
+| physics-pile | lottie-web | 102 | 102 | 102 | met | 140 | 0.9617% | 0.9606% to 0.9629% | 0.9660% | +0.0031 | met |
+| physics-pile | dotlottie-web | 96 | 96 | 96 | met | 0 | 0.1790% | 0.1790% to 0.1794% | 0.1790% | -0.0004 | met |
+
+Two dotlottie-web rows move the share more than the others:
+
+- Dusk Hills: 1.0985% against a calibrated highest of 1.0910% at frame 60
+  (+0.0075 points), and +0.0171 points at frame 330, the largest excess in the
+  row. That is the sub-pixel noise the 0.5-point gate allows for.
+- Logo reveal: the fitted share is 1.9538% at frame 50 against 3.9712% for the
+  per-frame file, about half, and 0.8171% at frame 25 against a calibrated
+  highest of 0.2302%, 0.587 points over, past the gate. Swapping only the
+  opacity tracks between the two files makes their dotlottie-web renders
+  identical at both frames, so the whole difference is opacity. At frame 25
+  the fitted file holds the sun, its disc and its rim at 99.963 opacity,
+  inside the 0.05 tolerance, where the per-frame file has 100, and
+  dotlottie-web draws the whole sun one level darker: (253, 184, 62) against
+  (254, 185, 62), 2988 pixels differing by exactly 1. At frame 50 the two
+  renders differ by one level on 17,650 pixels, and the fitted one is the
+  closer to the PNG export; how dotlottie-web turns that frame's opacities
+  into a one-level shift is not isolated. lottie-web shows neither shift on
+  this scene.
+
+Geometry, lottie-web, worst |fitted − per-frame| over each row's frames, in
+the file's units (px, percentage points, degrees, 0 to 100):
+
+| Scene | Position | Scale | Rotation | Opacity | Verdict |
+|---|---|---|---|---|---|
+| lottie-ease-linear | 6.82e-13 | 0 | 0 | 0 | met |
+| lottie-ease-in | 1.88e-12 | 0 | 0 | 0 | met |
+| lottie-ease-out | 5.80e-12 | 0 | 0 | 0 | met |
+| lottie-ease-inout | 6.82e-13 | 0 | 0 | 0 | met |
+| lottie-ease-handoff | 1.23e-3 | 0 | 0 | 0 | met |
+| lottie-ease-handoff-yoyo | 2.70e-10 | 0 | 0 | 0 | met |
+| dusk-hills | 5.45e-4 | 0 | 2.93e-14 | 4.29e-2 | met |
+| ledges | 4.01e-3 | 0 | 4.37e-4 | 0 | MISSED |
+| bar-chart-reveal | 0 | 0 | 0 | 2.61e-2 | met |
+| logo-reveal | 1.67e-3 | 0 | 0 | 3.65e-2 | met |
+| physics-pile | 3.94e-3 | 0 | 1.62e-4 | 0 | met |
+
+lottie-web holds rotation in radians and scale and opacity as ratios
+(`degToRads` and a 0.01 multiplier in its `TransformProperty`). The check
+converts them to the file's units before comparing. The version committed
+at `08e8f60` compared them unconverted, which made rotation 57 times and
+scale and opacity 100 times looser than F3, so its statement that every
+property was inside tolerance was not established.
+
+One property exceeds its tolerance: ledges `tile_17` rotation at frame 255,
+4.37e-4° against 2e-4°. The fitted keyframes hold `tile_17` flat at
+−326.2670432225297° from frame 246 to 269. At frame 255, `lottieEvaluate.ts`
+returns −326.2670432225297° for those keyframes, the per-frame sample is
+−326.2670432225297°, and lottie-web's own interpolated value (`r.pv`, in degrees) is
+−326.2670432225297°. The value lottie-web draws (`r.v`, converted to degrees) is
+−326.26747978652645°, the value it held at frame 180, the previous compared
+frame. lottie-web's `setVValue` replaces `v` only when the new value differs
+from the held one by more than 1e-5 in its internal units: 1e-5 rad, 5.7e-4°,
+for rotation, and 1e-3 percentage points for scale, both larger than F3's
+tolerances. From frame 180 to 255 the fitted file's rotation moves 4.37e-4°,
+under that threshold, and the per-frame file's moves 5.8e-4°, over it.
+Frame 255 read on its own draws −326.2670432225297° from the fitted file.
+The check reads the frames in sequence, so it compares two held values. The
+geometry check fails on this row.
+
+The position overshoot of the bare 0.004 px tolerance, 9.4e-6 px at ledges
+`tile_5` frame 180, is float32 storage, not the easing solver: lottie-web
+stores the per-frame file's combined position in a `Float32Array`, which
+rounds the sample 363.690083347462 to 363.6900939941406 (+1.06e-5 px). The
+fitted file's split position is read in float64 and lies 3.9988e-3 px from
+the exact sample. Geometry is not read from dotlottie-web, which exposes no
+transform matrices.
 
 Against the original bound, the dotlottie-web rows all pass now. Two lottie-web
 rows still read above it and are the artifacts above: ledges frame 180
@@ -298,16 +367,15 @@ Monotonic.
 
 ## 6. Editor
 
-Glaxnimate 0.6.0, GUI only (its command-line export crashes under this shell).
-Opening the fitted `lottie-ease-out.json` showed the "Invalid value for
-box.Transform.position" issue dialog, which spec §4's correction explains
-(Glaxnimate's importer joins split `x`/`y` into one position property), and the
-rectangle at its start position. I did not scrub the timeline or drag a
-handle, so I make no claim about the editor's timeline UI.
+Glaxnimate 0.6.0, GUI only (its command-line export crashed). Opening the
+fitted `lottie-ease-out.json` showed the "Invalid value for
+box.Transform.position" issue dialog and the rectangle at its start position.
+The timeline was not scrubbed and no handle was dragged, so nothing is claimed
+about the editor's timeline UI.
 
-I then used File > Save As (Lottie, not pretty) and read the file back. It has
-one combined position property with 3 keyframes at t = 0, 60 and 89, the same
-times as our `x` track, each with easing handles:
+Glaxnimate's own re-export (File > Save As, Lottie, not pretty), read back,
+has one combined position property with 3 keyframes at t = 0, 60 and 89, the
+same times as the fitted `x` track, each with easing handles:
 
 | Keyframe | Written by Marey (`o`, `i`) | Re-exported by Glaxnimate (`o`, `i`) |
 |---|---|---|
@@ -315,8 +383,8 @@ times as our `x` track, each with easing handles:
 | t = 60 | (0.3333, 0.3333), (0.6667, 0.6667) | (0.167, 0.167), (0.833, 0.833) |
 
 Computed from those numbers: the start slope `o.y / o.x` is 0.6667 / 0.3333 =
-2 in our file and 0.333 / 0.167 = 2 in Glaxnimate's, and both end slopes are 0
-(`i.y = 1`). Glaxnimate rewrites the handle lengths, not the tangents.
+2 in the fitted file and 0.333 / 0.167 = 2 in Glaxnimate's, and both end
+slopes are 0 (`i.y = 1`).
 
 ## 7. Hashes
 
