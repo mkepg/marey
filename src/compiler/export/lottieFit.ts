@@ -90,6 +90,9 @@ interface RunSums {
  * Fits `values` (one array per frame, each of the same length `d ≥ 1`, at
  * least two frames) into keyframes whose segments reproduce every sample
  * within `tolerance`.
+ *
+ * A run whose least-squares handles fall outside `handleRange` is rejected
+ * and split, never refitted with clamped handles.
  */
 export function fitKeyframes(
   values: ReadonlyArray<ReadonlyArray<number>>,

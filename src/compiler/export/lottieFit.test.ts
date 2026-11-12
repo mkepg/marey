@@ -270,6 +270,8 @@ describe("fitKeyframes", () => {
     const elapsed = performance.now() - start;
     console.log(`fitKeyframes: 66 tracks x ${FRAMES} frames in ${elapsed.toFixed(1)} ms, ${keyframes} keyframes`);
     expect(elapsed).toBeLessThan(2000);
+    // Outside the timed region: the timed output must also be correct.
+    for (const n of [0, 1, 32, 33, 34, 65]) roundTrip(tracks[n], LOTTIE_FIT_TOLERANCE.position);
     for (const track of tracks.slice(0, 33)) {
       // A cubic segment is one run, so each 2 s segment needs about one keyframe.
       expect(fitKeyframes(track, 0.01, OPTS).length).toBeLessThanOrEqual(FRAMES / SEGMENT * 3 + 1);
