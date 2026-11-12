@@ -198,7 +198,7 @@ resolves). Evidence is in
 `docs/plans/2026-10-30-phase-9a-embeddable-player.md`.
 `roadmap-and-process.md`'s Phase 9A bullet carries the same status.
 
-**9B (GitHub Action and Gate C) implemented on a branch (not yet merged); Gate C measured on the PR #2 run; evidence in `eval/RESULTS-PHASE-9B.md`.** Design:
+**9B (GitHub Action and Gate C) merged into `main` on 2026-11-13 (fast-forward to `c1808c9`); Gate C measured on the PR #2 runs; evidence in `eval/RESULTS-PHASE-9B.md`.** Design:
 `docs/specs/2026-11-12-marey-phase-9b-github-action-design.md`; plan:
 `docs/plans/2026-11-12-phase-9b-github-action.md`. It adds
 `action.yml` and `action/` at the repository root, `marey check --reporter
