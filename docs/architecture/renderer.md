@@ -325,6 +325,51 @@ measured this is inert, because neither propagates. In a renderer that *did*
 propagate, every nested alpha would double-apply. That is filed, not fixed —
 and the fixture above is the one that would catch it.
 
+### Fitted keyframes
+
+The encoder does not write one keyframe per frame. Each animated track goes
+through `export/lottieFit.ts`, which writes a few cubic-eased keyframes.
+Design: `docs/specs/2026-11-13-marey-lottie-fitted-keyframes-design.md`.
+
+- **Where it sits.** `lottieFit.ts` (the fitter) and `lottieEvaluate.ts` (a
+  player-faithful reader used by tests) are pure arithmetic. Like
+  `lottieEncode.ts`, they may not import `pixi.js`, `sceneIR` or
+  `harfbuzzjs`; `exportBoundary.test.ts` greps for this. The encoder calls
+  the fitter and nothing else changes at the boundary: it still receives
+  snapshots only.
+- **Tolerances.** A fitted track reproduces every sampled frame within a
+  per-channel tolerance in the file's own units, exported as
+  `LOTTIE_FIT_TOLERANCE`:
+
+  | channel | unit | tolerance |
+  |---|---|---|
+  | position | px | 0.01 |
+  | scale | percentage points | 0.01 |
+  | rotation | degrees | 0.01 |
+  | opacity | 0 to 100 | 0.1 |
+  | colour | 0 to 1 per channel | 0.49 / 255 |
+
+  A track that never varies, exactly, still collapses to a static property.
+- **Separated position.** When either coordinate moves, `ks.p` is
+  `{s: true, x, y}` and each axis is fitted on its own; a fully static
+  position stays the combined `[x, y]`. Anything that reads `ks.p.k` as a
+  vector must go through `evaluateProperty`.
+- **Shared easing on vectors.** Scale and colour stay combined vectors with
+  one easing for all components, written as length-1 handle arrays on the
+  keyframe that starts each segment, because dotlottie-web ignores
+  per-component handles on a combined vector. A vector whose components ease
+  differently therefore fits shorter runs.
+- **Exact keyframe values.** A keyframe's `s` is the sampled value, copied.
+  Handle values are written unrounded, exactly as the fitter checked them.
+- **The handle bound.** A fitted y handle must lie in `[-1, 2]`
+  (`DEFAULT_HANDLE_RANGE`); a run that needs more is split, never clamped.
+- **The final keyframe.** The last keyframe carries `t` and `s` only; it
+  starts no segment. Both measured players read this form.
+- **The round-trip test.** `lottieFitted.test.ts` encodes the headless
+  canonical scenes at 30 fps, evaluates every property of every layer at
+  every frame, and requires each value within its tolerance. It also pins a
+  keyframe ceiling per scene.
+
 ## The video encoder boundary (Phase 5B)
 
 Video export carries forward Phase 5A's two-modules-one-rule-each shape rather

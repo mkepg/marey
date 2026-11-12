@@ -1,7 +1,7 @@
 # Lottie keyframe recovery — proposal
 
-**Status: proposed, not scheduled.** Past the roadmap's finish line; nothing
-here is owed. This note records the problem, a measured baseline, the finding
+**Status: Accepted 2026-11-13; designed in
+`2026-11-13-marey-lottie-fitted-keyframes-design.md`.** This note records the problem, a measured baseline, the finding
 that makes the change tractable, and the open decisions, so the work can be
 picked up without redoing the investigation.
 

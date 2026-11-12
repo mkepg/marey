@@ -1,6 +1,7 @@
 import { rgb01OfInt, type LayerSpec, type LottieShapeSpec } from "./lottieGeometry";
 import type { FrameSnapshot, ObjectSnapshot } from "../renderer/frameSampler";
 import type { SamplerPlan } from "./exportContract";
+import { fitKeyframes, DEFAULT_HANDLE_RANGE, LOTTIE_FIT_TOLERANCE } from "./lottieFit";
 
 /**
  * The Lottie document, and the half of the exporter that never sees the IR.
@@ -52,8 +53,17 @@ import type { SamplerPlan } from "./exportContract";
  *
  * Two §11 items were settled without a browser, by reading the sources
  * directly: §11.3's shape-list field is `shapes` (the published layers page),
- * and §11.6's easing handles must be present and explicit — see
- * {@link LINEAR_IN}.
+ * and §11.6's easing handles must be present and explicit on every keyframe
+ * that starts a segment — omitting them leaves the property unevaluated.
+ *
+ * **Keyframes are fitted, not one per frame.** Design §7.1's per-frame linear
+ * keyframes are superseded by `docs/specs/2026-11-13-marey-lottie-fitted-keyframes-design.md`:
+ * each animated track goes through `fitKeyframes` (`lottieFit.ts`), which
+ * writes a few cubic-eased keyframes whose `s` values are copied samples and
+ * whose curves reproduce every frame within a per-channel tolerance. An
+ * animated position is written as separate `x` and `y` dimensions, the layout
+ * both measured players honour. A track that never varies still collapses to
+ * a static property (design §7.2).
  */
 
 /** A keyframe's easing handle: one component per value component, or one for all. */
@@ -61,33 +71,6 @@ export interface LottieBezierHandle {
   readonly x: ReadonlyArray<number>;
   readonly y: ReadonlyArray<number>;
 }
-
-/**
- * Linear interpolation, written out rather than omitted.
- *
- * Design §11.6 left open what a player does when `i`/`o` are absent.
- * **Measured against lottie-web 5.13.0 rather than assumed — and the first
- * measurement here was itself wrong and corrected by Task 4's reviewer, per
- * AGENT-LESSONS §1: omitting the handles is NOT a `TypeError`.** Stripping
- * `i`/`o` from every keyframe and re-rendering throws no exception and fires
- * no `AnimationItem` `'error'` event, at integer frames as well as sub-frame
- * ones — this is not "a TypeError at the first sub-frame sample", it never
- * happens at all. What actually happens: the position property is never
- * evaluated, so it keeps lottie-web's own uninitialised sentinel value
- * (`initialDefaultFrame = -999999`, `build/player/lottie.js:10`, the value
- * `KeyframedValueProperty`/`KeyframedMultidimensionalProperty` assign to
- * `this.v`/`this.pv` at construction, `lottie.js:3146-3147`) — so the layer
- * is drawn roughly a million pixels off-canvas rather than at any
- * interpolated position. Silent and invisible, not loud: a wrong-but-loud
- * crash would have been the easier failure to catch.
- *
- * `(0, 0)` → `(1, 1)` is the identity cubic. `BezierEaser.js:98` short-circuits
- * it — `if (mX1 === mY1 && mX2 === mY2) return x; // linear` — so this is
- * exactly linear rather than approximately so, which matters because design
- * §7.1 chose linear over hold precisely for sub-frame sampling.
- */
-const LINEAR_OUT: LottieBezierHandle = { x: [0], y: [0] };
-const LINEAR_IN: LottieBezierHandle = { x: [1], y: [1] };
 
 /**
  * One keyframe. `s` is an array even for a scalar property (design §3), and
@@ -98,8 +81,9 @@ const LINEAR_IN: LottieBezierHandle = { x: [1], y: [1] };
 export interface LottieKeyframe {
   readonly t: number;
   readonly s: ReadonlyArray<number>;
-  readonly i: LottieBezierHandle;
-  readonly o: LottieBezierHandle;
+  /** Absent only on the last keyframe, which starts no segment. */
+  readonly i?: LottieBezierHandle;
+  readonly o?: LottieBezierHandle;
 }
 
 /** An animatable scalar: `{a: 0, k: value}` static, `{a: 1, k: [...]}` animated. */
@@ -118,10 +102,20 @@ export type LottieVectorProperty =
  */
 export type LottieColorProperty = LottieVectorProperty;
 
+/**
+ * A position with its dimensions animated separately (`s: true`). Written only
+ * when either coordinate moves; a static position stays a combined vector.
+ */
+export interface LottieSplitPosition {
+  readonly s: true;
+  readonly x: LottieScalarProperty;
+  readonly y: LottieScalarProperty;
+}
+
 /** A layer transform. `r` is degrees clockwise, `s` percent, `o` 0–100. */
 export interface LottieTransform {
   readonly a: LottieVectorProperty;
-  readonly p: LottieVectorProperty;
+  readonly p: LottieVectorProperty | LottieSplitPosition;
   readonly s: LottieVectorProperty;
   readonly r: LottieScalarProperty;
   readonly o: LottieScalarProperty;
@@ -257,6 +251,12 @@ function hexOf(rgb: readonly [number, number, number]): string {
   return `#${byte(rgb[0])}${byte(rgb[1])}${byte(rgb[2])}`;
 }
 
+/**
+ * Fitter settings from the player measurements: the last keyframe carries no
+ * handles, and a fitted easing may overshoot within the default range.
+ */
+const FIT_OPTIONS = { finalHandles: false, handleRange: DEFAULT_HANDLE_RANGE } as const;
+
 /** A static property: the collapsed form of a track that never varies. */
 function staticVector(value: ReadonlyArray<number>): LottieVectorProperty {
   return { a: 0, k: value };
@@ -285,24 +285,29 @@ function staticScalar(value: number): LottieScalarProperty {
  * either way — so `lottieEncode.test.ts` pins both the collapse and the
  * all-frames comparison that decides it.
  */
-function track(values: ReadonlyArray<ReadonlyArray<number>>): LottieVectorProperty {
+function track(values: ReadonlyArray<ReadonlyArray<number>>, tolerance: number): LottieVectorProperty {
   const first = values[0];
   const constant = values.every((v) => v.length === first.length && v.every((n, i) => n === first[i]));
   if (constant) return staticVector(first);
-  return {
-    a: 1,
-    k: values.map((s, t) => ({ t, s, i: LINEAR_IN, o: LINEAR_OUT })),
-  };
+  return { a: 1, k: fitKeyframes(values, tolerance, FIT_OPTIONS) };
 }
 
 /** The scalar form of {@link track}: a static `k` is a bare number. */
-function scalarTrack(values: ReadonlyArray<number>): LottieScalarProperty {
+function scalarTrack(values: ReadonlyArray<number>, tolerance: number): LottieScalarProperty {
   const first = values[0];
   if (values.every((v) => v === first)) return staticScalar(first);
-  return {
-    a: 1,
-    k: values.map((v, t) => ({ t, s: [v], i: LINEAR_IN, o: LINEAR_OUT })),
-  };
+  return { a: 1, k: fitKeyframes(values.map((v) => [v]), tolerance, FIT_OPTIONS) };
+}
+
+/**
+ * Position: combined while it never moves, separated into `x` and `y` as soon
+ * as either coordinate does, each axis collapsing and fitting on its own.
+ */
+function positionTrack(values: ReadonlyArray<ReadonlyArray<number>>): LottieVectorProperty | LottieSplitPosition {
+  const x = scalarTrack(values.map((v) => v[0]), LOTTIE_FIT_TOLERANCE.position);
+  const y = scalarTrack(values.map((v) => v[1]), LOTTIE_FIT_TOLERANCE.position);
+  if (x.a === 0 && y.a === 0) return staticVector([x.k, y.k]);
+  return { s: true, x, y };
 }
 
 /**
@@ -574,10 +579,10 @@ export function encodeLottie(
         // is exactly what a Marey pivot is — so this is a copy, not a
         // computation, and it is never animated.
         a: staticVector([spec.anchor.x, spec.anchor.y]),
-        p: track(positions),
-        s: track(scales),
-        r: scalarTrack(rotations),
-        o: scalarTrack(opacities),
+        p: positionTrack(positions),
+        s: track(scales, LOTTIE_FIT_TOLERANCE.scale),
+        r: scalarTrack(rotations, LOTTIE_FIT_TOLERANCE.rotation),
+        o: scalarTrack(opacities, LOTTIE_FIT_TOLERANCE.opacity),
       },
       ao: 0 as const,
       ip: 0,
@@ -590,7 +595,7 @@ export function encodeLottie(
     if (spec.shape.kind === "group") {
       return { ...base, ty: 3 };
     }
-    const shapes = shapeItemsFor(spec.shape, spec.color === null ? null : track(colors), spec.name);
+    const shapes = shapeItemsFor(spec.shape, spec.color === null ? null : track(colors, LOTTIE_FIT_TOLERANCE.color), spec.name);
     if (spec.shape.kind === "text" && spec.shape.clip) {
       // pixi's texture box (see `lottieGeometry.ts`'s `textClip`): the
       // preview cuts off ink outside it, so the Lottie does too. In layer

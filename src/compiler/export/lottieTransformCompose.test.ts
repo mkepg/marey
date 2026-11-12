@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Container, Matrix } from "pixi.js";
-import { encodeLottie, type LottieLayer, type LottieVectorProperty, type LottieScalarProperty } from "./lottieEncode";
+import { encodeLottie, type LottieLayer } from "./lottieEncode";
+import { evaluateProperty } from "./lottieEvaluate";
 import { planLottie } from "./lottieGeometry";
 import { planExport } from "./exportContract";
 import { sampleFrames } from "../renderer/frameSampler";
@@ -72,18 +73,15 @@ scene {
  * One layer's own Lottie transform: `T(p)·R(r)·S(s)·T(-a)` — design §3's
  * documented order, matching lottie-web's `TransformElement` (a translate to
  * the anchor's negative, then scale, then rotate, then translate to `p`).
- * Reads either the static (`a: 0`) or single-keyframe (`a: 1`) shape a
- * `LottieVectorProperty`/`LottieScalarProperty` can take — this scene is
- * static, so every property here collapses to the static form, but reading
- * both keeps this helper honest about the type it is actually given.
+ * Reads each property through the evaluator, so a static, keyframed or split
+ * position all work; this scene is static, so every property collapses to the
+ * static form.
  */
 function lottieLocal(ks: LottieLayer["ks"]): Matrix {
-  const vec = (prop: LottieVectorProperty): readonly number[] => (prop.a === 0 ? prop.k : prop.k[0].s);
-  const scalar = (prop: LottieScalarProperty): number => (prop.a === 0 ? prop.k : prop.k[0].s[0]);
-  const [px, py] = vec(ks.p);
-  const [ax, ay] = vec(ks.a);
-  const [sx, sy] = vec(ks.s);
-  const rad = (scalar(ks.r) * Math.PI) / 180;
+  const [px, py] = evaluateProperty(ks.p, 0);
+  const [ax, ay] = evaluateProperty(ks.a, 0);
+  const [sx, sy] = evaluateProperty(ks.s, 0);
+  const rad = (evaluateProperty(ks.r, 0)[0] * Math.PI) / 180;
   return new Matrix().translate(-ax, -ay).scale(sx / 100, sy / 100).rotate(rad).translate(px, py);
 }
 

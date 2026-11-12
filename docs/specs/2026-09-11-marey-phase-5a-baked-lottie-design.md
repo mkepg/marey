@@ -331,6 +331,9 @@ between frames — which happens whenever the display rate is not the animation
 rate. Linear matches what Marey's own preview does between ticks; hold would
 render visibly stepped motion on a 60Hz display showing a 24fps export.
 
+> Superseded 2026-11-13 by `2026-11-13-marey-lottie-fitted-keyframes-design.md`.
+> The constant-track collapse in §7.2 still holds.
+
 ### 7.2 Constant-track collapse
 
 A 240-frame scene with twenty static objects is 24,000 keyframes, nearly all of

@@ -331,7 +331,8 @@ HarfBuzz shapes each line in the export font, and the glyph outlines become
 ordinary shape paths, so any Lottie player draws them without the font. A
 character the font has no glyph for is refused with
 `[LOTTIE_TEXT_MISSING_GLYPH]` instead of being drawn differently from the
-preview.
+preview. Lottie files carry a few keyframes per motion with real easing
+curves, so they can be retimed in a Lottie editor.
 
 ### Keeping one language honest across four consumers
 

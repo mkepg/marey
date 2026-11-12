@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { Container } from "pixi.js";
 import { encodeLottie, type LottieDoc } from "./lottieEncode";
+import { evaluateProperty } from "./lottieEvaluate";
+import { LOTTIE_FIT_TOLERANCE } from "./lottieFit";
 import { planLottie, hexToRgb01, type LayerSpec } from "./lottieGeometry";
 import { planExport, type SamplerPlan } from "./exportContract";
 import { sampleFrames, type FrameSnapshot } from "../renderer/frameSampler";
@@ -96,26 +98,6 @@ function runPipeline(fps: number): Pipeline {
 const layerNamed = (doc: unknown, nm: string): any =>
   (doc as { layers: ReadonlyArray<{ nm: string }> }).layers.find((l) => l.nm === nm)!;
 
-/** Reads a vector property (`p`/`s`/`a`) at a given output-frame index. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function vectorAt(prop: any, frame: number): readonly number[] {
-  if (prop.a === 0) return prop.k;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const kf = prop.k.find((k: any) => k.t === frame);
-  if (!kf) throw new Error(`no keyframe at frame ${frame}`);
-  return kf.s;
-}
-
-/** Reads a scalar property (`r`/`o`) at a given output-frame index. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function scalarAt(prop: any, frame: number): number {
-  if (prop.a === 0) return prop.k;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const kf = prop.k.find((k: any) => k.t === frame);
-  if (!kf) throw new Error(`no keyframe at frame ${frame}`);
-  return kf.s[0];
-}
-
 describe("lottieRoundTrip · compound-logo.marey, the whole headless pipeline", () => {
   it("planLottie returns ok for this scene", () => {
     const ir = irForCanonical("compound-logo.marey");
@@ -141,36 +123,33 @@ describe("lottieRoundTrip · compound-logo.marey, the whole headless pipeline", 
     expect(doc.layers.length).toBe(layers.length + 1);
   });
 
-  it("round-trips through JSON with exact numeric equality against the sampled snapshot", () => {
-    // §8.3's "numeric, headless, exact" obligation, on a real scene rather
-    // than a hand-built fixture: re-parse the emitted JSON and assert every
-    // value equals what the encoder's own documented arithmetic computes
-    // from the ObjectSnapshot that fed it — with `===`, not `toBeCloseTo`.
+  it("round-trips through JSON within the fit tolerance of the sampled snapshot", () => {
+    // §8.3's "numeric, headless" obligation on a real scene rather than a
+    // hand-built fixture: re-parse the emitted JSON, read every property
+    // through the evaluator, and compare with what the encoder's documented
+    // arithmetic computes from the ObjectSnapshot that fed it. Keyframe values
+    // are exact copies of samples; a frame between keyframes is within the
+    // per-channel tolerance of its sample (lottieFitted.test.ts checks every
+    // frame of every layer).
     const { frames, doc } = runPipeline(30);
     const reread = JSON.parse(JSON.stringify(doc)) as unknown;
 
     // Frame 100 of 240 (8s @ 30fps): past the 1.6s animate-in (frame 48) and
     // well before settling (~5.5s, frame 165), so the mark is genuinely
-    // tumbling under physics here — rotation and position are animated
-    // tracks, not collapsed statics, exercising both branches of
-    // `vectorAt`/`scalarAt` below (scale and opacity stay constant all
-    // scene long and DO collapse, since nothing here animates them).
+    // tumbling under physics here, with rotation and position animated.
+    // Scale and opacity stay constant all scene long and collapse to statics.
     const FRAME = 100;
     const snap = frames[FRAME].objects.find((o) => o.id === "scene.mark")!;
 
-    // `scene.mark` has no parent, so its ancestor chain is itself alone:
-    // composedOpacity is exactly `visible ? alpha : 0`, unaffected by the
-    // ancestor-product logic §5 adds for nested layers.
-    const expectedP = [snap.x, snap.y];
-    const expectedR = (snap.rotation * 180) / Math.PI;
-    const expectedS = [snap.scaleX * 100, snap.scaleY * 100];
-    const expectedO = (snap.visible ? snap.alpha : 0) * 100;
-
+    // `scene.mark` has no parent, so its ancestor chain is itself alone.
     const mark = layerNamed(reread, "mark");
-    expect(vectorAt(mark.ks.p, FRAME)).toEqual(expectedP);
-    expect(scalarAt(mark.ks.r, FRAME)).toBe(expectedR);
-    expect(vectorAt(mark.ks.s, FRAME)).toEqual(expectedS);
-    expect(scalarAt(mark.ks.o, FRAME)).toBe(expectedO);
+    const T = LOTTIE_FIT_TOLERANCE;
+    const [px, py] = evaluateProperty(mark.ks.p, FRAME);
+    expect(Math.abs(px - snap.x)).toBeLessThanOrEqual(T.position);
+    expect(Math.abs(py - snap.y)).toBeLessThanOrEqual(T.position);
+    expect(Math.abs(evaluateProperty(mark.ks.r, FRAME)[0] - (snap.rotation * 180) / Math.PI)).toBeLessThanOrEqual(T.rotation);
+    expect(evaluateProperty(mark.ks.s, FRAME)).toEqual([snap.scaleX * 100, snap.scaleY * 100]);
+    expect(evaluateProperty(mark.ks.o, FRAME)).toEqual([(snap.visible ? snap.alpha : 0) * 100]);
   });
 
   it("contains no reference to Matter or Marey (exit criterion 1, checkable rather than assertable)", () => {

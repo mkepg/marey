@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { encodeLottie, type LottieDoc } from "./lottieEncode";
+import { evaluateProperty } from "./lottieEvaluate";
 import { planExport, type SamplerPlan } from "./exportContract";
 import { hexToRgb01, rgb01OfInt, type LayerSpec } from "./lottieGeometry";
 import type { FrameSnapshot, ObjectSnapshot } from "../renderer/frameSampler";
@@ -88,9 +89,9 @@ describe("encodeLottie · units", () => {
     // Verified independently before this test was written:
     // (Math.PI / 2) * 180 / Math.PI === 90 exactly, 0.25 * 100 === 25
     // exactly, and 2 / 0.5 × 100 are 200 / 50 exactly.
-    expect(layer.ks.r.k[1].s[0]).toBe(90);
-    expect(layer.ks.s.k[1].s).toEqual([200, 50]);
-    expect(layer.ks.o.k[1].s[0]).toBe(25);
+    expect(evaluateProperty(layer.ks.r, 1)).toEqual([90]);
+    expect(evaluateProperty(layer.ks.s, 1)).toEqual([200, 50]);
+    expect(evaluateProperty(layer.ks.o, 1)).toEqual([25]);
   });
 
   it("writes the identity transform as 0 degrees, 100 percent and 100 opacity", () => {
@@ -107,9 +108,9 @@ describe("encodeLottie · units", () => {
       planFor(2, 30), SCENE,
     );
     const layer = layerNamed(doc, "c");
-    expect(layer.ks.r.k[0].s[0]).toBe(0);
-    expect(layer.ks.s.k[0].s).toEqual([100, 100]);
-    expect(layer.ks.o.k[0].s[0]).toBe(100);
+    expect(evaluateProperty(layer.ks.r, 0)).toEqual([0]);
+    expect(evaluateProperty(layer.ks.s, 0)).toEqual([100, 100]);
+    expect(evaluateProperty(layer.ks.o, 0)).toEqual([100]);
   });
 });
 
@@ -171,7 +172,7 @@ describe("encodeLottie · the opacity asymmetry", () => {
       framesOf([snap("scene.c")], [snap("scene.c", { visible: false })]),
       planFor(2, 30), SCENE,
     );
-    expect(layerNamed(doc, "c").ks.o.k[1].s[0]).toBe(0);
+    expect(evaluateProperty(layerNamed(doc, "c").ks.o, 1)).toEqual([0]);
   });
 
   it("bakes an invisible ANCESTOR as opacity 0 on its child", () => {
@@ -187,7 +188,7 @@ describe("encodeLottie · the opacity asymmetry", () => {
       ),
       planFor(2, 30), SCENE,
     );
-    expect(layerNamed(doc, "inner").ks.o.k[1].s[0]).toBe(0);
+    expect(evaluateProperty(layerNamed(doc, "inner").ks.o, 1)).toEqual([0]);
   });
 });
 
@@ -210,8 +211,10 @@ describe("encodeLottie · constant-track collapse", () => {
       planFor(2, 30), SCENE,
     );
     const p = layerNamed(doc, "c").ks.p;
-    expect(p.a).toBe(1);
-    expect(p.k.map((kf: { t: number }) => kf.t)).toEqual([0, 1]);
+    expect(p.s).toBe(true);
+    expect(p.x.a).toBe(1);
+    expect(p.x.k.map((kf: { t: number }) => kf.t)).toEqual([0, 1]);
+    expect(p.y).toEqual({ a: 0, k: 0 });
   });
 
   it("does not collapse a track whose first and last frames agree but whose middle does not", () => {
@@ -230,9 +233,9 @@ describe("encodeLottie · constant-track collapse", () => {
       planFor(3, 30), SCENE,
     );
     const p = layerNamed(doc, "c").ks.p;
-    expect(p.a).toBe(1);
-    expect(p.k.map((kf: { t: number }) => kf.t)).toEqual([0, 1, 2]);
-    expect(p.k.map((kf: { s: number[] }) => kf.s[0])).toEqual([7, 99, 7]);
+    expect(p.x.a).toBe(1);
+    expect(evaluateProperty(p, 1)).toEqual([99, 0]);
+    expect(evaluateProperty(p, 2)).toEqual([7, 0]);
   });
 
   it("does not collapse a SCALAR track whose first and last frames agree but whose middle does not", () => {
@@ -252,9 +255,9 @@ describe("encodeLottie · constant-track collapse", () => {
     );
     const ks = layerNamed(doc, "c").ks;
     expect(ks.r.a).toBe(1);
-    expect(ks.r.k.map((kf: { s: number[] }) => kf.s[0])).toEqual([0, 90, 0]);
+    expect(evaluateProperty(ks.r, 1)).toEqual([90]);
     expect(ks.o.a).toBe(1);
-    expect(ks.o.k.map((kf: { s: number[] }) => kf.s[0])).toEqual([100, 50, 100]);
+    expect(evaluateProperty(ks.o, 1)).toEqual([50]);
   });
 
   it("collapses each track independently", () => {
@@ -267,30 +270,66 @@ describe("encodeLottie · constant-track collapse", () => {
       planFor(2, 30), SCENE,
     );
     const ks = layerNamed(doc, "c").ks;
-    expect(ks.p.a).toBe(1);
+    expect(ks.p.s).toBe(true);
+    expect(ks.p.x.a).toBe(1);
+    expect(ks.p.y.a).toBe(0);
     expect(ks.r.a).toBe(0);
     expect(ks.s.a).toBe(0);
     expect(ks.o.a).toBe(0);
   });
 
-  it("gives every keyframe explicit linear easing handles", () => {
-    // Design §11.6 was open on what a player does when `i`/`o` are absent,
-    // until Task 4 measured lottie-web 5.13.0 directly: omitting the handles
-    // throws no exception and fires no 'error' event, at integer frames as
-    // well as sub-frame ones -- the position property is simply never
-    // evaluated, so it keeps lottie-web's own uninitialised sentinel value
-    // and the layer draws off-canvas. (0,0)/(1,1) hits `BezierEaser.js:98`'s
-    // `mX1 === mY1 && mX2 === mY2` linear fast path exactly, confirmed at a
-    // discriminating sample (design §11's dated correction).
+  it("writes a linear ramp as two keyframes with linear handles", () => {
+    // Design §11.6: a keyframe that starts a segment must carry explicit
+    // handles, or lottie-web never evaluates the property and the layer draws
+    // off-canvas. A ramp is one segment; its easing is the identity cubic with
+    // control points at thirds, and the closing keyframe starts no segment.
     const doc = encodeLottie(
       [circle("scene.c")],
-      framesOf([snap("scene.c", { x: 1 })], [snap("scene.c", { x: 2 })]),
-      planFor(2, 30), SCENE,
+      framesOf([snap("scene.c", { x: 0 })], [snap("scene.c", { x: 1 })], [snap("scene.c", { x: 2 })]),
+      planFor(3, 30), SCENE,
     );
-    for (const kf of layerNamed(doc, "c").ks.p.k) {
-      expect(kf.o).toEqual({ x: [0], y: [0] });
-      expect(kf.i).toEqual({ x: [1], y: [1] });
-    }
+    const p = layerNamed(doc, "c").ks.p;
+    expect(p.s).toBe(true);
+    expect(p.x.k).toHaveLength(2);
+    expect(p.x.k.map((kf: { t: number }) => kf.t)).toEqual([0, 2]);
+    expect(p.x.k[0].o).toEqual({ x: [1 / 3], y: [1 / 3] });
+    expect(p.x.k[0].i).toEqual({ x: [2 / 3], y: [2 / 3] });
+    expect(p.x.k[1].o).toBeUndefined();
+    expect(p.x.k[1].i).toBeUndefined();
+    expect(p.y).toEqual({ a: 0, k: 0 });
+  });
+
+  it("uses the per-channel tolerance", () => {
+    // 30 frames of rotation along a straight line, with the middle frame
+    // pushed off it by `offset` degrees. 0.004 is inside the 0.01 degree
+    // rotation tolerance, so the whole run is one segment; 0.02 is outside.
+    const rotated = (offset: number) => {
+      const frames = Array.from({ length: 30 }, (_, f) => {
+        const deg = f + (f === 15 ? offset : 0);
+        return [snap("scene.c", { rotation: (deg * Math.PI) / 180 })];
+      });
+      return layerNamed(
+        encodeLottie([circle("scene.c")], framesOf(...frames), planFor(30, 30), SCENE),
+        "c",
+      ).ks.r.k;
+    };
+    expect(rotated(0.004)).toHaveLength(2);
+    expect(rotated(0.02).length).toBeGreaterThan(2);
+  });
+
+  it("keeps keyframe values exact", () => {
+    // Spec F4: keyframe `s` values are copied samples, never fitted values.
+    const xs = [0, 3, 9, 4, 4, 11, 2, 2, 8, 1];
+    const doc = encodeLottie(
+      [circle("scene.c")],
+      framesOf(...xs.map((x, i) => [snap("scene.c", { x, rotation: x / 7, alpha: 1 - i / 20 })])),
+      planFor(xs.length, 30), SCENE,
+    );
+    const ks = layerNamed(doc, "c").ks;
+    const alphas = xs.map((_, i) => 1 - i / 20);
+    for (const kf of ks.p.x.k) expect(kf.s[0]).toBe(xs[kf.t]);
+    for (const kf of ks.r.k) expect(kf.s[0]).toBe(((xs[kf.t] / 7) * 180) / Math.PI);
+    for (const kf of ks.o.k) expect(kf.s[0]).toBe(alphas[kf.t] * 100);
   });
 });
 
