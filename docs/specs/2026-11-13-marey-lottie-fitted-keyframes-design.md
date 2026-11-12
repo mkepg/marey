@@ -228,10 +228,17 @@ replaced by measurements that can:
 1. **Geometry in the player.** In lottie-web, every layer's `finalTransform`
    at every compared frame of the fitted file is within F3's tolerances of
    the per-frame file's, translated to pixels the way the tolerance table
-   states, plus 1e-4 px. The extra 1e-4 px is lottie-web's own easing solver
-   (four Newton steps from a float32 table), which a fitter checked against
-   the exact curve cannot see. One translation was measured 9e-6 px over the
-   bare tolerance.
+   states, plus 1e-4 px. The extra 1e-4 px covers one translation that was
+   measured 9e-6 px over the bare tolerance. The cause is lottie-web storing
+   the per-frame file's positions in a `Float32Array`, not the easing solver
+   an earlier draft of this correction named. The value compared is the
+   player's evaluated property value (`pv`), the value it computes from the
+   file at that frame. The drawn value `v` can lag behind it, because
+   lottie-web skips changes under 1e-5 of its internal units (5.7e-4° of
+   rotation, 1e-3 points of scale). That holds for any file, so it measures
+   the player, not the encoding. The lag was measured on Ledges at frame 255:
+   `pv` matched the fit and the sample exactly, while `v` held frame 180's
+   value.
 2. **Pixels with a calibrated bound.** In both players, the fitted file's
    maximum delta does not exceed the worst maximum over the per-frame file
    and its copies with positions shifted by ±0.001, ±0.002 and ±0.004 px,
@@ -242,7 +249,17 @@ replaced by measurements that can:
    range. It fails only when it exceeds the range's highest share by more
    than 0.5 percentage points. Sub-pixel noise moves the share by hundredths
    of a point. A systematic error moves it by whole points; the colour
-   tolerance's first value moved Dusk Hills' share from 0.97% to 25.9%.
+   tolerance's first value moved Dusk Hills' share from 0.97% to 25.9%. The
+   share is judged on every compared frame, not only on the row's worst one.
+
+**Opacity at its bounds is exact.** A sample of exactly 0 or exactly 100
+opacity is reproduced exactly by the fit, not merely within F3's 0.05. Players
+quantise opacity, and dotlottie-web drew Logo reveal's sun one level darker
+at a fitted 99.963 that F3 allowed. That moved the frame's share by 0.59
+points over the calibrated range. Full and zero opacity are the values a
+scene holds longest, so an error there is spread over the most pixels. Runs
+through those samples therefore fit to them exactly, at the cost of a few
+more keyframes on fades.
 
 The original bound and its misses stay recorded in
 `eval/RESULTS-LOTTIE-FITTED.md`, beside the restated measurements.
