@@ -4,7 +4,7 @@ jobs:
   scenes:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Pin a full commit SHA of mkepg/marey instead of main for a reproducible build.
       - uses: mkepg/marey@main
         with:

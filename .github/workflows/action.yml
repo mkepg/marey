@@ -1,10 +1,14 @@
 # Runs the action at the repository root against examples/starter/, the way a
 # new repository would use it, so Gate C (spec
 # docs/specs/2026-11-12-marey-phase-9b-github-action-design.md §4) is measured
-# on every pull request. Both jobs install the branch's own package from an
-# `npm pack` tarball through the action's `package` input, so the run tests
-# this commit's CLI by the same install path a user's run takes, short of the
-# registry fetch.
+# on every pull request.
+#
+# The `pack` job builds this commit's package and packs it once. The jobs that
+# use the action set up no Node of their own, as the starter workflow does
+# not: the action's own Node check, and its setup-node step when the runner's
+# Node is older than 22, run as they do in a user's job. They install the
+# tarball through the action's `package` input, so the run tests this commit's
+# CLI by the same install path a user's run takes, short of the registry fetch.
 name: Action
 
 on:
@@ -17,60 +21,92 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  starter:
-    name: the starter checks and exports
+  pack:
+    name: pack this commit's package
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Pack this commit's package
-        id: pack
+      - name: Build and pack
         run: |
           npm run build:package
-          file=$(npm pack --silent | tail -n 1)
-          echo "tarball=$GITHUB_WORKSPACE/$file" >> "$GITHUB_OUTPUT"
+          npm pack --silent
+      - uses: actions/upload-artifact@v7
+        with:
+          name: marey-tarball
+          path: marey-lang-*.tgz
+          if-no-files-found: error
+
+  starter:
+    name: the starter checks and exports
+    needs: pack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: marey-tarball
+          path: ${{ runner.temp }}/marey-tarball
+      - name: Find the tarball, and record the runner's own Node
+        id: tarball
+        run: |
+          echo "path=$(ls "$RUNNER_TEMP"/marey-tarball/marey-lang-*.tgz)" >> "$GITHUB_OUTPUT"
+          echo "The runner's Node before the action: $(node --version)"
       - id: marey
         uses: ./
         with:
           files: examples/starter/*.marey
           export: apng lottie
           artifact-name: starter-export
-          package: ${{ steps.pack.outputs.tarball }}
-      - name: One scene checked, no errors, an APNG and a Lottie file
+          package: ${{ steps.tarball.outputs.path }}
+      # hello.marey lasts 2 s and marey export samples 30 fps, so the APNG
+      # must hold 60 frames. The PNG chunks are walked rather than searched,
+      # because the bytes "acTL" can also occur inside image data.
+      - name: One scene checked, no errors, a 60-frame APNG and a Lottie file
         env:
           CHECKED: ${{ steps.marey.outputs.checked }}
           ERRORS: ${{ steps.marey.outputs.errors }}
         run: |
+          echo "Node after the action: $(node --version)"
           test "$CHECKED" = 1
           test "$ERRORS" = 0
           node -e '
             const fs = require("node:fs");
             const png = fs.readFileSync("marey-export/examples/starter/hello.png");
-            if (!png.includes(Buffer.from("acTL"))) throw new Error("hello.png has no acTL chunk, so it is not an APNG");
+            const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+            if (!png.subarray(0, 8).equals(signature)) throw new Error("hello.png is not a PNG");
+            let actl = null;
+            for (let at = 8; at + 8 <= png.length; ) {
+              const length = png.readUInt32BE(at);
+              const type = png.toString("latin1", at + 4, at + 8);
+              if (type === "acTL") actl = { frames: png.readUInt32BE(at + 8), plays: png.readUInt32BE(at + 12) };
+              if (type === "IDAT" || type === "IEND") break;
+              at += 12 + length;
+            }
+            if (actl === null) throw new Error("hello.png has no acTL chunk before its image data, so it is not an APNG");
+            if (actl.frames !== 60) throw new Error(`hello.png acTL num_frames is ${actl.frames}, expected 60`);
+            console.log(`hello.png: acTL num_frames ${actl.frames}, num_plays ${actl.plays}`);
             const lottie = JSON.parse(fs.readFileSync("marey-export/examples/starter/hello.json", "utf8"));
             if (!Array.isArray(lottie.layers)) throw new Error("hello.json has no layers array");
           '
 
   broken-scene:
     name: a broken scene fails with an annotation and exports nothing
+    needs: pack
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Pack this commit's package
-        id: pack
-        run: |
-          npm run build:package
-          file=$(npm pack --silent | tail -n 1)
-          echo "tarball=$GITHUB_WORKSPACE/$file" >> "$GITHUB_OUTPUT"
+          name: marey-tarball
+          path: ${{ runner.temp }}/marey-tarball
+      - name: Find the tarball
+        id: tarball
+        run: echo "path=$(ls "$RUNNER_TEMP"/marey-tarball/marey-lang-*.tgz)" >> "$GITHUB_OUTPUT"
       # The edit replaces the scene's `background:` line (line 6) with
       # `  background: missing`, an undeclared name. The check reports it at
       # line 6, column 15, so the annotation on examples/starter/hello.marey
@@ -84,10 +120,69 @@ jobs:
         with:
           files: examples/starter/*.marey
           export: apng
-          package: ${{ steps.pack.outputs.tarball }}
-      - name: The action failed and exported nothing
+          package: ${{ steps.tarball.outputs.path }}
+      # A failed action alone could be any failure: the install, the browser,
+      # a crash. So assert the cause: one file checked, one error, and that
+      # error the check's annotation on line 6, column 15. The runner maps a
+      # composite action's outputs after a failed step (actions/runner,
+      # CompositeActionHandler.cs, ProcessOutputs runs after the step loop),
+      # and run.mjs writes them before it exits 1. The summary file run.mjs
+      # writes to $RUNNER_TEMP/marey-summary.json carries the same values and
+      # the annotations, and is asserted on either way, so the check holds even
+      # if the outputs come through empty. Its absence means run.mjs never ran.
+      - name: The check failed on line 6, column 15, and nothing was exported
         env:
           OUTCOME: ${{ steps.marey.outcome }}
+          CHECKED: ${{ steps.marey.outputs.checked }}
+          ERRORS: ${{ steps.marey.outputs.errors }}
         run: |
           test "$OUTCOME" = failure
           test ! -e marey-export
+          if [ -n "$CHECKED$ERRORS" ]; then
+            test "$CHECKED" = 1
+            test "$ERRORS" = 1
+          else
+            echo "::warning title=action workflow::the composite's outputs were empty after its failed step; asserting on the summary file alone"
+          fi
+          node -e '
+            const s = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
+            console.log(JSON.stringify(s));
+            if (s.checked !== 1 || s.errors !== 1) throw new Error(`checked ${s.checked}, errors ${s.errors}; expected 1 and 1`);
+            if (s.annotations.length !== 1) throw new Error(`${s.annotations.length} annotations, expected 1`);
+            if (!s.annotations[0].startsWith("::error file=examples/starter/hello.marey,line=6,col=15,")) {
+              throw new Error(`the annotation is not the check diagnostic on line 6, column 15: ${s.annotations[0]}`);
+            }
+          ' "$RUNNER_TEMP/marey-summary.json"
+
+  old-node:
+    name: on Node 20 the action sets up Node 22 for itself
+    needs: pack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Whatever Node the image ships, this job starts below 22, so the
+      # action's own setup-node step must run.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+      - uses: actions/download-artifact@v7
+        with:
+          name: marey-tarball
+          path: ${{ runner.temp }}/marey-tarball
+      - name: Find the tarball
+        id: tarball
+        run: echo "path=$(ls "$RUNNER_TEMP"/marey-tarball/marey-lang-*.tgz)" >> "$GITHUB_OUTPUT"
+      - id: marey
+        uses: ./
+        with:
+          files: examples/starter/*.marey
+          package: ${{ steps.tarball.outputs.path }}
+      - name: The check passed on Node 22, which stays on PATH
+        env:
+          CHECKED: ${{ steps.marey.outputs.checked }}
+          ERRORS: ${{ steps.marey.outputs.errors }}
+        run: |
+          test "$CHECKED" = 1
+          test "$ERRORS" = 0
+          node --version
+          node -e 'if (Number(process.versions.node.split(".")[0]) !== 22) throw new Error(`node ${process.version}, expected 22`)'
