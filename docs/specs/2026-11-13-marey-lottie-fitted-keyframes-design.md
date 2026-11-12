@@ -117,6 +117,33 @@ A fact either player gets wrong changes the layout, not the plan:
 
 Each fallback is recorded in this document as a dated correction.
 
+### Correction, 2026-11-13: measured layouts
+
+`eval/RESULTS-LOTTIE-FITTED.md` §1 holds the measurements.
+
+- Item 1 (split position) passes in both players. Glaxnimate 0.6.0 reported
+  `Invalid value for box.Transform.position` on the hand-made split-position
+  document and accepted the combined-position one. The cause is not isolated,
+  and the editor's reading of the animation was not checked. Split position
+  stays as F7 says unless the owner rules that the editor result outweighs the
+  two players.
+- Item 2 (per-component easing) fails in dotlottie-web: a scale and a colour
+  track with different handles per component render with a maximum channel
+  delta of 218 against the per-frame reference (scale alone 199, colour alone
+  56), while lottie-web is exact. **Fallback chosen: one easing per keyframe,
+  shared by every component of a scale or colour vector, with run boundaries
+  shared too.** The same documents with one shared easing pass in both players.
+  F6 and F7 change accordingly for scale and colour: a combined run is fitted
+  with one cubic shared by its components, which splits it more often than
+  per-component fitting would. Position is unaffected, because each separated
+  dimension is already a single component.
+- Item 3 (y handles outside 0 to 1) passes in both players, so F6's `[-1, 2]`
+  handle range stays. A fractional frame needs a reference keyed finer than
+  one keyframe per frame, because between two samples lottie-web draws the
+  curve and the per-frame reference draws a chord.
+- Item 4 (a final keyframe with only `t` and `s`) passes in both players, so
+  the final keyframe stays bare.
+
 ## 5. Tests
 
 - **Unit tests on the fitter** (pure functions, no IR):

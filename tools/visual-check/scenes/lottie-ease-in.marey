@@ -1,0 +1,14 @@
+// Fitted-keyframe probe fixture: an easeIn 2 s move and colour blend (Lottie layout measurement).
+scene {
+  size: (960, 540)
+  duration: 3
+  background: #0f172a
+
+  rectangle box {
+    position: (160, 270)
+    size: (80, 80)
+    color: #38bdf8
+    animate { property: position, to: (800, 270), duration: 2, easing: easeIn }
+    animate { property: color, to: #f97316, duration: 2, easing: easeIn }
+  }
+}

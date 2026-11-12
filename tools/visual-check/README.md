@@ -334,6 +334,22 @@ Add a scene rather than editing one when checking something new — same rule
 as the PixiJS-preview `scenes/` fixtures above: these are regression checks,
 and their expected pixel values are their value.
 
+### Lottie layout probe
+
+| Script | What it checks |
+|---|---|
+| `lottie-layout-probe.mjs` | The document layouts the fitted-keyframe encoder relies on, measured in `lottie-web` and `dotlottie-web`: split position, per-component easing, overshoot handles, a bare final keyframe. It writes each layout as a hand-made document next to a one-keyframe-per-frame reference of the same motion, renders both with `lottie-render-worker.mjs` and compares them pixel by pixel. It needs no Vite server. |
+
+```bash
+node tools/visual-check/lottie-layout-probe.mjs --out .visual-check/lottie-probe
+```
+
+A row passes at a maximum channel delta of 2 or less. The report also gives
+the delta against a reference keyed every half frame, which separates a layout
+error at frame 15.5 from the chord of the per-frame line. The
+`scenes/lottie-ease-*.marey` files are the six easing fixtures the per-frame
+baseline in `eval/RESULTS-LOTTIE-FITTED.md` was measured on.
+
 ## Exporting video
 
 `video-check.mjs` exports a scene to WebM or MP4, decodes the container back
