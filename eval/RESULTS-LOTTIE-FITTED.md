@@ -30,13 +30,18 @@ is chord error. dotlottie-web draws 15.5 as a whole frame (its delta there is
 The half-frame reference decides the layout, not the plan's per-frame one: the
 per-frame reference draws a straight chord between samples, which is wrong at
 fractional frames, so a delta at 15.5 against it is not evidence about the
-layout. The probe's exit code follows the half-frame verdict, so it is 1 today: the only failing non-diagnostic row is dotlottie-web per-component easing. dotlottie-web
-cannot render fractional frames (it draws 15.5 as a whole frame), so
-fractional-frame behaviour is established for lottie-web only.
+layout. The probe's exit code follows the half-frame verdict, so it is 1
+today: the only failing non-diagnostic row is dotlottie-web per-component
+easing. dotlottie-web cannot render fractional frames (it draws 15.5 as a
+whole frame), so fractional-frame behaviour is established for lottie-web
+only.
 
-The four rows the plan asks for, plus diagnostics for the one real failure:
+The four rows the plan asks for, plus rows marked "(diagnostic)". Diagnostic
+rows never affect the probe's exit code: the scale-only and colour-only splits
+of the per-component-easing failure, and three ways of writing one shared
+easing (scalar handles, one-element arrays, per-component arrays):
 
-| Question | Renderer | Max delta (per-frame reference) | Max delta, whole frames only | Max delta (half-frame reference) | Verdict | Verdict (half-frame reference) |
+| Question | Renderer | Max delta (per-frame reference) | Max delta, whole frames only | Max delta (half-frame reference) | Verdict (per-frame reference, superseded) | Verdict (half-frame reference) |
 |---|---|---|---|---|---|---|
 | split-position | lottie-web | 2 | 0 | 0 | pass | pass |
 | split-position | dotlottie-web | 0 | 0 | 0 | pass | pass |
@@ -97,7 +102,7 @@ the examples use frames spread over each scene's own duration (12 s, 9 s, 5 s,
 examples these deltas are mostly antialiasing and text differences between the
 two rasterizers, not motion error. The example-scene maximum channel delta
 (77 to 140) saturates on rasterizer and text antialiasing, so the share of
-differing pixels is the usable baseline signal for Task 4.
+differing pixels is the usable signal for comparing the fitted encoder against this baseline.
 
 | Scene | Frames | Renderer | Max channel delta | Share of differing pixels (worst frame) |
 |---|---|---|---|---|
@@ -136,3 +141,185 @@ Keyframes and bytes, as proposal §1 measured them
 | Ledges | 52 | 14040 | 1229171 | 179698 |
 | Bar chart reveal | 14 | 2100 | 202059 | 14186 |
 | Logo reveal | 13 | 1950 | 142990 | 8516 |
+
+## 3. After: real players
+
+Head: the commit after `aabd370` (encoder with tolerances 0.004 px, 0.0004
+points, 0.0002 degrees, 0.05 opacity, 0.25/255 colour, and `n` easing names).
+All runs exit 0 with no page, console or lottie errors.
+
+### Original pixel bound and the two superseded fitted runs
+
+The spec's first bound (§6.2): on every compared frame, fitted maximum channel
+delta at most the per-frame maximum plus 2. It was applied to the same 22 rows
+as section 2 (`lottie-check.mjs --compare-png`, same scenes, frames and
+renderers).
+
+First fitted run (superseded), tolerances 0.01 px, 0.01 points, 0.01 degrees,
+0.1 opacity, 0.49/255 colour. Missed on:
+
+| Scene | Renderer | Frame | Per-frame | Fitted |
+|---|---|---|---|---|
+| lottie-ease-handoff | lottie-web | 60 | 0 | 3 |
+| ledges | dotlottie-web | 45 | 96 | 104 |
+| logo-reveal | dotlottie-web | 25 | 70 | 81 |
+| physics-pile | lottie-web | 70 | 85 | 88 |
+
+It also inflated the share of differing pixels: Dusk Hills 0.97% to 25.9%
+(sky band 1 level off, from the 0.49/255 colour tolerance), and 0.0000% to
+1.2346% on `lottie-ease-linear` and `lottie-ease-inout`.
+
+Second fitted run (superseded), tolerances tightened to the values above.
+Shares returned to baseline everywhere. Missed on:
+
+| Scene | Renderer | Frame | Per-frame | Fitted |
+|---|---|---|---|---|
+| ledges | lottie-web | 180 | 81 | 109 |
+| logo-reveal | dotlottie-web | 25 | 70 | 81 |
+| physics-pile | lottie-web | 70 | 85 | 88 |
+| physics-pile | dotlottie-web | 105 | 90 | 206 |
+
+### Diagnosis, in brief
+
+The fitter's arithmetic was not at fault: in Node, and in lottie-web's own
+`finalTransform`, every property at every failing frame was within tolerance.
+Two separate causes:
+
+- **dotlottie-web caches easing curves by a rounded key.** ThorVG keys the
+  interpolator of a keyframe without `n` by `"%.2f_%.2f_%.2f_%.2f"` of the
+  handles. Fitted handles are full-precision, so different curves that agree to
+  two decimals were drawn with the first one's curve. A Node emulation of the
+  cache reproduced the player's output byte for byte (physics-pile frame 105:
+  206 at (503,275)). Over every frame it drew 445 of 2612 physics-pile
+  segments, 1382 of 4177 ledges segments, 613 of 3665 Dusk Hills segments and
+  15 of 57 logo-reveal segments with another keyframe's handles, up to 0.96 px
+  off (crate_0, physics-pile frame 102). Tighter tolerances made it worse: more
+  keyframes, more distinct handle pairs, more collisions. This is the cause of
+  the dotlottie-web misses. The fix is an `n` on every keyframe whose key is
+  shared with a different handle tuple. A first spelling, lottie-web's own
+  default key, was measured to be worse than no name: ThorVG compares names
+  over their first 20 characters and every such name starts
+  `bez_0p33333333333333` (physics-pile frames 70 and 105 read 147 and 228). The
+  name is `e` plus 16 hex digits of two FNV-1a hashes of the handle values.
+- **The pixel maximum cannot resolve sub-pixel position in lottie-web or
+  dotlottie-web.** Both rasterizers turn position into a step function. Moving
+  one object of the per-frame file by 0.001 px moves up to 50 edge pixels by up
+  to 55 levels. Shifting ledges' `tile_23` by -0.001 px in the per-frame file
+  reproduces the 109 exactly, and shifting physics-pile's `wedge_2` by
+  +0.0015 px reproduces the 88 exactly, while -0.0005 px changes nothing. These
+  two lottie-web rows are measurement artifacts.
+
+### Restated acceptance (spec §4, correction of 2026-11-13)
+
+1. Geometry, lottie-web: every layer's `finalTransform` properties at every
+   compared frame are within F3's tolerance of the per-frame file's, plus
+   1e-4 px on position for lottie-web's own Newton/float32 easing solver.
+2. Pixels, both players: fitted maximum at most the worst maximum over the
+   per-frame file and its copies shifted by +-0.001, +-0.002 and +-0.004 px,
+   plus 2, per compared frame. Share compared with the same calibrated range.
+
+```
+node tools/visual-check/lottie-fit-check.mjs --per-frame <section 2 doc.json> --fitted <this head's doc.json> \
+  --png-dir <lottie-check --compare-png output> --frames <frames> --renderer <renderer>
+```
+
+The per-frame document is the export at base commit `cd14c3d`
+(`git worktree add <dir> cd14c3d`, `npm run build:export-page`, `marey export
+... --format lottie --fps 30`); the PNG frames are `frame_<n>_pngexport.png`
+from `lottie-check.mjs --compare-png` on this head. Worst values over each
+row's frames (the verdict is per frame):
+
+| Scene | Renderer | Max, per-frame | Max, calibrated | Max, fitted | Verdict | Share, per-frame | Share, calibrated (highest) | Share, fitted | Worst position difference (px) |
+|---|---|---|---|---|---|---|---|---|---|
+| lottie-ease-linear | lottie-web | 0 | 2 | 0 | met | 0.0000% | 0.0216% | 0.0000% | 6.8e-13 |
+| lottie-ease-linear | dotlottie-web | 0 | 0 | 0 | met | 0.0000% | 0.0000% | 0.0000% | n/a |
+| lottie-ease-in | lottie-web | 0 | 2 | 0 | met | 0.0000% | 0.0216% | 0.0000% | 1.9e-12 |
+| lottie-ease-in | dotlottie-web | 0 | 0 | 0 | met | 0.0000% | 0.0000% | 0.0000% | n/a |
+| lottie-ease-out | lottie-web | 0 | 2 | 0 | met | 0.0000% | 0.0216% | 0.0000% | 5.8e-12 |
+| lottie-ease-out | dotlottie-web | 0 | 0 | 0 | met | 0.0000% | 0.0000% | 0.0000% | n/a |
+| lottie-ease-inout | lottie-web | 0 | 2 | 0 | met | 0.0000% | 0.0216% | 0.0000% | 6.8e-13 |
+| lottie-ease-inout | dotlottie-web | 0 | 0 | 0 | met | 0.0000% | 0.0000% | 0.0000% | n/a |
+| lottie-ease-handoff | lottie-web | 0 | 2 | 1 | met | 0.0000% | 0.0216% | 0.0216% | 1.2e-3 |
+| lottie-ease-handoff | dotlottie-web | 0 | 0 | 0 | met | 0.0000% | 0.0000% | 0.0000% | n/a |
+| lottie-ease-handoff-yoyo | lottie-web | 3 | 4 | 3 | met | 0.0108% | 0.0216% | 0.0108% | 2.7e-10 |
+| lottie-ease-handoff-yoyo | dotlottie-web | 0 | 0 | 0 | met | 0.0000% | 0.0000% | 0.0000% | n/a |
+| dusk-hills | lottie-web | 91 | 91 | 91 | met | 0.9725% | 0.9731% | 0.9725% | 5.5e-4 |
+| dusk-hills | dotlottie-web | 77 | 78 | 77 | met | 1.0910% | 1.0910% | 1.0985% | n/a |
+| ledges | lottie-web | 88 | 113 | 109 | met | 1.0456% | 1.0481% | 1.0454% | 4.0e-3 |
+| ledges | dotlottie-web | 128 | 129 | 128 | met | 1.1671% | 1.1671% | 1.1671% | n/a |
+| bar-chart-reveal | lottie-web | 140 | 140 | 140 | met | 0.8400% | 0.8400% | 0.8400% | 0 |
+| bar-chart-reveal | dotlottie-web | 139 | 139 | 139 | met | 0.8410% | 0.8410% | 0.8410% | n/a |
+| logo-reveal | lottie-web | 103 | 103 | 103 | met | 2.4646% | 2.4650% | 2.4646% | 1.7e-3 |
+| logo-reveal | dotlottie-web | 109 | 112 | 109 | met | 3.9712% | 3.9719% | 1.9537% | n/a |
+| physics-pile | lottie-web | 102 | 102 | 102 | met | 0.9623% | 0.9692% | 0.9660% | 3.9e-3 |
+| physics-pile | dotlottie-web | 96 | 96 | 96 | met | 1.0471% | 1.0481% | 1.0473% | n/a |
+
+Geometry: every layer property is inside tolerance at every compared frame.
+The worst position overshoot of the bare 0.004 px tolerance is 9.4e-6 px
+(ledges `tile_5`, frame 180, lottie-web), far inside the 1e-4 px allowed for
+the player's solver. Scale, rotation and opacity never exceed tolerance (worst
+0 points, 7.6e-6 degrees, 4.3e-4). Geometry is not read from dotlottie-web,
+which exposes no transform matrices.
+
+Against the original bound, the dotlottie-web rows all pass now. Two lottie-web
+rows still read above it and are the artifacts above: ledges frame 180
+(81 against 109, while the calibrated copies reach 113) and physics-pile frame
+70 (85 against 88, calibrated 88).
+
+## 4. After: size and keyframes
+
+Measured on the final head with
+`node bin/marey.mjs export src/examples/<scene>.marey --format lottie --fps 30`
+after `npm run build:export-page`. "Properties" counts objects with `a: 1` and
+an array `k`; a fitted position counts `x` and `y` separately, which is why
+Ledges has more properties than before. "Named" counts keyframes carrying `n`.
+
+| Scene | Properties | Keyframes before | Keyframes after (named) | JSON bytes before | JSON bytes after | gzip before | gzip after |
+|---|---|---|---|---|---|---|---|
+| Dusk Hills | 66 | 23760 | 3731 (3125) | 2036666 | 718929 | 167892 | 37629 |
+| Ledges | 52 to 79 | 14040 | 4256 (3124) | 1229171 | 704174 | 179698 | 136590 |
+| Bar chart reveal | 14 | 2100 | 76 (0) | 202059 | 72759 | 14186 | 9746 |
+| Logo reveal | 13 | 1950 | 70 (24) | 142990 | 20931 | 8516 | 3459 |
+
+The names cost bytes (Dusk Hills 2.9% of gzip) and buy correctness in
+dotlottie-web. Ledges' keyframe count includes colour and position tracks that
+each split into short runs under the tightened tolerances.
+
+## 5. Fractional frames
+
+`lottie-ease-out.marey` at 30 fps in lottie-web, left edge of the rectangle on
+row y = 270, from the edge pixel's coverage:
+
+| Frame | 10 | 10.5 | 11 | 30 | 30.5 | 31 |
+|---|---|---|---|---|---|---|
+| Edge x | 315.559 | 324.401 | 333.156 | 600.000 | 605.289 | 610.492 |
+
+Monotonic.
+
+## 6. Editor
+
+Glaxnimate 0.6.0, GUI only (its command-line export crashes under this shell).
+Opening the fitted `lottie-ease-out.json` showed the "Invalid value for
+box.Transform.position" issue dialog, which spec §4's correction explains
+(Glaxnimate's importer joins split `x`/`y` into one position property), and the
+rectangle at its start position. I did not scrub the timeline or drag a
+handle, so I make no claim about the editor's timeline UI.
+
+I then used File > Save As (Lottie, not pretty) and read the file back. It has
+one combined position property with 3 keyframes at t = 0, 60 and 89, the same
+times as our `x` track, each with easing handles:
+
+| Keyframe | Written by Marey (`o`, `i`) | Re-exported by Glaxnimate (`o`, `i`) |
+|---|---|---|
+| t = 0 | (0.3333, 0.6667), (0.6667, 1.0) | (0.167, 0.333), (0.833, 1) |
+| t = 60 | (0.3333, 0.3333), (0.6667, 0.6667) | (0.167, 0.167), (0.833, 0.833) |
+
+Computed from those numbers: the start slope `o.y / o.x` is 0.6667 / 0.3333 =
+2 in our file and 0.333 / 0.167 = 2 in Glaxnimate's, and both end slopes are 0
+(`i.y = 1`). Glaxnimate rewrites the handle lengths, not the tangents.
+
+## 7. Hashes
+
+`sha256` values for Lottie exports in earlier results files describe the
+per-frame encoding. A re-export on this branch no longer matches them. The
+sampled-frame hash (`frames`) is unchanged.

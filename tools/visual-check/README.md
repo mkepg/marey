@@ -128,6 +128,8 @@ renders and the handoff arcs, not for determinism.
 | `hello-face.marey` | The smiling face with confetti: the app's default scene from Phase 5B until 6B, kept unchanged under a provenance header. `text-check.mjs` and `lottie-click-check.mjs` were measured on it, and their checks read its `hello!` text. |
 | `linear-motion.marey` | `video-check.mjs`'s primary criterion-3 fixture (Phase 5B fix wave). A box and a dot move at constant velocity from frame 0 and stay on screen, so at 24–60 fps every decoded frame has one clearly nearest reference frame (not at 120 fps; see "Exporting video"). A dropped, duplicated or reordered frame is a nearest-neighbour failure from the very first frame. |
 
+`lottie-fit-check.mjs` judges a fitted-keyframe export against the per-frame export it replaced, in a real player and without a dev server. It checks that lottie-web's resolved transform of every layer is within the fit tolerances (plus 1e-4 px of solver slack) of the per-frame file's, and that the fitted file's maximum pixel delta against the PNG export does not exceed the worst over the per-frame file and its copies shifted by ±0.001, ±0.002 and ±0.004 px, plus 2 (the rasterizers turn sub-pixel position into a step function, so a tighter bound cannot be met by any encoding that is not bit-identical). Inputs: `--per-frame <doc.json>` (the base-commit export `cd14c3d`, built in a worktree), `--fitted <doc.json>`, `--png-dir <lottie-check --compare-png output>`, `--frames`, `--renderer lottie-web|dotlottie-web`. Exits 1 on a failure; writes `fit-check.json`. See `eval/RESULTS-LOTTIE-FITTED.md` section 3.
+
 Add a scene rather than editing one when checking something new — these are
 regression checks, and their expected images are their value.
 
@@ -328,7 +330,7 @@ Task 4 (see the 2026-09-12 correction appended to that document's §11):
 | `lottie-opacity-flatten.marey` | A `group` at alpha 0.5 containing a child at alpha 0.5. Confirms Lottie does NOT propagate opacity through parenting — the composed/flattened value (~25%) is what renders, not a double-applied ~12.5% (§11.2). Task 5 re-tested this specifically against a second renderer, `dotlottie-web`, with the same result — see `eval/RESULTS-PHASE-5A.md` |
 | `lottie-version-field.marey` | Confirms lottie-web reads `v` (a string like `"5.5.2"`), not the community-spec `ver` integer (§11.4) |
 | `lottie-outpoint.marey` | A rectangle sliding across four frames. Confirms `op` is EXCLUSIVE — frame `op` itself renders nothing (§11.5) |
-| `lottie-easing-halfframe.marey` | A two-keyframe position track. Confirms the emitted `(0,0)`/`(1,1)` handles produce true linear interpolation, not an approximation (§11.6) |
+| `lottie-easing-halfframe.marey` | A two-keyframe position track. Confirms the fitted encoding of a linear run, a single `x` segment on separated `x`/`y` position with `(1/3,1/3)`/`(2/3,2/3)` handles, still interpolates linearly at fractional frames rather than approximately (§11.6) |
 
 Add a scene rather than editing one when checking something new — same rule
 as the PixiJS-preview `scenes/` fixtures above: these are regression checks,

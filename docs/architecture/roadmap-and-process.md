@@ -350,10 +350,14 @@ explicitly rather than quietly deviating.
     `.github/workflows/action.yml`. Design:
     `docs/specs/2026-11-12-marey-phase-9b-github-action-design.md`.
     Plan: `docs/plans/2026-11-12-phase-9b-github-action.md`.
-- **Proposed, not scheduled — Lottie keyframe recovery.** Export animated
-  tracks as a few keyframes with Bézier easing instead of one linear keyframe
-  per frame, so files shrink and timing is editable in Lottie editors.
-  Problem, baseline measurements, approach and open decisions:
+- **Lottie fitted keyframes — implemented on branch `lottie-fitted-keyframes`.**
+  Animated tracks export as a few cubic-eased keyframes with separated
+  position, and easings that dotlottie-web would otherwise share are named.
+  Dusk Hills goes from 23760 keyframes to 3731 (2036666 to 718929 JSON bytes,
+  167892 to 37629 gzipped). Design:
+  `docs/specs/2026-11-13-marey-lottie-fitted-keyframes-design.md`; plan:
+  `docs/plans/2026-11-13-lottie-fitted-keyframes.md`; measurements:
+  `eval/RESULTS-LOTTIE-FITTED.md`. Earlier problem statement:
   `docs/specs/2026-11-06-marey-lottie-keyframe-recovery-design.md`.
 
 ## Reference docs

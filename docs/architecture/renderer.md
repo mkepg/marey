@@ -349,12 +349,22 @@ Design: `docs/specs/2026-11-13-marey-lottie-fitted-keyframes-design.md`.
   | opacity | 0 to 100 | 0.05 |
   | colour | 0 to 1 per channel | 0.25 / 255 |
 
-  dotlottie-web caches an easing curve under its handles rounded to two
-  decimals, so a keyframe whose rounded key is shared with a different handle
-  tuple anywhere in the document carries an `n` name (`nameCollidingEasings`).
-  The name is a 17-character hash of the exact handle values: derived from the
-  values, never a counter (lottie-web's curve cache is per page), and under the
-  20 characters ThorVG compares.
+  **Easing names (`n`).** dotlottie-web's ThorVG builds one easing curve per
+  keyframe and caches it under a key: `"%.2f_%.2f_%.2f_%.2f"` of the handles,
+  cut to 19 characters, when the keyframe has no `n`. Fitted handles are
+  full-precision, so different curves can share a key and every later keyframe
+  is drawn with the first one's curve (measured: up to 0.96 px off). The encoder
+  therefore writes `n` on every keyframe whose rounded key is shared with a
+  different handle tuple anywhere in the document (`nameCollidingEasings`), and
+  on no other. Two constraints shape the name. ThorVG compares names over their
+  first 20 characters, so it must be short: lottie-web's own default key
+  (`bez_0p3333...`, about 70 characters) makes every name equal and was
+  measured to be worse than no name. And lottie-web keeps a curve cache per
+  page, keyed by `n` on its spatial-tangent path, so a counter would make two
+  Marey files on one page share curves. The name is `e` and 16 hex digits of two
+  FNV-1a hashes of the exact handle values: 17 characters, derived from the
+  values, never from a counter. lottie-web does not read `n` on the paths this
+  encoder writes, so its output is unchanged.
   A track that never varies, exactly, still collapses to a static property.
 - **Separated position.** When either coordinate moves, `ks.p` is
   `{s: true, x, y}` and each axis is fitted on its own; a fully static
