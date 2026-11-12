@@ -185,6 +185,12 @@ resolves). Evidence is in
 `docs/plans/2026-10-30-phase-9a-embeddable-player.md`.
 `roadmap-and-process.md`'s Phase 9A bullet carries the same status.
 
+**9B (GitHub Action and Gate C) implemented on a branch; Gate C measured on its pull-request run; evidence in `eval/RESULTS-PHASE-9B.md`.** Design:
+`docs/specs/2026-11-12-marey-phase-9b-github-action-design.md`. It adds
+`action.yml` and `action/` at the repository root, `marey check --reporter
+github`, `examples/starter/` and `.github/workflows/action.yml`. It ships as
+`marey-lang@0.7.0` once the owner publishes.
+
 **8 — physics authoring syntax is merged into `main`** (2026-10-11, `2caf55c`),
 and with it the roadmap's finish line is declared. It adds
 `world { gravity, bounds }`, `lockPosition`, `lockRotation` and `spin`, with

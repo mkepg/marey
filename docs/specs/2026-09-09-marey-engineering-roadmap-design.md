@@ -395,6 +395,8 @@ component; a gallery; the adoption ladder and its Gate C.
 > Docusaurus and VitePress. Design:
 > `2026-10-30-marey-phase-9a-embeddable-player-design.md` §0 and §7. The
 > finish line (§12) stands. This is work past it.
+>
+> 9B's spec is `2026-11-12-marey-phase-9b-github-action-design.md`.
 
 **Language and motion** — spring easing; semantic layout primitives (`row`,
 `grid`, `radial`, `distribute`, `align`), still governed by R11; `from` on

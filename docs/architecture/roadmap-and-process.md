@@ -344,6 +344,11 @@ explicitly rather than quietly deviating.
     `eval/RESULTS-PHASE-9A.md`. Design:
     `docs/specs/2026-10-30-marey-phase-9a-embeddable-player-design.md`.
     Plan: `docs/plans/2026-10-30-phase-9a-embeddable-player.md`.
+- **Phase 9B — GitHub Action and Gate C** (roadmap §13, past the finish line).
+  - **Status: 9B (GitHub Action and Gate C) implemented on a branch; Gate C measured on its pull-request run; evidence in `eval/RESULTS-PHASE-9B.md`.** It adds `action.yml` and `action/` at the repository
+    root, `marey check --reporter github`, `examples/starter/` and
+    `.github/workflows/action.yml`. Design:
+    `docs/specs/2026-11-12-marey-phase-9b-github-action-design.md`.
 - **Proposed, not scheduled — Lottie keyframe recovery.** Export animated
   tracks as a few keyframes with Bézier easing instead of one linear keyframe
   per frame, so files shrink and timing is editable in Lottie editors.

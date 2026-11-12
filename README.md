@@ -81,6 +81,18 @@ errors with their line numbers. With `--export-ready` it also checks that the
 scene can be exported: a bounded duration, and a frame count within budget at
 the rate given by `--fps`.
 
+`--reporter github` prints each diagnostic as a GitHub workflow command, so a
+workflow run shows it as an annotation on the file and line. The default,
+`--reporter text`, is the output described above.
+
+```bash
+npx marey-lang check --reporter github scene.marey
+```
+
+```text
+::error file=scene.marey,line=1,col=12,title=marey check::In variable declaration 'ink': Undefined variable 'nope'. Bare names cannot be used as values unless they are declared with 'let'. Variables defined inside 'generate' blocks are strictly block-scoped and cannot be accessed outside of them.
+```
+
 `export` writes one output per run:
 
 | `--format` | Output (default name) |
@@ -132,6 +144,63 @@ if (!result.ok) {
 
 `ir` is the Scene IR, the compiler's typed output, and its types are exported
 too. It is the same structure every exporter consumes.
+
+## Check scenes in CI
+
+The repository root is a GitHub Action. It checks every tracked `.marey` file,
+and can export them too. A workflow in your repository, at
+`.github/workflows/marey.yml`:
+
+```text
+name: Marey
+on: [push, pull_request]
+jobs:
+  scenes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mkepg/marey@<commit-sha>
+        with:
+          export: apng lottie
+```
+
+Every tracked file that matches `files` is checked, not only the files a push
+changed. A pattern that matches no file fails the run. Each diagnostic becomes
+an error annotation on its file and line, in the run and in the pull request's
+diff. When every file passes, each one is exported in each format. If any file
+fails, nothing is exported.
+
+| Input | Default | Meaning |
+|---|---|---|
+| `files` | `*.marey` | Git pathspecs of the scenes to check, separated by whitespace or newlines. |
+| `export` | (empty) | Formats to export: `png`, `apng`, `webm`, `mp4`, `lottie`, separated by whitespace or commas. Empty means check only. |
+| `export-dir` | `marey-export` | Directory the exports go into. |
+| `upload` | `true` | Upload `export-dir` as a workflow artifact after a fully successful export. |
+| `artifact-name` | `marey-export` | Name of the uploaded artifact. |
+| `package` | (empty) | An npm install spec to use instead of `marey-lang` at the action's own version, such as a tarball path. |
+
+| Output | Meaning |
+|---|---|
+| `checked` | How many files were checked. |
+| `errors` | Diagnostics reported by the check, plus exports that failed. |
+| `export-dir` | The export directory, or empty when nothing was exported. |
+
+The export directory mirrors the source paths, so `scenes/a/logo.marey`
+exports to `marey-export/scenes/a/logo.json`, and two scenes with the same
+name in different folders do not overwrite each other. Each export keeps the
+CLI's default file name for its format.
+
+The action installs `marey-lang` at the `version` in `package.json` at the
+ref you use. Pin the action to a full commit SHA. The repository's old `v0.x`
+tags date from before the npm versions and do not match them, so there is no
+release tag to pin. Until `marey-lang@0.7.0` is published, a ref whose version
+is not on npm fails at the install step with a message saying so. Pin a commit
+from after the publish, or set `package`.
+
+The action is tested on `ubuntu-latest` only. `examples/starter/` is a
+complete repository root with a scene, a workflow and a README that embeds the
+exported APNG. [`.github/workflows/action.yml`](.github/workflows/action.yml)
+runs the action against it on every pull request.
 
 ## Embed a scene
 
