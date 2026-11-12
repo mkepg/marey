@@ -238,8 +238,11 @@ replaced by measurements that can:
    plus 2. The shifts span the position tolerance, because a fitted position
    anywhere inside the tolerance is correct by F3, and a pixel result that a
    tolerance-sized shift of the reference also produces cannot count against
-   it. The share of differing pixels stays within the same calibrated
-   range.
+   it. The share of differing pixels is reported beside the calibrated
+   range. It fails only when it exceeds the range's highest share by more
+   than 0.5 percentage points. Sub-pixel noise moves the share by hundredths
+   of a point. A systematic error moves it by whole points; the colour
+   tolerance's first value moved Dusk Hills' share from 0.97% to 25.9%.
 
 The original bound and its misses stay recorded in
 `eval/RESULTS-LOTTIE-FITTED.md`, beside the restated measurements.
