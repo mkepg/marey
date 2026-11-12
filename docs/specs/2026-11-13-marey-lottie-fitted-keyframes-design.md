@@ -123,10 +123,15 @@ Each fallback is recorded in this document as a dated correction.
 
 - Item 1 (split position) passes in both players. Glaxnimate 0.6.0 reported
   `Invalid value for box.Transform.position` on the hand-made split-position
-  document and accepted the combined-position one. The cause is not isolated,
-  and the editor's reading of the animation was not checked. Split position
-  stays as F7 says unless the owner rules that the editor result outweighs the
-  two players.
+  document and accepted the combined-position one. The cause is in
+  Glaxnimate's importer (`src/core/io/lottie/lottie_importer.hpp` at tag
+  `v0.6.0`). `load_transform` first calls the generic `load_basic`, whose
+  field table maps `p` to `position` and warns because a split `p` has no
+  `k`. It then reads `p.x` and `p.y` and joins them into one position
+  (`JoinAnimatables`). The warning is therefore cosmetic, the motion is
+  imported, and Glaxnimate shows it as a single position property. **Split
+  position stays as F7 says.** Task 4's editor check confirms the imported
+  motion.
 - Item 2 (per-component easing) fails in dotlottie-web: a scale and a colour
   track with different handles per component render with a maximum channel
   delta of 218 against the per-frame reference (scale alone 199, colour alone
