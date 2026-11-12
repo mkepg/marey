@@ -305,3 +305,40 @@ describe("fitKeyframes", () => {
     expect(k[1].i).toBeUndefined();
   });
 });
+
+describe("fitKeyframes · exactValues", () => {
+  /** Opacity held at 100 for 30 frames, then an easeIn fade to 0 over 60: the fade leaves 100 so slowly that one run can span the hold. */
+  const holdThenFade = (): number[][] => [
+    ...Array.from({ length: 30 }, () => [100]),
+    ...sample((t) => 100 * (1 - evaluateEasing(t, "easeIn", null)), 61),
+  ];
+  const EXACT: FitOptions = { ...OPTS, exactValues: [0, 100] };
+
+  it("reproduces held 100s exactly and ends exactly at 0", () => {
+    const values = holdThenFade();
+    const k = roundTrip(values, LOTTIE_FIT_TOLERANCE.opacity, EXACT);
+    for (let f = 0; f < 30; f++) expect(evaluateKeyframes(k, f)[0], `frame ${f}`).toBe(100);
+    expect(evaluateKeyframes(k, values.length - 1)[0]).toBe(0);
+    // Every sample equal to a listed value, wherever it falls, within 1e-9.
+    for (let f = 0; f < values.length; f++) {
+      if (values[f][0] === 0 || values[f][0] === 100) {
+        expect(Math.abs(evaluateKeyframes(k, f)[0] - values[f][0]), `frame ${f}`).toBeLessThanOrEqual(1e-9);
+      }
+    }
+  });
+
+  it("lets the same track deviate at the hold without them", () => {
+    const values = holdThenFade();
+    const k = roundTrip(values, LOTTIE_FIT_TOLERANCE.opacity);
+    let off = 0;
+    for (let f = 0; f < 30; f++) if (evaluateKeyframes(k, f)[0] !== 100) off++;
+    expect(off).toBeGreaterThan(0);
+  });
+
+  it("is deterministic", () => {
+    const values = holdThenFade();
+    const a = JSON.stringify(fitKeyframes(values, LOTTIE_FIT_TOLERANCE.opacity, EXACT));
+    const b = JSON.stringify(fitKeyframes(values, LOTTIE_FIT_TOLERANCE.opacity, EXACT));
+    expect(a).toBe(b);
+  });
+});

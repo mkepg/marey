@@ -84,7 +84,10 @@ function countKeyframes(node: unknown): number {
 // deterministic, so each ceiling is the measured count. A vector whose
 // components ease differently (a linear sx with an easeIn sy) fits one
 // keyframe per frame under the shared easing, which is why the physics scenes
-// stay well above the count a per-component fit would give.
+// stay well above the count a per-component fit would give. Measured again
+// with opacity held exact at 0 and 100 (`exactValues`): every count is
+// unchanged on these five scenes. Section 4 of
+// `eval/RESULTS-LOTTIE-FITTED.md` has the exported examples' counts.
 //
 //   scene          per-frame   fitted (= ceiling)
 //   compound-logo        480       99

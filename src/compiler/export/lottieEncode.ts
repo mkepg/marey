@@ -1,7 +1,7 @@
 import { rgb01OfInt, type LayerSpec, type LottieShapeSpec } from "./lottieGeometry";
 import type { FrameSnapshot, ObjectSnapshot } from "../renderer/frameSampler";
 import type { SamplerPlan } from "./exportContract";
-import { fitKeyframes, DEFAULT_HANDLE_RANGE, LOTTIE_FIT_TOLERANCE } from "./lottieFit";
+import { fitKeyframes, DEFAULT_HANDLE_RANGE, LOTTIE_FIT_TOLERANCE, type FitOptions } from "./lottieFit";
 
 /**
  * The Lottie document, and the half of the exporter that never sees the IR.
@@ -262,6 +262,14 @@ function hexOf(rgb: readonly [number, number, number]): string {
  */
 const FIT_OPTIONS = { finalHandles: false, handleRange: DEFAULT_HANDLE_RANGE } as const;
 
+/**
+ * Opacity keeps 0 and 100 exactly (spec §4, "Opacity at its bounds is
+ * exact"). Players quantise opacity, and full and zero opacity are what a
+ * scene holds longest, so a fitted 99.96 inside the 0.05 tolerance darkens a
+ * held layer by a level over its whole area.
+ */
+const OPACITY_FIT_OPTIONS = { ...FIT_OPTIONS, exactValues: [0, 100] } as const;
+
 /** A static property: the collapsed form of a track that never varies. */
 function staticVector(value: ReadonlyArray<number>): LottieVectorProperty {
   return { a: 0, k: value };
@@ -298,10 +306,14 @@ function track(values: ReadonlyArray<ReadonlyArray<number>>, tolerance: number):
 }
 
 /** The scalar form of {@link track}: a static `k` is a bare number. */
-function scalarTrack(values: ReadonlyArray<number>, tolerance: number): LottieScalarProperty {
+function scalarTrack(
+  values: ReadonlyArray<number>,
+  tolerance: number,
+  options: FitOptions = FIT_OPTIONS,
+): LottieScalarProperty {
   const first = values[0];
   if (values.every((v) => v === first)) return staticScalar(first);
-  return { a: 1, k: fitKeyframes(values.map((v) => [v]), tolerance, FIT_OPTIONS) };
+  return { a: 1, k: fitKeyframes(values.map((v) => [v]), tolerance, options) };
 }
 
 /**
@@ -687,7 +699,7 @@ export function encodeLottie(
         p: positionTrack(positions),
         s: track(scales, LOTTIE_FIT_TOLERANCE.scale),
         r: scalarTrack(rotations, LOTTIE_FIT_TOLERANCE.rotation),
-        o: scalarTrack(opacities, LOTTIE_FIT_TOLERANCE.opacity),
+        o: scalarTrack(opacities, LOTTIE_FIT_TOLERANCE.opacity, OPACITY_FIT_OPTIONS),
       },
       ao: 0 as const,
       ip: 0,

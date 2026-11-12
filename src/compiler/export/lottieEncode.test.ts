@@ -8,6 +8,7 @@ import { lex } from "../lexer";
 import { parse } from "../parser";
 import { typeCheck } from "../typeChecker";
 import { TICK_HZ } from "../sceneIR";
+import { evaluateEasing } from "../renderer/easing";
 
 /**
  * The whole point of the two-module split (design §2.2): every input below is
@@ -189,6 +190,24 @@ describe("encodeLottie · the opacity asymmetry", () => {
       planFor(2, 30), SCENE,
     );
     expect(evaluateProperty(layerNamed(doc, "inner").ks.o, 1)).toEqual([0]);
+  });
+
+  it("keeps opacity exactly 100 while it is held there and exactly 0 at the end of a fade", () => {
+    // Players quantise opacity, so a fitted 99.96 that the 0.05 tolerance
+    // allows draws a held layer one level dark. A 30-frame hold followed by
+    // an easeIn fade leaves 100 slowly enough that one run would span both.
+    const alphas = [
+      ...Array.from({ length: 30 }, () => 1),
+      ...Array.from({ length: 61 }, (_, f) => 1 - evaluateEasing(f / 60, "easeIn", null)),
+    ];
+    const doc = encodeLottie(
+      [circle("scene.c")],
+      framesOf(...alphas.map((alpha) => [snap("scene.c", { alpha })])),
+      planFor(alphas.length, 30), SCENE,
+    );
+    const o = layerNamed(doc, "c").ks.o;
+    for (let f = 0; f < 30; f++) expect(evaluateProperty(o, f), `frame ${f}`).toEqual([100]);
+    expect(evaluateProperty(o, alphas.length - 1)).toEqual([0]);
   });
 });
 

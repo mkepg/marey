@@ -349,6 +349,11 @@ Design: `docs/specs/2026-11-13-marey-lottie-fitted-keyframes-design.md`.
   | opacity | 0 to 100 | 0.05 |
   | colour | 0 to 1 per channel | 0.25 / 255 |
 
+  An opacity sample of exactly 0 or 100 is reproduced within 1e-9, not
+  merely within 0.05 (`exactValues` in `FitOptions`): players quantise
+  opacity, and dotlottie-web drew a held layer fitted at 99.963 one level
+  dark.
+
   **Easing names (`n`).** dotlottie-web's ThorVG builds one easing curve per
   keyframe and caches it under a key: `"%.2f_%.2f_%.2f_%.2f"` of the handles,
   cut to 19 characters, when the keyframe has no `n`. Fitted handles are

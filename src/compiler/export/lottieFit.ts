@@ -26,7 +26,11 @@
  *   line between its end samples (F3, F6);
  * - no critical point of the curve inside a frame interval lies outside that
  *   interval's two samples widened by the tolerance (F4b), so players drawing
- *   fractional frames never see an overshoot between samples.
+ *   fractional frames never see an overshoot between samples;
+ * - every interior sample equal to one of `exactValues` is reproduced within
+ *   1e-9, not merely within the tolerance (spec §4, "Opacity at its bounds is
+ *   exact"). Keyframe values are copied samples, so a run's own ends are
+ *   always exact.
  *
  * Pure and deterministic (F9): plain arithmetic in a fixed order. Imports
  * nothing from the renderer, the IR or the text shaper.
@@ -67,7 +71,17 @@ export interface FitOptions {
   readonly finalHandles: boolean;
   /** The inclusive range every fitted y handle must lie in. */
   readonly handleRange: readonly [number, number];
+  /**
+   * Values a sample must keep exactly: a sample equal (`===`) to one of them
+   * is reproduced by the fitted curve within {@link EXACT_VALUE_EPSILON} at
+   * its frame, or the run does not fit. The encoder passes `[0, 100]` for
+   * opacity, which players quantise and scenes hold longest.
+   */
+  readonly exactValues?: ReadonlyArray<number>;
 }
+
+/** How close the fitted curve must come to a sample listed in `exactValues`. */
+export const EXACT_VALUE_EPSILON = 1e-9;
 
 export interface FitHandle {
   readonly x: ReadonlyArray<number>;
@@ -123,6 +137,7 @@ export function fitKeyframes(
   }
   if (!(tolerance >= 0)) throw new RangeError(`fitKeyframes: tolerance must be non-negative, got ${tolerance}`);
 
+  const exact = options.exactValues ?? [];
   const keyframes: FittedKeyframe[] = [];
   const sums: RunSums = { pow: new Float64Array(7), dev: new Float64Array(d * 3) };
   let a = 0;
@@ -135,7 +150,7 @@ export function fitKeyframes(
     while (b + 1 < frames) {
       // Frame b becomes interior to the candidate run [a, b + 1].
       addInterior(sums, values, a, b, d);
-      const handles = fitRun(values, a, b + 1, tolerance, options.handleRange, sums, d);
+      const handles = fitRun(values, a, b + 1, tolerance, options.handleRange, exact, sums, d);
       if (handles === null) break;
       best = handles;
       b++;
@@ -192,6 +207,7 @@ function fitRun(
   b: number,
   tol: number,
   range: readonly [number, number],
+  exact: ReadonlyArray<number>,
   sums: RunSums,
   d: number,
 ): readonly [number, number] | null {
@@ -263,8 +279,10 @@ function fitRun(
     const v = values[a + j];
     for (let c = 0; c < d; c++) {
       const delta = end[c] - start[c];
-      if (!(Math.abs(start[c] + delta * e - v[c]) <= tol)) return null;
+      const err = Math.abs(start[c] + delta * e - v[c]);
+      if (!(err <= tol)) return null;
       if (Math.abs(delta) <= tol && !(Math.abs(start[c] + delta * u - v[c]) <= tol)) return null;
+      if (!(err <= EXACT_VALUE_EPSILON) && exact.includes(v[c])) return null;
     }
   }
 
