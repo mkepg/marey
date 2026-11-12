@@ -92,6 +92,18 @@ function countKeyframes(node: unknown): number {
 //   physics-pile       16800     2718
 //   ledges             14040     1958
 //   dusk-hills         23760     3731
+//
+// `marey export ledges.marey --format lottie --fps 30` writes 4256 keyframes,
+// not 1958, at the same 270 frames and 38 layers. Two differences in the
+// simulation account for it. `run` builds `new MatterWorld(width, height)`,
+// which has all four walls, while ledges declares `bounds: [left, right,
+// bottom]`; the export builds the world with `createWorldForScene`, so its
+// tiles fall in through the open top, and here they land on the top wall and
+// settle early. Built with `createWorldForScene` in Node, ledges fits to 4136
+// keyframes. The remaining 120 come from Node and the export's Chromium
+// drifting apart: the first differing sample is crate_2 at frame 78, 3e-4 px,
+// and the bodies diverge from there. physics-pile and dusk-hills declare all
+// four walls and match the export's counts.
 const CEILINGS: Record<string, number> = {
   "compound-logo": 99,
   "radial-dots": 0,
