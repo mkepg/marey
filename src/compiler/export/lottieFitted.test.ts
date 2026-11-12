@@ -87,17 +87,17 @@ function countKeyframes(node: unknown): number {
 // stay well above the count a per-component fit would give.
 //
 //   scene          per-frame   fitted (= ceiling)
-//   compound-logo        480       81
+//   compound-logo        480       99
 //   radial-dots            0        0   (nothing moves)
-//   physics-pile       16800     2204
-//   ledges             14040     1581
-//   dusk-hills         23760     3292
+//   physics-pile       16800     2718
+//   ledges             14040     1958
+//   dusk-hills         23760     3731
 const CEILINGS: Record<string, number> = {
-  "compound-logo": 81,
+  "compound-logo": 99,
   "radial-dots": 0,
-  "physics-pile": 2204,
-  "ledges": 1581,
-  "dusk-hills": 3292,
+  "physics-pile": 2718,
+  "ledges": 1958,
+  "dusk-hills": 3731,
 };
 
 describe("lottieFitted · canonical scenes", () => {

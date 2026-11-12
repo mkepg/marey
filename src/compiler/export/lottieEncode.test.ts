@@ -301,8 +301,8 @@ describe("encodeLottie · constant-track collapse", () => {
 
   it("uses the per-channel tolerance", () => {
     // 30 frames of rotation along a straight line, with the middle frame
-    // pushed off it by `offset` degrees. 0.004 is inside the 0.01 degree
-    // rotation tolerance, so the whole run is one segment; 0.02 is outside.
+    // pushed off it by `offset` degrees. 0.0001 is inside the 0.0002 degree
+    // rotation tolerance, so the whole run is one segment; 0.001 is outside.
     const rotated = (offset: number) => {
       const frames = Array.from({ length: 30 }, (_, f) => {
         const deg = f + (f === 15 ? offset : 0);
@@ -313,8 +313,8 @@ describe("encodeLottie · constant-track collapse", () => {
         "c",
       ).ks.r.k;
     };
-    expect(rotated(0.004)).toHaveLength(2);
-    expect(rotated(0.02).length).toBeGreaterThan(2);
+    expect(rotated(0.0001)).toHaveLength(2);
+    expect(rotated(0.001).length).toBeGreaterThan(2);
   });
 
   it("keeps keyframe values exact", () => {

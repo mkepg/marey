@@ -220,11 +220,11 @@ describe("fitKeyframes", () => {
 
   it("pins the tolerance table", () => {
     expect(LOTTIE_FIT_TOLERANCE).toEqual({
-      position: 0.01,
-      scale: 0.01,
-      rotation: 0.01,
-      opacity: 0.1,
-      color: 0.49 / 255,
+      position: 0.004,
+      scale: 0.0004,
+      rotation: 0.0002,
+      opacity: 0.05,
+      color: 0.25 / 255,
     });
   });
 

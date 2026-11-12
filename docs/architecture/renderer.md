@@ -343,11 +343,11 @@ Design: `docs/specs/2026-11-13-marey-lottie-fitted-keyframes-design.md`.
 
   | channel | unit | tolerance |
   |---|---|---|
-  | position | px | 0.01 |
-  | scale | percentage points | 0.01 |
-  | rotation | degrees | 0.01 |
-  | opacity | 0 to 100 | 0.1 |
-  | colour | 0 to 1 per channel | 0.49 / 255 |
+  | position | px | 0.004 |
+  | scale | percentage points | 0.0004 |
+  | rotation | degrees | 0.0002 |
+  | opacity | 0 to 100 | 0.05 |
+  | colour | 0 to 1 per channel | 0.25 / 255 |
 
   A track that never varies, exactly, still collapses to a static property.
 - **Separated position.** When either coordinate moves, `ks.p` is

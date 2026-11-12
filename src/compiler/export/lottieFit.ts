@@ -32,20 +32,31 @@
  * nothing from the renderer, the IR or the text shaper.
  */
 
-/** Per-channel tolerances in the Lottie file's own units (spec F3). */
+/**
+ * Per-channel tolerances in the Lottie file's own units (spec F3, and its
+ * correction of 2026-11-13). Each is chosen from what the player draws, not
+ * from the property's own units:
+ *
+ * - position 0.004 px: about one level on an antialiased edge;
+ * - scale 0.0004 percentage points: 0.004 px at the edge of a 1,000 px shape;
+ * - rotation 0.0002 degrees: 0.0035 px at 1,000 px from the pivot;
+ * - opacity 0.05 on the 0-100 scale: 0.13 of an 8-bit level;
+ * - colour 0.25/255 on the 0-1 scale: a quarter level, which leaves the
+ *   player's own easing inversion (accurate to about 1e-3 in progress) half a
+ *   level of margin before a channel rounds to the wrong 8-bit value.
+ */
 export const LOTTIE_FIT_TOLERANCE: {
-  readonly position: 0.01;
-  readonly scale: 0.01;
-  readonly rotation: 0.01;
-  readonly opacity: 0.1;
+  readonly position: 0.004;
+  readonly scale: 0.0004;
+  readonly rotation: 0.0002;
+  readonly opacity: 0.05;
   readonly color: number;
 } = {
-  position: 0.01,
-  scale: 0.01,
-  rotation: 0.01,
-  opacity: 0.1,
-  // With 0.49/255, rounding a fitted colour channel recovers its 8-bit value.
-  color: 0.49 / 255,
+  position: 0.004,
+  scale: 0.0004,
+  rotation: 0.0002,
+  opacity: 0.05,
+  color: 0.25 / 255,
 };
 
 /** The y-handle range a fitted easing may use (spec F6). */
