@@ -23,6 +23,8 @@ import devExportSeamSource from "../../lib/devExportSeam.ts?raw";
 import useExportSource from "../../hooks/useExport.ts?raw";
 import topBarSource from "../../components/TopBar/TopBar.tsx?raw";
 import lottieEncodeSource from "./lottieEncode.ts?raw";
+import lottieFitSource from "./lottieFit.ts?raw";
+import lottieEvaluateSource from "./lottieEvaluate.ts?raw";
 import lottieGeometrySource from "./lottieGeometry.ts?raw";
 import apngEncodeSource from "./apngEncode.ts?raw";
 import textOutlineSource from "./textOutline.ts?raw";
@@ -259,6 +261,20 @@ describe("export boundary", () => {
     expect(importsModule(lottieEncodeSource, "pixi\\.js")).toBe(false);
     expect(importsModule(lottieEncodeSource, "sceneIR")).toBe(false);
     expect(importsModule(lottieEncodeSource, "harfbuzzjs")).toBe(false);
+  });
+
+  it("lottieFit.ts does not import pixi.js, sceneIR or harfbuzzjs in any form", () => {
+    expect(lottieFitSource).toContain("export function fitKeyframes");
+    expect(importsModule(lottieFitSource, "pixi\\.js")).toBe(false);
+    expect(importsModule(lottieFitSource, "sceneIR")).toBe(false);
+    expect(importsModule(lottieFitSource, "harfbuzzjs")).toBe(false);
+  });
+
+  it("lottieEvaluate.ts does not import pixi.js, sceneIR or harfbuzzjs in any form", () => {
+    expect(lottieEvaluateSource).toContain("export function evaluateKeyframes");
+    expect(importsModule(lottieEvaluateSource, "pixi\\.js")).toBe(false);
+    expect(importsModule(lottieEvaluateSource, "sceneIR")).toBe(false);
+    expect(importsModule(lottieEvaluateSource, "harfbuzzjs")).toBe(false);
   });
 
   it("lottieGeometry.ts does not import pixi.js or harfbuzzjs in any form", () => {
