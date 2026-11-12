@@ -149,6 +149,42 @@ Each fallback is recorded in this document as a dated correction.
 - Item 4 (a final keyframe with only `t` and `s`) passes in both players, so
   the final keyframe stays bare.
 
+### Correction, 2026-11-13: tighter tolerances after the real-player measurement
+
+The first fitted export missed §6.2's acceptance bound. `eval/RESULTS-LOTTIE-FITTED.md`
+holds the numbers. F3's tolerances were set in each property's own units, but a
+player's error shows up in pixels:
+
+- **Rotation and scale act through a lever arm.** 0.01° on a point 300 px from
+  its pivot moves it 0.05 px. 0.01 percentage points of scale on a 1,000 px
+  shape moves its edge 0.05 px. On an antialiased edge that is about a dozen
+  levels. That matches the misses on Ledges, Logo reveal and Physics pile in
+  dotlottie-web and lottie-web (+8 to +11 over the per-frame file).
+- **Position at 0.01 px is about 2.5 levels on an edge**, above the +2 bound.
+  That matches the handoff fixture's miss (+3).
+- **Colour at 0.49/255 leaves no margin for the player's own easing
+  inversion.** The samples are whole 8-bit levels, and a value within 0.49 of
+  one rounds back to it only if the player evaluates the curve exactly. Its
+  curve solver is accurate to about 1e-3 in progress. Dusk Hills' sky then came
+  out 1 level off over a quarter of the frame. The maximum delta was unchanged,
+  but the claim in F3's rationale ("rounding the fitted value recovers the
+  original 8-bit channel at every sampled frame") did not hold in a real
+  player.
+
+The tolerances are tightened, as §6.2 allows. They are never loosened:
+
+| Channel | Was | Now | Worst case on screen |
+|---|---|---|---|
+| position | 0.01 px | 0.004 px | 1 level on an edge |
+| scale | 0.01 points | 0.0004 points | 0.004 px at 1,000 px from the pivot |
+| rotation | 0.01° | 0.0002° | 0.0035 px at 1,000 px from the pivot |
+| opacity | 0.1 (of 100) | 0.05 | 0.13 levels |
+| colour | 0.49/255 | 0.25/255 | half a level of margin for the player |
+
+Every Marey easing is an exact cubic, so `animate` tracks still fit to within
+float noise and are unaffected. Physics, composed opacity and colour fit
+shorter runs. The new keyframe counts are recorded beside the old ones.
+
 ## 5. Tests
 
 - **Unit tests on the fitter** (pure functions, no IR):
