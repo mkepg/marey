@@ -353,8 +353,8 @@ explicitly rather than quietly deviating.
 - **Lottie fitted keyframes — implemented on branch `lottie-fitted-keyframes`.**
   Animated tracks export as a few cubic-eased keyframes with separated
   position, and easings that dotlottie-web would otherwise share are named.
-  Dusk Hills goes from 23760 keyframes to 3731 (2036666 to 718929 JSON bytes,
-  167892 to 37629 gzipped). Design:
+  Dusk Hills goes from 23760 keyframes to 3731 (2036666 to 711442 JSON bytes,
+  167892 to 37561 gzipped). Design:
   `docs/specs/2026-11-13-marey-lottie-fitted-keyframes-design.md`; plan:
   `docs/plans/2026-11-13-lottie-fitted-keyframes.md`; measurements:
   `eval/RESULTS-LOTTIE-FITTED.md`. Earlier problem statement:

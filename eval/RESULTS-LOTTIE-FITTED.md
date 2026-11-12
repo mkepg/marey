@@ -144,11 +144,11 @@ Keyframes and bytes, as proposal §1 measured them
 
 ## 3. After: real players
 
-Fitted documents exported at `aabd370` (encoder with tolerances 0.004 px,
-0.0004 points, 0.0002 degrees, 0.05 opacity, 0.25/255 colour, and `n` easing
-names). The encoder is unchanged through `2e0dc41`, whose
-`lottie-fit-check.mjs` produced the restated tables below. No run raised a
-page, console or lottie error.
+The restated tables below measure fitted documents exported at `8ac67eb`
+(tolerances 0.004 px, 0.0004 points, 0.0002 degrees, 0.05 opacity, 0.25/255
+colour, `n` easing names, and opacity exact at 0 and 100), judged by
+`lottie-fit-check.mjs` at `7c69e00`. No run raised a page,
+console or lottie error.
 
 ### Original pixel bound and the two superseded fitted runs
 
@@ -211,11 +211,13 @@ Two separate causes:
   +0.0015 px reproduces the 88 exactly, while -0.0005 px changes nothing. These
   two lottie-web rows are measurement artifacts.
 
-### Restated acceptance (spec §4, correction of 2026-11-13)
+### Restated acceptance (spec §4, corrections of 2026-11-13)
 
-1. Geometry, lottie-web: every layer's `finalTransform` properties at every
-   compared frame are within F3's tolerance of the per-frame file's, plus
-   1e-4 px on position for lottie-web's own Newton/float32 easing solver.
+1. Geometry, lottie-web: every layer's transform, as the player evaluates it
+   from the file (`pv`), at every compared frame is within F3's tolerance of
+   the per-frame file's, plus 1e-4 px on position. The 1e-4 px covers
+   lottie-web storing the per-frame file's combined position in a
+   `Float32Array`.
 2. Pixels, both players: fitted maximum at most the worst maximum over the
    per-frame file and its copies shifted by +-0.001, +-0.002 and +-0.004 px,
    plus 2, per compared frame. The share of differing pixels fails when it
@@ -223,14 +225,16 @@ Two separate causes:
    percentage points, per compared frame.
 
 ```
-node tools/visual-check/lottie-fit-check.mjs --per-frame <section 2 doc.json> --fitted <this head's doc.json> \
-  --png-dir <lottie-check --compare-png output> --frames <frames> --renderer <renderer>
+node tools/visual-check/lottie-fit-check.mjs --per-frame <section 2 doc.json> --fitted <this head's doc.json>   --png-dir <lottie-check --compare-png output> --frames <frames> --renderer <renderer>
 ```
 
 The per-frame document is the export at base commit `cd14c3d`
 (`git worktree add <dir> cd14c3d`, `npm run build:export-page`, `marey export
-... --format lottie --fps 30`); the PNG frames are `frame_<n>_pngexport.png`
-from `lottie-check.mjs --compare-png` on this head.
+... --format lottie --fps 30`); the fitted document and the PNG frames
+(`frame_<n>_pngexport.png`) come from `lottie-check.mjs --compare-png` at
+`8ac67eb`, with Vite on port 5199.
+
+All 22 rows pass both checks.
 
 Pixels. The maximum columns are the worst over each row's frames; the
 verdict is per frame. The share columns are taken at the frame where the
@@ -259,7 +263,7 @@ range's highest share, in percentage points.
 | bar-chart-reveal | lottie-web | 140 | 140 | 140 | met | 0 | 0.7135% | 0.7135% to 0.7135% | 0.7135% | +0.0000 | met |
 | bar-chart-reveal | dotlottie-web | 139 | 139 | 139 | met | 0 | 0.7123% | 0.7123% to 0.7123% | 0.7123% | +0.0000 | met |
 | logo-reveal | lottie-web | 103 | 103 | 103 | met | 0 | 0.0000% | 0.0000% to 0.0000% | 0.0000% | +0.0000 | met |
-| logo-reveal | dotlottie-web | 109 | 112 | 109 | met | 25 | 0.2298% | 0.2290% to 0.2302% | 0.8171% | +0.5869 | MISSED |
+| logo-reveal | dotlottie-web | 109 | 112 | 109 | met | 0 | 0.0000% | 0.0000% to 0.0000% | 0.0000% | +0.0000 | met |
 | physics-pile | lottie-web | 102 | 102 | 102 | met | 140 | 0.9617% | 0.9606% to 0.9629% | 0.9660% | +0.0031 | met |
 | physics-pile | dotlottie-web | 96 | 96 | 96 | met | 0 | 0.1790% | 0.1790% to 0.1794% | 0.1790% | -0.0004 | met |
 
@@ -268,19 +272,15 @@ Two dotlottie-web rows move the share more than the others:
 - Dusk Hills: 1.0985% against a calibrated highest of 1.0910% at frame 60
   (+0.0075 points), and +0.0171 points at frame 330, the largest excess in the
   row. That is the sub-pixel noise the 0.5-point gate allows for.
-- Logo reveal: the fitted share is 1.9538% at frame 50 against 3.9712% for the
-  per-frame file, about half, and 0.8171% at frame 25 against a calibrated
-  highest of 0.2302%, 0.587 points over, past the gate. Swapping only the
-  opacity tracks between the two files makes their dotlottie-web renders
-  identical at both frames, so the whole difference is opacity. At frame 25
-  the fitted file holds the sun, its disc and its rim at 99.963 opacity,
-  inside the 0.05 tolerance, where the per-frame file has 100, and
-  dotlottie-web draws the whole sun one level darker: (253, 184, 62) against
-  (254, 185, 62), 2988 pixels differing by exactly 1. At frame 50 the two
-  renders differ by one level on 17,650 pixels, and the fitted one is the
-  closer to the PNG export; how dotlottie-web turns that frame's opacities
-  into a one-level shift is not isolated. lottie-web shows neither shift on
-  this scene.
+- Logo reveal: at frame 50 the fitted share is 1.7846% against 3.9712% for
+  the per-frame file, about half. Swapping only the opacity tracks between the
+  two files makes their dotlottie-web renders identical at that frame, so the
+  difference is opacity. The renders differ by exactly one level on 16,406
+  pixels, all in rows 301 to 390, where the ridge layers are mid-fade (one
+  at 20.0556 in the per-frame file and 20.0520 fitted, inside the 0.05
+  tolerance), and the fitted render is the closer to the PNG export.
+  Why dotlottie-web shifts the per-frame file's ridges by a level there is
+  not isolated. lottie-web shows no such shift on this scene.
 
 Geometry, lottie-web, worst |fitted − per-frame| over each row's frames, in
 the file's units (px, percentage points, degrees, 0 to 100):
@@ -294,41 +294,51 @@ the file's units (px, percentage points, degrees, 0 to 100):
 | lottie-ease-handoff | 1.23e-3 | 0 | 0 | 0 | met |
 | lottie-ease-handoff-yoyo | 2.70e-10 | 0 | 0 | 0 | met |
 | dusk-hills | 5.45e-4 | 0 | 2.93e-14 | 4.29e-2 | met |
-| ledges | 4.01e-3 | 0 | 4.37e-4 | 0 | MISSED |
+| ledges | 4.01e-3 | 0 | 1.90e-4 | 0 | met |
 | bar-chart-reveal | 0 | 0 | 0 | 2.61e-2 | met |
-| logo-reveal | 1.67e-3 | 0 | 0 | 3.65e-2 | met |
+| logo-reveal | 1.67e-3 | 0 | 0 | 5.04e-3 | met |
 | physics-pile | 3.94e-3 | 0 | 1.62e-4 | 0 | met |
 
-lottie-web holds rotation in radians and scale and opacity as ratios
-(`degToRads` and a 0.01 multiplier in its `TransformProperty`). The check
-converts them to the file's units before comparing. The version committed
-at `08e8f60` compared them unconverted, which made rotation 57 times and
-scale and opacity 100 times looser than F3, so its statement that every
-property was inside tolerance was not established.
+The only overshoot of a bare tolerance is position, 9.4e-6 px at ledges
+`tile_5` frame 180, inside the 1e-4 px allowance. It is float32 storage, not
+the easing solver: lottie-web stores the per-frame file's combined position
+in a `Float32Array`, which rounds the sample 363.690083347462 to
+363.6900939941406 (+1.06e-5 px). The fitted file's split position is read in
+float64 and lies 3.9988e-3 px from the exact sample. Geometry is not read from
+dotlottie-web, which exposes no transform matrices.
 
-One property exceeds its tolerance: ledges `tile_17` rotation at frame 255,
-4.37e-4° against 2e-4°. The fitted keyframes hold `tile_17` flat at
-−326.2670432225297° from frame 246 to 269. At frame 255, `lottieEvaluate.ts`
-returns −326.2670432225297° for those keyframes, the per-frame sample is
-−326.2670432225297°, and lottie-web's own interpolated value (`r.pv`, in degrees) is
-−326.2670432225297°. The value lottie-web draws (`r.v`, converted to degrees) is
-−326.26747978652645°, the value it held at frame 180, the previous compared
-frame. lottie-web's `setVValue` replaces `v` only when the new value differs
-from the held one by more than 1e-5 in its internal units: 1e-5 rad, 5.7e-4°,
-for rotation, and 1e-3 percentage points for scale, both larger than F3's
-tolerances. From frame 180 to 255 the fitted file's rotation moves 4.37e-4°,
-under that threshold, and the per-frame file's moves 5.8e-4°, over it.
-Frame 255 read on its own draws −326.2670432225297° from the fitted file.
-The check reads the frames in sequence, so it compares two held values. The
-geometry check fails on this row.
+### Superseded acceptance runs
 
-The position overshoot of the bare 0.004 px tolerance, 9.4e-6 px at ledges
-`tile_5` frame 180, is float32 storage, not the easing solver: lottie-web
-stores the per-frame file's combined position in a `Float32Array`, which
-rounds the sample 363.690083347462 to 363.6900939941406 (+1.06e-5 px). The
-fitted file's split position is read in float64 and lies 3.9988e-3 px from
-the exact sample. Geometry is not read from dotlottie-web, which exposes no
-transform matrices.
+The geometry check committed at `08e8f60` compared lottie-web's
+`finalTransform` values unconverted. lottie-web holds rotation in radians and
+scale and opacity as ratios (`degToRads` and a 0.01 multiplier in its
+`TransformProperty`), so rotation was checked 57 times and scale and opacity
+100 times more loosely than F3, and that run's statement that every property
+was inside tolerance was not established. That run also reported the share
+without gating it.
+
+Run again at `2e0dc41` on the documents exported at `aabd370` (before opacity
+was kept exact), in the file's units and on the drawn value `v`, two rows
+failed:
+
+- Geometry, ledges, lottie-web: `tile_17` rotation at frame 255 read 4.37e-4°
+  against 2e-4°. The fitted keyframes hold `tile_17` flat at
+  −326.2670432225297° from frame 246 to 269; `lottieEvaluate.ts`, the
+  per-frame sample and lottie-web's evaluated value `pv` all read
+  −326.2670432225297° there. The drawn value `v` read −326.26747978652645°,
+  the value held from frame 180, the previous compared frame. lottie-web's
+  `setVValue` replaces `v` only when the new value differs from the held one
+  by more than 1e-5 of its internal units (1e-5 rad, 5.7e-4°); the fitted
+  file's rotation moved 4.37e-4° between the two frames and the per-frame
+  file's 5.8e-4°. The check now reads `pv`, which the threshold does not
+  touch, so it measures the file rather than the player's redraw skipping.
+- Share, logo-reveal, dotlottie-web, frame 25: 0.8171% against a calibrated
+  highest of 0.2302%, 0.587 points over the gate. The fitted file held the
+  sun, its disc and its rim at 99.963 opacity, inside the 0.05 tolerance,
+  where the per-frame file has 100, and dotlottie-web drew the whole sun one
+  level darker: (253, 184, 62) against (254, 185, 62), 2988 pixels differing
+  by exactly 1. Opacity is now kept exact at 0 and 100 (`8ac67eb`), and the
+  same frame reads 0.2298%, inside its calibrated range.
 
 Against the original bound, the dotlottie-web rows all pass now. Two lottie-web
 rows still read above it and are the artifacts above: ledges frame 180
@@ -337,7 +347,7 @@ rows still read above it and are the artifacts above: ledges frame 180
 
 ## 4. After: size and keyframes
 
-Measured on the final head with
+Measured at `8ac67eb` (opacity exact at 0 and 100) with
 `node bin/marey.mjs export src/examples/<scene>.marey --format lottie --fps 30`
 after `npm run build:export-page`. "Properties" counts objects with `a: 1` and
 an array `k`; a fitted position counts `x` and `y` separately, which is why
@@ -345,13 +355,22 @@ Ledges has more properties than before. "Named" counts keyframes carrying `n`.
 
 | Scene | Properties | Keyframes before | Keyframes after (named) | JSON bytes before | JSON bytes after | gzip before | gzip after |
 |---|---|---|---|---|---|---|---|
-| Dusk Hills | 66 | 23760 | 3731 (3125) | 2036666 | 718929 | 167892 | 37629 |
+| Dusk Hills | 66 | 23760 | 3731 (2822) | 2036666 | 711442 | 167892 | 37561 |
 | Ledges | 52 to 79 | 14040 | 4256 (3124) | 1229171 | 704174 | 179698 | 136590 |
 | Bar chart reveal | 14 | 2100 | 76 (0) | 202059 | 72759 | 14186 | 9746 |
-| Logo reveal | 13 | 1950 | 70 (24) | 142990 | 20931 | 8516 | 3459 |
+| Logo reveal | 13 | 1950 | 74 (24) | 142990 | 21455 | 8516 | 3477 |
 
-The names cost bytes (Dusk Hills 2.9% of gzip) and buy correctness in
-dotlottie-web. Ledges' keyframe count includes colour and position tracks that
+Keeping opacity exact at 0 and 100 changed two scenes against the export at
+`aabd370`: Logo reveal's four fading layers (`name`, `sun`, `disc`, `rim`)
+each gained a keyframe where the fade reaches 100 (70 to 74 keyframes), and
+Dusk Hills' `spark` keyframe at frame 189 moved to frame 180, where its
+opacity peaks at exactly 100 (the count stays 3731). Ledges and Bar chart
+reveal are byte-identical. Fewer handle tuples collide in Dusk Hills after the
+move, so fewer keyframes carry a name (3125 to 2822).
+
+The names cost bytes and buy correctness in dotlottie-web: removing every `n`
+from Dusk Hills takes its gzip size from 37561 to 34061 bytes, so the names
+are 9.3% of it. Ledges' keyframe count includes colour and position tracks that
 each split into short runs under the tightened tolerances.
 
 ## 5. Fractional frames
