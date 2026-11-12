@@ -60,6 +60,8 @@ export interface ControllerOptions {
   onReady(info: { width: number; height: number; duration: number }): void;
   onError(code: PlayerErrorCode, message: string, errors: ReadonlyArray<CompilerError>): void;
   onEnded(): void;
+  /** A mount was adopted: the scene is drawing, so an earlier mount failure no longer applies. */
+  onMounted(): void;
   /** For the controls UI. Also fired when the mount is torn down or rebuilt. */
   onState(s: PlayheadState): void;
 }
@@ -317,8 +319,38 @@ export class PlayerController {
     }
 
     this._mount = mount;
-    this.wasPlaying = start.playing;
+    this.wasPlaying = mount.getState().playing;
     this.unsubscribe = mount.subscribe((s) => this.onMountState(s));
+    this.reconcile(mount);
+    this.options.onMounted();
+  }
+
+  /**
+   * While a mount is pending, play(), pause(), restart() and the currentTime
+   * setter only update `stored`, and the mount started from the copy taken
+   * before it was awaited. Apply what changed in that window the way each
+   * method's mounted branch would have, so the reader's input is not lost and
+   * the getters agree with the screen.
+   */
+  private reconcile(mount: PlayerMount): void {
+    const want = this.stored;
+    const now = mount.getState();
+    if (want.tick !== now.tick) {
+      mount.seek(want.tick);
+      this.seekTarget = want.tick;
+      // As the setter does: a seek leaves playback paused, so a playing intent
+      // resumes once it lands, except on the end tick, where play() replays.
+      if (want.playing && want.tick !== this.endTick) this.resumeAt = want.tick;
+      else if (now.playing) mount.pause();
+    } else if (want.playing !== now.playing) {
+      if (want.playing) mount.play();
+      else mount.pause();
+    }
+    const s = mount.getState();
+    this.shown = this.seekPending()
+      ? { ...s, tick: want.tick, playing: s.playing || this.resumeAt !== null, reachedTick: Math.max(s.reachedTick, want.tick) }
+      : s;
+    this.options.onState(this.shown);
   }
 
   private onMountState(s: PlayheadState): void {

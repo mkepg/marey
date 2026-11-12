@@ -70,6 +70,7 @@ function setup(opts: { autoplay?: boolean; loop?: boolean; reducedMotion?: boole
     ready: vi.fn(),
     error: vi.fn(),
     ended: vi.fn(),
+    mounted: vi.fn(),
     state: vi.fn(),
   };
   const options: ControllerOptions = {
@@ -79,6 +80,7 @@ function setup(opts: { autoplay?: boolean; loop?: boolean; reducedMotion?: boole
     onReady: events.ready,
     onError: events.error,
     onEnded: events.ended,
+    onMounted: events.mounted,
     onState: events.state,
   };
   const starts: Array<{ tick: number; playing: boolean }> = [];
@@ -208,6 +210,35 @@ describe("PlayerController: race guards", () => {
     await reloading;
   });
 
+  it("a superseded load that rejects late reports no error", async () => {
+    const t = setup();
+    const first = deferred<string>();
+    const a = t.controller.load(() => first.promise);
+    await t.controller.load(text(BOUNDED));
+    first.reject(new PlayerError("PLAYER_FETCH_FAILED", "404 old.marey"));
+    await a;
+    expect(t.events.error).not.toHaveBeenCalled();
+    expect(t.events.ready).toHaveBeenCalledTimes(1);
+    expect(t.controller.source).toBe(BOUNDED);
+  });
+
+  it("onMounted fires for the adopted mount and not for one destroyed as stale", async () => {
+    const t = setup();
+    const gate = deferred<void>();
+    const late: MountFn = async (ir, start) => {
+      await gate.promise;
+      return t.mountFn(ir, start);
+    };
+    await t.controller.load(text(BOUNDED));
+    const attaching = t.controller.attach(late);
+    t.controller.detach();
+    gate.resolve();
+    await attaching;
+    expect(t.events.mounted).not.toHaveBeenCalled();
+    await t.controller.attach(t.mountFn);
+    expect(t.events.mounted).toHaveBeenCalledTimes(1);
+  });
+
   it("a superseded load is discarded", async () => {
     const t = setup();
     const first = deferred<string>();
@@ -277,6 +308,19 @@ describe("PlayerController: currentTime", () => {
     }
     expect(t.mounts[0].calls.filter((c) => c.startsWith("seek"))).toEqual([]);
     expect(t.controller.currentTime).toBe(0);
+  });
+
+  it("currentTime set on a paused embed stays paused once the seek is performed", async () => {
+    const t = setup({ autoplay: false });
+    await t.controller.load(text(BOUNDED));
+    await t.controller.attach(t.mountFn);
+    t.controller.currentTime = 0.5;
+    expect(t.controller.paused).toBe(true);
+    t.mounts[0].performSeek();
+    expect(t.mounts[0].calls).toEqual(["seek:60"]);
+    expect(t.mounts[0].getState()).toMatchObject({ tick: 60, playing: false });
+    expect(t.controller.paused).toBe(true);
+    expect(t.controller.currentTime).toBe(0.5);
   });
 
   it("currentTime set while detached updates the stored playhead", async () => {
@@ -361,6 +405,45 @@ describe("PlayerController: play, pause and restart while a seek is pending (spe
     expect(t.mounts[0].getState()).toMatchObject({ tick: 120, playing: true });
   });
 
+  it("play() with a seek to the end pending restarts from tick 0 (spec §3.4)", async () => {
+    const t = setup({ autoplay: false });
+    await t.controller.load(text(BOUNDED));
+    await t.controller.attach(t.mountFn);
+    t.mounts[0].push({ tick: 90 });
+    t.controller.currentTime = 99;
+    t.controller.play();
+    expect(t.mounts[0].calls).toEqual(["seek:240", "restart"]);
+    expect(t.mounts[0].hasPendingSeek()).toBe(false);
+    expect(t.controller.currentTime).toBe(0);
+    expect(t.controller.paused).toBe(false);
+  });
+
+  it("leaving view with a resume armed stores the playhead as playing", async () => {
+    const t = setup({ autoplay: false });
+    await t.controller.load(text(BOUNDED));
+    await t.controller.attach(t.mountFn);
+    t.mounts[0].push({ tick: 90 });
+    t.controller.currentTime = 0.5;
+    t.controller.play();
+    // The mount itself is still paused; only the armed resume says playing.
+    expect(t.mounts[0].getState().playing).toBe(false);
+    t.controller.detach();
+    await t.controller.attach(t.mountFn);
+    expect(t.starts[1]).toEqual({ tick: 60, playing: true });
+  });
+
+  it("an indefinite scene leaving view with a seek pending still restarts from tick 0", async () => {
+    const t = setup();
+    await t.controller.load(text(INDEFINITE));
+    await t.controller.attach(t.mountFn);
+    t.mounts[0].push({ tick: 500, reachedTick: 500 });
+    t.controller.currentTime = 3;
+    expect(t.mounts[0].calls).toEqual(["seek:360"]);
+    t.controller.detach();
+    await t.controller.attach(t.mountFn);
+    expect(t.starts[1]).toEqual({ tick: 0, playing: true });
+  });
+
   it("leaving view with a seek pending stores the target, not the old tick", async () => {
     const t = setup();
     await t.controller.load(text(BOUNDED));
@@ -370,6 +453,119 @@ describe("PlayerController: play, pause and restart while a seek is pending (spe
     t.controller.detach();
     await t.controller.attach(t.mountFn);
     expect(t.starts[1]).toEqual({ tick: 120, playing: true });
+  });
+});
+
+/**
+ * A mount whose `mountFn` waits on a gate, as the real one waits on the
+ * renderer chunk, the font and `app.init`. Whatever the reader does in that
+ * window must hold once the mount resolves.
+ */
+async function pendingMount(opts: Parameters<typeof setup>[0], source: string) {
+  const t = setup(opts);
+  const gate = deferred<void>();
+  const late: MountFn = async (ir, start) => {
+    await gate.promise;
+    return t.mountFn(ir, start);
+  };
+  await t.controller.load(text(source));
+  const attaching = t.controller.attach(late);
+  const resolve = async () => {
+    gate.resolve();
+    await attaching;
+    return t.mounts[0];
+  };
+  return { ...t, resolve };
+}
+
+describe("PlayerController: input while the mount is pending", () => {
+  it("play() on a paused poster plays from tick 0 once the mount resolves", async () => {
+    const t = await pendingMount({ autoplay: false }, BOUNDED);
+    t.controller.play();
+    const m = await t.resolve();
+    expect(t.starts[0]).toEqual({ tick: 240, playing: false });
+    expect(t.controller.paused).toBe(false);
+    expect(t.controller.currentTime).toBe(0);
+    expect(t.events.state.mock.calls.at(-1)![0]).toMatchObject({ tick: 0, playing: true });
+    // Play at the end starts again from tick 0 (spec §3.4).
+    expect(m.calls).toEqual(["seek:0"]);
+    m.performSeek();
+    expect(m.calls).toEqual(["seek:0", "play"]);
+    expect(m.getState()).toMatchObject({ tick: 0, playing: true });
+  });
+
+  it("play() on a paused indefinite scene plays once the mount resolves", async () => {
+    const t = await pendingMount({ autoplay: false }, INDEFINITE);
+    t.controller.play();
+    const m = await t.resolve();
+    expect(m.calls).toEqual(["play"]);
+    expect(m.getState().playing).toBe(true);
+    expect(t.controller.paused).toBe(false);
+  });
+
+  it("pause() on an autoplay embed holds once the mount resolves", async () => {
+    const t = await pendingMount({}, BOUNDED);
+    t.controller.pause();
+    const m = await t.resolve();
+    expect(t.starts[0]).toEqual({ tick: 0, playing: true });
+    expect(m.calls).toEqual(["pause"]);
+    expect(m.getState().playing).toBe(false);
+    expect(t.controller.paused).toBe(true);
+    expect(t.events.state.mock.calls.at(-1)![0]).toMatchObject({ tick: 0, playing: false });
+  });
+
+  it("restart() on a paused poster plays from tick 0 once the mount resolves", async () => {
+    const t = await pendingMount({ autoplay: false }, BOUNDED);
+    t.controller.restart();
+    const m = await t.resolve();
+    expect(t.controller.paused).toBe(false);
+    expect(t.controller.currentTime).toBe(0);
+    m.performSeek();
+    expect(m.getState()).toMatchObject({ tick: 0, playing: true });
+  });
+
+  it("currentTime set on an autoplay embed is shown and keeps it playing once the mount resolves", async () => {
+    const t = await pendingMount({}, BOUNDED);
+    t.controller.currentTime = 1;
+    const m = await t.resolve();
+    expect(m.calls).toEqual(["seek:120"]);
+    expect(t.controller.currentTime).toBe(1);
+    expect(t.controller.paused).toBe(false);
+    expect(t.events.state.mock.calls.at(-1)![0]).toMatchObject({ tick: 120, playing: true });
+    m.performSeek();
+    expect(m.calls).toEqual(["seek:120", "play"]);
+    expect(m.getState()).toMatchObject({ tick: 120, playing: true });
+  });
+
+  it("currentTime set on a paused poster seeks and stays paused once the mount resolves", async () => {
+    const t = await pendingMount({ autoplay: false }, BOUNDED);
+    t.controller.currentTime = 0.5;
+    const m = await t.resolve();
+    expect(m.calls).toEqual(["seek:60"]);
+    m.performSeek();
+    expect(m.calls).toEqual(["seek:60"]);
+    expect(m.getState()).toMatchObject({ tick: 60, playing: false });
+    expect(t.controller.paused).toBe(true);
+    expect(t.controller.currentTime).toBe(0.5);
+  });
+
+  it("currentTime set then pause() on an autoplay embed ends paused on the new time", async () => {
+    const t = await pendingMount({}, BOUNDED);
+    t.controller.currentTime = 1;
+    t.controller.pause();
+    const m = await t.resolve();
+    expect(t.controller.paused).toBe(true);
+    expect(t.controller.currentTime).toBe(1);
+    m.performSeek();
+    expect(m.calls).toEqual(["seek:120", "pause"]);
+    expect(m.getState()).toMatchObject({ tick: 120, playing: false });
+  });
+
+  it("no input in the window sends nothing to the mount", async () => {
+    const t = await pendingMount({}, BOUNDED);
+    const m = await t.resolve();
+    expect(m.calls).toEqual([]);
+    expect(t.events.state.mock.calls.at(-1)![0]).toMatchObject({ tick: 0, playing: true });
   });
 });
 
@@ -416,13 +612,20 @@ describe("PlayerController: ended and loop", () => {
     expect(t.events.ended).not.toHaveBeenCalled();
   });
 
-  it("loop and ended ignore an indefinite scene", async () => {
-    const t = setup({ loop: true });
-    await t.controller.load(text(INDEFINITE));
-    await t.controller.attach(t.mountFn);
-    t.mounts[0].push({ tick: 240, playing: false });
-    expect(t.mounts[0].calls).not.toContain("restart");
-    expect(t.events.ended).not.toHaveBeenCalled();
+  it("loop and ended ignore an indefinite scene that comes to rest", async () => {
+    for (const loop of [true, false]) {
+      const t = setup({ loop });
+      await t.controller.load(text(INDEFINITE));
+      await t.controller.attach(t.mountFn);
+      t.mounts[0].push({ tick: 100, reachedTick: 100, playing: true });
+      // What Playback reports when an indefinite scene goes idle: it pauses
+      // itself on the furthest tick it reached, the end of its seek range.
+      // A rule that took that for an end (tick === endTick ?? reachedTick)
+      // would fire here.
+      t.mounts[0].push({ tick: 240, reachedTick: 240, playing: false });
+      expect(t.mounts[0].calls).not.toContain("restart");
+      expect(t.events.ended).not.toHaveBeenCalled();
+    }
   });
 });
 

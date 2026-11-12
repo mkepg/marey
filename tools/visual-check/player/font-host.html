@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>marey-player: a host page with its own JetBrains Mono</title>
+<!--
+  A page that declares its own "JetBrains Mono" @font-face, as a docs site
+  that styles code blocks with it does, and has not used it yet when the
+  player mounts. The face's file is deliberately a different font
+  (Bricolage Grotesque Bold), so player-check.mjs can tell from a text width
+  which file the page's own JetBrains Mono text ends up drawn with. "Host Ref"
+  names the same file under a family nothing else uses, as the reference
+  width.
+-->
+<style>
+  @font-face { font-family: "JetBrains Mono"; src: url(/public/fonts/BricolageGrotesque-Bold.ttf); }
+  @font-face { font-family: "Host Ref"; src: url(/public/fonts/BricolageGrotesque-Bold.ttf); }
+  body { margin: 0; padding: 16px; background: #e9e7e2; font: 13px system-ui, sans-serif; color: #222; }
+  figure { margin: 0; }
+  figcaption { margin-top: 6px; }
+  marey-player { display: block; width: 400px; height: 300px; }
+</style>
+</head>
+<body>
+<figure><marey-player id="text" autoplay src="/src/examples/bar-chart-reveal.marey"></marey-player><figcaption>text: src/examples/bar-chart-reveal.marey on a page with its own JetBrains Mono</figcaption></figure>
+<script>
+  window.__events = [];
+  for (const el of document.querySelectorAll("marey-player")) {
+    for (const type of ["ready", "error", "ended"]) {
+      el.addEventListener(type, (e) => window.__events.push({ id: el.id, type, detail: e.detail ?? null, t: performance.now() }));
+    }
+  }
+</script>
+<script type="module" src="/dist/player/marey-player.mjs"></script>
+</body>
+</html>

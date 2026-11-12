@@ -773,7 +773,7 @@ edit. Look at the two screenshots. The recorded run is in
 ## Checking the player
 
 `player-check.mjs` measures the embeddable `<marey-player>` (Phase 9A, spec
-§6 criteria 2 to 6) against the built `dist/player/`. It reads frames through
+§6 criteria 2 to 6, and the host-font case found after it) against the built `dist/player/`. It reads frames through
 the element's test hook, `el[Symbol.for("marey.player.debug")].liveFramesHash(ticks)`,
 which seeks the live playback and hashes the tree on screen the way
 `sampleFrames` does. That makes the result comparable with the `frames` hash
@@ -807,6 +807,16 @@ which seeks the live playback and hashes the tree on screen the way
    one-frame export, `--duration 0.25 --fps 4`). Following `<video>` (spec
    §3.3), the getter must still read 0 straight after that `pause()`, and on
    a paused embed a set followed by `play()` must play from the new time.
+6. **Font host** (`player/font-host.html`): a page that declares its own
+   `JetBrains Mono` `@font-face`, not yet used when the player mounts, as a
+   docs site styling its code does. The face's file is a different font on
+   purpose. The text scene must mount with no error, its `liveFramesHash`
+   must equal the export's `frames` hash, and the page's own `JetBrains Mono`
+   text must measure as wide as the page's file does under a family nothing
+   else uses: the player's face must not take over the page's. Before the
+   player registered its face under a family of its own, both failed: the
+   scene was refused with `PLAYER_FONT_UNAVAILABLE`, and the page's text drew
+   in the player's file.
 
 ```bash
 node tools/visual-check/player-check.mjs --out .visual-check/phase9a/player
@@ -815,7 +825,7 @@ node tools/visual-check/player-check.mjs --out .visual-check/phase9a/player
 | Flag | Meaning |
 |---|---|
 | `--out <dir>` | Where `report.json` and the screenshots go (default `.visual-check/phase9a/player`) |
-| `--only <list>` | A comma-separated subset of `agreement`, `currentTime`, `reducedMotion`, `errors`, `many` |
+| `--only <list>` | A comma-separated subset of `agreement`, `currentTime`, `reducedMotion`, `errors`, `fontHost`, `many` |
 | `--headed` | Show the browser window |
 
 It needs no dev server. It runs `npm run build:player` (and

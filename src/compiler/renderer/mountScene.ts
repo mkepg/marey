@@ -11,6 +11,11 @@ import { SceneRuntime } from "./sceneRuntime";
 /** The controller a stage's owner drives; `inner` is for the dev seam's hashes. */
 export type LivePlayback = PlaybackController & { readonly inner: Playback };
 
+export interface MountOptions {
+  /** The family `text` nodes ask for; `builder.ts`'s `TEXT_FONT_FAMILY` when omitted. */
+  readonly fontFamily?: string;
+}
+
 export interface MountedScene {
   readonly playback: LivePlayback;
   cleanup(): void;
@@ -31,6 +36,7 @@ export function mountScene(
   scene: IRSceneNode,
   host: HTMLElement,
   start?: PlaybackStart,
+  options: MountOptions = {},
 ): MountedScene {
   const sceneRoot = new Container();
   app.stage.addChild(sceneRoot);
@@ -90,7 +96,7 @@ export function mountScene(
   const playbackHost: PlaybackHost = {
     build() {
       const root = new Container();
-      for (const node of scene.children) root.addChild(buildNode(node));
+      for (const node of scene.children) root.addChild(buildNode(node, options.fontFamily));
       const runtime = new SceneRuntime(createWorldForScene(scene), root);
       return { root, runtime };
     },

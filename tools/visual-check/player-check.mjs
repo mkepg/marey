@@ -19,7 +19,11 @@
  *   3. reduced motion: an autoplay bounded scene shows its last tick, paused;
  *   4. errors: compile, fetch, font and no-source failures, each with its code;
  *   5. currentTime: a set keeps a playing embed playing and reads back at
- *      once; `currentTime = 0` shows the CLI's frame 0.
+ *      once; `currentTime = 0` shows the CLI's frame 0;
+ *   6. font host: on a page that declares its own, not yet used,
+ *      `JetBrains Mono` @font-face (`player/font-host.html`), the text scene
+ *      mounts, still hashes as the export does, and the page's own text in
+ *      that family keeps the page's face.
  *
  * It builds the player (and the CLI, for the references), serves the
  * repository root from its own `node:http` server on a free port, and closes
@@ -27,7 +31,7 @@
  *
  * Usage:
  *   node tools/visual-check/player-check.mjs [--out .visual-check/phase9a/player]
- *     [--only agreement,many,reducedMotion,errors,currentTime] [--headed]
+ *     [--only agreement,many,reducedMotion,errors,currentTime,fontHost] [--headed]
  *
  * Writes `report.json` and two screenshots to `--out`; exits 1 if any
  * requirement failed or a page raised an error.
@@ -48,7 +52,7 @@ function arg(name, fallback = null) {
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const outDir = resolve(arg("out", ".visual-check/phase9a/player"));
 const headed = process.argv.includes("--headed");
-const ALL = ["agreement", "currentTime", "reducedMotion", "errors", "many"];
+const ALL = ["agreement", "currentTime", "reducedMotion", "errors", "fontHost", "many"];
 const only = arg("only", ALL.join(",")).split(",");
 for (const name of only) if (!ALL.includes(name)) throw new Error(`--only: unknown requirement "${name}"; one of ${ALL.join(", ")}`);
 mkdirSync(outDir, { recursive: true });
@@ -421,6 +425,50 @@ async function checkErrors(browser) {
   await ctx.close();
 }
 
+// --- 6: a host page that declares its own JetBrains Mono ------------------------
+
+async function checkFontHost(browser, ref) {
+  const req = "6 font host";
+  const { ctx, page } = await open(browser, "fontHost", "font-host.html");
+  await page.waitForFunction(() => window.__events.some((e) => e.id === "text" && e.type === "error") ||
+    document.getElementById("text").shadowRoot.querySelector("canvas") !== null, null, { timeout: 30000, polling: 50 });
+  await sleep(300);
+  const events = await page.evaluate(() => window.__events.map((e) => ({ type: e.type, code: e.detail?.code ?? null })));
+  const canvas = await page.evaluate(() => document.getElementById("text").shadowRoot.querySelector("canvas") !== null);
+  record(req, "a text scene on a page with its own unused JetBrains Mono face mounts with no error",
+    canvas && !events.some((e) => e.type === "error"), `canvas ${canvas}; events ${JSON.stringify(events)}`);
+
+  let live = null;
+  if (canvas) {
+    const ticks = Array.from({ length: ref.frames }, (_, i) => i * TICKS_PER_FRAME);
+    live = await hookHash(page, "text", ticks);
+    record(req, "its liveFramesHash still equals the export's frames hash (the player drew with its own font file)",
+      live.hash === ref.hash, `live ${live.hash}, export ${ref.hash}`);
+  }
+
+  // The page's own regular-weight "JetBrains Mono" text must keep the page's
+  // face. "Host Ref" is the same file under a family only the page uses.
+  const widths = await page.evaluate(async () => {
+    const probe = (family) => {
+      const span = document.createElement("span");
+      span.textContent = "Wide glyphs, narrow ones: MMMM iiii 0123";
+      span.style.cssText = `font: 400 20px ${family}; position: absolute; white-space: nowrap; left: 0; top: 900px;`;
+      document.body.append(span);
+      return span;
+    };
+    await document.fonts.load("400 20px 'JetBrains Mono'");
+    await document.fonts.load("400 20px 'Host Ref'");
+    const own = probe("'JetBrains Mono'");
+    const ref = probe("'Host Ref'");
+    await document.fonts.ready;
+    return { own: own.getBoundingClientRect().width, ref: ref.getBoundingClientRect().width };
+  });
+  record(req, "after the player mounted, the page's own JetBrains Mono text is still drawn with the page's face",
+    Math.abs(widths.own - widths.ref) < 0.5, `page 'JetBrains Mono' ${widths.own.toFixed(2)} px, its own file as 'Host Ref' ${widths.ref.toFixed(2)} px`);
+  report.measurements.fontHost = { events, canvas, live: live?.hash ?? null, export: ref.hash, widths };
+  await ctx.close();
+}
+
 // --- 2: context budget and far players ------------------------------------------
 
 /** Every player's place relative to the viewport, and its canvas if it has one. */
@@ -644,7 +692,7 @@ async function checkMany(browser) {
 // --- run ------------------------------------------------------------------------
 
 const wants = (name) => only.includes(name);
-const needsCli = wants("agreement") || wants("currentTime") || wants("errors");
+const needsCli = wants("agreement") || wants("currentTime") || wants("errors") || wants("fontHost");
 npmRun("build:player");
 if (needsCli) {
   npmRun("build:export-page");
@@ -653,6 +701,9 @@ if (needsCli) {
 const refs = {};
 if (wants("agreement")) {
   for (const s of AGREEMENT_SCENES) refs[s.id] = exportFrames(s.path, ["--fps", String(FPS)]);
+} else if (wants("fontHost")) {
+  const s = AGREEMENT_SCENES.find((a) => a.id === "text");
+  refs.text = exportFrames(s.path, ["--fps", String(FPS)]);
 }
 const frame0 = wants("currentTime") ? exportFrames("docs/media/bars-reveal.marey", ["--duration", "0.25", "--fps", "4"]) : null;
 report.references = { ...refs, ...(frame0 ? { barsFrame0: frame0 } : {}) };
@@ -671,6 +722,7 @@ try {
     ["currentTime", () => checkCurrentTime(browser, frame0)],
     ["reducedMotion", () => checkReducedMotion(browser)],
     ["errors", () => checkErrors(browser)],
+    ["fontHost", () => checkFontHost(browser, refs.text)],
     ["many", () => checkMany(browser)],
   ];
   for (const [name, fn] of steps) {

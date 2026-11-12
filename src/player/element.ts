@@ -78,6 +78,12 @@ export class MareyPlayerElement extends HTMLElement {
       },
       onError: (code, message, errors) => this.showError(code, message, errors),
       onEnded: () => this.dispatchEvent(new Event("ended")),
+      // A later mount can succeed after a font or render failure (the element
+      // left view and came back), so the box from that failure goes.
+      onMounted: () => {
+        this.diagnostics.hidden = true;
+        this.updateControls();
+      },
       onState: (s) => {
         this.shown = s;
         this.updateControls();
@@ -142,7 +148,15 @@ export class MareyPlayerElement extends HTMLElement {
    */
   get [Symbol.for("marey.player.debug")](): { liveFramesHash: (ticks: readonly number[]) => Promise<string> } {
     return {
-      liveFramesHash: (ticks) => this.controller.mounted?.liveFramesHash(ticks) ?? Promise.reject(new Error("not mounted")),
+      liveFramesHash: (ticks) => {
+        const mounted = this.controller.mounted;
+        if (!mounted) return Promise.reject(new Error("not mounted"));
+        // The hook seeks and pauses the mount itself. Pausing through the
+        // controller first clears a resume it had armed, which would
+        // otherwise outlive the hook and report a paused embed as playing.
+        this.controller.pause();
+        return mounted.liveFramesHash(ticks);
+      },
     };
   }
 
@@ -220,6 +234,8 @@ export class MareyPlayerElement extends HTMLElement {
   }
 
   private showError(code: string, message: string, errors: ReadonlyArray<CompilerError>): void {
+    // Shown before it is filled, so the alert region announces its contents.
+    this.diagnostics.hidden = false;
     this.diagnostics.replaceChildren(
       ...diagnosticLines(code, message, errors).map((line) => {
         const row = document.createElement("div");
@@ -227,7 +243,10 @@ export class MareyPlayerElement extends HTMLElement {
         return row;
       }),
     );
-    this.diagnostics.hidden = false;
+    // A failed load leaves no scene: drop the previous one's time and share
+    // link rather than keep showing them.
+    if (!this.controller.ir) this.shown = { tick: 0, playing: false, endTick: null, reachedTick: 0 };
+    this.updateControls();
     this.dispatchEvent(new CustomEvent("error", { detail: { code, errors } }));
   }
 
@@ -252,6 +271,7 @@ export class MareyPlayerElement extends HTMLElement {
     this.seek.min = "0";
     this.seek.step = "1";
     this.seek.setAttribute("part", "seek");
+    this.seek.setAttribute("aria-label", "Seek");
     this.seek.addEventListener("input", () => {
       this.controller.currentTime = tickToTime(Number(this.seek.value));
     });
@@ -268,6 +288,8 @@ export class MareyPlayerElement extends HTMLElement {
   private updateControls(): void {
     const bar = this.controlsEl;
     if (!bar) return;
+    // The bar would paint over the diagnostic box, and has nothing to drive.
+    bar.hidden = !this.diagnostics.hidden;
     const s = this.shown;
     this.playButton.setAttribute("aria-label", s.playing ? "Pause" : "Play");
     this.playButton.textContent = s.playing ? "⏸" : "▶";

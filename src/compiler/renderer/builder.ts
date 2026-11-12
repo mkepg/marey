@@ -248,7 +248,15 @@ function collectBodyParts(container: Container, t: LocalTransform, out: BodyPart
   }
 }
 
-export function buildNode(node: IRObjectNode): Container {
+/**
+ * The family every `text` node asks for. A caller may name another family for
+ * the same face: the embeddable player registers JetBrains Mono under a family
+ * of its own so it never shares one with the page it is embedded in
+ * (`src/player/render.ts`). The file, and so every measured width, is the same.
+ */
+export const TEXT_FONT_FAMILY = "JetBrains Mono";
+
+export function buildNode(node: IRObjectNode, fontFamily: string = TEXT_FONT_FAMILY): Container {
   const props: IRObjectProps = node.props;
   let wrapper: Container;
 
@@ -376,7 +384,7 @@ export function buildNode(node: IRObjectNode): Container {
       wrapper = new Container();
       const tinted = animatesColor(props);
       const style = new TextStyle({
-        fontFamily: "'JetBrains Mono', monospace",
+        fontFamily: `'${fontFamily}', monospace`,
         fontSize: props.fontSize,
         fill: tinted ? 0xffffff : props.color,
       });
@@ -400,7 +408,7 @@ export function buildNode(node: IRObjectNode): Container {
     case "group": {
       wrapper = new Container();
       for (const child of node.children) {
-        wrapper.addChild(buildNode(child));
+        wrapper.addChild(buildNode(child, fontFamily));
       }
 
       // A group's pivot is always its own local origin (0, 0), never derived

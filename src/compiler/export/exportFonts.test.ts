@@ -2,7 +2,8 @@ import { afterEach, describe, it, expect, vi } from "vitest";
 import { CanvasTextMetrics } from "pixi.js";
 import { compileSource } from "../compileSource";
 import type { IRSceneNode } from "../sceneIR";
-import { ensureExportFonts, exportFontSizes, fetchExportFont, type ExportFontSet } from "./exportFonts";
+import { EXPORT_FONT_FAMILY, ensureExportFonts, exportFontSizes, fetchExportFont, type ExportFontSet } from "./exportFonts";
+import { TEXT_FONT_FAMILY } from "../renderer/builder";
 import { withRasterExport } from "./rasterExport";
 import { runApngExport } from "./apngPipeline";
 import { runLottieExport } from "./lottiePipeline";
@@ -53,6 +54,14 @@ function recordingFonts(opts: { available: boolean; loadRejects?: boolean }) {
   };
   return { fonts, calls };
 }
+
+describe("the export font family", () => {
+  it("is the family builder.ts's text asks for by default", () => {
+    // Two constants that must agree: export loads and checks one family, and
+    // the scene tree it measures asks for the other.
+    expect(TEXT_FONT_FAMILY).toBe(EXPORT_FONT_FAMILY);
+  });
+});
 
 describe("exportFontSizes", () => {
   it("lists each text node's fontSize once, ascending, including text inside groups", () => {
