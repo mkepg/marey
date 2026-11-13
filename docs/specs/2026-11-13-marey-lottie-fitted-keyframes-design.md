@@ -281,9 +281,10 @@ Newton step on `x(u) = u` lands on the answer. The mechanism is truncation.
 lottie-web draws a fill or stroke channel as `Math.floor(255 · c)`
 (`bmFloor` in `renderFill` and on its canvas style path), so a fitted value a
 hair under the sampled level k/255, which a symmetric tolerance allows, is
-drawn as k − 1. The same mechanism accounts for Dusk Hills' share of 25.9%
-under the first tolerance, 0.49/255 on both sides, where rounding would have
-recovered every level.
+drawn as k − 1. The same mechanism is the likely cause of Dusk Hills' share
+of 25.9% under the first tolerance, 0.49/255 on both sides, where rounding
+would have recovered every level. That document was not re-measured to
+confirm it.
 
 The ±0.25/255 tolerance still let it through. Evaluated in double precision,
 199 channel-frames over Dusk Hills' ten colour tracks at 30 fps (230 at
@@ -332,7 +333,11 @@ Physics pile.
 - **Unit tests on the fitter** (pure functions, no IR):
   - each Marey easing (`linear`, `easeIn`, `easeOut`, `easeInOut`, and the four
     handoff variants) sampled at 30 and 60 fps fits as one keyframe pair, or as
-    two for `easeInOut` and the yoyo cases;
+    two segments for `easeInOut`, split at its midpoint;
+  - a yoyo fits as two segments, split at the turn when the curve still moves
+    there and wherever the first segment stops fitting when it arrives at rest,
+    and an `easeInOut` yoyo fits as four, two of its splits fixed at each leg's
+    midpoint (added 2026-11-13, when the yoyo cases were first tested);
   - a sampled parabola fits as one pair;
   - a step discontinuity splits exactly at the step;
   - a run whose start and end match but whose middle moves is split;

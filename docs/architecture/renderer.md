@@ -404,7 +404,9 @@ Design: `docs/specs/2026-11-13-marey-lottie-fitted-keyframes-design.md`.
   run's length. A body at rest is one or the other. Any other run that
   reaches 64 frames grows by galloping: its end advances by doubling steps
   and the last fitting end is found by bisection, every candidate checked in
-  full. The end found is never earlier than the frame-by-frame one. The test
+  full. The end found is never earlier than the frame-by-frame one, and can
+  be later: a run that stops fitting and fits again further on is extended
+  past the gap. The test
   suite times `encodeLottie` on Dusk Hills at 60 fps and on Physics pile
   lengthened to 60 s at 60 fps, and fails either above 2 s.
 - **The round-trip test.** `lottieFitted.test.ts` encodes the headless

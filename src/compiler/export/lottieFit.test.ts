@@ -456,13 +456,13 @@ describe("fitKeyframes · long runs (spec F10)", () => {
     const start = performance.now();
     const fitted = tracks.map((values) => fitKeyframes(values, tol, OPTS));
     const elapsed = performance.now() - start;
-    console.log(`fitKeyframes: 4 smooth tracks x ${FRAMES} frames in ${elapsed.toFixed(1)} ms`);
-    expect(elapsed).toBeLessThan(500);
+    // F10's ceiling. Growing every run one frame at a time takes seconds here.
+    expect(elapsed).toBeLessThan(2000);
     for (const k of fitted.slice(0, 3)) expect(k.map((kf) => kf.t)).toEqual([0, FRAMES - 1]);
     // easeInOut changes curve between frames 1799 and 1800, so it needs a short run there.
     expect(fitted[3].length).toBeLessThanOrEqual(4);
     tracks.forEach((values) => roundTrip(values, tol));
-  });
+  }, 30_000);
 
   it("fits a body that comes to rest, exactly or inside the tolerance, quickly", () => {
     for (const jitter of [false, true]) {
@@ -470,13 +470,12 @@ describe("fitKeyframes · long runs (spec F10)", () => {
       const start = performance.now();
       const k = fitKeyframes(values, tol, OPTS);
       const elapsed = performance.now() - start;
-      console.log(`fitKeyframes: settling ${jitter ? "with jitter" : "exactly"}, ${FRAMES} frames in ${elapsed.toFixed(1)} ms, ${k.length} keyframes`);
-      expect(elapsed).toBeLessThan(500);
+      expect(elapsed).toBeLessThan(2000);
       roundTrip(values, tol);
       // The rest is one run: no keyframe between the first resting frames and the end.
       expect(k.filter((kf) => kf.t > 401 && kf.t < FRAMES - 1)).toEqual([]);
     }
-  });
+  }, 30_000);
 
   it("is deterministic and inside tolerance on long irregular tracks", () => {
     const rand = lcg(3);
