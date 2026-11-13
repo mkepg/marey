@@ -39,6 +39,13 @@ describe("checkSample", () => {
     const wrong = checkSample(sample({ mode: "error", code: "TYPE_SEQ_YOYO", source: LOOP_STEP }));
     expect(wrong).toHaveLength(1);
     expect(wrong[0]).toContain("TYPE_SEQ_YOYO");
+    expect(wrong[0]).toContain("got [TYPE_SEQ_LOOP]");
+  });
+
+  it("does not let a code match only the start of the raised code", () => {
+    const wrong = checkSample(sample({ mode: "error", code: "TYPE_SEQ", source: LOOP_STEP }));
+    expect(wrong).toHaveLength(1);
+    expect(wrong[0]).toContain("[TYPE_SEQ_LOOP]");
   });
 
   it("lets a bare error fence pass on any error and fails it on a clean compile", () => {
@@ -51,6 +58,7 @@ describe("checkSample", () => {
   it("rejects a fragment that contains a scene block", () => {
     expect(checkSample(sample({ mode: "fragment", source: "scene {\n}" }))).toHaveLength(1);
     expect(checkSample(sample({ mode: "fragment", source: "circle dot { radius: 4 }" }))).toEqual([]);
+    expect(checkSample(sample({ mode: "fragment", source: 'text t { content: "scene { }" } // scene {' }))).toEqual([]);
   });
 
   it("checks solutions and showcases like any scene", () => {

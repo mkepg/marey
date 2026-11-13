@@ -1,3 +1,4 @@
+import { lex } from "../../src/compiler/lexer";
 import { compileSource } from "../../src/compiler/compileSource";
 import { buildShareURLFor } from "../../src/lib/share";
 import { highlightMarey } from "../shared/highlight";
@@ -29,6 +30,17 @@ export function errorMessages(source: string): string[] {
   return compileMessages(source).errors.map((e) => e.message);
 }
 
+/** True when the source has a `scene` keyword followed by `{`; text in strings and comments does not count. */
+function containsSceneBlock(source: string): boolean {
+  try {
+    const tokens = lex(source);
+    return tokens.some((t, i) => t.type === "KEYWORD" && t.value === "scene" && tokens[i + 1]?.type === "LBRACE");
+  } catch {
+    // A fragment the lexer rejects cannot be tokenised; fall back to the text.
+    return /\bscene\s*\{/.test(source);
+  }
+}
+
 /**
  * What is wrong with a sample, as "file:line: message" entries. Compile errors
  * are placed by adding the error's line within the snippet to the fence's line,
@@ -39,7 +51,7 @@ export function checkSample(sample: Sample): string[] {
   const fence = at(sample.line);
 
   if (sample.mode === "fragment") {
-    return /\bscene\s*\{/.test(sample.source)
+    return containsSceneBlock(sample.source)
       ? [`${fence}: a fragment must not contain a scene block; drop "fragment" so the sample is compiled`]
       : [];
   }
@@ -51,7 +63,10 @@ export function checkSample(sample: Sample): string[] {
     if (sample.code === null) return [];
     const prefix = `[${sample.code}]`;
     if (result.errors.some((e) => e.message.startsWith(prefix))) return [];
-    const got = result.errors.flatMap((e) => /^\[[A-Z0-9_]+\]/.exec(e.message) ?? []).map((m) => m[0]).join(", ");
+    const got = result.errors
+      .map((e) => /^[[A-Z0-9_]+]/.exec(e.message)?.[0])
+      .filter((c): c is string => c !== undefined)
+      .join(", ");
     return [`${fence}: expected an error ${prefix}, got ${got === "" ? "none" : got}`];
   }
 
