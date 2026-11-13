@@ -186,7 +186,12 @@ describe("lottieFitted · canonical scenes", () => {
 
       it("no two distinct easings resolve to one cached curve in either player", { timeout: 30_000 }, () => {
         // ThorVG: a named keyframe is cached by its name, any other by the
-        // two-decimal key. lottie-web: by name, else by the full-precision key.
+        // two-decimal key. lottie-web: Marey writes array handles, and on that
+        // path `interpolateValue` calls `getBezierEasing(o.x, o.y, i.x, i.y)`
+        // without the name, so the key is always the full-precision
+        // `bez_...` string and `n` plays no part. (lottie-web passes `n` only
+        // on its spatial path, keyframes with `to`/`ti`, which Marey does not
+        // write.)
         const thorvg = new Map<string, string>();
         const lottieWeb = new Map<string, string>();
         const claim = (cache: Map<string, string>, key: string, tuple: string, player: string) => {
@@ -203,7 +208,7 @@ describe("lottieFitted · canonical scenes", () => {
               if (!kf.i || !kf.o) continue;
               const tuple = `${kf.i.x[0]}_${kf.i.y[0]}_${kf.o.x[0]}_${kf.o.y[0]}`;
               claim(thorvg, kf.n !== undefined ? `n:${kf.n.slice(0, 20)}` : `k:${thorvgEasingKey(kf)}`, tuple, "thorvg");
-              claim(lottieWeb, kf.n ?? `bez_${kf.o.x}_${kf.o.y}_${kf.i.x}_${kf.i.y}`.replace(/\./g, "p"), tuple, "lottie-web");
+              claim(lottieWeb, `bez_${kf.o.x[0]}_${kf.o.y[0]}_${kf.i.x[0]}_${kf.i.y[0]}`.replace(/\./g, "p"), tuple, "lottie-web");
             }
             return;
           }

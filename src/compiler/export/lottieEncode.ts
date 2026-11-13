@@ -571,10 +571,13 @@ function easingTuple(kf: LottieKeyframe): string {
  * with a different handle tuple anywhere in the document gets an `n`; ThorVG
  * then keys on the name instead.
  *
- * The name is derived from the values, never from a counter: lottie-web keeps
- * its curve cache per page and keys it by `n` on its spatial path, so a counter
- * would make two Marey files on one page share curves. It is short because
- * ThorVG compares names over 20 characters.
+ * The name is derived from the values, never from a counter, so one name
+ * always means one curve: a player that caches curves by `n` (ThorVG within a
+ * document, lottie-web page-wide on its spatial path) cannot give one
+ * keyframe another's curve, within a file or across Marey files on one page.
+ * A counter such as `m1` would mean a different curve in every file. lottie-web
+ * ignores `n` on the array-handle path Marey writes, so there the name changes
+ * nothing. It is short because ThorVG compares names over 20 characters.
  */
 export function nameCollidingEasings<T>(root: T): T {
   const tuplesByKey = new Map<string, Set<string>>();

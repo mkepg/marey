@@ -202,10 +202,17 @@ separate causes.
   physics-pile 206 and logo-reveal 81 misses came from this. That is a real
   defect in the file as ThorVG reads it. **Fix: a keyframe whose ThorVG key
   collides with a different handle tuple in the same document carries an `n`
-  name. The name is derived from the handle values, not from a counter.**
-  lottie-web also uses `n` as a cache key (`BezierFactory.getBezierEasing`),
-  and that cache is shared by every animation on a page. A counter such as
-  `m1` would make two Marey files on one page reuse each other's curves. The
+  name. The name is derived from the handle values, not from a counter,**
+  so one name always means one curve. A player that caches curves by `n`
+  (ThorVG within a document; lottie-web's `BezierFactory.getBezierEasing`,
+  whose cache every animation on a page shares, on its spatial path) then
+  cannot give a keyframe another keyframe's curve, within a file or across
+  Marey files on one page, while a counter such as `m1` would name a
+  different curve in every file. lottie-web ignores `n` on the array-handle
+  path Marey writes (`interpolateValue` calls `getBezierEasing` without it),
+  so there the name changes nothing. (Corrected the same day: an earlier
+  wording said a counter would make two Marey files share curves in
+  lottie-web, which reads `n` only on the spatial path.) The
   name is `e` followed by 16 hex digits: two FNV-1a hashes of the
   full-precision handle values, 17 characters in all. The first draft spelled
   it like lottie-web's own default key (`bez_0p3333…`). That was measured to
