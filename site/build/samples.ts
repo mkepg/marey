@@ -64,7 +64,7 @@ export function checkSample(sample: Sample): string[] {
     const prefix = `[${sample.code}]`;
     if (result.errors.some((e) => e.message.startsWith(prefix))) return [];
     const got = result.errors
-      .map((e) => /^[[A-Z0-9_]+]/.exec(e.message)?.[0])
+      .map((e) => /^\[[A-Z0-9_]+\]/.exec(e.message)?.[0])
       .filter((c): c is string => c !== undefined)
       .join(", ");
     return [`${fence}: expected an error ${prefix}, got ${got === "" ? "none" : got}`];
