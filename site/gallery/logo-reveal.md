@@ -7,8 +7,8 @@ source: src/examples/logo-reveal.marey
 ---
 
 A reveal is a timeline: each part waits for its moment, arrives, and stays.
-This scene has five parts and every one is placed in time by a number you can
-read in the source.
+The sun starts at once; the three ridges and the name each wait for their own
+`delay` before they move.
 
 ### A shaded sun from two circles
 
@@ -21,14 +21,14 @@ overlapping. The lesson on shapes covers this.
 ### The sun grows in
 
 `group sun` starts small and invisible, `scale: (0.4, 0.4), alpha: 0`, and a
-`parallel` runs three animations together: a rise, a growth to full size with
-`duration: 1.1, easing: easeOut`, and a fade in over `duration: 0.6`. Because
+`parallel` runs three animations together: a rise and a growth to full size,
+both `duration: 1.1, easing: easeOut`, and a fade in over `duration: 0.6`. Because
 they are on the group, the rim and the disc grow as one.
 
 The `sequence` around the `parallel` has a single step, so here it plays the
-same as three plain `animate` blocks would, since those also start together. Written
-this way, a later step, such as a hold or an exit, can be added after the
-`parallel` without restructuring. The lessons on groups and on sequences cover
+same as three plain `animate` blocks would, since those also start together.
+Written this way, a later step, such as a hold or an exit, can be added after
+the `parallel` without restructuring. The lessons on groups and on sequences cover
 both forms.
 
 ### Three ridges from one template
@@ -40,8 +40,8 @@ outline. The ridge starts 70 pixels low and transparent, at
 are measured up from the horizon line.
 
 The template's parameter `delay` is passed straight to the animation's
-property, `delay: delay`. The three uses start 0.3 seconds apart, at 0.9, 1.2
-and 1.5 seconds, as in `use Ridge(#6b4a7a, 0.9,`, so the back ridge lands first
+property, `delay: delay`. The three uses pass 0.9, 1.2 and 1.5 as their second
+argument, so the ridges start 0.3 seconds apart: the back ridge lands first
 and the front one last. Each use has an empty body, `back {}`, because the
 template places the ridge itself. The lessons on templates and on timing
 cover this.
@@ -50,7 +50,8 @@ cover this.
 
 The ridges are written after the sun, and objects draw in source order, so the
 ridges cover the lower part of the sun. That overlap is the mark: a sun on the
-horizon. Nothing clips the sun. The lesson on shapes covers drawing order.
+horizon. The language has no clipping or masking; covering is how a shape is
+partly hidden. The lesson on shapes covers drawing order.
 
 ### The name, last
 

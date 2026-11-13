@@ -35,14 +35,24 @@ function makePlayer(address: string, options: { controls: boolean; autoplay: boo
 
 function initCards(): void {
   // A card plays only for a pointer that can hover, and never for a reader who asked for less motion.
-  const canPlay =
-    !window.matchMedia("(hover: none)").matches && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Both can change while the page is open (a tablet docked to a keyboard and mouse, or a
+  // system setting), so every card follows them.
+  const noHover = window.matchMedia("(hover: none)");
+  const lessMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const canPlay = (): boolean => !noHover.matches && !lessMotion.matches;
+  const cards: CardPlayback[] = [];
+  const update = (): void => {
+    for (const playback of cards) playback.set("canPlay", canPlay());
+  };
+  noHover.addEventListener("change", update);
+  lessMotion.addEventListener("change", update);
   for (const card of document.querySelectorAll<HTMLElement>("li.gallery-card")) {
     const link = card.querySelector<HTMLAnchorElement>("a.card");
     const stage = card.querySelector<HTMLElement>(".sample-stage");
     if (!link || !stage) continue;
     const posterText = stage.dataset.poster;
-    const playback = new CardPlayback(posterText === undefined ? null : Number(posterText), canPlay);
+    const playback = new CardPlayback(posterText === undefined ? null : Number(posterText), canPlay());
+    cards.push(playback);
     const address = sceneAddress(stage.dataset.source ?? "");
     sharedPool().request(stage, () => {
       const player = makePlayer(address, { controls: false, autoplay: false });

@@ -134,6 +134,26 @@ function checkScene(
   return { duration, width: outcome.ir.width, height: outcome.ir.height };
 }
 
+/**
+ * The file line of each `## ` heading in a Markdown body, in order, skipping
+ * fenced code. The page model keeps a heading's text but not its line, and the
+ * rendered text of a heading with inline code or emphasis is not its source.
+ */
+function levelTwoHeadingLines(body: string, bodyLine: number): number[] {
+  const found: number[] = [];
+  let fence: string | null = null;
+  body.split(/\r?\n/).forEach((line, i) => {
+    const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    if (marker !== undefined) {
+      if (fence === null) fence = marker[0]!;
+      else if (marker[0] === fence) fence = null;
+      return;
+    }
+    if (fence === null && /^ {0,3}##(?:[ \t]|$)/.test(line)) found.push(bodyLine + i);
+  });
+  return found;
+}
+
 function loadEntry(
   repoRoot: string,
   id: string,
@@ -210,12 +230,12 @@ function loadEntry(
 
   const notes = renderMarkdown(fm.body, { file, bodyLine: fm.bodyLine, sampleMode: "live" });
   errors.push(...notes.errors);
+  const h2Lines = levelTwoHeadingLines(fm.body, fm.bodyLine);
+  let h2 = 0;
   for (const h of notes.headings) {
     if (h.depth === 2) {
-      // The heading's line is not kept in the page model; find it in the file.
-      const lines = readFileSync(join(repoRoot, file), "utf8").split(/\r?\n/);
-      const line = lines.findIndex((l, i) => i >= fm.bodyLine - 1 && /^##\s/.test(l) && l.includes(h.text)) + 1;
-      errors.push(`${file}:${line || fm.bodyLine}: the notes sit under "${NOTES_HEADING.text}"; start their headings at ###`);
+      const line = h2Lines[h2++] ?? fm.bodyLine;
+      errors.push(`${file}:${line}: the notes sit under "${NOTES_HEADING.text}"; start their headings at ###`);
     } else if (h.id === NOTES_HEADING.id || h.id === SOURCE_HEADING.id) {
       errors.push(`${at}: the notes' heading "${h.text}" takes an id the page already uses`);
     }
@@ -281,6 +301,33 @@ export function loadGallery(
     }
   }
   return { entries, errors };
+}
+
+/**
+ * The scene files the gallery reads from outside `site/gallery/`: each listed
+ * entry's `source:` path, repository-relative. It reads front matter only and
+ * reports nothing, so the dev server can ask on every file change.
+ */
+export function gallerySourcePaths(repoRoot: string): string[] {
+  const paths: string[] = [];
+  let ids: unknown;
+  try {
+    ids = (JSON.parse(readFileSync(join(repoRoot, CONFIG_FILE), "utf8")) as { gallery?: unknown }).gallery;
+  } catch {
+    return paths;
+  }
+  if (!Array.isArray(ids)) return paths;
+  for (const id of ids) {
+    if (typeof id !== "string" || !SLUG.test(id)) continue;
+    const file = `${GALLERY_DIR}/${id}.md`;
+    try {
+      const source = parseFrontMatter(readFileSync(join(repoRoot, file), "utf8"), file).data.source;
+      if (typeof source === "string" && source !== "") paths.push(source);
+    } catch {
+      // A missing or malformed entry is the build's to report.
+    }
+  }
+  return paths;
 }
 
 const INDEX_DESCRIPTION = "Finished Marey scenes to study, each with notes on how it is made and its full source.";

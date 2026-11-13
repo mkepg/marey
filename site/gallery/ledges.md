@@ -13,8 +13,8 @@ paths, because the simulation steps at a fixed rate and its inputs are fixed.
 
 ### A world with an open top
 
-`world { gravity: (0, 980) bounds: [left, right, bottom] }` sets gravity once
-for every physics block and puts walls on three edges. There is no top wall,
+The `world` block sets `gravity: (0, 980)` once for every physics block, and
+`bounds: [left, right, bottom]` puts walls on three edges. There is no top wall,
 so the tiles can start above the frame, at heights of `-40 - i * rise`, and
 fall in. The lesson on the physics world covers `world` and `bounds`.
 
@@ -32,13 +32,13 @@ The paddle is locked too, `lockPosition: true, bounce: 0.6`, but it also has
 `to: (500, 350), duration: 1, easing: easeInOut, loop: true, yoyo: true`.
 The lock stops physics from moving the body, not an animation. So the paddle
 sweeps back and forth between the second and third ledges, and its body goes
-with it, shoving whatever is in its way. The lessons on timing and on the physics world
-cover the two halves.
+with it, shoving whatever is in its way. The lessons on timing and on the physics
+world cover the two halves.
 
 ### Scattering without randomness
 
 Marey has no random numbers, so the tiles are scattered with arithmetic.
-Each one enters at x `(i * 197) % span` past the left edge of the drop zone.
+Tile `i` enters `(i * 197) % span` pixels to the right of `entry`.
 197 shares no factor with the span of 480, so the 24 entry points never repeat
 and land in a scrambled order. Sizes come from `18 + (i % 3) * 5`, starting
 angles from `(i * 29) % 90`, and colours from `colors[i % 4]`. The lesson on
@@ -52,8 +52,11 @@ clockwise, so neighbouring tiles turn opposite ways. `airDrag: drag`, with
 `let drag = 0.03`, holds the fall near 540 pixels per second. Since the tiles
 all fall at about the same speed, a tile that starts higher arrives later, and
 the stagger in height becomes a stagger in time. `duration: indefinitely`
-keeps each tile simulated until it comes to rest. The lesson on physics covers
-air drag and the duration, and the lesson on the physics world covers spin.
+keeps each tile in the simulation for the whole scene. A tile at rest is only
+asleep: when the paddle or another tile strikes it, it wakes and moves again.
+That is the difference from a numeric duration, which freezes a body for good
+when it runs out. The lesson on physics covers air drag and the duration, and
+the lesson on the physics world covers spin.
 
 ### Crates that stay level
 

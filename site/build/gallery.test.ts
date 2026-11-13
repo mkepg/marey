@@ -3,13 +3,55 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { compileSource } from "../../src/compiler/compileSource";
+import { EDGE_VALUES, LANGUAGE_CONTRACT } from "../../src/compiler/languageContract";
 import { lex } from "../../src/compiler/lexer";
+import {
+  BOOLEAN_VALUES,
+  DURATION_INDEFINITELY_VALUES,
+  EASING_VALUES,
+  EXPRESSION_WORDS,
+  FIT_VALUE_WORDS,
+  KEYWORDS,
+} from "../../src/compiler/lexer/constants";
 import { buildShareURLFor } from "../../src/lib/share";
 import { escapeHtml } from "./escape";
-import { GALLERY_TAGS, loadGallery } from "./gallery";
+import { GALLERY_TAGS, gallerySourcePaths, loadGallery } from "./gallery";
 import { buildSite } from "./index";
 
 const repoRoot = resolve(import.meta.dirname, "../..");
+
+/**
+ * The language's own words: block keywords, property names, expression words,
+ * easings, fits, booleans, `indefinitely` and the bounds edges, from the same
+ * contract the compiler reads.
+ */
+const LANGUAGE_WORDS: ReadonlySet<string> = new Set([
+  ...KEYWORDS,
+  ...EXPRESSION_WORDS,
+  ...EASING_VALUES,
+  ...FIT_VALUE_WORDS,
+  ...BOOLEAN_VALUES,
+  ...DURATION_INDEFINITELY_VALUES,
+  ...EDGE_VALUES,
+  ...Object.values(LANGUAGE_CONTRACT).flatMap((block) => Object.keys(block.properties)),
+]);
+
+/** The inline code spans of a Markdown body, which may wrap across lines. */
+function codeSpans(markdown: string): string[] {
+  return [...markdown.matchAll(/`([^`]+)`/g)].map((m) => m[1]!);
+}
+
+/**
+ * Notes point at the source by quoting it, so a quoted fragment must appear in
+ * the scene (spacing aside); a quote the source no longer contains means the
+ * notes have drifted. A single word of the language passes either way, so a
+ * note can name a keyword or a property the scene does not use.
+ */
+function spanProblem(span: string, source: string): string | null {
+  if (LANGUAGE_WORDS.has(span)) return null;
+  const squash = (s: string) => s.replace(/\s+/g, " ");
+  return squash(source).includes(squash(span)) ? null : `\`${span}\` is not in the scene's source`;
+}
 const config = JSON.parse(readFileSync(join(repoRoot, "site/site.json"), "utf8")) as {
   learn: Array<{ slug: string }>;
   gallery: string[];
@@ -73,6 +115,12 @@ describe("the gallery in the repository", () => {
     }
   });
 
+  it("names the scenes it reads from outside site/gallery", () => {
+    const named = gallery.entries.filter((e) => !e.sourcePath.startsWith("site/gallery/")).map((e) => e.sourcePath);
+    expect(gallerySourcePaths(repoRoot)).toEqual(named);
+    expect(named).toContain("src/examples/ledges.marey");
+  });
+
   it("uses only the five known tags", () => {
     for (const entry of gallery.entries) {
       for (const tag of entry.tags) expect(GALLERY_TAGS, `${entry.id}: ${tag}`).toContain(tag);
@@ -94,19 +142,44 @@ describe("the gallery in the repository", () => {
     }
   });
 
-  it("quotes only the scene's own source in the notes' code spans", () => {
-    // Notes point at the source by quoting it; a quote the source no longer
-    // contains means the notes have drifted from the scene.
-    const squash = (s: string) => s.replace(/\s+/g, " ");
+  it("quotes only the scene's own source in the notes' code spans, or names a language word", () => {
     for (const entry of gallery.entries) {
       const md = readFileSync(join(repoRoot, "site/gallery", `${entry.id}.md`), "utf8");
-      const body = md.slice(md.indexOf("\n---", 3) + 4);
-      const spans = [...body.matchAll(/`([^`\n]+)`/g)].map((m) => m[1]!);
+      const spans = codeSpans(md.slice(md.indexOf("\n---", 3) + 4));
       expect(spans.length, entry.id).toBeGreaterThan(0);
-      for (const span of spans) {
-        expect(squash(entry.source).includes(squash(span)), `${entry.id}: \`${span}\``).toBe(true);
-      }
+      for (const span of spans) expect(spanProblem(span, entry.source), entry.id).toBeNull();
     }
+  });
+});
+
+describe("the notes' code-span rule", () => {
+  const scene = "scene {\n  duration: 2\n  circle c { position: (200, 150), radius: 20 }\n}\n";
+
+  it("passes a fragment the scene contains, whatever its spacing", () => {
+    expect(spanProblem("position: (200,  150)", scene)).toBeNull();
+    expect(spanProblem("circle c", scene)).toBeNull();
+  });
+
+  it("fails a fragment the scene does not contain", () => {
+    expect(spanProblem("radius: 30", scene)).toBe("`radius: 30` is not in the scene's source");
+    expect(spanProblem("circle d", scene)).not.toBeNull();
+  });
+
+  it("passes a single language word the scene does not use", () => {
+    for (const word of ["lockPosition", "easeInOut", "sequence", "contain", "true", "indefinitely", "fit", "length", "bottom"]) {
+      expect(scene.includes(word), word).toBe(false);
+      expect(spanProblem(word, scene), word).toBeNull();
+    }
+  });
+
+  it("fails a single word that is not the language's and not in the scene", () => {
+    expect(spanProblem("asin", scene)).not.toBeNull();
+    expect(spanProblem("Position", scene)).not.toBeNull();
+    expect(spanProblem("lockPosition: true", scene)).not.toBeNull();
+  });
+
+  it("finds spans that wrap across lines", () => {
+    expect(codeSpans("A `radius:\n20` and `c`.")).toEqual(["radius:\n20", "c"]);
   });
 });
 
@@ -348,6 +421,14 @@ describe("loadGallery on a fixture", () => {
     expect(loadGallery(dir).errors).toEqual([
       'site/gallery/a.md:1: the scene has a text object, so tag it "text"',
       'site/gallery/b.md:1: the scene has no text object, so drop the "text" tag',
+    ]);
+  });
+
+  it("puts a ## heading's error on its own line, even with inline code in it", () => {
+    const notes = "### Fine\n\n```text\n## not a heading\n```\n\n## The `circle c` part\n\nUses `circle c`.";
+    const dir = fixture(["a"], { "site/gallery/a.md": entry("tags:\n- loop\n", notes), "site/gallery/a.marey": SCENE });
+    expect(loadGallery(dir).errors).toEqual([
+      'site/gallery/a.md:14: the notes sit under "How it\'s made"; start their headings at ###',
     ]);
   });
 

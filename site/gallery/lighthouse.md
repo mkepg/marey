@@ -7,14 +7,17 @@ tags:
 ---
 
 Everything here is flat shapes, transparency and timing. There is no 3D, no
-blur and no random number anywhere. The scene is about 260 lines, and most of
-them are lists of numbers.
+blur and no random number anywhere. Of its 261 lines, 40 are the steps of
+the beam's and the flare's timelines, written out one per line, because a step
+inside a `sequence` cannot loop.
 
 ### One period for the whole scene
 
-The scene runs for `duration: 12`, and every motion that repeats has a cycle
-that divides 12 seconds. A yoyo animation's `duration` is one direction, so
-`duration: 6, loop: true, yoyo: true` on the clouds is a 12-second cycle. The
+The scene runs for `duration: 12`, and every looping animation has a cycle
+that divides 12 seconds. The beam and the flare are not loops but written-out
+timelines, and each fits inside the 12 seconds. A yoyo animation's `duration`
+is one direction, so `duration: 6, loop: true, yoyo: true` on the clouds is a
+12-second cycle. The
 stars twinkle on beats of `[1, 1.5, 2, 3][i % 4]`, which give cycles of 2, 3,
 4 and 6 seconds. The five bands of waves take 6, 4, 3, 4 and 6 seconds. No
 animation is delayed, so at 12 seconds every motion is back where it started,
@@ -25,10 +28,12 @@ yoyo and why a delay would break this.
 
 `let edges` holds the top edge of each sky band and `let sky` holds its
 colour. `generate c, i in sky` makes one rectangle per colour. Its height is
-`edges[i + 1] - edges[i]`, the gap to the next edge. `origin: (0.5, 0)` puts
+`edges[i + 1] - edges[i]`, the gap to the next edge, which is why `edges` has
+one more entry than `sky`: its last value, `horizon`, is the bottom of the
+lowest band. `origin: (0.5, 0)` puts
 the band's pivot at its top centre, so `position: (480, edges[i])` places its
-top edge exactly on the list's value. To add a band, you add a number and a
-colour. The lesson on values covers lists and indexing, and the lesson on
+top edge exactly on the list's value. To add a band, you add an edge and a
+colour together. The lesson on values covers lists and indexing, and the lesson on
 generate covers the loop.
 
 ### Stars and clouds are templates
@@ -50,8 +55,9 @@ the low one large. The lessons on templates and on groups cover both.
 ### Light from stacked transparency
 
 The moon's glow is three circles on one centre: the moon, then halos at
-`alpha: 0.07` and `alpha: 0.04`. Where they overlap, the opacity adds up, so
-the glow is brightest at the moon and fades outward.
+`alpha: 0.07` and `alpha: 0.04`. Each translucent layer lets less of the sky
+through, so where they overlap the light builds up: the glow is brightest at
+the moon and fades outward.
 
 The beam is built the same way. `generate L in [1300, 1050, 820, 620, 440, 280]`
 draws six cones of falling length, each at `alpha: 0.04`. All six cover the
@@ -65,7 +71,8 @@ covers alpha and polygon points.
 
 The lamp is seen from the side. As it turns, the beam's length on screen
 follows the cosine of its angle: full length when it points right, nothing
-when it points at you, full length again pointing left. The scene draws this
+when it points at you, full length again pointing left, and nothing again when
+it points away from you, behind the headland. The scene draws this
 by scaling one axis. `group beamRight` sits at `position: lampAt`, and each
 cone has `origin: (0, 0.5)`, so its left end is at the lamp. Scaling the group
 on x shrinks the beam towards the lamp.
@@ -91,10 +98,10 @@ easing, scale and the steps.
 `group flare` holds two circles, `alpha: 0.35` and `alpha: 0.9`. The group's
 own alpha multiplies with theirs, so animating the group dims or brightens
 both together. Its sequence climbs with `to: 1, duration: 1, easing: easeIn`
-to a peak at 1, 5 and 9 seconds, the moments the beam is shortest, and
-`to: 0.15, duration: 2` holds it low between. The flare uses the same easing as
-the beam, so the glow grows exactly as the beam shortens. The lesson on
-sequences covers this timeline.
+to a peak at 1, 5 and 9 seconds, the moments the lamp faces you, and
+`to: 0.15, duration: 2` holds it low between, including while the lamp faces
+away. The flare uses the same easing as the beam, so the glow grows as the
+beam shortens towards you. The lesson on sequences covers this timeline.
 
 ### Waves that scroll forever
 
@@ -112,7 +119,7 @@ identical picture, so the sea never ends. Linear easing keeps the speed
 constant through that jump. Twenty-two crests of 48 pixels cover the 960-pixel
 width plus the one wavelength the band slides.
 
-The five bands go from 48-pixel wavelengths far away to 220 near the shore,
+The five bands go from 48-pixel wavelengths far away to 220 nearest you,
 with taller crests and darker water as they come closer. `group back` and
 `group near` start one wavelength to the left, with `position: (-72, 0)` and
 `position: (-160, 0)`, and slide right, so neighbouring bands move against each

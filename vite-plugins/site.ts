@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Plugin, ViteDevServer } from "vite";
+import { gallerySourcePaths } from "../site/build/gallery";
 import { buildSite } from "../site/build/index";
 import { renderLayout } from "../site/build/layout";
 import { escapeHtml } from "../site/build/escape";
@@ -41,6 +42,21 @@ function errorPage(errors: ReadonlyArray<string>): string {
     next: null,
     breadcrumb: [],
   });
+}
+
+/**
+ * Whether a changed file alters a site page, so an open page should reload:
+ * site content, a gallery entry, `site.json`, or a scene a gallery entry
+ * names with `source:` (the playground examples live in `src/examples/`).
+ */
+export function reloadsSite(file: string, root: string, scenes: () => ReadonlyArray<string> = () => gallerySourcePaths(root)): boolean {
+  const path = normalize(file);
+  const site = normalize(resolve(root, "site"));
+  if (path.startsWith(`${site}/content/`) || path.startsWith(`${site}/gallery/`) || path === `${site}/site.json`) {
+    return true;
+  }
+  // Only a scene file can be a gallery source, so the entries are read for those alone.
+  return path.endsWith(".marey") && scenes().some((scene) => normalize(resolve(root, scene)) === path);
 }
 
 /**
@@ -106,16 +122,8 @@ export function site(): Plugin {
     },
 
     configureServer(server: ViteDevServer) {
-      const contentRoot = normalize(resolve(root, "site"));
       const reload = (file: string) => {
-        const path = normalize(file);
-        if (
-          path.startsWith(`${contentRoot}/content/`) ||
-          path.startsWith(`${contentRoot}/gallery/`) ||
-          path === `${contentRoot}/site.json`
-        ) {
-          server.ws.send({ type: "full-reload" });
-        }
+        if (reloadsSite(file, root)) server.ws.send({ type: "full-reload" });
       };
       server.watcher.on("change", reload);
       server.watcher.on("add", reload);

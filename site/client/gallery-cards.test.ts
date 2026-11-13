@@ -93,6 +93,27 @@ describe("CardPlayback", () => {
     expect(player.currentTime).toBe(3);
   });
 
+  it("follows a change in whether the card may play", () => {
+    const card = new CardPlayback(null, true);
+    const player = new FakePlayer();
+    card.attach(player);
+    card.set("hover", true);
+    card.set("canPlay", false);
+    expect(player.calls).toEqual(["play", "pause"]);
+    card.set("canPlay", true);
+    expect(player.calls).toEqual(["play", "pause", "play"]);
+  });
+
+  it("starts playing a hovered card once it becomes allowed to", () => {
+    const card = new CardPlayback(null, false);
+    const player = new FakePlayer();
+    card.attach(player);
+    card.set("hover", true);
+    expect(player.calls).toEqual([]);
+    card.set("canPlay", true);
+    expect(player.calls).toEqual(["play"]);
+  });
+
   it("ignores a replaced player that becomes ready late", () => {
     const card = new CardPlayback(2, true);
     const first = new FakePlayer();

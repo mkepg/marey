@@ -8,8 +8,8 @@ source: src/examples/bar-chart-reveal.marey
 ---
 
 The chart is laid out from its data. Each bar's height, the height of the
-number above it and the spacing between bars are all computed from one list,
-so changing the data moves everything that depends on it.
+number above it and the spacing between bars are computed from the values,
+not written in by hand.
 
 ### The data is three lists
 
@@ -17,8 +17,14 @@ so changing the data moves everything that depends on it.
 names, and `let tags` the same numbers again as strings, because text content
 is a quoted string and cannot be built from a number. The spacing comes from
 the data too: `let step = 800 / (length(values) + 1)` divides the width into
-one more gap than there are values, so adding an eighth value respaces the
-whole chart. The lesson on values covers lists, `length` and arithmetic.
+one more gap than there are values.
+
+The three lists are read with the same index, as `tags[i]` and `weeks[i]`, so
+they must stay the same length. Indexing has no wrap-around: an eighth value
+with no eighth tag or week name is a compile error, "Index 7 is out of range
+for a list of length 7". Add the value, its string and its week name together,
+and the chart respaces itself for eight bars. The lesson on values covers
+lists, indexing, `length` and arithmetic.
 
 ### Three objects per value
 
@@ -34,9 +40,10 @@ Each bar has `origin: (0.5, 1)`, which puts its pivot at the bottom centre, on
 the baseline. It starts at `scale: (1, 0)`, full width and no height, and
 animates to full height with `easing: easeOut`, fast at first and settling at
 the end. Because the pivot is at the bottom, the bar grows upwards from the
-baseline rather than out from its middle. A zero scale is allowed on an object
-without physics, which is what makes a reveal from nothing this direct. The
-lessons on shapes and on animation cover origin, scale and easing.
+baseline rather than out from its middle. A zero scale is allowed here
+because the bar takes no part in physics; on an object that does, it is a
+compile error. The lessons on shapes and on animation cover origin, scale and
+easing.
 
 ### A stagger is a delay
 

@@ -1,6 +1,6 @@
 ---
 title: Physics pile
-summary: Twenty-six shapes drop in three waves, collide and settle into one heap in a bin, and the heap freezes as the scene ends.
+summary: Twenty-six shapes drop in three waves, collide and settle into one heap in a bin.
 tags:
 - physics
 - generative
@@ -19,7 +19,7 @@ solid, so later shapes land on it as they would on any fixed body. With no
 gravity a wall does not move in its 0.05 seconds, so it freezes exactly where
 it was placed. The walls lean out with `rotation: s * 6`, mirrored by
 `generate s in [-1, 1]`, so the bin widens upwards. The lesson on the physics
-world shows the direct way to write a wall that never moves, a position lock,
+world shows the direct way to write a wall that never moves, `lockPosition`,
 which Ledges uses. The lesson on physics covers freezing.
 
 ### One numbering for four kinds of shape
@@ -38,10 +38,13 @@ lesson on generate covers the blocks.
 Each shape starts at `alpha: 0` and runs a `sequence` of two steps. First,
 `animate { property: alpha, to: 1, duration: 0.01, delay: waveAt[w] }` makes it
 appear when its wave is released, at 0, 1.4 or 2.8 seconds. Then its
-`physics` step runs for `duration: end - waveAt[w]`. Every shape's simulation
-therefore ends at the same time, `let end = 7` seconds plus the short fade-in
-step, in step with the scene's `duration: 7`. The lessons on sequences and on
-timing cover this.
+`physics` step runs for `duration: end - waveAt[w]`. A physics step inside a
+`sequence` must have a numeric duration, because a simulation that never ended
+would stop the sequence from ever moving on. This one gives every shape a
+simulation that runs to the end of the scene: with `let end = 7`, each ends at 7.01 seconds, the 7 plus the 0.01
+second fade-in step. That is just after the last frame, so no shape is seen to
+freeze; the heap you see at the end is where the shapes lie at 7 seconds. The
+lessons on sequences and on timing cover this.
 
 ### Invisible but solid
 

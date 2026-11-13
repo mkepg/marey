@@ -39,7 +39,7 @@ export class CardPlayback {
   private focused = false;
   private player: CardPlayer | null = null;
   private readonly poster: number | null;
-  private readonly canPlay: boolean;
+  private canPlay: boolean;
 
   constructor(poster: number | null, canPlay: boolean) {
     this.poster = poster;
@@ -60,10 +60,16 @@ export class CardPlayback {
     });
   }
 
-  set(kind: "hover" | "focus", on: boolean): void {
+  /**
+   * Records a change: the pointer entering or leaving, the focus arriving or
+   * going, or the page learning that the card may or may not play (a hybrid
+   * device switching pointer, or the reduced-motion preference changing).
+   */
+  set(kind: "hover" | "focus" | "canPlay", on: boolean): void {
     const was = this.active;
     if (kind === "hover") this.hovered = on;
-    else this.focused = on;
+    else if (kind === "focus") this.focused = on;
+    else this.canPlay = on;
     if (this.active === was || !this.player) return;
     if (this.active) this.player.play();
     else this.player.pause();

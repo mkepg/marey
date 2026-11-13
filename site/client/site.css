@@ -2274,12 +2274,9 @@ details.solution[open] > figure.sample {
   max-width: 1200px;
 }
 
+/* Hover already marks the card (with the lesson and section cards); focus does the same. */
 .gallery-card > a.card:focus-visible {
   outline-offset: 3px;
-}
-
-.gallery-card > a.card:focus-visible,
-.gallery-card > a.card:hover {
   border-color: color-mix(in srgb, var(--site-accent) 55%, var(--site-border));
 }
 
