@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Plugin, ViteDevServer } from "vite";
 import { buildSite } from "../site/build/index";
@@ -9,6 +10,17 @@ const GENERATED_FILES = new Map([
   ["/sitemap.xml", { type: "application/xml; charset=utf-8", pick: (s: BuiltSite) => s.sitemap }],
   ["/search-index.json", { type: "application/json; charset=utf-8", pick: (s: BuiltSite) => s.searchIndex }],
 ]);
+
+/**
+ * The scene font. `src/player/render.ts` resolves it as
+ * `./fonts/JetBrainsMono-Regular.ttf` beside its own chunk, so the build emits
+ * it at `assets/fonts/` and development serves it under `src/player/fonts/`.
+ * Without it a scene with `text` fails on the site with PLAYER_FONT_UNAVAILABLE,
+ * because the request falls through to an HTML page.
+ */
+const SCENE_FONT_SOURCE = "public/fonts/JetBrainsMono-Regular.ttf";
+const SCENE_FONT_BUILD_PATH = "assets/fonts/JetBrainsMono-Regular.ttf";
+const SCENE_FONT_DEV_URL = "/src/player/fonts/JetBrainsMono-Regular.ttf";
 
 function normalize(path: string): string {
   return path.replace(/\\/g, "/");
@@ -86,6 +98,11 @@ export function site(): Plugin {
       if (!built) return;
       this.emitFile({ type: "asset", fileName: "sitemap.xml", source: built.sitemap });
       this.emitFile({ type: "asset", fileName: "search-index.json", source: built.searchIndex });
+      this.emitFile({
+        type: "asset",
+        fileName: SCENE_FONT_BUILD_PATH,
+        source: readFileSync(resolve(root, SCENE_FONT_SOURCE)),
+      });
     },
 
     configureServer(server: ViteDevServer) {
@@ -104,29 +121,39 @@ export function site(): Plugin {
         if (req.method !== "GET" && req.method !== "HEAD") return next();
         const url = (req.url ?? "/").split("?")[0];
         if (url === "/") return next();
+        if (url === SCENE_FONT_DEV_URL) {
+          try {
+            const font = readFileSync(resolve(root, SCENE_FONT_SOURCE));
+            res.setHeader("Content-Type", "font/ttf");
+            res.end(font);
+          } catch (e) {
+            next(e);
+          }
+          return;
+        }
         const generated = GENERATED_FILES.get(url);
         const sectionPath = /^\/(learn|guides|gallery|reference)(\/[^.]*)?$/.test(url);
         if (!generated && !sectionPath && url !== "/404.html") return next();
 
-        const result = buildSite(root);
-        for (const error of result.errors) server.config.logger.warn(`[site] ${error}`);
-        if (generated) {
-          res.setHeader("Content-Type", generated.type);
-          res.end(generated.pick(result));
-          return;
-        }
-        const page = result.pages.find((p) => p.url === url);
-        if (!page) {
-          // A section path without its trailing slash: send it where the page is.
-          if (result.pages.some((p) => p.url === `${url}/`)) {
-            res.statusCode = 301;
-            res.setHeader("Location", `${url}/`);
-            res.end();
+        try {
+          const result = buildSite(root);
+          for (const error of result.errors) server.config.logger.warn(`[site] ${error}`);
+          if (generated) {
+            res.setHeader("Content-Type", generated.type);
+            res.end(generated.pick(result));
             return;
           }
-          return next();
-        }
-        try {
+          const page = result.pages.find((p) => p.url === url);
+          if (!page) {
+            // A section path without its trailing slash: send it where the page is.
+            if (result.pages.some((p) => p.url === `${url}/`)) {
+              res.statusCode = 301;
+              res.setHeader("Location", `${url}/`);
+              res.end();
+              return;
+            }
+            return next();
+          }
           const html = result.errors.length > 0 ? errorPage(result.errors) : page.html;
           res.statusCode = 200;
           res.setHeader("Content-Type", "text/html; charset=utf-8");

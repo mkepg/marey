@@ -72,6 +72,8 @@ describe("renderLayout", () => {
     const script = html.indexOf("localStorage");
     expect(script).toBeGreaterThan(-1);
     expect(html.slice(script - 20, script + 200)).toContain("try{");
+    // A blocked localStorage throws on read: the script must swallow it.
+    expect(html.slice(script, script + 300)).toMatch(/\}catch\(e\)\{\}/);
     expect(script).toBeLessThan(html.indexOf("<title>"));
     expect(script).toBeLessThan(html.indexOf('src="/site/client/main.ts"'));
   });

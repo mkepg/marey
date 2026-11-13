@@ -14,3 +14,8 @@ if (searchButton) initSearch(searchButton);
 initNav();
 markFinished(document, safeStorage);
 initFinishButtons(document, safeStorage);
+
+// Samples need the compiler, the player and the editor: a page without one skips them.
+if (document.querySelector("figure.sample")) {
+  void import("./samples").then((m) => m.initSamples());
+}

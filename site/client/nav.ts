@@ -26,6 +26,32 @@ export function activeHeading(headings: ReadonlyArray<HeadingTop>, line: number)
   return active;
 }
 
+/**
+ * The heading to mark in the contents list: the last one when the page is
+ * scrolled to its end, else the one the reading line is in. Null when the
+ * list has no heading on the page.
+ */
+export function currentHeading(headings: ReadonlyArray<HeadingTop>, line: number, atEnd: boolean): string | null {
+  if (headings.length === 0) return null;
+  if (atEnd) return [...headings].sort((a, b) => a.top - b.top).at(-1)!.id;
+  return activeHeading(headings, line);
+}
+
+/**
+ * Which layer an Escape key press belongs to. Search sits above the drawer,
+ * so while it is open the drawer stays; a press another handler already
+ * acted on belongs to nothing.
+ */
+export function topmostLayer(state: {
+  readonly searchOpen: boolean;
+  readonly drawerOpen: boolean;
+  readonly handled: boolean;
+}): "search" | "drawer" | null {
+  if (state.searchOpen) return "search";
+  if (state.handled) return null;
+  return state.drawerOpen ? "drawer" : null;
+}
+
 const NARROW_DRAWER = "(max-width: 1099.98px)";
 const NARROW_MENU = "(max-width: 859.98px)";
 
@@ -86,7 +112,13 @@ function initDrawer(): void {
   backdrop.addEventListener("click", () => set(false));
   sidebar.querySelector(".drawer-close")?.addEventListener("click", () => set(false));
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && document.body.classList.contains("drawer-open")) {
+    if (event.key !== "Escape") return;
+    const layer = topmostLayer({
+      searchOpen: document.querySelector("dialog.search-dialog[open]") !== null,
+      drawerOpen: document.body.classList.contains("drawer-open"),
+      handled: event.defaultPrevented,
+    });
+    if (layer === "drawer") {
       event.preventDefault();
       set(false);
     }
@@ -103,6 +135,8 @@ function initScrollSpy(): void {
   const targets = links
     .map((a) => ({ link: a, heading: document.getElementById(decodeURIComponent(a.hash.slice(1))) }))
     .filter((t): t is { link: HTMLAnchorElement; heading: HTMLElement } => t.heading !== null);
+  // Links whose headings are not on the page (a stale hash) leave nothing to follow.
+  if (targets.length === 0) return;
   let queued = false;
   let current: string | null = null;
   const update = (): void => {
@@ -110,12 +144,11 @@ function initScrollSpy(): void {
     const header = document.querySelector<HTMLElement>(".site-header")?.offsetHeight ?? 0;
     const line = window.scrollY + header + 32;
     const atEnd = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
-    const id = atEnd
-      ? targets[targets.length - 1]!.heading.id
-      : activeHeading(
-          targets.map((t) => ({ id: t.heading.id, top: t.heading.getBoundingClientRect().top + window.scrollY })),
-          line,
-        );
+    const id = currentHeading(
+      targets.map((t) => ({ id: t.heading.id, top: t.heading.getBoundingClientRect().top + window.scrollY })),
+      line,
+      atEnd,
+    );
     if (id === current) return;
     current = id;
     for (const t of targets) {
@@ -134,8 +167,33 @@ function initScrollSpy(): void {
 }
 
 /**
+ * Makes `button` copy `text()`. Where the clipboard is refused, `select()` is
+ * called so the text is highlighted for a keyboard copy, and the button says
+ * "Selected" rather than "Copied".
+ */
+export function wireCopy(button: HTMLButtonElement, text: () => string, select: () => void): void {
+  let reset = 0;
+  button.addEventListener("click", async () => {
+    let label = "Copied";
+    try {
+      await navigator.clipboard.writeText(text());
+    } catch {
+      select();
+      label = "Selected";
+    }
+    button.textContent = label;
+    button.classList.add("is-done");
+    window.clearTimeout(reset);
+    reset = window.setTimeout(() => {
+      button.textContent = "Copy";
+      button.classList.remove("is-done");
+    }, 1600);
+  });
+}
+
+/**
  * A Copy button on each static code block. Samples (`figure.sample`) are left
- * alone: their toolbar has its own Copy.
+ * alone: every kind of sample has its own Copy in its toolbar.
  */
 function initCopyButtons(): void {
   for (const pre of document.querySelectorAll<HTMLPreElement>(".content pre.code")) {
@@ -150,28 +208,12 @@ function initCopyButtons(): void {
     button.textContent = "Copy";
     const lang = pre.dataset.lang;
     button.setAttribute("aria-label", lang && lang !== "text" ? `Copy the ${lang} code` : "Copy the code");
-    let reset = 0;
-    button.addEventListener("click", async () => {
-      const text = pre.textContent ?? "";
-      let label = "Copied";
-      try {
-        await navigator.clipboard.writeText(text);
-      } catch {
-        // No clipboard permission: select the code so a keyboard copy takes it.
-        const range = document.createRange();
-        range.selectNodeContents(pre);
-        const selection = window.getSelection();
-        selection?.removeAllRanges();
-        selection?.addRange(range);
-        label = "Selected";
-      }
-      button.textContent = label;
-      button.classList.add("is-done");
-      window.clearTimeout(reset);
-      reset = window.setTimeout(() => {
-        button.textContent = "Copy";
-        button.classList.remove("is-done");
-      }, 1600);
+    wireCopy(button, () => pre.textContent ?? "", () => {
+      const range = document.createRange();
+      range.selectNodeContents(pre);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
     });
     wrap.append(button);
   }

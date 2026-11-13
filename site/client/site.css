@@ -1110,6 +1110,223 @@ figure.sample[data-mode="error"] {
   color: var(--site-error);
 }
 
+/*
+ * The stage before a player is in it, and while one loads: a dark panel with an
+ * edge and a ring that breathes, so it reads against the code block in both
+ * themes. A player that is ready covers it.
+ */
+.sample-stage {
+  box-shadow: inset 0 0 0 1px var(--site-stage-edge);
+}
+
+.sample-stage::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  border: 2px solid var(--site-stage-text-2);
+  border-radius: 50%;
+  border-top-color: transparent;
+  opacity: 0.7;
+  animation: stage-wait 1.1s linear infinite;
+  pointer-events: none;
+}
+
+.sample-stage:has(> marey-player.is-ready)::before,
+.sample-stage:has(> marey-player.is-failed)::before {
+  display: none;
+}
+
+.sample-stage:not(:has(> marey-player))::before {
+  animation: none;
+  border-color: var(--site-stage-text-2);
+  border-top-color: var(--site-stage-text-2);
+  opacity: 0.45;
+}
+
+@keyframes stage-wait {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* The last version that compiled keeps playing, dimmed, while the text has errors. */
+.sample-stage > marey-player {
+  transition: opacity var(--site-ease), filter var(--site-ease);
+}
+
+.sample-stage.is-stale > marey-player {
+  opacity: 0.4;
+  filter: grayscale(0.7);
+}
+
+.sample-stage.is-stale::after {
+  content: "Showing the last version that ran";
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--site-error) 85%, #000);
+  color: #fff;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  pointer-events: none;
+}
+
+/*
+ * The editor: a transparent textarea over a highlighted copy, both in one
+ * grid cell, so the box is as large as the copy and scrolls sideways as one.
+ */
+.editor {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  border-top: 1px solid var(--site-border);
+  background: var(--site-code-bg);
+  color: var(--site-code-text);
+  font-family: var(--site-font-mono);
+  font-size: 0.8625rem;
+  line-height: 1.7;
+  tab-size: 2;
+}
+
+.editor-gutter {
+  padding: 18px 10px 18px 14px;
+  color: var(--site-text-3);
+  text-align: right;
+  user-select: none;
+  border-right: 1px solid var(--site-border);
+}
+
+.editor-gutter > span {
+  display: block;
+}
+
+.editor-gutter > span.is-error {
+  color: var(--site-error);
+  font-weight: 700;
+}
+
+.editor-scroll {
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--site-border-strong) transparent;
+}
+
+.editor-cell {
+  position: relative;
+  display: grid;
+  min-width: max-content;
+}
+
+.editor-cell > * {
+  grid-area: 1 / 1;
+}
+
+.editor-highlight.code,
+.editor-input {
+  margin: 0;
+  padding: 18px 22px;
+  border: 0;
+  border-radius: 0;
+  font: inherit;
+  letter-spacing: normal;
+  tab-size: 2;
+  white-space: pre;
+  overflow: visible;
+}
+
+.editor-highlight.code {
+  pointer-events: none;
+  background: transparent;
+}
+
+.editor-input {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--site-code-text);
+  outline: none;
+  -webkit-text-fill-color: transparent;
+}
+
+.editor-input::selection {
+  background: color-mix(in srgb, var(--site-accent) 35%, transparent);
+  -webkit-text-fill-color: transparent;
+}
+
+.editor:focus-within {
+  box-shadow: inset 0 0 0 2px var(--site-focus);
+}
+
+.editor-marks > div {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(18px + var(--line) * 1.7em);
+  height: 1.7em;
+  background: color-mix(in srgb, var(--site-error) 16%, transparent);
+  box-shadow: inset 3px 0 0 var(--site-error);
+}
+
+.sample-errors .error-jump {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.sample-errors .error-jump:hover {
+  text-decoration-color: currentColor;
+}
+
+.sample-errors[hidden] {
+  display: none;
+}
+
+/* A showcase's source sits behind a disclosure. */
+details.sample-source > summary {
+  padding: 10px 16px;
+  color: var(--site-text-2);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  cursor: pointer;
+  border-top: 1px solid var(--site-border);
+}
+
+details.sample-source > summary:hover {
+  color: var(--site-text);
+}
+
+details.sample-source > pre.code {
+  border-top: 1px solid var(--site-border);
+}
+
+figure.sample > .sample-toolbar:first-child,
+figure.sample > .sample-stage + .sample-toolbar {
+  border-top: 1px solid var(--site-border);
+}
+
+.sample-toolbar [aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ---------------------------------------------------------------- buttons */
 
 .button {
