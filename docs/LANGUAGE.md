@@ -4,10 +4,10 @@ A reference for Marey, a declarative scene format that compiles to a PixiJS
 scene graph. This document describes **behaviour**: what each construct does,
 in what units, and what happens at its edges.
 
-It is not a tutorial. For one, take the course at
-<https://marey.pages.dev/learn/>, which teaches the language one idea at a time
-with runnable examples; the [README](../README.md) gives the short orientation.
-This document stays the formal reference.
+It is not a tutorial. To learn the language, take the course at
+<https://marey.pages.dev/learn/>, which teaches it one idea at a time with
+runnable examples; the [README](../README.md) gives the short orientation. This
+document is the formal reference.
 
 Every example below is compiled by the test suite, so nothing here can silently
 stop being true. So is every example in the README — both documents are listed

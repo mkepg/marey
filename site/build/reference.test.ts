@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { LANGUAGE_CONTRACT } from "../../src/compiler/languageContract";
 import { buildSite } from "./index";
-import { rewriteRepoLink } from "./reference";
+import { ANIMATABLE_OWNERS, NON_ANIMATABLE_KINDS, rewriteRepoLink } from "./reference";
 
 const repoRoot = resolve(import.meta.dirname, "../..");
 const BLOB = "https://github.com/mkepg/marey/blob/main/";
@@ -115,14 +115,29 @@ describe("the properties page", () => {
   });
 
   it("carries each property's description and example", () => {
+    const plain = (h: string): string =>
+      h
+        .replace(/<[^>]+>/g, "")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&amp;/g, "&")
+        .replace(/\s+/g, " ");
     for (const [kind, block] of withProperties) {
       for (const [name, spec] of Object.entries(block.properties)) {
-        const r = row(kind, name);
-        expect(r, `${kind}.${name} example`).toContain("<code>");
-        expect(r, `${kind}.${name}`).not.toContain("undefined");
-        expect(spec.example.length).toBeGreaterThan(0);
+        const text = plain(row(kind, name));
+        expect(text, `${kind}.${name} description`).toContain(spec.description.replace(/\s+/g, " "));
+        expect(text, `${kind}.${name} example`).toContain(spec.example);
+        expect(text, `${kind}.${name}`).not.toContain("undefined");
       }
     }
+  });
+
+  it("decides animatability for every contract kind", () => {
+    const decided = new Set([...ANIMATABLE_OWNERS, ...NON_ANIMATABLE_KINDS]);
+    const undecided = Object.keys(LANGUAGE_CONTRACT).filter((k) => !decided.has(k));
+    expect(undecided).toEqual([]);
   });
 
   it("says it is generated from the compiler's contract", () => {

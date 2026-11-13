@@ -43,7 +43,14 @@ export function rewriteRepoLink(href: string, fromFile: string): string {
 const KIND_ORDER = Object.keys(LANGUAGE_CONTRACT) as Array<keyof typeof LANGUAGE_CONTRACT>;
 
 /** Block kinds whose objects `animate` can target. */
-const ANIMATABLE_OWNERS: ReadonlySet<string> = new Set(["circle", "rectangle", "polygon", "line", "text", "group"]);
+export const ANIMATABLE_OWNERS: ReadonlyArray<string> = ["circle", "rectangle", "polygon", "line", "text", "group"];
+
+/**
+ * Block kinds `animate` cannot target. Every contract kind must be in one of
+ * these two lists; `reference.test.ts` fails when a new kind is in neither, so
+ * its Animatable column is never silently "no".
+ */
+export const NON_ANIMATABLE_KINDS: ReadonlyArray<string> = ["scene", "animate", "physics", "world", "sequence", "parallel"];
 
 function formatDefault(value: ContractDefault, spec: PropertySpec): string {
   if (Array.isArray(value)) return `[${value.join(", ")}]`;
@@ -92,7 +99,7 @@ function describeNeed(spec: PropertySpec): string {
 }
 
 function isAnimatable(kind: string, name: string): boolean {
-  if (!ANIMATABLE_OWNERS.has(kind)) return false;
+  if (!ANIMATABLE_OWNERS.includes(kind)) return false;
   return (ANIMATABLE_PROPERTIES as ReadonlyArray<string>).includes(name);
 }
 
