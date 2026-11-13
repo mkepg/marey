@@ -5,16 +5,15 @@ tags:
 - text
 source: src/examples/logo-reveal.marey
 ---
-
-A reveal is a timeline: each part waits for its moment, arrives, and stays.
-The sun starts at once; the three ridges and the name each wait for their own
+A reveal is a timeline: each part waits for its moment, arrives, and stays. The
+sun starts at once; the three ridges and the name each wait for their own
 `delay` before they move.
 
 ### A shaded sun from two circles
 
 The sun is a rim and a disc. The disc is slightly smaller and lifted,
-`position: (0, -8), radius: 91` inside a rim of 96, so the rim's colour shows
-as a crescent along the bottom and the sun looks lit from above. There is no
+`position: (0, -8), radius: 91` inside a rim of 96, so the rim's colour shows as
+a crescent along the bottom and the sun looks lit from above. There is no
 gradient or shading in the language. The look comes from two flat circles
 overlapping. The lesson on shapes covers this.
 
@@ -22,14 +21,14 @@ overlapping. The lesson on shapes covers this.
 
 `group sun` starts small and invisible, `scale: (0.4, 0.4), alpha: 0`, and a
 `parallel` runs three animations together: a rise and a growth to full size,
-both `duration: 1.1, easing: easeOut`, and a fade in over `duration: 0.6`. Because
-they are on the group, the rim and the disc grow as one.
+both `duration: 1.1, easing: easeOut`, and a fade in over `duration: 0.6`.
+Because they are on the group, the rim and the disc grow as one.
 
 The `sequence` around the `parallel` has a single step, so here it plays the
 same as three plain `animate` blocks would, since those also start together.
 Written this way, a later step, such as a hold or an exit, can be added after
-the `parallel` without restructuring. The lessons on groups and on sequences cover
-both forms.
+the `parallel` without restructuring. The lessons on groups and on sequences
+cover both forms.
 
 ### Three ridges from one template
 
@@ -39,12 +38,11 @@ outline. The ridge starts 70 pixels low and transparent, at
 `origin: (0.5, 1)` puts the pivot at the bottom centre, so the outline's points
 are measured up from the horizon line.
 
-The template's parameter `delay` is passed straight to the animation's
-property, `delay: delay`. The three uses pass 0.9, 1.2 and 1.5 as their second
-argument, so the ridges start 0.3 seconds apart: the back ridge lands first
-and the front one last. Each use has an empty body, `back {}`, because the
-template places the ridge itself. The lessons on templates and on timing
-cover this.
+The template's parameter `delay` is passed straight to the animation's property,
+`delay: delay`. The three uses pass 0.9, 1.2 and 1.5 as their second argument,
+so the ridges start 0.3 seconds apart: the back ridge lands first and the front
+one last. Each use has an empty body, `back {}`, because the template places the
+ridge itself. The lessons on templates and on timing cover this.
 
 ### The horizon is drawing order
 
@@ -61,5 +59,5 @@ ridge settles at 2.3 seconds, so the parts overlap slightly instead of queuing.
 The lockup is complete at 3.1 seconds and holds until the scene ends at 5.
 
 A bounded scene that is not playing shows its last frame, which here is the
-finished lockup. That is why this gallery card needs no poster time. The
-lessons on shapes (text) and on timing (delay) cover this.
+finished lockup. That is why this gallery card needs no poster time. The lessons
+on shapes (text) and on timing (delay) cover this.
