@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { parseFrontMatter } from "./frontMatter";
 import { renderLayout, ORIGIN, SECTION_LABELS, type Crumb, type NavLink, type SidebarItem } from "./layout";
+import { galleryPages, loadGallery, type LessonRef } from "./gallery";
 import { checkLinks } from "./links";
 import { renderMarkdown } from "./markdown";
 import { loadReference, rewriteRepoLink } from "./reference";
@@ -124,10 +125,6 @@ export function buildSite(repoRoot: string): BuiltSite {
   errors.push(...parsed.errors);
   const config = parsed.config;
 
-  for (const id of config.gallery) {
-    errors.push(`${CONFIG_FILE}:1: gallery entry "${id}" cannot be built yet; gallery pages are not generated`);
-  }
-
   // Load every document, then render, so each page can name its neighbours.
   const docs: Doc[] = [];
   const entriesBySection: Record<"learn" | "guides" | "reference", Doc[]> = { learn: [], guides: [], reference: [] };
@@ -248,6 +245,14 @@ ${body.text}`,
       links: rendered.links,
     });
   }
+
+  // The gallery comes after the lessons, so an entry can name the lesson it showcases.
+  const gallery = loadGallery(repoRoot, config);
+  errors.push(...gallery.errors);
+  const lessons = new Map<string, LessonRef>(
+    entriesBySection.learn.map((doc, i) => [doc.slug, { title: doc.title, number: i + 1 }]),
+  );
+  pages.push(...galleryPages(gallery.entries, lessons));
 
   errors.push(...checkLinks(pages));
 

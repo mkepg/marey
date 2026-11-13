@@ -19,3 +19,8 @@ initFinishButtons(document, safeStorage);
 if (document.querySelector("figure.sample")) {
   void import("./samples").then((m) => m.initSamples());
 }
+
+// The gallery's cards and scene pages need the player; other pages do not load it.
+if (document.querySelector(".gallery-grid, .gallery-stage")) {
+  void import("./gallery").then((m) => m.initGallery());
+}

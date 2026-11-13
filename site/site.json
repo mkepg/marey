@@ -2,5 +2,5 @@
   "learn": [],
   "guides": [],
   "reference": ["language", "properties", "determinism"],
-  "gallery": []
+  "gallery": ["lighthouse", "dusk-hills", "ledges", "logo-reveal", "bar-chart-reveal", "physics-pile"]
 }

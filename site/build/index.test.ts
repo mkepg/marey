@@ -133,10 +133,16 @@ describe("buildSite on a fixture", () => {
     expect(errors[0]).toMatch(/^site\/content\/guides\/a\.md:8: /);
   });
 
-  it("reports a missing site.json and a gallery entry it cannot build yet", () => {
+  it("reports a missing site.json and a gallery entry with no file", () => {
     expect(buildSite(join(tmpdir(), "marey-site-does-not-exist")).errors).toHaveLength(1);
     const dir = fixture({ ...empty, gallery: ["x"] });
-    expect(buildSite(dir).errors[0]).toMatch(/gallery entry "x"/);
+    expect(buildSite(dir).errors).toEqual(["site/gallery/x.md:1: the gallery entry is listed but its file does not exist"]);
+  });
+
+  it("builds the gallery index even with no entries", () => {
+    const site = buildSite(fixture(empty));
+    expect(site.errors).toEqual([]);
+    expect(site.pages.find((p) => p.url === "/gallery/")?.outFile).toBe("gallery/index.html");
   });
 
   it("escapes a hostile title through the whole page", () => {

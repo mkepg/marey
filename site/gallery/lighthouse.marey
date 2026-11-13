@@ -1,0 +1,261 @@
+// Lighthouse at dusk. The lamp turns, its beam sweeping
+// out to sea and back behind the headland, and flaring
+// each time it faces you. Waves roll, a boat rides them,
+// stars twinkle and clouds drift.
+//
+// Every motion repeats on a period that divides 12 s and
+// nothing is delayed, so the last frame matches the first
+// and the loop has no seam.
+
+let ink     = #1f2440
+let lamp    = #ffe7a3
+let glow    = #fff6d8
+let paint   = #e9e4da
+let stripe  = #c2413a
+let moonlit = #f1e9d2
+let rock    = #0a1430
+
+let horizon = 330
+let lampAt  = (190, 174)
+let spread  = 0.075      // the beam's half-width per px of length
+
+// Sky bands, top to bottom, by their top edges.
+let edges   = [0, 60, 120, 175, 225, 270, 305, 322, horizon]
+let sky     = [#0d1533, #111c41, #172550, #1f305f, #2b3e6c, #3f5076, #6a6377, #b9806a]
+
+let starAt  = [(60, 40), (140, 90), (250, 30), (330, 118), (420, 62), (505, 140),
+               (560, 34), (640, 98), (880, 48), (922, 150), (700, 182), (385, 200),
+               (92, 176), (600, 214), (860, 236), (470, 18)]
+
+// A star brightens and dims on its own beat.
+template Star(size, beat) {
+  polygon spark {
+    position: (0, 0), color: moonlit
+    points: [(0, -size), (size / 4, -size / 4), (size, 0), (size / 4, size / 4),
+             (0, size), (-size / 4, size / 4), (-size, 0), (-size / 4, -size / 4)]
+    animate { property: alpha, to: 0.25, duration: beat, loop: true, yoyo: true }
+  }
+}
+
+// A flat-bottomed cloud that drifts 40 px and back every 12 s.
+// The drift is on an inner group: `to` is a position in the
+// parent's space, so it must be relative to where `use` put it.
+template Cloud(tone) {
+  group drift {
+    position: (0, 0)
+    animate { property: position, to: (40, 0), duration: 6, loop: true, yoyo: true }
+    rectangle base { position: (0, 7), size: (130, 14), color: tone }
+    circle a { position: (-45, 0), radius: 14, color: tone }
+    circle b { position: (-15, -8), radius: 20, color: tone }
+    circle c { position: (20, -4), radius: 16, color: tone }
+    circle d { position: (50, 2), radius: 10, color: tone }
+  }
+}
+
+// One wavelength of sea: a cosine crest with a lighter rim.
+// origin (0, 0) pins the top-left of each crest to its position.
+template Crest(lam, amp, depth, tone, rim) {
+  polygon water {
+    position: (0, 0), origin: (0, 0), color: tone
+    points: [(0, -amp), (lam / 8, -amp * cos(45)), (lam / 4, 0), (3 * lam / 8, amp * cos(45)),
+             (lam / 2, amp), (5 * lam / 8, amp * cos(45)), (3 * lam / 4, 0),
+             (7 * lam / 8, -amp * cos(45)), (lam, -amp), (lam, depth), (0, depth)]
+  }
+  line foam {
+    position: (0, 0), origin: (0, 0), thickness: 1.5, color: rim, alpha: 0.45
+    points: [(0, -amp), (lam / 8, -amp * cos(45)), (lam / 4, 0), (3 * lam / 8, amp * cos(45)),
+             (lam / 2, amp), (5 * lam / 8, amp * cos(45)), (3 * lam / 4, 0),
+             (7 * lam / 8, -amp * cos(45)), (lam, -amp)]
+  }
+}
+
+scene {
+  size: (960, 540)
+  duration: 12
+  background: #0d1533
+
+  // ── Sky ──
+  generate c, i in sky {
+    rectangle band {
+      position: (480, edges[i]), origin: (0.5, 0), color: c
+      size: (960, edges[i + 1] - edges[i])
+    }
+  }
+  generate p, i in starAt {
+    use Star([2.5, 3.5, 2, 4.5][i % 4], [1, 1.5, 2, 3][i % 4]) star { position: p }
+  }
+
+  circle halo2 { position: (760, 95), radius: 62, color: moonlit, alpha: 0.04 }
+  circle halo1 { position: (760, 95), radius: 40, color: moonlit, alpha: 0.07 }
+  circle moon  { position: (760, 95), radius: 24, color: moonlit }
+
+  use Cloud(#1b2650) cloudHigh { position: (380, 70), scale: 0.7 }
+  use Cloud(#2a3c70) cloudMid  { position: (560, 156) }
+  use Cloud(#4a5a85) cloudLow  { position: (850, 252), scale: 1.2 }
+
+  // ── The beam ── One lamp, seen from the side. As it turns,
+  // the beam's length on screen follows |cos| of its angle:
+  // full to the right, gone as it faces you (the flare),
+  // full to the left, gone again as it faces away. Each
+  // sweep is 4 s, written out three times. Six cones of
+  // one spread and falling length overlap near the lamp,
+  // so the beam is brightest there and fades along its way.
+  // While a beam is hidden it is scaled to (0, 0), not
+  // (0, 1), so no sliver of it is left standing at the lamp.
+  group beamRight {
+    position: lampAt
+    generate L in [1300, 1050, 820, 620, 440, 280] {
+      polygon ray { position: (0, 0), origin: (0, 0.5), color: lamp, alpha: 0.04
+                    points: [(0, -3), (L, -3 - L * spread), (L, 3 + L * spread), (0, 3)] }
+    }
+    sequence {
+      animate { property: scale, to: (0.004, 1), duration: 1, easing: easeIn }
+      animate { property: scale, to: (0, 0), duration: 0.01 }
+      animate { property: scale, to: (0, 0), duration: 1.98 }
+      animate { property: scale, to: (0.004, 1), duration: 0.01 }
+      animate { property: scale, to: (1, 1), duration: 0.99, easing: easeOut }
+      animate { property: scale, to: (0.004, 1), duration: 1, easing: easeIn }
+      animate { property: scale, to: (0, 0), duration: 0.01 }
+      animate { property: scale, to: (0, 0), duration: 1.98 }
+      animate { property: scale, to: (0.004, 1), duration: 0.01 }
+      animate { property: scale, to: (1, 1), duration: 0.99, easing: easeOut }
+      animate { property: scale, to: (0.004, 1), duration: 1, easing: easeIn }
+      animate { property: scale, to: (0, 0), duration: 0.01 }
+      animate { property: scale, to: (0, 0), duration: 1.98 }
+      animate { property: scale, to: (0.004, 1), duration: 0.01 }
+      animate { property: scale, to: (1, 1), duration: 0.99, easing: easeOut }
+    }
+  }
+  group beamLeft {
+    position: lampAt
+    scale: (0, 0)
+    generate L in [420, 340, 260, 190, 130, 80] {
+      polygon ray { position: (0, 0), origin: (1, 0.5), color: lamp, alpha: 0.04
+                    points: [(0, -3), (-L, -3 - L * spread), (-L, 3 + L * spread), (0, 3)] }
+    }
+    sequence {
+      animate { property: scale, to: (0, 0), duration: 1 }
+      animate { property: scale, to: (0.004, 1), duration: 0.01 }
+      animate { property: scale, to: (1, 1), duration: 0.99, easing: easeOut }
+      animate { property: scale, to: (0.004, 1), duration: 1, easing: easeIn }
+      animate { property: scale, to: (0, 0), duration: 0.01 }
+      animate { property: scale, to: (0, 0), duration: 1.98 }
+      animate { property: scale, to: (0.004, 1), duration: 0.01 }
+      animate { property: scale, to: (1, 1), duration: 0.99, easing: easeOut }
+      animate { property: scale, to: (0.004, 1), duration: 1, easing: easeIn }
+      animate { property: scale, to: (0, 0), duration: 0.01 }
+      animate { property: scale, to: (0, 0), duration: 1.98 }
+      animate { property: scale, to: (0.004, 1), duration: 0.01 }
+      animate { property: scale, to: (1, 1), duration: 0.99, easing: easeOut }
+      animate { property: scale, to: (0.004, 1), duration: 1, easing: easeIn }
+      animate { property: scale, to: (0, 0), duration: 0.01 }
+      animate { property: scale, to: (0, 0), duration: 0.99 }
+    }
+  }
+
+  // ── Sea ── Each band of crests scrolls exactly one
+  // wavelength per loop, so the jump back is invisible.
+  rectangle sea { position: (480, horizon), origin: (0.5, 0), size: (960, 540 - horizon), color: #1e3d6b }
+
+  group far {
+    animate { property: position, to: (-48, 0), duration: 6, easing: linear, loop: true }
+    generate k in 0 to 21 { use Crest(48, 1.5, 40, #1b3864, #6a7aa0) w { position: (k * 48, 334) } }
+  }
+  group back {
+    position: (-72, 0)
+    animate { property: position, to: (0, 0), duration: 4, easing: linear, loop: true }
+    generate k in 0 to 14 { use Crest(72, 2.5, 50, #173160, #5b6e98) w { position: (k * 72, 352) } }
+  }
+  group middle {
+    animate { property: position, to: (-110, 0), duration: 3, easing: linear, loop: true }
+    generate k in 0 to 9 { use Crest(110, 4, 80, #132a54, #4d6290) w { position: (k * 110, 380) } }
+  }
+
+  // The boat drifts, bobs and rocks: three motions, three nested groups.
+  group boat {
+    position: (600, 418)
+    animate { property: position, to: (660, 418), duration: 6, loop: true, yoyo: true }
+    group bob {
+      position: (0, 0)
+      animate { property: position, to: (0, -4), duration: 1.5, loop: true, yoyo: true }
+      group rock {
+        rotation: -5
+        animate { property: rotation, to: 5, duration: 2, loop: true, yoyo: true }
+        rectangle mast  { position: (0, -36), size: (2, 58), color: ink }
+        polygon   sail  { position: (16, -36), color: paint, points: [(-14, -26), (14, 26), (-14, 26)] }
+        polygon   jib   { position: (-13, -34), color: #cfc8bd, points: [(11, -22), (11, 22), (-11, 22)] }
+        polygon   hull  { position: (0, 0), color: #5a2e2a, points: [(-34, -7), (34, -7), (24, 7), (-26, 7)] }
+        rectangle cabin { position: (-8, -11), size: (10, 6), color: #3b2a2e }
+        rectangle light { position: (-8, -11), size: (4, 3), color: lamp }
+      }
+    }
+  }
+
+  group near {
+    position: (-160, 0)
+    animate { property: position, to: (0, 0), duration: 4, easing: linear, loop: true }
+    generate k in 0 to 7 { use Crest(160, 7, 130, #0f2247, #41588a) w { position: (k * 160, 425) } }
+  }
+  group front {
+    animate { property: position, to: (-220, 0), duration: 6, easing: linear, loop: true }
+    generate k in 0 to 5 { use Crest(220, 10, 80, #0b1a3a, #35497a) w { position: (k * 220, 480) } }
+  }
+
+  // Moonlight on the water, each glint on its own beat.
+  generate i in 0 to 9 {
+    let half = 6 + i * 3
+    line glint {
+      position: (760 + [0, 6, -4, 8, -6, 4, -8, 6, -2, 0][i], 342 + i * 14)
+      points: [(-half, 0), (half, 0)]
+      thickness: 2, color: moonlit, alpha: 0.5
+      animate { property: alpha, to: 0.08, duration: [1, 1.5, 2][i % 3], loop: true, yoyo: true }
+    }
+  }
+
+  // ── Headland ── origin (0, 0) pins the top-left of the
+  // outline to (0, 292), so its points read as scene coordinates.
+  polygon cliff {
+    position: (0, 292), origin: (0, 0), color: rock
+    points: [(0, 300), (120, 292), (150, 296), (240, 296), (290, 318), (330, 342),
+             (360, 384), (380, 440), (400, 540), (0, 540)]
+  }
+  line ridge {
+    position: (0, 292), origin: (0, 0), thickness: 2, color: #23335e
+    points: [(0, 300), (120, 292), (150, 296), (240, 296), (290, 318), (330, 342)]
+  }
+
+  // ── Lighthouse ── Tower shapes are written about their own centres.
+  polygon tower   { position: (190, 243), color: paint,
+                    points: [(-22, 53), (22, 53), (15, -53), (-15, -53)] }
+  polygon band1   { position: (190, 261), color: stripe,
+                    points: [(-20.28, 9), (20.28, 9), (19.09, -9), (-19.09, -9)] }
+  polygon band2   { position: (190, 219), color: stripe,
+                    points: [(-17.51, 9), (17.51, 9), (16.32, -9), (-16.32, -9)] }
+  rectangle door  { position: (190, 288), size: (8, 14), color: ink }
+  rectangle win   { position: (190, 238), size: (5, 8), color: lamp }
+  rectangle deck  { position: (190, 188), size: (44, 5), color: ink }
+  rectangle room  { position: lampAt, size: (22, 22), color: lamp }
+  rectangle barL  { position: (183, 174), size: (2, 22), color: ink }
+  rectangle barR  { position: (197, 174), size: (2, 22), color: ink }
+  polygon roof    { position: (190, 155), color: stripe, points: [(-15, 8), (15, 8), (0, -8)] }
+  circle finial   { position: (190, 145), radius: 3, color: ink }
+
+  // The flare peaks when the lamp faces you: at 1 s, 5 s and 9 s.
+  group flare {
+    position: lampAt
+    alpha: 0.15
+    circle bloom { position: (0, 0), radius: 42, color: lamp, alpha: 0.35 }
+    circle core  { position: (0, 0), radius: 15, color: glow, alpha: 0.9 }
+    sequence {
+      animate { property: alpha, to: 1, duration: 1, easing: easeIn }
+      animate { property: alpha, to: 0.15, duration: 1, easing: easeOut }
+      animate { property: alpha, to: 0.15, duration: 2 }
+      animate { property: alpha, to: 1, duration: 1, easing: easeIn }
+      animate { property: alpha, to: 0.15, duration: 1, easing: easeOut }
+      animate { property: alpha, to: 0.15, duration: 2 }
+      animate { property: alpha, to: 1, duration: 1, easing: easeIn }
+      animate { property: alpha, to: 0.15, duration: 1, easing: easeOut }
+      animate { property: alpha, to: 0.15, duration: 2 }
+    }
+  }
+}

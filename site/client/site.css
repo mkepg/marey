@@ -2264,6 +2264,86 @@ details.solution[open] > figure.sample {
   color: var(--site-text-2);
 }
 
+/*
+ * The gallery index takes the width its grid needs. A card's stage is the
+ * pool's slot: its player shows the poster until the card is hovered or
+ * focused, and a card has no controls of its own, so the whole card stays one
+ * link.
+ */
+.section-gallery .main-inner:has(.gallery-grid) {
+  max-width: 1200px;
+}
+
+.gallery-card > a.card:focus-visible {
+  outline-offset: 3px;
+}
+
+.gallery-card > a.card:focus-visible,
+.gallery-card > a.card:hover {
+  border-color: color-mix(in srgb, var(--site-accent) 55%, var(--site-border));
+}
+
+.gallery-card-poster.sample-stage {
+  border-radius: 0;
+}
+
+/* The prose list rules would indent the tag chips inside a card. */
+.content .chips {
+  margin: auto 20px 20px;
+  padding: 0;
+}
+
+.content .chips > li {
+  margin: 0;
+  padding: 4px 9px;
+  border: 1px solid var(--site-border);
+}
+
+/* The player fills the card's stage; it takes no pointer events, so the whole card is one target. */
+.gallery-card-poster > marey-player {
+  pointer-events: none;
+}
+
+.gallery-count {
+  min-height: 1.5em;
+  margin: -16px 0 14px;
+  font-size: 0.875rem;
+  color: var(--site-text-3);
+}
+
+/* A scene page: one large stage in the scene's own shape. */
+.gallery-stage {
+  margin: 28px 0 40px;
+}
+
+.gallery-stage > .sample-stage {
+  aspect-ratio: var(--scene-aspect, 16 / 9);
+  border-radius: var(--site-radius-lg);
+  box-shadow: inset 0 0 0 1px var(--site-stage-edge), 0 24px 48px -28px rgb(0 0 0 / 55%);
+}
+
+.gallery-lesson {
+  padding: 14px 18px;
+  border-left: 3px solid var(--site-accent);
+  border-radius: 0 var(--site-radius) var(--site-radius) 0;
+  background: var(--site-accent-soft);
+}
+
+.gallery-source-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin: 0 0 12px;
+}
+
+.gallery-source-head > p {
+  margin: 0;
+  color: var(--site-text-2);
+  font-size: 0.9375rem;
+}
+
 /* ============================================================ breakpoints */
 
 /* Right-hand "On this page" from 1280 px; the inline copy below that. */

@@ -109,7 +109,11 @@ export function site(): Plugin {
       const contentRoot = normalize(resolve(root, "site"));
       const reload = (file: string) => {
         const path = normalize(file);
-        if (path.startsWith(`${contentRoot}/content/`) || path === `${contentRoot}/site.json`) {
+        if (
+          path.startsWith(`${contentRoot}/content/`) ||
+          path.startsWith(`${contentRoot}/gallery/`) ||
+          path === `${contentRoot}/site.json`
+        ) {
           server.ws.send({ type: "full-reload" });
         }
       };
