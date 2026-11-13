@@ -162,7 +162,11 @@ export function buildSite(repoRoot: string): BuiltSite {
 
   const pages: SitePage[] = [];
   for (const doc of docs) {
-    const rendered = renderMarkdown(doc.body, { file: doc.file, bodyLine: doc.bodyLine });
+    const rendered = renderMarkdown(doc.body, {
+      file: doc.file,
+      bodyLine: doc.bodyLine,
+      sampleMode: doc.section === "reference" ? "run" : "live",
+    });
     errors.push(...rendered.errors);
 
     const sidebar: SidebarItem[] = [];
