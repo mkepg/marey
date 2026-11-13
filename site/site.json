@@ -1,6 +1,6 @@
 {
   "learn": [],
   "guides": [],
-  "reference": [],
+  "reference": ["language", "properties", "determinism"],
   "gallery": []
 }

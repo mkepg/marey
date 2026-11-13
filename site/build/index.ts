@@ -4,6 +4,7 @@ import { parseFrontMatter } from "./frontMatter";
 import { renderLayout, ORIGIN, SECTION_LABELS, type Crumb, type NavLink, type SidebarItem } from "./layout";
 import { checkLinks } from "./links";
 import { renderMarkdown } from "./markdown";
+import { loadReference, rewriteRepoLink } from "./reference";
 import { buildSearchIndex } from "./search";
 import { SLUG, parseSiteConfig } from "./siteConfig";
 import { buildSitemap } from "./sitemap";
@@ -23,6 +24,10 @@ interface Doc {
   readonly description: string;
   readonly body: string;
   readonly bodyLine: number;
+  /** Markdown rendered above the body (the reference's "formal reference" notice). */
+  readonly banner?: string;
+  /** The repository file whose relative links the body uses, when they need rewriting. */
+  readonly linksFrom?: string | null;
 }
 
 const CONTENT = "site/content";
@@ -140,6 +145,16 @@ export function buildSite(repoRoot: string): BuiltSite {
       indexBySection[section] = index;
     }
     for (const slug of sectionSlugs(repoRoot, config, section, errors)) {
+      const where = { section, kind: "entry", slug, url: `/${section}/${slug}/`, outFile: `${section}/${slug}/index.html` } as const;
+      if (section === "reference") {
+        const source = loadReference(repoRoot, slug, errors);
+        if (source) {
+          const doc: Doc = { ...where, ...source };
+          docs.push(doc);
+          entriesBySection.reference.push(doc);
+        }
+        continue;
+      }
       const doc = loadDoc(
         repoRoot,
         `${CONTENT}/${section}/${slug}.md`,
@@ -162,11 +177,26 @@ export function buildSite(repoRoot: string): BuiltSite {
 
   const pages: SitePage[] = [];
   for (const doc of docs) {
-    const rendered = renderMarkdown(doc.body, {
+    const linksFrom = doc.linksFrom ?? null;
+    const body = renderMarkdown(doc.body, {
       file: doc.file,
       bodyLine: doc.bodyLine,
       sampleMode: doc.section === "reference" ? "run" : "live",
+      ...(linksFrom !== null ? { rewriteLink: (href: string) => rewriteRepoLink(href, linksFrom) } : {}),
     });
+    const banner = doc.banner
+      ? renderMarkdown(doc.banner, { file: "site/build/reference.ts", bodyLine: 1, sampleMode: "run" })
+      : null;
+    const rendered = banner
+      ? {
+          html: banner.html + body.html,
+          headings: [...banner.headings, ...body.headings],
+          links: [...banner.links, ...body.links],
+          text: `${banner.text}
+${body.text}`,
+          errors: [...banner.errors, ...body.errors],
+        }
+      : body;
     errors.push(...rendered.errors);
 
     const sidebar: SidebarItem[] = [];

@@ -893,6 +893,11 @@ h4:hover .anchor,
   color: var(--site-text);
 }
 
+.content td:first-child code {
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+
 /* ------------------------------------------------------------------ code */
 
 pre.code {

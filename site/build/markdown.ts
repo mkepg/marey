@@ -11,6 +11,8 @@ export interface RenderContext {
   readonly bodyLine: number;
   /** What a plain `marey` fence becomes: "live" in lessons and guides, "run" in the reference. */
   readonly sampleMode: "live" | "run";
+  /** Rewrites each link's target before it is recorded and rendered. */
+  readonly rewriteLink?: (href: string) => string;
 }
 
 export interface RenderedMarkdown {
@@ -279,6 +281,7 @@ export function renderMarkdown(body: string, ctx: RenderContext): RenderedMarkdo
     marked.walkTokens([token], (t) => {
       if (t.type !== "link") return;
       const link = t as Tokens.Link;
+      if (ctx.rewriteLink) link.href = ctx.rewriteLink(link.href);
       let at = token.raw.indexOf(link.raw, searchFrom);
       if (at < 0) at = token.raw.indexOf(link.raw);
       else searchFrom = at + link.raw.length;

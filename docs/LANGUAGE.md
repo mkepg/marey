@@ -4,11 +4,10 @@ A reference for Marey, a declarative scene format that compiles to a PixiJS
 scene graph. This document describes **behaviour**: what each construct does,
 in what units, and what happens at its edges.
 
-It is not a tutorial. Minimal getting-started and export guides ship with the
-capabilities they describe. A full tutorial and gallery site sits past the
-finish line in the engineering roadmap's §13 — catalogued, with nothing owed —
-rather than being a phase; see the [README](../README.md) for the short
-orientation this document deliberately does not give.
+It is not a tutorial. For one, take the course at
+<https://marey.pages.dev/learn/>, which teaches the language one idea at a time
+with runnable examples; the [README](../README.md) gives the short orientation.
+This document stays the formal reference.
 
 Every example below is compiled by the test suite, so nothing here can silently
 stop being true. So is every example in the README — both documents are listed
@@ -1470,14 +1469,13 @@ runtime warning or a silent clamp.
 
 ## Not covered here
 
-This document deliberately has no exhaustive per-property type table. A
-later phase generates that table directly from the compiler's single property
-contract, `LANGUAGE_CONTRACT` in `src/compiler/languageContract.ts` — the
-type checker, the Monaco hovers, and the completions all read their property
-kinds, required lists, defaults, and constraints from it, so it cannot drift
-out of sync with the source the way hand-written prose can. Until that phase
-lands, the editor's own completions and hovers are the authority on which
-properties a given object accepts.
+This document deliberately has no exhaustive per-property type table. The
+table is generated directly from the compiler's single property contract,
+`LANGUAGE_CONTRACT` in `src/compiler/languageContract.ts` — the type checker,
+the Monaco hovers, and the completions all read their property kinds, required
+lists, defaults, and constraints from it, so it cannot drift out of sync with
+the source the way hand-written prose can. It is published at
+<https://marey.pages.dev/reference/properties/>.
 
 For the design rationale behind these decisions, see
 `docs/specs/`. The authoritative future sequence is
