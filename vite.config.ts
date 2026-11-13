@@ -1,10 +1,11 @@
 import { defineConfig } from 'vite'
 import preact from '@preact/preset-vite'
+import { site } from './vite-plugins/site'
 import { thirdPartyLicenses } from './vite-plugins/thirdPartyLicenses'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [preact(), thirdPartyLicenses()],
+  plugins: [preact(), site(), thirdPartyLicenses()],
   css: {
     preprocessorOptions: {
       scss: {

@@ -2,7 +2,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    include: ["src/**/*.test.ts", "vite-plugins/**/*.test.ts", "action/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "vite-plugins/**/*.test.ts", "action/**/*.test.ts", "site/**/*.test.ts"],
     environment: "node",
   },
 });
