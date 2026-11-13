@@ -55,8 +55,9 @@ the arc's lowest point on that spot, so the smile shrinks towards its lowest
 point rather than its middle.
 
 A Marey line ends flat at its end points. The brows and the smile get round ends
-from a circle of `radius: stroke / 2` placed on each end point. The lessons on
-animation, on shapes and on groups cover these.
+from a circle of `radius: stroke / 2` placed on each end point. The lesson on
+animation, [the lesson on shapes](/learn/shapes/) and the lesson on groups cover
+these.
 
 ### A smile from sine and cosine
 
@@ -83,8 +84,9 @@ for the nearest, so their peaks crowd closer together. Each outline closes at y
 
 The ridges are written after the sun, and objects draw in source order, so the
 sun sets behind them. It sinks by `to: (0, sink)`, deep enough to drop it below
-the farthest ridge. The lessons on values and on generate cover the ridges, and
-the lesson on shapes covers origin and drawing order.
+the farthest ridge. The lessons on values and on generate cover the ridges,
+[the lesson on shapes](/learn/shapes/) covers origin, and
+[the first lesson](/learn/first-scene/) covers drawing order.
 
 ### The flock
 

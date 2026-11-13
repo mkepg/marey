@@ -15,7 +15,8 @@ The sun is a rim and a disc. The disc is slightly smaller and lifted,
 `position: (0, -8), radius: 91` inside a rim of 96, so the rim's colour shows as
 a crescent along the bottom and the sun looks lit from above. There is no
 gradient or shading in the language. The look comes from two flat circles
-overlapping. The lesson on shapes covers this.
+overlapping. [The first lesson](/learn/first-scene/) covers circles and drawing
+order.
 
 ### The sun grows in
 
@@ -49,7 +50,7 @@ ridge itself. The lessons on templates and on timing cover this.
 The ridges are written after the sun, and objects draw in source order, so the
 ridges cover the lower part of the sun. That overlap is the mark: a sun on the
 horizon. The language has no clipping or masking; covering is how a shape is
-partly hidden. The lesson on shapes covers drawing order.
+partly hidden. [The first lesson](/learn/first-scene/) covers drawing order.
 
 ### The name, last
 
@@ -59,5 +60,5 @@ ridge settles at 2.3 seconds, so the parts overlap slightly instead of queuing.
 The lockup is complete at 3.1 seconds and holds until the scene ends at 5.
 
 A bounded scene that is not playing shows its last frame, which here is the
-finished lockup. That is why this gallery card needs no poster time. The lessons
-on shapes (text) and on timing (delay) cover this.
+finished lockup. That is why this gallery card needs no poster time. [The lesson
+on shapes](/learn/shapes/) (text) and the lesson on timing (delay) cover this.

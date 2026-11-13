@@ -1,0 +1,180 @@
+// Sunrise over the sea. The sun climbs out of the water
+// while the colours of dawn climb the sky above it, the
+// stars go out one band at a time, and a path of light
+// reaches across the sea towards you.
+//
+// Every shape is a circle or a rectangle, and every motion
+// is one `animate` on `position`. The depth comes from
+// drawing order alone: each shape covers the ones written
+// before it.
+
+scene {
+  size: (960, 540)
+  duration: 6
+  background: #141838
+
+  // ── Night ── The stars sit on the background. Nothing
+  // fades them: the dawn bands below rise over them, so
+  // each star goes out when a band reaches it.
+  circle star1  { position: (70, 40),   radius: 1.5, color: #c9c6e8 }
+  circle star2  { position: (190, 96),  radius: 1,   color: #c9c6e8 }
+  circle star3  { position: (300, 26),  radius: 2,   color: #e6e2ff }
+  circle star4  { position: (420, 150), radius: 1,   color: #c9c6e8 }
+  circle star5  { position: (520, 64),  radius: 1.5, color: #e6e2ff }
+  circle star6  { position: (650, 18),  radius: 1,   color: #c9c6e8 }
+  circle star7  { position: (735, 118), radius: 1.5, color: #c9c6e8 }
+  circle star8  { position: (840, 54),  radius: 2,   color: #e6e2ff }
+  circle star9  { position: (905, 168), radius: 1,   color: #c9c6e8 }
+  circle star10 { position: (110, 210), radius: 1.5, color: #c9c6e8 }
+  circle star11 { position: (590, 132), radius: 1,   color: #c9c6e8 }
+  circle star12 { position: (24, 128),  radius: 1,   color: #c9c6e8 }
+
+  // ── Dawn ── Eight bands, cool to warm. Each is a
+  // rectangle 400 px tall, so its top edge is where its
+  // colour begins and the rest of it hangs down behind
+  // the sea. A rectangle is placed by its centre: a band
+  // whose top should end at y = 40 ends at y = 240.
+  // The bands start low and rise by different amounts,
+  // the warm ones least, so the sky grades as it lightens.
+  rectangle dawn1 { position: (480, 400), size: (960, 400), color: #1f2050
+    animate { property: position, to: (480, 240), duration: 5 } }
+  rectangle dawn2 { position: (480, 450), size: (960, 400), color: #2e2759
+    animate { property: position, to: (480, 300), duration: 5.5 } }
+  rectangle dawn3 { position: (480, 490), size: (960, 400), color: #452d63
+    animate { property: position, to: (480, 350), duration: 6 } }
+  rectangle dawn4 { position: (480, 515), size: (960, 400), color: #643369
+    animate { property: position, to: (480, 395), duration: 6 } }
+  rectangle dawn5 { position: (480, 535), size: (960, 400), color: #8c3c6b
+    animate { property: position, to: (480, 435), duration: 6 } }
+  rectangle dawn6 { position: (480, 545), size: (960, 400), color: #b84f68
+    animate { property: position, to: (480, 468), duration: 6 } }
+  rectangle dawn7 { position: (480, 550), size: (960, 400), color: #df7363
+    animate { property: position, to: (480, 495), duration: 6 } }
+  rectangle dawn8 { position: (480, 555), size: (960, 400), color: #f6a167
+    animate { property: position, to: (480, 515), duration: 6 } }
+
+  // ── The sun ── Four discs, largest first, so each smaller
+  // one sits on the one before: two rings of glow, a rim
+  // and the core. All four start 100 px below the horizon,
+  // hidden by the sea, which is written further down.
+  circle glow  { position: (600, 430), radius: 96, color: #f0936a
+    animate { property: position, to: (600, 205), duration: 6 } }
+  circle halo  { position: (600, 430), radius: 74, color: #fbbb72
+    animate { property: position, to: (600, 205), duration: 6 } }
+  circle rim   { position: (600, 430), radius: 58, color: #ffdb94
+    animate { property: position, to: (600, 205), duration: 6 } }
+  circle core  { position: (600, 430), radius: 52, color: #fff4d8
+    animate { property: position, to: (600, 205), duration: 6 } }
+
+  // ── Clouds ── Written after the sun, so the sun rises
+  // behind the low one. A cloud is two bars with round caps
+  // (a circle at each end), over a thin warm rim where the
+  // light catches its underside.
+  rectangle cloudArim { position: (366, 131), size: (196, 2), color: #f0907a }
+  rectangle cloudA    { position: (360, 124), size: (220, 10), color: #563a72 }
+  circle    cloudAl   { position: (250, 124), radius: 5,   color: #563a72 }
+  circle    cloudAr   { position: (470, 124), radius: 5,   color: #563a72 }
+  rectangle cloudA2   { position: (320, 115), size: (110, 9),  color: #563a72 }
+  circle    cloudA2l  { position: (265, 115), radius: 4.5, color: #563a72 }
+  circle    cloudA2r  { position: (375, 115), radius: 4.5, color: #563a72 }
+
+  rectangle cloudBrim { position: (664, 267), size: (240, 2), color: #ffc480 }
+  rectangle cloudB    { position: (655, 261), size: (270, 9),  color: #6a3768 }
+  circle    cloudBl   { position: (520, 261), radius: 4.5, color: #6a3768 }
+  circle    cloudBr   { position: (790, 261), radius: 4.5, color: #6a3768 }
+  rectangle cloudB2   { position: (720, 253), size: (130, 7),  color: #6a3768 }
+  circle    cloudB2l  { position: (655, 253), radius: 3.5, color: #6a3768 }
+  circle    cloudB2r  { position: (785, 253), radius: 3.5, color: #6a3768 }
+
+  rectangle cloudCrim { position: (842, 183), size: (104, 2), color: #e07a72 }
+  rectangle cloudC    { position: (838, 178), size: (116, 7),  color: #5e3a70 }
+  circle    cloudCl   { position: (780, 178), radius: 3.5, color: #5e3a70 }
+  circle    cloudCr   { position: (896, 178), radius: 3.5, color: #5e3a70 }
+
+  // ── Headlands ── Discs whose lower halves the sea will
+  // hide. The far one is paler, as distance hazes it.
+  circle far1  { position: (318, 350), radius: 28, color: #5c3a66 }
+  circle far2  { position: (352, 344), radius: 20, color: #5c3a66 }
+  circle far3  { position: (284, 346), radius: 16, color: #5c3a66 }
+  circle near1 { position: (130, 376), radius: 62, color: #34254c }
+  circle near2 { position: (206, 364), radius: 42, color: #34254c }
+  circle near3 { position: (64, 360),  radius: 36, color: #34254c }
+
+  // ── Sea ── Written after the sun, the dawn bands and the
+  // headlands, so it hides everything below the horizon at
+  // y = 330. It reflects the sky's warm colours near the
+  // horizon and darkens towards you.
+  rectangle sea     { position: (480, 435), size: (960, 210), color: #272250 }
+  rectangle seaLit  { position: (480, 335), size: (960, 10),  color: #c96a74 }
+  rectangle seaRose { position: (480, 347), size: (960, 14),  color: #8c4a76 }
+  rectangle seaPlum { position: (480, 368), size: (960, 28),  color: #5a3a6c }
+  rectangle seaDeep { position: (480, 402), size: (960, 40),  color: #3a2d5e }
+
+  // A fishing boat on the horizon, dark against the lit
+  // water. Its three parts carry the same move, so they
+  // travel together.
+  rectangle mast  { position: (812, 321), size: (2, 20),  color: #2a1f40
+    animate { property: position, to: (842, 321), duration: 6 } }
+  rectangle cabin { position: (800, 327), size: (12, 7),  color: #2a1f40
+    animate { property: position, to: (830, 327), duration: 6 } }
+  rectangle hull  { position: (806, 333), size: (34, 6),  color: #2a1f40
+    animate { property: position, to: (836, 333), duration: 6 } }
+
+  // Swell: faint streaks drifting slowly to the left.
+  rectangle swell1 { position: (140, 352), size: (90, 2),  color: #a85a78
+    animate { property: position, to: (110, 352), duration: 6 } }
+  rectangle swell2 { position: (820, 362), size: (120, 2), color: #74467a
+    animate { property: position, to: (790, 362), duration: 6 } }
+  rectangle swell3 { position: (330, 390), size: (150, 2), color: #4f3a6e
+    animate { property: position, to: (296, 390), duration: 6 } }
+  rectangle swell4 { position: (880, 424), size: (170, 3), color: #3c3064
+    animate { property: position, to: (840, 424), duration: 6 } }
+  rectangle swell5 { position: (210, 446), size: (200, 3), color: #352b5e
+    animate { property: position, to: (166, 446), duration: 6 } }
+  rectangle swell6 { position: (420, 482), size: (230, 3), color: #322a5c
+    animate { property: position, to: (370, 482), duration: 6 } }
+
+  // ── The path of light ── Streaks of reflection, wider
+  // the nearer they are. They start out of sight below the
+  // frame and rise as the sun rises; the farthest has the
+  // furthest to go, so the path lengthens to the horizon.
+  rectangle glint1  { position: (600, 560), size: (30, 2),  color: #ffe6b0
+    animate { property: position, to: (600, 336), duration: 6 } }
+  rectangle glint2  { position: (594, 560), size: (44, 2),  color: #f6a167
+    animate { property: position, to: (594, 343), duration: 6 } }
+  rectangle glint3  { position: (604, 562), size: (56, 3),  color: #ffe6b0
+    animate { property: position, to: (604, 352), duration: 6 } }
+  rectangle glint4  { position: (596, 562), size: (70, 3),  color: #ffcf8a
+    animate { property: position, to: (596, 363), duration: 6 } }
+  rectangle glint5  { position: (607, 564), size: (62, 3),  color: #f6a167
+    animate { property: position, to: (607, 376), duration: 6 } }
+  rectangle glint6  { position: (598, 564), size: (96, 3),  color: #ffe6b0
+    animate { property: position, to: (598, 391), duration: 6 } }
+  rectangle glint7  { position: (590, 566), size: (78, 4),  color: #ffcf8a
+    animate { property: position, to: (590, 408), duration: 6 } }
+  rectangle glint8  { position: (610, 566), size: (120, 4), color: #ffe6b0
+    animate { property: position, to: (610, 428), duration: 6 } }
+  rectangle glint9  { position: (596, 568), size: (100, 4), color: #f6a167
+    animate { property: position, to: (596, 451), duration: 6 } }
+  rectangle glint10 { position: (604, 568), size: (150, 5), color: #ffcf8a
+    animate { property: position, to: (604, 477), duration: 6 } }
+
+  // ── Shore ── Two dunes, the nearer darker, each the top
+  // of a disc far larger than the frame. Written last, they
+  // hide the light path until it rises past them.
+  circle duneBack  { position: (170, 1180), radius: 690, color: #1c1634 }
+  circle duneFront { position: (860, 1320), radius: 820, color: #110d22 }
+
+  // Reeds on the dunes: tall, thin rectangles.
+  rectangle reed1  { position: (60, 482),  size: (3, 46), color: #1c1634 }
+  rectangle reed2  { position: (72, 476),  size: (3, 60), color: #1c1634 }
+  rectangle reed3  { position: (84, 486),  size: (3, 40), color: #1c1634 }
+  rectangle reed4  { position: (98, 480),  size: (2, 52), color: #1c1634 }
+  rectangle reed5  { position: (232, 496), size: (2, 30), color: #1c1634 }
+  rectangle reed6  { position: (242, 492), size: (3, 38), color: #1c1634 }
+  rectangle reed7  { position: (840, 488), size: (3, 44), color: #110d22 }
+  rectangle reed8  { position: (854, 480), size: (3, 60), color: #110d22 }
+  rectangle reed9  { position: (866, 486), size: (2, 48), color: #110d22 }
+  rectangle reed10 { position: (880, 490), size: (3, 40), color: #110d22 }
+  rectangle reed11 { position: (900, 484), size: (2, 52), color: #110d22 }
+}

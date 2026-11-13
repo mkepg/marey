@@ -1,6 +1,9 @@
 {
-  "learn": [],
+  "learn": [
+    { "slug": "first-scene", "vocabulary": ["scene", "size", "background", "duration", "circle", "rectangle", "position", "radius", "color", "animate", "property", "to"] },
+    { "slug": "shapes", "vocabulary": ["polygon", "line", "text", "points", "thickness", "content", "fontSize", "alpha", "rotation", "origin", "layer", "fit", "contain", "cover", "fill", "none"] }
+  ],
   "guides": [],
   "reference": ["language", "properties", "determinism"],
-  "gallery": ["lighthouse", "dusk-hills", "ledges", "logo-reveal", "bar-chart-reveal", "physics-pile"]
+  "gallery": ["lighthouse", "dusk-hills", "ledges", "logo-reveal", "bar-chart-reveal", "physics-pile", "set-sail", "sunrise"]
 }

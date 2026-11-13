@@ -40,7 +40,8 @@ animates to full height with `easing: easeOut`, fast at first and settling at
 the end. Because the pivot is at the bottom, the bar grows upwards from the
 baseline rather than out from its middle. A zero scale is allowed here because
 the bar takes no part in physics; on an object that does, it is a compile error.
-The lessons on shapes and on animation cover origin, scale and easing.
+[The lesson on shapes](/learn/shapes/) covers origin, and the lesson on animation
+covers scale and easing.
 
 ### A stagger is a delay
 
@@ -57,4 +58,5 @@ The title, the numbers and the week names are `text` objects with a `content`
 string and a `fontSize`, drawn in the monospaced font the player carries with
 it, so the chart looks the same on every machine. Text takes the same properties
 and animations as any other shape: the numbers start at `alpha: 0` and fade in
-exactly as a circle would. The lesson on shapes covers text.
+exactly as a circle would. [The lesson on shapes](/learn/shapes/)
+covers text.

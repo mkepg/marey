@@ -61,8 +61,8 @@ draws six cones of falling length, each at `alpha: 0.04`. All six cover the part
 next to the lamp, so the light is strongest there, and only the longest cone
 reaches the far end. Every cone widens at the same rate, `let spread = 0.075`
 pixels of half-width per pixel of length, so their edges lie on one angle and
-the beam reads as a single shape. The lesson on shapes covers alpha and polygon
-points.
+the beam reads as a single shape. [The lesson on shapes](/learn/shapes/) covers
+alpha and polygon points.
 
 ### Turning a lamp with scale
 
@@ -130,8 +130,8 @@ with `to: (0, -4), duration: 1.5`, and `group rock` inside that tilts from
 `rotation: -5` to 5 degrees. Each group's animation happens in its parent's
 space, so the three combine without any arithmetic. The boat is written between
 `group middle` and `group near`, and objects draw in source order, so the near
-waves pass in front of its hull. The lessons on groups and on shapes (drawing
-order) cover this.
+waves pass in front of its hull. The lesson on groups and [the first
+lesson](/learn/first-scene/) (drawing order) cover this.
 
 ### Moonlight and the headland
 
@@ -144,4 +144,4 @@ left of its points' bounding box is (0, 292), so pinning that corner there makes
 every point read as a scene coordinate. The tower's red stripes are trapezoids
 whose corners, such as `(-20.28, 9), (20.28, 9), (19.09, -9)`, were computed to
 sit on the tower's sloping sides. The lesson on values covers `let` inside a
-`generate`, and the lesson on shapes covers `origin`.
+`generate`, and [the lesson on shapes](/learn/shapes/) covers `origin`.
