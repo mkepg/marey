@@ -42,6 +42,13 @@ describe("renderLayout", () => {
     expect(html).not.toContain("<img");
   });
 
+  it("leaves the h1 to the page when the page supplies its own", () => {
+    const html = renderLayout({ ...base, url: "/learn/", title: "Learn", bodyHtml: '<h1 class="hero-title">Learn Marey</h1>', pageHeading: true });
+    expect(html.match(/<h1[ >]/g)).toHaveLength(1);
+    expect(html).toContain('<h1 class="hero-title">Learn Marey</h1>');
+    expect(renderLayout(base).match(/<h1[ >]/g)).toHaveLength(1);
+  });
+
   it("gives the canonical URL as the origin plus the page's url", () => {
     expect(renderLayout(base)).toContain('<link rel="canonical" href="https://marey.pages.dev/learn/animate/" />');
   });

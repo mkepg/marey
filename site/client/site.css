@@ -1424,6 +1424,46 @@ figure.sample > .sample-stage + .sample-toolbar {
     var(--site-accent);
 }
 
+/* ---------------------------------------------------------- lesson parts */
+
+/* The reading time, under a lesson's summary. */
+.content > .lesson-time {
+  margin: -0.5em 0 2em;
+  color: var(--site-text-3);
+  font-size: 0.9375rem;
+}
+
+/* "You'll learn": the lesson's goals, set apart from the prose. */
+.content > .lesson-learn {
+  max-width: var(--site-measure);
+  margin: 0 0 2.4em;
+  padding: 18px 24px 6px;
+  border: 1px solid var(--site-border);
+  border-radius: var(--site-radius-lg);
+  background: var(--site-surface);
+}
+
+.content .lesson-learn > h2 {
+  margin: 0 0 0.35em;
+  font-size: 1.125rem;
+  letter-spacing: -0.01em;
+}
+
+.content .lesson-learn > ul {
+  margin: 0 0 14px;
+  padding-left: 1.2em;
+}
+
+/* A lesson's showcase: the caption sits above the player it describes. */
+figure.sample > .showcase-caption {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--site-border);
+  background: var(--site-raised);
+  color: var(--site-text-2);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
 /* --------------------------------------------------------------- callouts */
 
 .callout {
@@ -2030,6 +2070,11 @@ details.solution[open] > figure.sample {
   margin-top: 12px;
   font-size: 0.875rem;
   color: var(--site-stage-text-2);
+}
+
+/* The stage is dark in both themes, so its links take the dark theme's link colour. */
+.hero-stage figcaption a {
+  color: #a99bff;
 }
 
 .front-heading {

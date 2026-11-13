@@ -2,14 +2,15 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { parseFrontMatter } from "./frontMatter";
 import { renderLayout, ORIGIN, SECTION_LABELS, type Crumb, type NavLink, type SidebarItem } from "./layout";
-import { galleryPages, loadGallery, type LessonRef } from "./gallery";
+import { galleryPages, loadGallery, type LessonRef, type LoadedGalleryEntry } from "./gallery";
+import { YOULL_LEARN, learnFrontBody, lessonBody, lessonText, parseLessonMeta, type LessonMeta, type SceneRef } from "./learn";
 import { checkLinks } from "./links";
 import { renderMarkdown } from "./markdown";
 import { loadReference, rewriteRepoLink } from "./reference";
 import { buildSearchIndex } from "./search";
 import { SLUG, parseSiteConfig } from "./siteConfig";
 import { buildSitemap } from "./sitemap";
-import type { BuiltSite, Section, SiteConfig, SitePage } from "./types";
+import type { BuiltSite, Heading, Section, SiteConfig, SitePage } from "./types";
 
 type DocSection = Exclude<Section, "gallery">;
 
@@ -25,6 +26,8 @@ interface Doc {
   readonly description: string;
   readonly body: string;
   readonly bodyLine: number;
+  /** The front matter as parsed; lessons and the course's front page read more than a title from it. */
+  readonly data: Readonly<Record<string, string | string[]>>;
   /** Markdown rendered above the body (the reference's "formal reference" notice). */
   readonly banner?: string;
   /** The repository file whose relative links the body uses, when they need rewriting. */
@@ -68,6 +71,7 @@ function loadDoc(
       description: description as string,
       body: fm.body,
       bodyLine: fm.bodyLine,
+      data: fm.data,
     };
   } catch (e) {
     errors.push(e instanceof Error ? e.message : String(e));
@@ -146,7 +150,7 @@ export function buildSite(repoRoot: string): BuiltSite {
       if (section === "reference") {
         const source = loadReference(repoRoot, slug, errors);
         if (source) {
-          const doc: Doc = { ...where, ...source };
+          const doc: Doc = { ...where, ...source, data: {} };
           docs.push(doc);
           entriesBySection.reference.push(doc);
         }
@@ -172,6 +176,29 @@ export function buildSite(repoRoot: string): BuiltSite {
   );
   if (notFound) docs.push(notFound);
 
+  // The gallery is read before the pages are rendered: a lesson shows its
+  // showcase's scene, and the course's front page plays one in its hero.
+  const gallery = loadGallery(repoRoot, config);
+  errors.push(...gallery.errors);
+  const galleryById = new Map(gallery.entries.map((e) => [e.id, e]));
+  const lessonMeta = new Map<Doc, LessonMeta>();
+  for (const doc of entriesBySection.learn) {
+    const parsed = parseLessonMeta(doc.data, doc.file);
+    errors.push(...parsed.errors);
+    lessonMeta.set(doc, parsed.meta);
+  }
+  /** The scene a lesson's `showcase` or the front page's `hero` names; reports an id the gallery does not list. */
+  const sceneFor = (doc: Doc, key: "showcase" | "hero", id: string | null): LoadedGalleryEntry | null => {
+    if (id === null) return null;
+    if (!config.gallery.includes(id)) {
+      errors.push(`${doc.file}:1: ${key} "${id}" is not a gallery entry in ${CONFIG_FILE}`);
+      return null;
+    }
+    // A listed entry that failed to load has had its own errors reported.
+    return galleryById.get(id) ?? null;
+  };
+  const sceneRef = (entry: LoadedGalleryEntry): SceneRef => ({ id: entry.id, title: entry.title, source: entry.source });
+
   const pages: SitePage[] = [];
   for (const doc of docs) {
     const linksFrom = doc.linksFrom ?? null;
@@ -195,6 +222,54 @@ ${body.text}`,
         }
       : body;
     errors.push(...rendered.errors);
+    let bodyHtml = rendered.html;
+    let headings: ReadonlyArray<Heading> = rendered.headings;
+    let links: SitePage["links"] = rendered.links;
+    let text = rendered.text;
+    let pageHeading = false;
+    const meta = lessonMeta.get(doc);
+    const lessonNumber = entriesBySection.learn.indexOf(doc) + 1;
+    if (meta) {
+      const entry = sceneFor(doc, "showcase", meta.showcase);
+      if (entry && entry.lesson !== doc.slug) {
+        const named = entry.lesson === null ? "no lesson" : `lesson "${entry.lesson}"`;
+        errors.push(`${doc.file}:1: showcase "${entry.id}" names ${named} in ${entry.file}; it should name "${doc.slug}"`);
+      }
+      if (rendered.headings.some((h) => h.id === YOULL_LEARN.id)) {
+        errors.push(`${doc.file}:1: the heading "${YOULL_LEARN.text}" is the page's own; give the body's heading another name`);
+      }
+      bodyHtml = lessonBody({ slug: doc.slug, meta, bodyHtml: rendered.html, showcase: entry ? sceneRef(entry) : null });
+      headings = [YOULL_LEARN, ...rendered.headings];
+      if (entry) links = [...links, { href: `/gallery/${entry.id}/`, line: 1, file: doc.file }];
+      text = lessonText(meta, rendered.text);
+    } else if (doc.section === "learn" && doc.kind === "index") {
+      const str = (key: string): string | null => {
+        const value = doc.data[key];
+        return typeof value === "string" && value !== "" ? value : null;
+      };
+      const hero = sceneFor(doc, "hero", str("hero"));
+      const front = learnFrontBody({
+        heading: str("heading") ?? doc.title,
+        lead: str("summary") ?? doc.description,
+        bodyHtml: rendered.html,
+        lessons: entriesBySection.learn.map((lesson, i) => {
+          const m = lessonMeta.get(lesson)!;
+          const showcase = m.showcase === null ? undefined : galleryById.get(m.showcase);
+          return {
+            slug: lesson.slug,
+            number: i + 1,
+            title: lesson.title,
+            summary: m.summary,
+            poster: showcase ? { source: showcase.source, time: showcase.poster } : null,
+          };
+        }),
+        hero: hero ? sceneRef(hero) : null,
+      });
+      bodyHtml = front.html;
+      headings = [...front.headings.slice(0, 1), ...rendered.headings, ...front.headings.slice(1)];
+      links = [...links, ...front.links.map((href) => ({ href, line: 1, file: doc.file }))];
+      pageHeading = true;
+    }
 
     const sidebar: SidebarItem[] = [];
     let prev: NavLink | null = null;
@@ -209,7 +284,8 @@ ${body.text}`,
         sidebar.push({ href: e.url, title: e.title, ...(section === "learn" ? { number: i + 1 } : {}) });
       });
       if (doc.kind === "entry") {
-        breadcrumb = [{ title: SECTION_LABELS[section], href: `/${section}/` }, { title: doc.title }];
+        const here = section === "learn" ? `Lesson ${lessonNumber}` : doc.title;
+        breadcrumb = [{ title: SECTION_LABELS[section], href: `/${section}/` }, { title: here }];
       }
       if (section !== "reference") {
         const order = [...(index ? [index] : []), ...entries];
@@ -233,22 +309,21 @@ ${body.text}`,
         url: doc.url,
         title: doc.title,
         description: doc.description,
-        bodyHtml: rendered.html,
-        headings: rendered.headings,
+        bodyHtml,
+        headings,
         sidebar,
         prev,
         next,
         breadcrumb,
+        pageHeading,
       }),
-      headings: rendered.headings,
-      text: rendered.text,
-      links: rendered.links,
+      headings,
+      text,
+      links,
     });
   }
 
-  // The gallery comes after the lessons, so an entry can name the lesson it showcases.
-  const gallery = loadGallery(repoRoot, config);
-  errors.push(...gallery.errors);
+  // The gallery's pages come after the lessons, so an entry can name the lesson it showcases.
   const lessons = new Map<string, LessonRef>(
     entriesBySection.learn.map((doc, i) => [doc.slug, { title: doc.title, number: i + 1 }]),
   );

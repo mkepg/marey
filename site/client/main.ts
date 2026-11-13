@@ -20,7 +20,7 @@ if (document.querySelector("figure.sample")) {
   void import("./samples").then((m) => m.initSamples());
 }
 
-// The gallery's cards and scene pages need the player; other pages do not load it.
-if (document.querySelector(".gallery-grid, .gallery-stage")) {
+// The gallery's cards and scene pages, and the course's cards and hero, need the player; other pages do not load it.
+if (document.querySelector(".gallery-grid, .gallery-stage, .lesson-cards, .hero-stage")) {
   void import("./gallery").then((m) => m.initGallery());
 }

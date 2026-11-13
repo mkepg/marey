@@ -66,13 +66,17 @@ describe("buildSite on a fixture", () => {
 
   const empty = { learn: [], guides: [], reference: [], gallery: [] };
   const lesson = (slug: string) => ({ slug, vocabulary: [] });
+  const lessonPage = (title: string, extra = "", body = "Text.") =>
+    `---\ntitle: ${title}\nsummary: About ${title}.\ndescription: The ${title} lesson.\nminutes: 9\nlearn:\n- One\n- Two\n- Three\n${extra}---\n\n${body}\n`;
+  const scene = "scene {\n  size: (400, 300)\n  duration: 2\n  circle c { position: (200, 150), radius: 20 }\n}\n";
+  const entry = (lessonSlug: string) => `---\ntitle: Sun\nsummary: A sun.\ntags:\n- lesson\nlesson: ${lessonSlug}\n---\n\nNotes.\n`;
 
   it("builds a listed lesson with its sidebar number, pager and breadcrumb", () => {
     const dir = fixture(
       { ...empty, learn: [lesson("one"), lesson("two")] },
       {
-        "site/content/learn/one.md": "---\ntitle: One\ndescription: d\n---\n\n## Part\n",
-        "site/content/learn/two.md": "---\ntitle: Two\ndescription: d\n---\n\nSee [one](/learn/one/#part).\n",
+        "site/content/learn/one.md": lessonPage("One", "", "## Part"),
+        "site/content/learn/two.md": lessonPage("Two", "", "See [one](/learn/one/#part)."),
       },
     );
     const site = buildSite(dir);
@@ -83,6 +87,98 @@ describe("buildSite on a fixture", () => {
     expect(two?.html).toContain('rel="prev" href="/learn/one/"');
     expect(two?.html).toContain('rel="next" href="/gallery/"');
     expect(two?.html).toContain("<title>Two · Learn Marey</title>");
+  });
+
+  it("renders a lesson's anatomy: breadcrumb, reading time, what it teaches, showcase, finish toggle", () => {
+    const dir = fixture(
+      { ...empty, learn: [lesson("one"), lesson("two")], gallery: ["sun"] },
+      {
+        "site/content/learn/one.md": lessonPage("One"),
+        "site/content/learn/two.md": lessonPage("Two", "showcase: sun\n", "## Part\n\nBody."),
+        "site/gallery/sun.md": entry("two"),
+        "site/gallery/sun.marey": scene,
+      },
+    );
+    const site = buildSite(dir);
+    expect(site.errors).toEqual([]);
+    const two = site.pages.find((p) => p.url === "/learn/two/")!;
+    expect(two.html).toContain('<nav class="breadcrumb" aria-label="Breadcrumb"><ol><li><a href="/learn/">Learn</a></li><li aria-current="page">Lesson 2</li></ol></nav>');
+    expect(two.html).toContain("<h1>Two</h1>");
+    expect(two.html).toContain('<p class="lesson-time">About 9 minutes</p>');
+    expect(two.html).toContain("<li>One</li><li>Two</li><li>Three</li>");
+    expect(two.html).toContain('<figure class="sample" data-mode="showcase"');
+    expect(two.html).toContain('<a href="/gallery/sun/">Sun</a>');
+    expect(two.html).toContain('data-finish-lesson="two"');
+    expect(two.headings.map((h) => h.id)).toEqual(["youll-learn", "part"]);
+    expect(two.links.map((l) => l.href)).toContain("/gallery/sun/");
+    expect(two.text).toContain("About Two.");
+  });
+
+  it("reports a lesson whose front matter misses a key, and still builds the rest", () => {
+    const dir = fixture(
+      { ...empty, learn: [lesson("one")] },
+      { "site/content/learn/one.md": "---\ntitle: One\ndescription: d\n---\n\nText.\n" },
+    );
+    expect(buildSite(dir).errors).toEqual([
+      `site/content/learn/one.md:1: a lesson's front matter needs "summary"`,
+      `site/content/learn/one.md:1: a lesson's front matter needs "minutes"`,
+      `site/content/learn/one.md:1: a lesson's front matter needs "learn"`,
+    ]);
+  });
+
+  it("reports a showcase that names no gallery entry, or an entry that names another lesson", () => {
+    const dir = fixture(
+      { ...empty, learn: [lesson("one"), lesson("two")], gallery: ["sun"] },
+      {
+        "site/content/learn/one.md": lessonPage("One", "showcase: moon\n"),
+        "site/content/learn/two.md": lessonPage("Two", "showcase: sun\n"),
+        "site/gallery/sun.md": entry("one"),
+        "site/gallery/sun.marey": scene,
+      },
+    );
+    expect(buildSite(dir).errors).toEqual([
+      'site/content/learn/one.md:1: showcase "moon" is not a gallery entry in site/site.json',
+      'site/content/learn/two.md:1: showcase "sun" names lesson "one" in site/gallery/sun.md; it should name "two"',
+    ]);
+  });
+
+  it("gives /learn/ exactly one h1, the hero's, with cards for the lessons", () => {
+    const dir = fixture(
+      { ...empty, learn: [lesson("one"), lesson("two")], gallery: ["lighthouse", "sun"] },
+      {
+        "site/content/learn/index.md": "---\ntitle: Learn\ndescription: The course.\nheading: Learn Marey\nsummary: A course.\nhero: lighthouse\n---\n\nIntro.\n",
+        "site/content/learn/one.md": lessonPage("One", "showcase: sun\n"),
+        "site/content/learn/two.md": lessonPage("Two"),
+        "site/gallery/sun.md": entry("one"),
+        "site/gallery/sun.marey": scene,
+        "site/gallery/lighthouse.md": "---\ntitle: Lighthouse\nsummary: A lamp.\n---\n\nNotes.\n",
+        "site/gallery/lighthouse.marey": scene,
+      },
+    );
+    const site = buildSite(dir);
+    expect(site.errors).toEqual([]);
+    const learn = site.pages.find((p) => p.url === "/learn/")!;
+    expect(learn.html.match(/<h1[ >]/g)).toHaveLength(1);
+    expect(learn.html).toContain('<h1 class="hero-title">Learn Marey</h1>');
+    expect(learn.html).toContain('<title>Learn · Marey</title>');
+    expect(learn.html).toContain('href="/learn/one/">Start with lesson 1</a>');
+    expect(learn.html).toContain('<li class="lesson-card" data-lesson="two">');
+    expect(learn.html).toContain('<figure class="hero-stage"><div class="sample-stage" data-source="scene {');
+    expect(learn.text).toContain("Intro.");
+  });
+
+  it("reports a /learn/ hero that names no gallery entry", () => {
+    const dir = fixture(empty, {
+      "site/content/learn/index.md": "---\ntitle: Learn\ndescription: The course.\nhero: moon\n---\n",
+    });
+    expect(buildSite(dir).errors).toEqual(['site/content/learn/index.md:1: hero "moon" is not a gallery entry in site/site.json']);
+  });
+
+  it("falls back to the title and description for the /learn/ hero", () => {
+    const learn = buildSite(fixture(empty)).pages.find((p) => p.url === "/learn/")!;
+    expect(learn.html.match(/<h1[ >]/g)).toHaveLength(1);
+    expect(learn.html).toContain('<h1 class="hero-title">Learn</h1>');
+    expect(learn.html).toContain('<p class="hero-lead">About Learn.</p>');
   });
 
   it("reports a content file that site.json does not list", () => {

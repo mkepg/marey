@@ -34,6 +34,8 @@ export interface LayoutInput {
   readonly prev: NavLink | null;
   readonly next: NavLink | null;
   readonly breadcrumb: ReadonlyArray<Crumb>;
+  /** True when `bodyHtml` carries the page's h1 itself (the course's front page, whose hero holds it). */
+  readonly pageHeading?: boolean;
 }
 
 export const SECTION_LABELS: Readonly<Record<Exclude<Section, "root">, string>> = {
@@ -232,7 +234,7 @@ ${indexed ? `    <link rel="canonical" href="${esc(canonical)}" />\n` : `    <me
       <main id="main" tabindex="-1"><div class="main-inner">
         ${front ? "" : sidebarButton(input)}
         ${breadcrumbNav(input.breadcrumb)}
-        <h1>${esc(input.title)}</h1>
+        ${input.pageHeading === true ? "" : `<h1>${esc(input.title)}</h1>`}
         ${front ? "" : inlineToc(input.headings)}
         <div class="content">
 ${input.bodyHtml}

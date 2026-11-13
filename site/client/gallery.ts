@@ -1,8 +1,10 @@
 /**
- * The gallery's pages. On `/gallery/` each card's stage gets a player from the
+ * The gallery's pages and the course's front page. On `/gallery/` (and on
+ * `/learn/`'s lesson cards) each card's stage gets a player from the
  * shared pool, paused on its poster until the card is hovered or focused, and
- * the tag buttons filter the grid. On `/gallery/<id>/` the stage gets a player
- * with controls that plays on its own and loops.
+ * the tag buttons filter the grid. On `/gallery/<id>/`, and in the hero on
+ * `/learn/`, the stage gets a player with controls that plays on its own and
+ * loops.
  *
  * Players come from the pool, never straight from `createElement`, so the
  * page holds at most 12 of them however long the grid grows.
@@ -46,7 +48,9 @@ function initCards(): void {
   };
   noHover.addEventListener("change", update);
   lessMotion.addEventListener("change", update);
-  for (const card of document.querySelectorAll<HTMLElement>("li.gallery-card")) {
+  // The course's lesson cards show their showcase the same way; a lesson
+  // without a showcase has no stage and is skipped.
+  for (const card of document.querySelectorAll<HTMLElement>("li.gallery-card, li.lesson-card")) {
     const link = card.querySelector<HTMLAnchorElement>("a.card");
     const stage = card.querySelector<HTMLElement>(".sample-stage");
     if (!link || !stage) continue;
@@ -96,8 +100,9 @@ function initFilter(): void {
   group.hidden = false;
 }
 
-function initDetail(): void {
-  for (const stage of document.querySelectorAll<HTMLElement>(".gallery-stage > .sample-stage")) {
+/** A scene page's large player, and the course front page's hero: controls, autoplay and loop. */
+function initStages(): void {
+  for (const stage of document.querySelectorAll<HTMLElement>(".gallery-stage > .sample-stage, .hero-stage > .sample-stage")) {
     const address = sceneAddress(stage.dataset.source ?? "");
     sharedPool().request(stage, () => makePlayer(address, { controls: true, autoplay: true }));
   }
@@ -106,5 +111,5 @@ function initDetail(): void {
 export function initGallery(): void {
   initCards();
   initFilter();
-  initDetail();
+  initStages();
 }

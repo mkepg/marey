@@ -454,6 +454,8 @@ describe("gallery pages on a fixture", () => {
     dirs.push(dir);
     const scene = "scene {\n  size: (400, 300)\n  duration: 2\n  circle c { position: (200, 150), radius: 20 }\n}\n";
     const page = (title: string) => `---\ntitle: ${title}\ndescription: About ${title}.\n---\n\nText.\n`;
+    const lesson = (title: string) =>
+      `---\ntitle: ${title}\nsummary: S.\ndescription: About ${title}.\nminutes: 5\nlearn:\n- a\n- b\n- c\n---\n\nText.\n`;
     const files: Record<string, string> = {
       "site/site.json": JSON.stringify({
         learn: [{ slug: "first", vocabulary: [] }, { slug: "animate", vocabulary: [] }],
@@ -462,8 +464,8 @@ describe("gallery pages on a fixture", () => {
         gallery: ["a"],
       }),
       "site/content/learn/index.md": page("Learn"),
-      "site/content/learn/first.md": page("First"),
-      "site/content/learn/animate.md": page("Animate & ease"),
+      "site/content/learn/first.md": lesson("First"),
+      "site/content/learn/animate.md": lesson("Animate & ease"),
       "site/content/guides/index.md": page("Guides"),
       "site/content/reference/index.md": page("Reference"),
       "site/content/404.md": page("Not found"),

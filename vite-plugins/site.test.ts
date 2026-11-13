@@ -32,7 +32,7 @@ describe("site()", () => {
     const load = plugin.load as (id: string) => string | null;
     const learn = resolve(repoRoot, "learn/index.html");
     expect(resolveId(learn)).not.toBeNull();
-    expect(load(resolveId(learn) as string)).toContain("<h1>Learn</h1>");
+    expect(load(resolveId(learn) as string)).toContain(`<h1 class="hero-title">`);
     expect(resolveId(resolve(repoRoot, "index.html"))).toBeNull();
     expect(load(resolve(repoRoot, "index.html"))).toBeNull();
   });
