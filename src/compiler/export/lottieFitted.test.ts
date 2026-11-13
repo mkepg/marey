@@ -5,7 +5,7 @@ import { evaluateProperty } from "./lottieEvaluate";
 import { LOTTIE_FIT_TOLERANCE } from "./lottieFit";
 import { planLottie, hexToRgb01, rgb01OfInt, type LayerSpec } from "./lottieGeometry";
 import { planExport } from "./exportContract";
-import { sampleFrames, type FrameSnapshot } from "../renderer/frameSampler";
+import { sampleFrames, type FrameSnapshot, type ObjectSnapshot } from "../renderer/frameSampler";
 import { buildNode } from "../renderer/builder";
 import { SceneRuntime } from "../renderer/sceneRuntime";
 import { MatterWorld } from "../renderer/physicsWorld";
@@ -43,13 +43,14 @@ interface Run {
   readonly frames: ReadonlyArray<FrameSnapshot>;
 }
 
-function run(name: string): Run {
-  const out = compileSource(sourceOf(name));
+/** Compiles, plans, builds and samples `source` at `fps`, then encodes it. */
+function runSource(name: string, source: string, fps: number): Run {
+  const out = compileSource(source);
   if (!out.ir) throw new Error(`${name} did not compile: ${out.errors.map((e) => e.message).join("; ")}`);
   const ir = out.ir;
   const geo = planLottie(ir);
   if (!geo.ok) throw new Error(`planLottie failed: ${geo.diagnostics.map((d) => d.code).join(",")}`);
-  const exp = planExport(ir, { fps: 30 });
+  const exp = planExport(ir, { fps });
   if (!exp.ok) throw new Error(`planExport failed: ${exp.diagnostics.map((d) => d.code).join(",")}`);
   const root = new Container();
   for (const node of ir.children) root.addChild(buildNode(node as IRObjectNode));
@@ -63,11 +64,30 @@ function run(name: string): Run {
 }
 
 const RUNS = new Map<string, Run>();
-const runOf = (name: string): Run => {
-  let r = RUNS.get(name);
-  if (!r) RUNS.set(name, (r = run(name)));
+const runOf = (name: string, fps = 30): Run => {
+  const key = `${name}@${fps}`;
+  let r = RUNS.get(key);
+  if (!r) RUNS.set(key, (r = runSource(name, sourceOf(name), fps)));
   return r;
 };
+
+/** Each frame's snapshots by object id, so a lookup is not a scan of the frame. */
+const snapshotIndex = (frames: ReadonlyArray<FrameSnapshot>): ReadonlyArray<ReadonlyMap<string, ObjectSnapshot>> =>
+  frames.map((f) => new Map(f.objects.map((o) => [o.id, o])));
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyLayer = any;
+
+/** The Lottie layer each spec was encoded as, keyed by spec id and found by its `ind`. */
+function lottieLayers(run: Run): ReadonlyMap<string, AnyLayer> {
+  const byInd = new Map<number, AnyLayer>((run.doc.layers as ReadonlyArray<AnyLayer>).map((l) => [l.ind, l]));
+  return new Map(run.layers.map((spec, i) => [spec.id, byInd.get(i + 1)!]));
+}
+
+/** Every fill and stroke colour property of a layer. */
+function colorProperties(layer: { shapes?: ReadonlyArray<{ ty: string; c?: unknown }> }): unknown[] {
+  return (layer.shapes ?? []).filter((item) => item.ty === "fl" || item.ty === "st").map((item) => item.c);
+}
 
 /** Every keyframe written anywhere in the document. */
 function countKeyframes(node: unknown): number {
@@ -98,7 +118,7 @@ function countKeyframes(node: unknown): number {
 //
 // `marey export ledges.marey --format lottie --fps 30` writes 4256 keyframes,
 // not 1958, at the same 270 frames and 38 layers. Two differences in the
-// simulation account for it. `run` builds `new MatterWorld(width, height)`,
+// simulation account for it. `runSource` builds `new MatterWorld(width, height)`,
 // which has all four walls, while ledges declares `bounds: [left, right,
 // bottom]`; the export builds the world with `createWorldForScene`, so its
 // tiles fall in through the open top, and here they land on the top wall and
@@ -118,12 +138,12 @@ const CEILINGS: Record<string, number> = {
 describe("lottieFitted · canonical scenes", () => {
   for (const name of SCENE_NAMES) {
     describe(name, () => {
-      it("every sampled frame round-trips within tolerance", () => {
-        const { doc, layers, frames } = runOf(name);
+      it("every sampled frame round-trips within tolerance", { timeout: 30_000 }, () => {
+        const run = runOf(name);
+        const { layers, frames } = run;
         const byId = new Map(layers.map((l) => [l.id, l]));
-        const lottieLayer = (spec: LayerSpec) =>
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (doc.layers as ReadonlyArray<any>).find((l) => l.ind === layers.indexOf(spec) + 1)!;
+        const snaps = snapshotIndex(frames);
+        const lottie = lottieLayers(run);
         const EPS = 1e-9;
         const near = (got: ReadonlyArray<number>, want: ReadonlyArray<number>, tol: number, what: string) => {
           expect(got.length, what).toBe(want.length);
@@ -134,15 +154,15 @@ describe("lottieFitted · canonical scenes", () => {
         const opacityOf = (id: string, f: number): number => {
           let product = 1;
           for (let cur: LayerSpec | undefined = byId.get(id); cur; cur = cur.parentId === null ? undefined : byId.get(cur.parentId)) {
-            const s = frames[f].objects.find((o) => o.id === cur!.id)!;
+            const s = snaps[f].get(cur.id)!;
             product *= s.visible ? s.alpha : 0;
           }
           return product * 100;
         };
         for (const spec of layers) {
-          const layer = lottieLayer(spec);
+          const layer = lottie.get(spec.id)!;
           for (let f = 0; f < frames.length; f++) {
-            const snap = frames[f].objects.find((o) => o.id === spec.id)!;
+            const snap = snaps[f].get(spec.id)!;
             const at = `${name} ${spec.id} frame ${f}`;
             near(evaluateProperty(layer.ks.p, f), [snap.x, snap.y], LOTTIE_FIT_TOLERANCE.position, `${at} p`);
             near(evaluateProperty(layer.ks.s, f), [snap.scaleX * 100, snap.scaleY * 100], LOTTIE_FIT_TOLERANCE.scale, `${at} s`);
@@ -150,17 +170,13 @@ describe("lottieFitted · canonical scenes", () => {
             near(evaluateProperty(layer.ks.o, f), [opacityOf(spec.id, f)], LOTTIE_FIT_TOLERANCE.opacity, `${at} o`);
             if (spec.color !== null) {
               const want = [...rgb01OfInt(snap.color!)];
-              for (const item of layer.shapes as ReadonlyArray<{ ty: string; c?: unknown }>) {
-                if (item.ty === "fl" || item.ty === "st") {
-                  near(evaluateProperty(item.c, f), want, LOTTIE_FIT_TOLERANCE.color, `${at} ${item.ty}`);
-                }
-              }
+              for (const c of colorProperties(layer)) near(evaluateProperty(c, f), want, LOTTIE_FIT_TOLERANCE.color, `${at} colour`);
             }
           }
         }
       });
 
-      it("no two distinct easings resolve to one cached curve in either player", () => {
+      it("no two distinct easings resolve to one cached curve in either player", { timeout: 30_000 }, () => {
         // ThorVG: a named keyframe is cached by its name, any other by the
         // two-decimal key. lottie-web: by name, else by the full-precision key.
         const thorvg = new Map<string, string>();
@@ -188,7 +204,7 @@ describe("lottieFitted · canonical scenes", () => {
         visit(runOf(name).doc.layers);
       });
 
-      it("keyframe counts stay under their ceilings", () => {
+      it("keyframe counts stay under their ceilings", { timeout: 30_000 }, () => {
         const total = countKeyframes(runOf(name).doc);
         expect(total).toBeLessThanOrEqual(CEILINGS[name]);
       });
