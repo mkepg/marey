@@ -203,7 +203,9 @@ resolves). Evidence is in
 `docs/plans/2026-11-12-phase-9b-github-action.md`. It adds
 `action.yml` and `action/` at the repository root, `marey check --reporter
 github`, `examples/starter/` and `.github/workflows/action.yml`. It ships as
-`marey-lang@0.7.0`, once that version is published.
+`marey-lang@0.7.0`, once that version is published. 0.7.0 also carries fitted
+Lottie keyframes, merged into `main` on 2026-11-13
+(`docs/specs/2026-11-13-marey-lottie-fitted-keyframes-design.md`).
 
 **8 — physics authoring syntax is merged into `main`** (2026-10-11, `2caf55c`),
 and with it the roadmap's finish line is declared. It adds

@@ -40,7 +40,7 @@ table: Dusk Hills has 23,760 keyframes (2,036,666 B) and Ledges 14,040
 | F4b | **Between samples, a fitted curve stays between its neighbours.** Inside a run, in each interval between two consecutive frames, the curve stays within the range of the two samples at its ends, widened by the tolerance. Since a cubic is monotonic between its critical points, it is enough to check the curve's at most two critical points: one that falls inside an interval must lie in that interval's range. | Players draw fractional frames: a 30 fps file on a 60 Hz display is sampled halfway between frames. A cubic that matches every sample can still overshoot between two of them. For example, a step from 0 to 100 can be fitted through the frames after it with a curve that swings past 100 between samples. The per-frame encoding never did this, because a straight line stays between its ends. Without this rule the fitted file would be exact at every frame and visibly wrong between them. |
 | F5 | **Runs are fitted greedily, left to right, longest first.** From each run's start, the run is extended while one cubic per component, pinned to the samples at both ends, reproduces every sample inside it within tolerance. When the next frame would break the fit, a keyframe is written at the last frame that fitted, and the next run starts there. | It is simple and deterministic, and it puts keyframes where motion changes character: where an `animate` starts, ends, reverses or splits (`easeInOut` splits at its midpoint). The proposal's §4.3 asks whether that matches what an editor user expects. §6 checks it on the canonical scenes rather than assuming it. |
 | F6 | **The handles carry the cubic.** With x handles at 1/3 and 2/3, time is linear in the curve parameter, so the y handles encode any cubic in time (proposal §2). Lottie stores a segment's easing on the keyframe that **starts** the segment: that keyframe carries both `o = {x: 1/3, y: P1}` and `i = {x: 2/3, y: P2}`, where `P1` and `P2` are the fitted Bernstein control values normalised to the run's start and end values. This is how lottie-web reads them and how the current encoder already writes them. (The proposal's §2 says "the arriving keyframe's `i`", which describes the curve, not where the field is stored.) A component is **flat** on a run when its start and end samples differ by no more than its tolerance. A flat component gets linear handles, and its interior samples must lie within tolerance of the straight line between its two exact end samples. A component that is not flat must normalise to handles inside **[−1, 2]**. A run that needs handles outside that range (a bump that returns near its start, or a normalisation by a tiny difference) does not fit and is split. On a combined vector (scale, colour) one component's split splits the whole vector, because the components share keyframe times. | Lottie easing is normalised: the curve maps 0 to 1 in value, so a component that barely changes across a run has nothing safe to normalise against. The [−1, 2] bound keeps every handle within reach of an editor's curve view and admits every Marey easing and handoff curve, whose handles all lie inside [0, 1] (proposal §2's coefficients give, for example, `o.y = 2/3`, `i.y = 5/6` for the `easeOut` handoff). The round-trip test (§5) evaluates the curve exactly as a player does, so these edge cases are tested, not reasoned about. |
-| F7 | **Position is written as separate dimensions** (`p: {s: true, x: …, y: …}`) whenever it is animated, so x and y are fitted and keyframed independently. A static position stays the combined `[x, y]`. Scale and colour stay combined vectors, with one handle per component (`x` and `y` arrays as long as the value). | x and y usually move differently (a parabola is linear in x and quadratic in y), so one shared run boundary would cut both tracks wherever either one changes. Editors show separated position as two plain value curves, and in After Effects terms these are "separate dimensions", not a spatial path that needs `to`/`ti` tangents. Scale and colour are not spatial, so per-component easing is enough. Task 1 measures all three layouts in both players before anything depends on them (§4). |
+| F7 | **Position is written as separate dimensions** (`p: {s: true, x: …, y: …}`) whenever it is animated, so x and y are fitted and keyframed independently. A static position stays the combined `[x, y]`. Scale and colour stay combined vectors, with one handle per component (`x` and `y` arrays as long as the value). | x and y usually move differently (a parabola is linear in x and quadratic in y), so one shared run boundary would cut both tracks wherever either one changes. Editors show separated position as two plain value curves, and in After Effects terms these are "separate dimensions", not a spatial path that needs `to`/`ti` tangents. Scale and colour are not spatial, so per-component easing is enough. A layout probe measures all three layouts in both players before anything depends on them (§4). |
 | F8 | Handles outside 0 to 1 in y, within F6's bound, are written as they come (overshoot). They are not clamped. | A fitted run can need them: a value that passes its end value and comes back inside one run. Clamping a handle changes the motion. Lottie allows y outside 0 to 1; only x is confined to it. |
 | F9 | The fitter is **deterministic**: plain IEEE arithmetic in a fixed order, no randomness, and no dependence on object iteration order beyond the encoder's existing layer order. | `marey export` prints the file's `sha256`, and `tools/cli-check/export-matrix.mjs` byte-compares two runs. |
 | F10 | **Encoding time has a budget.** In Node, encoding Dusk Hills at 60 fps takes under 1 s, measured in the test suite, which fails above 2 s. The algorithm is the builder's choice within that budget. | Greedy extension that refits from scratch on every step is O(n²) per track. That is fine at 30 fps and 12 s, and it is the kind of cost that quietly grows when someone exports a 60 s scene at 60 fps. A measured ceiling keeps it honest. |
@@ -69,7 +69,7 @@ The handle values shown are rounded for the page; the file carries full
 doubles.
 
 The last keyframe of a track carries `t` and `s` only. That is the form Lottie
-editors write, and Task 1 confirms both players read it. If either player needs
+editors write, and the layout probe confirms both players read it. If either player needs
 `i`/`o` on the final keyframe, it gets linear handles instead, and the result
 is recorded.
 
@@ -88,7 +88,7 @@ is recorded.
 ## 4. Real-player facts to measure first
 
 The Lottie specification does not settle these, and both players must answer
-them before the encoder depends on them. Task 1 builds hand-written fixture
+them before the encoder depends on them. A layout probe builds hand-written fixture
 documents and renders them in lottie-web 5.13 and dotlottie-web through
 `tools/visual-check/lottie-render-worker.mjs`, comparing pixels against a
 per-frame reference document rendered the same way:
@@ -100,7 +100,7 @@ per-frame reference document rendered the same way:
    whole and fractional frames.
 4. A final keyframe with no `i`/`o`.
 
-Task 1 also opens the item 1 fixture in an editor (Glaxnimate, if it can be
+The item 1 fixture is also opened in an editor (Glaxnimate, if it can be
 installed on this machine), because the point of the change is editing, and
 finding late that an editor cannot read separated position would force a
 rework.
@@ -130,7 +130,7 @@ Each fallback is recorded in this document as a dated correction.
   `k`. It then reads `p.x` and `p.y` and joins them into one position
   (`JoinAnimatables`). The warning is therefore cosmetic, the motion is
   imported, and Glaxnimate shows it as a single position property. **Split
-  position stays as F7 says.** Task 4's editor check confirms the imported
+  position stays as F7 says.** The editor check (§6.4) confirms the imported
   motion.
 - Item 2 (per-component easing) fails in dotlottie-web: a scale and a colour
   track with different handles per component render with a maximum channel

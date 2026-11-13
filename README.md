@@ -322,7 +322,7 @@ between the compiler and everything downstream, and it is the only thing an
 exporter sees.
 
 The Lottie export is a bounded subset: circle, rectangle, polygon, line, group
-and text geometry, with position, rotation, scale and opacity baked per frame
+and text geometry, with position, rotation, scale and opacity sampled per frame
 at a fixed duration and frame rate. Physics, easing and sequencing are
 evaluated at export and stored as keyframes, so the file plays with no Marey
 and no Matter.js code present at playback, and with no Lottie expressions.
@@ -331,8 +331,9 @@ HarfBuzz shapes each line in the export font, and the glyph outlines become
 ordinary shape paths, so any Lottie player draws them without the font. A
 character the font has no glyph for is refused with
 `[LOTTIE_TEXT_MISSING_GLYPH]` instead of being drawn differently from the
-preview. Lottie files carry a few keyframes per motion with real easing
-curves, so they can be retimed in a Lottie editor.
+preview. `animate` and `sequence` motion exports as a few keyframes with
+cubic easing that an editor can adjust; physics motion keeps denser
+keyframes.
 
 ### Keeping one language honest across four consumers
 

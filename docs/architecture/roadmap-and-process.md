@@ -345,16 +345,16 @@ explicitly rather than quietly deviating.
     `docs/specs/2026-10-30-marey-phase-9a-embeddable-player-design.md`.
     Plan: `docs/plans/2026-10-30-phase-9a-embeddable-player.md`.
 - **Phase 9B — GitHub Action and Gate C** (roadmap §13, past the finish line).
-  - **Status: 9B (GitHub Action and Gate C) merged into `main` on 2026-11-13 (fast-forward to `c1808c9`); Gate C measured on the PR #2 runs; evidence in `eval/RESULTS-PHASE-9B.md`.** It adds `action.yml` and `action/` at the repository
+  - **Status: 9B (GitHub Action and Gate C) merged into `main` on 2026-11-13 (fast-forward to `c1808c9`); Gate C measured on the PR #2 runs; evidence in `eval/RESULTS-PHASE-9B.md`. 0.7.0 carries 9B and fitted Lottie keyframes together (below).** It adds `action.yml` and `action/` at the repository
     root, `marey check --reporter github`, `examples/starter/` and
     `.github/workflows/action.yml`. Design:
     `docs/specs/2026-11-12-marey-phase-9b-github-action-design.md`.
     Plan: `docs/plans/2026-11-12-phase-9b-github-action.md`.
-- **Lottie fitted keyframes — implemented on branch `lottie-fitted-keyframes`.**
-  Animated tracks export as a few cubic-eased keyframes with separated
-  position, and easings that dotlottie-web would otherwise share are named.
-  Dusk Hills goes from 23760 keyframes to 3731 (2036666 to 711442 JSON bytes,
-  167892 to 37561 gzipped). Design:
+- **Lottie fitted keyframes — merged into `main` on 2026-11-13; carried by
+  `marey-lang@0.7.0`.** Animated tracks export as a few cubic-eased keyframes
+  with separated position, and easings that dotlottie-web would otherwise
+  share are named. Dusk Hills goes from 23760 keyframes to 3941 (2036666 to
+  768839 JSON bytes, 167892 to 39792 gzipped). Design:
   `docs/specs/2026-11-13-marey-lottie-fitted-keyframes-design.md`; plan:
   `docs/plans/2026-11-13-lottie-fitted-keyframes.md`; measurements:
   `eval/RESULTS-LOTTIE-FITTED.md`. Earlier problem statement:
