@@ -1,8 +1,9 @@
 # Lottie fitted keyframes: measurements
 
-Measured against base commit `cd14c3d`. The encoder is unchanged: every number
-below describes the per-frame encoder and the two players as they are before
-the fitted-keyframe change.
+Sections 1 and 2 are measured against base commit `cd14c3d`, with the encoder
+unchanged: their numbers describe the per-frame encoder and the two players as
+they are before the fitted-keyframe change. Sections 3 to 9 measure the fitted
+encoder, each at the commit it names.
 
 ## 1. Player layout facts (before the change)
 
@@ -76,13 +77,13 @@ installed and ran. Opening the question 1 candidate showed an "Issues"
 dialog, `Invalid value for box.Transform.position`, and the rectangle
 appeared at a fixed place. Opening the question 4 candidate (combined position,
 bare final keyframe) raised no dialog and showed the rectangle. The timeline
-was not scrubbed, so this run does not show whether the layer moves or how
-the position track appears in the editor. The cause of the question 1
-warning is not isolated: it may be the split layout itself or a field
-Glaxnimate expects that the probe document leaves out. Spec §4 says an
-editor that cannot read split position means combined position; the plan
-says the players decide. That conflict is left to the owner (see the
-correction under spec §4).
+was not scrubbed. The cause of the question 1 warning was then found in
+Glaxnimate's importer source (spec §4, "Correction, 2026-11-13: measured
+layouts"): `load_transform` first runs the generic field loader, which maps `p`
+to `position` and warns because a split `p` has no `k`, and then reads `p.x`
+and `p.y` and joins them into one position. The warning is cosmetic and the
+motion is imported, so split position stays. Section 6 confirms it from
+Glaxnimate's own re-export of a fitted file.
 
 ## 2. Per-frame baseline
 
@@ -271,7 +272,9 @@ Two dotlottie-web rows move the share more than the others:
 
 - Dusk Hills: 1.0985% against a calibrated highest of 1.0910% at frame 60
   (+0.0075 points), and +0.0171 points at frame 330, the largest excess in the
-  row. That is the sub-pixel noise the 0.5-point gate allows for.
+  row. That is the sub-pixel noise the 0.5-point gate allows for. Both figures
+  were read again from the run under "One-sided colour" below, on the
+  document with one-sided colour, and are unchanged.
 - Logo reveal: at frame 50 the fitted share is 1.7846% against 3.9712% for
   the per-frame file, about half. Swapping only the opacity tracks between the
   two files makes their dotlottie-web renders identical at that frame, so the
@@ -333,7 +336,8 @@ failed:
   file's 5.8e-4°. The check now reads `pv`, which the threshold does not
   touch, so it measures the file rather than the player's redraw skipping.
 - Share, logo-reveal, dotlottie-web, frame 25: 0.8171% against a calibrated
-  highest of 0.2302%, 0.587 points over the gate. The fitted file held the
+  highest of 0.2302%, 0.587 points over the calibrated range's highest share
+  and 0.087 points over the 0.5-point gate. The fitted file held the
   sun, its disc and its rim at 99.963 opacity, inside the 0.05 tolerance,
   where the per-frame file has 100, and dotlottie-web drew the whole sun one
   level darker: (253, 184, 62) against (254, 185, 62), 2988 pixels differing
@@ -345,9 +349,79 @@ rows still read above it and are the artifacts above: ledges frame 180
 (81 against 109, while the calibrated copies reach 113) and physics-pile frame
 70 (85 against 88, calibrated 88).
 
+### One-sided colour, re-measured on Dusk Hills
+
+The tables above judge Dusk Hills' document with a symmetric colour tolerance,
+±0.25/255. lottie-web draws a fill channel as `Math.floor(255 * c)`, so a
+fitted channel under its sampled level k/255 is drawn as k - 1 (spec §4,
+"Correction, 2026-11-13: colour is drawn by truncation"). Colour is now fitted
+one-sided, in `[k/255, (k + 0.25)/255]`, at `002bc36`. Only Dusk Hills
+changes: Ledges, Bar chart reveal, Logo reveal and Physics pile export
+byte-identical documents, so their rows above stand.
+
+How many channel-frames draw a level low, over all 360 frames and Dusk Hills'
+ten animated colour tracks (`band_0` to `band_5`, `ridge_0` to `ridge_3`),
+counted with `lottieEvaluate.ts`:
+
+| Document | Truncated in double precision | Truncated as lottie-web stores it (`Float32Array`) |
+|---|---|---|
+| per-frame (`cd14c3d`) | 0 | 0 |
+| symmetric (`8ac67eb`) | 199 (230 at 60 fps) | 48, on 42 frames |
+| one-sided (`002bc36`) | 0 (0 at 60 fps) | 0 |
+
+lottie-web holds an animated vector property in a `Float32Array`, which absorbs
+an undershoot smaller than its resolution. 151 of the 199 are undershoots of at
+most 3e-14 of a level, among them frames 21, 29, 331 and 345, and the player
+draws them at the right level. The 48 that survive are undershoots of 0.088
+to 0.244 of a level, all in `band_4` and `band_5`, on frames 51 to 305.
+
+Both documents were judged with `lottie-fit-check.mjs` against the same
+per-frame document and PNG frames, the PNGs from `lottie-check.mjs
+--compare-png` with the encoder as committed at `002bc36`, with Vite on
+port 5199:
+
+```
+node tools/visual-check/lottie-check.mjs --scene src/examples/dusk-hills.marey --compare-png --fps 30 --frames 0,21,29,60,120,180,240,330,331,345 --renderer <renderer> --out <dir>
+node tools/visual-check/lottie-fit-check.mjs --per-frame <cd14c3d doc.json> --fitted <doc.json> --png-dir <dir> --frames 0,21,29,60,120,180,240,330,331,345 --renderer <renderer>
+```
+
+and again at frames 58, 61, 122 and 238, four of the 42. Share of differing
+pixels against the PNG export. The maximum channel delta is not shown: for both
+documents, in both players, at every frame it equals the per-frame file's, so
+it is met in every row.
+
+| Frame | lottie-web, calibrated range | symmetric | one-sided | dotlottie-web, calibrated range | symmetric | one-sided |
+|---|---|---|---|---|---|---|
+| 0 | 0.8708% to 0.8740% | 0.8717% | 0.8717% | 0.9873% to 0.9892% | 0.9892% | 0.9892% |
+| 21 | 1.0075% to 1.0088% | 1.0081% | 1.0081% | 1.1227% to 1.1242% | 1.1279% | 1.1279% |
+| 29 | 0.9973% to 0.9983% | 0.9981% | 0.9981% | 1.1019% to 1.1040% | 1.1117% | 1.1117% |
+| 58 | 0.9775% to 0.9783% | **8.8104%** | 0.9783% | 1.1025% to 1.1040% | **8.9121%** | 1.0981% |
+| 60 | 0.9723% to 0.9731% | 0.9725% | 0.9725% | 1.0894% to 1.0910% | 1.0985% | 1.0985% |
+| 61 | 0.9846% to 0.9862% | **8.8654%** | 0.9842% | 1.0885% to 1.0902% | **8.9540%** | 1.0904% |
+| 120 | 0.8421% to 0.8425% | 0.8425% | 0.8425% | 0.9521% to 0.9527% | 0.9569% | 0.9569% |
+| 122 | 0.8504% to 0.8510% | **11.1377%** | 0.8508% | 0.9540% to 0.9544% | **11.2183%** | 0.9544% |
+| 180 | 0.7783% to 0.7783% | 0.7783% | 0.7783% | 0.8904% to 0.8904% | 0.8904% | 0.8904% |
+| 238 | 0.8508% to 0.8510% | **11.1377%** | 0.8508% | 0.9535% to 0.9546% | **11.2183%** | 0.9544% |
+| 240 | 0.8425% to 0.8427% | 0.8427% | 0.8427% | 0.9515% to 0.9523% | 0.9515% | 0.9515% |
+| 330 | 0.9667% to 0.9683% | 0.9619% | 0.9619% | 1.0508% to 1.0527% | 1.0698% | 1.0698% |
+| 331 | 0.9615% to 0.9625% | 0.9623% | 0.9623% | 1.0648% to 1.0671% | 1.0750% | 1.0750% |
+| 345 | 0.9588% to 0.9594% | 0.9592% | 0.9592% | 1.0760% to 1.0790% | 1.0798% | 1.0798% |
+
+The bold cells miss the share gate: the symmetric document draws a sky band one
+level dark over 8 to 11% of the frame, in lottie-web where the truncation model
+says it does. dotlottie-web draws the same frames dark, so it also turns these
+values into the level below; how ThorVG converts a colour was not read. The
+one-sided document passes both checks at all 14 frames in both players. At
+frames 21, 29, 331 and 345 the two documents draw identically, as the
+`Float32Array` storage predicts. lottie-web geometry at the 14 frames,
+one-sided document: worst position 5.74e-4 px, scale 0, rotation 3.02e-14°,
+opacity 4.58e-2, all within tolerance. No run raised a page, console or
+lottie error.
+
 ## 4. After: size and keyframes
 
-Measured at `8ac67eb` (opacity exact at 0 and 100) with
+Measured at `8ac67eb` (opacity exact at 0 and 100), and Dusk Hills again at
+`002bc36` (colour one-sided), with
 `node bin/marey.mjs export src/examples/<scene>.marey --format lottie --fps 30`
 after `npm run build:export-page`. "Properties" counts objects with `a: 1` and
 an array `k`; a fitted position counts `x` and `y` separately, which is why
@@ -355,7 +429,8 @@ Ledges has more properties than before. "Named" counts keyframes carrying `n`.
 
 | Scene | Properties | Keyframes before | Keyframes after (named) | JSON bytes before | JSON bytes after | gzip before | gzip after |
 |---|---|---|---|---|---|---|---|
-| Dusk Hills | 66 | 23760 | 3731 (2822) | 2036666 | 711442 | 167892 | 37561 |
+| Dusk Hills | 66 | 23760 | 3941 (3383) | 2036666 | 768839 | 167892 | 39792 |
+| Dusk Hills, symmetric colour (`8ac67eb`, superseded) | 66 | 23760 | 3731 (2822) | 2036666 | 711442 | 167892 | 37561 |
 | Ledges | 52 to 79 | 14040 | 4256 (3124) | 1229171 | 704174 | 179698 | 136590 |
 | Bar chart reveal | 14 | 2100 | 76 (0) | 202059 | 72759 | 14186 | 9746 |
 | Logo reveal | 13 | 1950 | 74 (24) | 142990 | 21455 | 8516 | 3477 |
@@ -368,9 +443,15 @@ opacity peaks at exactly 100 (the count stays 3731). Ledges and Bar chart
 reveal are byte-identical. Fewer handle tuples collide in Dusk Hills after the
 move, so fewer keyframes carry a name (3125 to 2822).
 
+Fitting colour one-sided changed Dusk Hills only. Its ten colour tracks went
+from 2018 to 2228 keyframes, a few more segments each, and the other tracks
+are unchanged (3731 to 3941 in all); more distinct handle tuples collide, so
+more keyframes carry a name (2822 to 3383). Ledges, Bar chart reveal and Logo
+reveal export byte-identical documents.
+
 The names cost bytes and buy correctness in dotlottie-web: removing every `n`
-from Dusk Hills takes its gzip size from 37561 to 34061 bytes, so the names
-are 9.3% of it. Ledges' keyframe count includes colour and position tracks that
+from Dusk Hills takes its gzip size from 39792 to 35599 bytes, so the names
+are 10.5% of it (at `8ac67eb`, 37561 to 34061, 9.3%). Ledges' keyframe count includes colour and position tracks that
 each split into short runs under the tightened tolerances.
 
 ## 5. Fractional frames
@@ -390,7 +471,10 @@ Glaxnimate 0.6.0, GUI only (its command-line export crashed). Opening the
 fitted `lottie-ease-out.json` showed the "Invalid value for
 box.Transform.position" issue dialog and the rectangle at its start position.
 The timeline was not scrubbed and no handle was dragged, so nothing is claimed
-about the editor's timeline UI.
+about the editor's timeline UI. In particular, spec §6.4 asks whether the
+easing handle is editable, and that was not checked: no handle was dragged in
+Glaxnimate. What the evidence shows is that Glaxnimate imports the keyframes
+and their easing and writes them back out.
 
 Glaxnimate's own re-export (File > Save As, Lottie, not pretty), read back,
 has one combined position property with 3 keyframes at t = 0, 60 and 89, the
@@ -410,3 +494,56 @@ slopes are 0 (`i.y = 1`).
 `sha256` values for Lottie exports in earlier results files describe the
 per-frame encoding. A re-export on this branch no longer matches them. The
 sampled-frame hash (`frames`) is unchanged.
+
+## 8. Encoding time
+
+Spec F10: encoding Dusk Hills at 60 fps in Node takes under 1 s, and the suite
+fails above 2 s. Growing a run frame by frame re-checked every interior sample,
+so a long run was quadratic. At `c020827` the fitter decides exactly
+constant runs and all-flat runs in constant time per frame, and gallops any
+other run past 64 frames (spec §4, "Correction, 2026-11-13: encoding time").
+
+`encodeLottie` alone, in Node, with compiling and sampling outside the timed
+region. Each figure is a single run of a throwaway probe test, with the
+previous fitter (`c020827`'s parent) and with the new one. The machine's
+load varied between runs, which is why two "before" figures for one input
+differ by up to a factor of three:
+
+| Input | Frames | Before | After |
+|---|---|---|---|
+| Dusk Hills, 60 fps | 720 | 68 ms, 240 ms | 59 ms, 46 ms |
+| Physics pile at 60 s, 60 fps (bodies simulated to the end; they sleep in a heap) | 3,600 | 3,714 ms, 11,632 ms | 109 ms, 81 ms |
+| 40 rectangles, each rotating linearly and moving with easeInOut for 60 s, 60 fps | 3,600 | 4,433 ms | 160 ms, 152 ms |
+
+The first two rows are the suite's budget tests (`lottieFitted.test.ts`,
+"encoding budget", which fail above 2 s); in a run of `npx vitest run
+src/compiler/export/` at `c020827`, 20 files in parallel, they read
+155 ms and 235 ms. The third is a scene
+written to check a long run that is neither constant nor flat, and is not in
+the suite; `lottieFit.test.ts` covers the same case on synthetic 3,600-frame
+tracks.
+
+The change does not alter any measured output. With the shortcuts and the
+galloping in place, and before colour went one-sided, the SHA-256 of
+`JSON.stringify` of every encoded document was compared against the previous
+fitter: compound-logo, radial-dots, physics-pile, ledges and dusk-hills at 30
+and 60 fps, Physics pile at 60 s both with its bodies frozen at 7 s and
+simulated to the end, and the 40-rectangle scene, all identical.
+
+## 9. Determinism (`npm run check:export`)
+
+Spec §6.5 asks for the byte comparison CI runs. `npm run check:export`, at
+`132361f` after `npm run build:export-page` and `npm run build:cli`, exported
+every canonical scene (bar-chart, radial-dots, compound-logo, timeline-ticks)
+in every format twice and compared the runs: `matrix: all passed` (144.8 s),
+exit code 0. The Lottie rows matched byte for byte across the two runs:
+
+| Scene | Frames | Lottie `sha256` |
+|---|---|---|
+| bar-chart | 30 | `79aa2ffc7216b022` |
+| radial-dots | 30 | `5aba4b1aff965c8f` |
+| compound-logo | 240 | `b6c88fb7e814ca0c` |
+| timeline-ticks | 30 | `38c44cdd8fff0b15` |
+
+The mp4 rows report a differing `sha256` between the two runs, which the
+matrix reports and does not gate (R47).
