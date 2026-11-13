@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { THEME_KEY } from "../client/theme";
 import { renderLayout, type LayoutInput } from "./layout";
 
 const base: LayoutInput = {
@@ -84,6 +85,43 @@ describe("renderLayout", () => {
     expect(html).not.toContain('class="sidebar"');
     expect(html).not.toContain('class="toc"');
     expect(html).not.toContain('class="pager"');
+  });
+
+  it("reads the theme from the key the client's toggle writes", () => {
+    expect(renderLayout(base)).toContain(`localStorage.getItem(${JSON.stringify(THEME_KEY)})`);
+  });
+
+  it("marks the document as scripted before any stylesheet, so the drawer only replaces the plain layout when it can open", () => {
+    const html = renderLayout(base);
+    expect(html.indexOf('classList.add("js")')).toBeGreaterThan(-1);
+    expect(html.indexOf('classList.add("js")')).toBeLessThan(html.indexOf("<title>"));
+  });
+
+  it("hides the controls that need the client script until it runs", () => {
+    const html = renderLayout(base);
+    for (const cls of ["search-button", "theme-toggle", "sidebar-toggle", "menu-toggle"]) {
+      expect(html).toMatch(new RegExp(`<button class="${cls}"[^>]* hidden>`));
+    }
+  });
+
+  it("numbers lessons in the sidebar and names each by its slug for the progress ticks", () => {
+    const html = renderLayout(base);
+    expect(html).toContain('<li class="lesson-item" data-lesson="animate"><a href="/learn/animate/" aria-current="page">');
+    expect(html).toContain('<span class="visually-hidden">Lesson 3: </span>Animate');
+    expect(html).toContain('class="sidebar-list is-course"');
+  });
+
+  it("lists the page's headings beside the content and again, collapsed, under the title", () => {
+    const html = renderLayout(base);
+    expect(html).toContain('<aside class="toc" aria-label="On this page">');
+    expect(html).toMatch(/<h1>Animate<\/h1>\s*<details class="toc-inline"><summary>On this page<\/summary><ol><li class="toc-2"><a href="#easing">Easing<\/a>/);
+  });
+
+  it("gives the course's front page the full width, with no sidebar", () => {
+    const html = renderLayout({ ...base, url: "/learn/", title: "Learn" });
+    expect(html).toContain('<body class="section-learn page-front">');
+    expect(html).not.toContain('id="sidebar"');
+    expect(html).not.toContain('class="sidebar-toggle"');
   });
 
   it("keeps the 404 page out of search engines", () => {

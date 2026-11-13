@@ -79,7 +79,7 @@ describe("buildSite on a fixture", () => {
     expect(site.errors).toEqual([]);
     const two = site.pages.find((p) => p.url === "/learn/two/");
     expect(two?.outFile).toBe("learn/two/index.html");
-    expect(two?.html).toContain('<span class="num">2</span>');
+    expect(two?.html).toContain('<span class="num" aria-hidden="true">2</span><span class="visually-hidden">Lesson 2: </span>');
     expect(two?.html).toContain('rel="prev" href="/learn/one/"');
     expect(two?.html).toContain('rel="next" href="/gallery/"');
     expect(two?.html).toContain("<title>Two · Learn Marey</title>");
