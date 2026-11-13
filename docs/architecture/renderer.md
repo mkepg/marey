@@ -347,7 +347,17 @@ Design: `docs/specs/2026-11-13-marey-lottie-fitted-keyframes-design.md`.
   | scale | percentage points | 0.0004 |
   | rotation | degrees | 0.0002 |
   | opacity | 0 to 100 | 0.05 |
-  | colour | 0 to 1 per channel | 0.25 / 255 |
+  | colour | 0 to 1 per channel | 0.25 / 255, above the sample only |
+
+  Colour's tolerance is one-sided (`COLOR_FIT_BAND`, passed as `band` in
+  `FitOptions`): every fitted channel lies in `[k/255, (k + 0.25)/255]` for a
+  sampled level k, and between two frames it stays between the lower sample
+  and the higher one plus 0.25/255. lottie-web draws a fill or stroke channel
+  as `Math.floor(255 * c)`, so a fitted value a hair under k/255, which a
+  symmetric tolerance allowed, was drawn as k - 1. Inside the band, truncation
+  and rounding both give k. The easing itself is evaluated exactly: with x
+  handles at 1/3 and 2/3, lottie-web's curve inversion returns the progress
+  unchanged.
 
   An opacity sample of exactly 0 or 100 is reproduced within 1e-9, not
   merely within 0.05 (`exactValues` in `FitOptions`): players quantise
@@ -400,7 +410,8 @@ Design: `docs/specs/2026-11-13-marey-lottie-fitted-keyframes-design.md`.
 - **The round-trip test.** `lottieFitted.test.ts` encodes the headless
   canonical scenes at 30 fps, evaluates every property of every layer at
   every frame, and requires each value within its tolerance. It also pins a
-  keyframe ceiling per scene.
+  keyframe ceiling per scene, and checks that at every frame of Dusk Hills,
+  at 30 and 60 fps, every colour channel truncates to its sampled level.
 
 ## The video encoder boundary (Phase 5B)
 

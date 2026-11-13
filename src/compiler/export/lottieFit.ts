@@ -21,17 +21,20 @@
  * only when:
  *
  * - its two shared handles lie in `handleRange` (F6);
- * - every component, rebuilt from those handles, is within the tolerance of
- *   every interior sample, and a flat component (end samples within the
- *   tolerance of each other) also stays within the tolerance of the straight
- *   line between its end samples (F3, F6);
+ * - every component, rebuilt from those handles, is within the tolerance band
+ *   of every interior sample, and a flat component (end samples within the
+ *   tolerance of each other) also keeps the straight line between its end
+ *   samples within that band (F3, F6);
  * - no critical point of the curve inside a frame interval lies outside that
- *   interval's two samples widened by the tolerance (F4b), so players drawing
+ *   interval's two samples widened by the band (F4b), so players drawing
  *   fractional frames never see an overshoot between samples;
  * - every interior sample equal to one of `exactValues` is reproduced within
  *   1e-9, not merely within the tolerance (spec §4, "Opacity at its bounds is
  *   exact"). Keyframe values are copied samples, so a run's own ends are
  *   always exact.
+ *
+ * The band is `tolerance` on both sides of a sample unless `band` gives it
+ * per side (spec §4, "Correction, 2026-11-13: colour is drawn by truncation").
  *
  * **Cost (spec F10).** Checking a candidate run reads every interior sample,
  * so growing one run a frame at a time costs O(L²) for a run of length L.
@@ -52,16 +55,18 @@
 
 /**
  * Per-channel tolerances in the Lottie file's own units (spec F3, and its
- * correction of 2026-11-13). Each is chosen from what the player draws, not
+ * corrections of 2026-11-13). Each is chosen from what the player draws, not
  * from the property's own units:
  *
  * - position 0.004 px: about one level on an antialiased edge;
  * - scale 0.0004 percentage points: 0.004 px at the edge of a 1,000 px shape;
  * - rotation 0.0002 degrees: 0.0035 px at 1,000 px from the pivot;
  * - opacity 0.05 on the 0-100 scale: 0.13 of an 8-bit level;
- * - colour 0.25/255 on the 0-1 scale: a quarter level, which leaves the
- *   player's own easing inversion (accurate to about 1e-3 in progress) half a
- *   level of margin before a channel rounds to the wrong 8-bit value.
+ * - colour 0.25/255 on the 0-1 scale, one-sided: the encoder passes
+ *   {@link COLOR_FIT_BAND}, so a fitted channel lies at or above its sampled
+ *   level k/255 and below (k + 0.25)/255. lottie-web draws a colour channel
+ *   as `floor(255 · c)`, and a value just under k/255 would be drawn as
+ *   k − 1; inside the band both truncation and rounding give k.
  */
 export const LOTTIE_FIT_TOLERANCE: {
   readonly position: 0.004;
@@ -76,6 +81,9 @@ export const LOTTIE_FIT_TOLERANCE: {
   opacity: 0.05,
   color: 0.25 / 255,
 };
+
+/** Colour's band: nothing below the sample, the colour tolerance above it. */
+export const COLOR_FIT_BAND: readonly [below: number, above: number] = [0, LOTTIE_FIT_TOLERANCE.color];
 
 /** The y-handle range a fitted easing may use (spec F6). */
 export const DEFAULT_HANDLE_RANGE: readonly [number, number] = [-1, 2];
@@ -92,6 +100,15 @@ export interface FitOptions {
    * opacity, which players quantise and scenes hold longest.
    */
   readonly exactValues?: ReadonlyArray<number>;
+  /**
+   * An asymmetric tolerance: the fitted value at a sampled frame may lie at
+   * most `below` under the sample and at most `above` over it, and between
+   * two frames at most `below` under the lower and `above` over the higher of
+   * the two samples (F4b). Both default to the `tolerance` argument, which
+   * still decides which components are flat. The encoder passes
+   * {@link COLOR_FIT_BAND} for colour.
+   */
+  readonly band?: readonly [below: number, above: number];
 }
 
 /** How close the fitted curve must come to a sample listed in `exactValues`. */
@@ -159,7 +176,7 @@ interface FlatSlopes {
 /**
  * Fits `values` (one array per frame, each of the same length `d ≥ 1`, at
  * least two frames) into keyframes whose segments reproduce every sample
- * within `tolerance`.
+ * within `tolerance` (or within `options.band`).
  *
  * A run whose least-squares handles fall outside `handleRange` is rejected
  * and split, never refitted with clamped handles.
@@ -181,7 +198,12 @@ export function fitKeyframes(
     }
   }
   if (!(tolerance >= 0)) throw new RangeError(`fitKeyframes: tolerance must be non-negative, got ${tolerance}`);
-  const band: Band = { below: tolerance, above: tolerance };
+  const band: Band = options.band
+    ? { below: options.band[0], above: options.band[1] }
+    : { below: tolerance, above: tolerance };
+  if (!(band.below >= 0 && band.above >= 0 && Number.isFinite(band.below) && Number.isFinite(band.above))) {
+    throw new RangeError(`fitKeyframes: band must be two finite non-negative numbers, got [${band.below}, ${band.above}]`);
+  }
 
   const exact = options.exactValues ?? [];
   const range = options.handleRange;
@@ -432,6 +454,9 @@ function fitRun(
   const n = b - a;
   const start = values[a];
   const end = values[b];
+  // The least-squares target is the middle of the band, so an asymmetric band
+  // pulls the curve toward the side it allows. Zero for a symmetric band.
+  const offset = (band.above - band.below) / 2;
 
   // Least squares on the non-flat components, residuals in tolerance units:
   // component c weighs |Δc| / tol, which is the same as fitting Δc · E(u) to
@@ -451,7 +476,7 @@ function fitRun(
     let mid = 0;
     for (let c = 0; c < d; c++) {
       const delta = end[c] - start[c];
-      if (Math.abs(delta) > tol) mid += delta * (values[a + 1][c] - start[c]);
+      if (Math.abs(delta) > tol) mid += delta * (values[a + 1][c] - start[c] + offset);
     }
     mid /= weight;
     const q1 = (mid - 0.25) / 0.5;
@@ -478,9 +503,9 @@ function fitRun(
     for (let c = 0; c < d; c++) {
       const delta = end[c] - start[c];
       if (!(Math.abs(delta) > tol)) continue;
-      const d1 = sums.dev[c * 3] / n;
-      const d2 = sums.dev[c * 3 + 1] / n2;
-      const d3 = sums.dev[c * 3 + 2] / n3;
+      const d1 = (sums.dev[c * 3] + offset * sums.pow[1]) / n;
+      const d2 = (sums.dev[c * 3 + 1] + offset * sums.pow[2]) / n2;
+      const d3 = (sums.dev[c * 3 + 2] + offset * sums.pow[3]) / n3;
       r1 += delta * 3 * (d1 - 2 * d2 + d3);
       r2 += delta * 3 * (d2 - d3);
     }

@@ -1,7 +1,7 @@
 import { rgb01OfInt, type LayerSpec, type LottieShapeSpec } from "./lottieGeometry";
 import type { FrameSnapshot, ObjectSnapshot } from "../renderer/frameSampler";
 import type { SamplerPlan } from "./exportContract";
-import { fitKeyframes, DEFAULT_HANDLE_RANGE, LOTTIE_FIT_TOLERANCE, type FitOptions } from "./lottieFit";
+import { fitKeyframes, COLOR_FIT_BAND, DEFAULT_HANDLE_RANGE, LOTTIE_FIT_TOLERANCE, type FitOptions } from "./lottieFit";
 
 /**
  * The Lottie document, and the half of the exporter that never sees the IR.
@@ -270,6 +270,14 @@ const FIT_OPTIONS = { finalHandles: false, handleRange: DEFAULT_HANDLE_RANGE } a
  */
 const OPACITY_FIT_OPTIONS = { ...FIT_OPTIONS, exactValues: [0, 100] } as const;
 
+/**
+ * Colour fits one-sided, at or above each sample (spec §4, "Correction,
+ * 2026-11-13: colour is drawn by truncation"). lottie-web draws a channel as
+ * `floor(255 · c)`, so a fitted value just under the sampled level k/255 is
+ * drawn as k − 1; one in [k/255, (k + 0.25)/255] truncates and rounds to k.
+ */
+const COLOR_FIT_OPTIONS = { ...FIT_OPTIONS, band: COLOR_FIT_BAND } as const;
+
 /** A static property: the collapsed form of a track that never varies. */
 function staticVector(value: ReadonlyArray<number>): LottieVectorProperty {
   return { a: 0, k: value };
@@ -298,11 +306,15 @@ function staticScalar(value: number): LottieScalarProperty {
  * either way — so `lottieEncode.test.ts` pins both the collapse and the
  * all-frames comparison that decides it.
  */
-function track(values: ReadonlyArray<ReadonlyArray<number>>, tolerance: number): LottieVectorProperty {
+function track(
+  values: ReadonlyArray<ReadonlyArray<number>>,
+  tolerance: number,
+  options: FitOptions = FIT_OPTIONS,
+): LottieVectorProperty {
   const first = values[0];
   const constant = values.every((v) => v.length === first.length && v.every((n, i) => n === first[i]));
   if (constant) return staticVector(first);
-  return { a: 1, k: fitKeyframes(values, tolerance, FIT_OPTIONS) };
+  return { a: 1, k: fitKeyframes(values, tolerance, options) };
 }
 
 /** The scalar form of {@link track}: a static `k` is a bare number. */
@@ -712,7 +724,7 @@ export function encodeLottie(
     if (spec.shape.kind === "group") {
       return { ...base, ty: 3 };
     }
-    const shapes = shapeItemsFor(spec.shape, spec.color === null ? null : track(colors, LOTTIE_FIT_TOLERANCE.color), spec.name);
+    const shapes = shapeItemsFor(spec.shape, spec.color === null ? null : track(colors, LOTTIE_FIT_TOLERANCE.color, COLOR_FIT_OPTIONS), spec.name);
     if (spec.shape.kind === "text" && spec.shape.clip) {
       // pixi's texture box (see `lottieGeometry.ts`'s `textClip`): the
       // preview cuts off ink outside it, so the Lottie does too. In layer

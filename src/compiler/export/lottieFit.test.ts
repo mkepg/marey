@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  COLOR_FIT_BAND,
   DEFAULT_HANDLE_RANGE,
   LOTTIE_FIT_TOLERANCE,
   fitKeyframes,
@@ -340,6 +341,49 @@ describe("fitKeyframes · exactValues", () => {
     const a = JSON.stringify(fitKeyframes(values, LOTTIE_FIT_TOLERANCE.opacity, EXACT));
     const b = JSON.stringify(fitKeyframes(values, LOTTIE_FIT_TOLERANCE.opacity, EXACT));
     expect(a).toBe(b);
+  });
+});
+
+describe("fitKeyframes · band", () => {
+  /** A colour channel easing between two levels, each frame rounded to a whole 8-bit level as the sampler does. */
+  const quantisedRamp = (from: number, to: number, easing: string, frames: number): number[][] =>
+    sample((t) => Math.round(from + (to - from) * evaluateEasing(t, easing)) / 255, frames);
+  const COLOR: FitOptions = { ...OPTS, band: COLOR_FIT_BAND };
+
+  for (const fps of [30, 60]) {
+    it(`keeps every fitted channel at or above its level, so truncation draws the level, at ${fps} fps`, () => {
+      const ramps: Array<[number, number, string]> = [[13, 47, "easeInOut"], [230, 61, "easeOut"], [0, 255, "linear"], [128, 129, "easeIn"]];
+      for (const [from, to, easing] of ramps) {
+        const values = quantisedRamp(from, to, easing, 12 * fps + 1);
+        const k = fitKeyframes(values, LOTTIE_FIT_TOLERANCE.color, COLOR);
+        expect(k.length, `${from}->${to} ${easing}`).toBeLessThan(values.length);
+        for (let f = 0; f < values.length; f++) {
+          const got = evaluateKeyframes(k, f)[0];
+          const want = values[f][0];
+          const at = `${from}->${to} ${easing} frame ${f}`;
+          expect(got, at).toBeGreaterThanOrEqual(want);
+          expect(got - want, at).toBeLessThanOrEqual(LOTTIE_FIT_TOLERANCE.color);
+          expect(Math.floor(255 * got), at).toBe(Math.round(255 * want));
+        }
+        // Between frames (F4b): no lower than the lower neighbour, no higher than the higher one plus the band.
+        for (let f = 0; f + 1 < values.length; f++) {
+          const got = evaluateKeyframes(k, f + 0.5)[0];
+          expect(got).toBeGreaterThanOrEqual(Math.min(values[f][0], values[f + 1][0]));
+          expect(got).toBeLessThanOrEqual(Math.max(values[f][0], values[f + 1][0]) + LOTTIE_FIT_TOLERANCE.color);
+        }
+      }
+    });
+  }
+
+  it("a symmetric band is the tolerance on both sides", () => {
+    const values = bouncingBall(300);
+    const plain = JSON.stringify(fitKeyframes(values, 0.01, OPTS));
+    expect(JSON.stringify(fitKeyframes(values, 0.01, { ...OPTS, band: [0.01, 0.01] }))).toBe(plain);
+  });
+
+  it("rejects a negative or non-finite band", () => {
+    expect(() => fitKeyframes([[0], [1]], 0.01, { ...OPTS, band: [-0.01, 0.01] })).toThrow(RangeError);
+    expect(() => fitKeyframes([[0], [1]], 0.01, { ...OPTS, band: [0, Infinity] })).toThrow(RangeError);
   });
 });
 

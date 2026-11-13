@@ -112,7 +112,9 @@ function countKeyframes(node: unknown): number {
 // with opacity held exact at 0 and 100 (`exactValues`): every count is
 // unchanged on these five scenes. Measured again with the run-growth
 // shortcuts and galloping of spec F10: every document is byte-identical.
-// Section 4 of `eval/RESULTS-LOTTIE-FITTED.md` has
+// Measured again with colour fitted one-sided (`COLOR_FIT_BAND`): Dusk Hills,
+// the only one of the five whose colours animate, rose from 3731 to 3941; the
+// others are byte-identical. Section 4 of `eval/RESULTS-LOTTIE-FITTED.md` has
 // the exported examples' counts.
 //
 //   scene          per-frame   fitted (= ceiling)
@@ -120,7 +122,7 @@ function countKeyframes(node: unknown): number {
 //   radial-dots            0        0   (nothing moves)
 //   physics-pile       16800     2718
 //   ledges             14040     1958
-//   dusk-hills         23760     3731
+//   dusk-hills         23760     3941
 //
 // `marey export ledges.marey --format lottie --fps 30` writes 4256 keyframes,
 // not 1958, at the same 270 frames and 38 layers. Two differences in the
@@ -138,7 +140,7 @@ const CEILINGS: Record<string, number> = {
   "radial-dots": 0,
   "physics-pile": 2718,
   "ledges": 1958,
-  "dusk-hills": 3731,
+  "dusk-hills": 3941,
 };
 
 describe("lottieFitted · canonical scenes", () => {
@@ -214,6 +216,45 @@ describe("lottieFitted · canonical scenes", () => {
         const total = countKeyframes(runOf(name).doc);
         expect(total).toBeLessThanOrEqual(CEILINGS[name]);
       });
+    });
+  }
+});
+
+describe("lottieFitted · colour as lottie-web draws it", () => {
+  // lottie-web multiplies a fill or stroke colour by 255 and truncates each
+  // channel (`bmFloor` in `renderFill` and on the static-colour path), so a
+  // fitted channel a hair under its sampled level k/255 is drawn as k - 1.
+  // The colour tolerance is one-sided for that reason: every fitted channel
+  // lies at or above its sample and truncates back to the sampled level.
+  // This check truncates the double-precision value, which is stricter than
+  // the player: lottie-web holds an animated vector in a `Float32Array`, which
+  // absorbs undershoots below its resolution. With the symmetric tolerance it
+  // failed on 199 channel-frames at 30 fps and 230 at 60 fps.
+  for (const fps of [30, 60]) {
+    it(`Dusk Hills at ${fps} fps draws every sampled colour channel at its own level`, { timeout: 60_000 }, () => {
+      const run = runOf("dusk-hills", fps);
+      const snaps = snapshotIndex(run.frames);
+      const lottie = lottieLayers(run);
+      let checked = 0;
+      const wrong: string[] = [];
+      for (const spec of run.layers) {
+        if (spec.color === null) continue;
+        const props = colorProperties(lottie.get(spec.id)!);
+        for (let f = 0; f < run.frames.length; f++) {
+          const want = rgb01OfInt(snaps[f].get(spec.id)!.color!);
+          for (const prop of props) {
+            const got = evaluateProperty(prop, f);
+            for (let c = 0; c < 3; c++) {
+              checked++;
+              const drawn = Math.floor(255 * got[c]);
+              const level = Math.round(255 * want[c]);
+              if (drawn !== level) wrong.push(`${spec.id} frame ${f} channel ${c}: drawn ${drawn}, sampled ${level}`);
+            }
+          }
+        }
+      }
+      expect(checked).toBeGreaterThan(0);
+      expect(wrong.length, `${wrong.length} channel-frames, first: ${wrong.slice(0, 10).join("; ")}`).toBe(0);
     });
   }
 });
