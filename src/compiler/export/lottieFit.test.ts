@@ -100,28 +100,77 @@ function allHandles(k: ReadonlyArray<FittedKeyframe>): number[] {
 }
 
 describe("fitKeyframes", () => {
-  it("fits each Marey easing as one segment", () => {
-    const curves: Array<[string, (t: number) => number]> = [
-      ["linear", scaled("linear")],
-      ["easeIn", scaled("easeIn")],
-      ["easeOut", scaled("easeOut")],
-      ["easeOut handoff at end", scaled("easeOut", "end")],
-      ["easeInOut handoff at end", scaled("easeInOut", "end")],
-      ["easeIn handoff at start", scaled("easeIn", "start")],
-      ["easeInOut handoff at start", scaled("easeInOut", "start")],
-    ];
-    for (const [name, f] of curves) {
-      const values = sample(f, 61);
-      const k = roundTrip(values, 0.01);
-      expect(k.map((kf) => kf.t), name).toEqual([0, 60]);
-    }
-  });
+  // A 2 s animation, sampled the way the exporter samples it: one frame per
+  // output frame, `2 * fps + 1` frames from its start to its end.
+  const SECONDS = 2;
+  const ONE_SEGMENT: Array<[string, string, "start" | "end" | null]> = [
+    ["linear", "linear", null],
+    ["easeIn", "easeIn", null],
+    ["easeOut", "easeOut", null],
+    ["easeOut handoff at end", "easeOut", "end"],
+    ["easeInOut handoff at end", "easeInOut", "end"],
+    ["easeIn handoff at start", "easeIn", "start"],
+    ["easeInOut handoff at start", "easeInOut", "start"],
+  ];
 
-  it("splits easeInOut near its midpoint", () => {
-    const values = sample(scaled("easeInOut"), 61);
-    const k = roundTrip(values, 0.01);
-    expect(k.map((kf) => kf.t)).toEqual([0, 30, 60]);
-  });
+  for (const fps of [30, 60]) {
+    const N = SECONDS * fps;
+    const tol = LOTTIE_FIT_TOLERANCE.position;
+
+    it(`fits each Marey easing as one segment at ${fps} fps`, () => {
+      for (const [name, easing, release] of ONE_SEGMENT) {
+        const k = roundTrip(sample(scaled(easing, release), N + 1), tol);
+        expect(k.map((kf) => kf.t), name).toEqual([0, N]);
+      }
+    });
+
+    it(`splits easeInOut at its midpoint at ${fps} fps`, () => {
+      const k = roundTrip(sample(scaled("easeInOut"), N + 1), tol);
+      expect(k.map((kf) => kf.t)).toEqual([0, N / 2, N]);
+    });
+
+    it(`fits a yoyo as two segments, and an easeInOut yoyo as four, at ${fps} fps`, () => {
+      // A yoyo plays its curve forward over N frames and back over the next N
+      // (`timeline.ts`): progress t, then 2 - t. A non-looping yoyo with a
+      // handoff releases at its start, so it uses the "start" curves.
+      const yoyo = (easing: string, release: "start" | "end" | null) =>
+        sample((t) => scaled(easing, release)(t <= 0.5 ? 2 * t : 2 - 2 * t), 2 * N + 1);
+      // Each curve here moves at its end, so the yoyo has a corner at the turn
+      // and splits exactly there.
+      const cornered: Array<[string, string, "start" | "end" | null]> = [
+        ["linear", "linear", null],
+        ["easeIn", "easeIn", null],
+        ["easeIn handoff at start", "easeIn", "start"],
+      ];
+      for (const [name, easing, release] of cornered) {
+        const values = yoyo(easing, release);
+        expect(values[N][0], name).toBe(PX);
+        const k = roundTrip(values, tol);
+        expect(k.map((kf) => kf.t), name).toEqual([0, N, 2 * N]);
+        expectNoOvershoot(values, tol);
+      }
+      // These arrive at rest, so the turn is smooth and one cubic runs through
+      // it (easeOut's two legs are one parabola). Two segments still, split
+      // wherever the first one stops fitting.
+      const smooth: Array<[string, string, "start" | "end" | null]> = [
+        ["easeOut", "easeOut", null],
+        ["easeInOut handoff at start", "easeInOut", "start"],
+      ];
+      for (const [name, easing, release] of smooth) {
+        const values = yoyo(easing, release);
+        const k = roundTrip(values, tol);
+        expect(k, name).toHaveLength(3);
+        expectNoOvershoot(values, tol);
+      }
+      // easeInOut changes curve at each leg's midpoint, which fixes two of its
+      // splits; its smooth turn leaves the one between them free.
+      const values = yoyo("easeInOut", null);
+      const k = roundTrip(values, tol);
+      expect(k).toHaveLength(5);
+      expect([k[0].t, k[1].t, k[3].t, k[4].t]).toEqual([0, N / 2, (3 * N) / 2, 2 * N]);
+      expectNoOvershoot(values, tol);
+    });
+  }
 
   it("fits a sampled parabola as one segment", () => {
     const values = sample((t) => 300 + 400 * t - 150 * t * t, 45);
