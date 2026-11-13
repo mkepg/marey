@@ -88,14 +88,27 @@ interface PlayerOptions {
  * pool makes the player, so a player made late, or made again after the pool
  * took it away, plays the latest text.
  */
-function requestPlayer(stage: HTMLElement, address: () => string, options: PlayerOptions): void {
+function requestPlayer(
+  stage: HTMLElement,
+  address: () => string,
+  options: PlayerOptions,
+  onSettled: () => void = () => undefined,
+): void {
   sharedPool().request(stage, () => {
     const player = document.createElement("marey-player");
     player.controls = true;
     player.loop = true;
     player.autoplay = options.autoplay;
-    player.addEventListener("ready", () => player.classList.add("is-ready"));
-    player.addEventListener("error", () => player.classList.add("is-failed"));
+    player.addEventListener("ready", () => {
+      player.classList.remove("is-failed");
+      player.classList.add("is-ready");
+      onSettled();
+    });
+    player.addEventListener("error", () => {
+      player.classList.remove("is-ready");
+      player.classList.add("is-failed");
+      onSettled();
+    });
     player.src = address();
     return player;
   });
@@ -105,19 +118,42 @@ function currentPlayer(stage: HTMLElement): HTMLElementTagNameMap["marey-player"
   return stage.querySelector("marey-player");
 }
 
-/** A `blob:` address for a source text, and the means to replace it and revoke the old one. */
-function blobSource(initial: string): { address: () => string; set: (text: string, stage: HTMLElement) => void } {
+/**
+ * A `blob:` address for a source text. A sample has one address for its
+ * lifetime unless its text changes (live samples): run and showcase samples
+ * keep theirs, because the pool may take their player away and make a new one
+ * from the same address, and the cost is one small blob per sample on a page.
+ *
+ * `<marey-player>` fetches `src` asynchronously, so an address that was just
+ * replaced may still be in flight. Replaced addresses are retired, and revoked
+ * once the player has settled (`ready` or `error`), when a player is next made,
+ * or at once when there is no player to be reading one.
+ */
+function blobSource(initial: string): {
+  address: () => string;
+  set: (text: string, stage: HTMLElement) => void;
+  settled: () => void;
+} {
   const make = (text: string): string => URL.createObjectURL(new Blob([text], { type: "text/plain" }));
   let url = make(initial);
+  let retired: string[] = [];
+  const flush = (): void => {
+    for (const old of retired) URL.revokeObjectURL(old);
+    retired = [];
+  };
   return {
-    address: () => url,
+    address: () => {
+      flush();
+      return url;
+    },
     set(text, stage) {
-      const old = url;
+      retired.push(url);
       url = make(text);
       const player = currentPlayer(stage);
       if (player) player.src = url;
-      URL.revokeObjectURL(old);
+      else flush();
     },
+    settled: flush,
   };
 }
 
@@ -132,7 +168,7 @@ function enhanceLive(figure: HTMLElement): void {
   if (!stage || !pre) return;
 
   const scene = blobSource(source);
-  requestPlayer(stage, scene.address, { autoplay: true });
+  requestPlayer(stage, scene.address, { autoplay: true }, scene.settled);
 
   const status = make("span", "sample-status is-ok", "Runs");
   status.setAttribute("role", "status");

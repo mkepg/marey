@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CompilerError } from "../../src/compiler/types";
-import { applyTab, errorLocations, lineCount } from "./editor";
+import { compileSource } from "../../src/compiler/compileSource";
+import { applyTab, errorLocations, lineCount, offsetOf } from "./editor";
 
 describe("applyTab", () => {
   it("inserts two spaces at a single caret", () => {
@@ -33,6 +34,10 @@ describe("applyTab", () => {
 
   it("does not move the caret before the line when it sat inside the removed spaces", () => {
     expect(applyTab("  ab", 1, 1, true)).toEqual({ value: "ab", start: 0, end: 0 });
+  });
+
+  it("leaves the second line alone for a caret at 0 in text that starts with a newline", () => {
+    expect(applyTab("\n  b", 0, 0, true)).toEqual({ value: "\n  b", start: 0, end: 0 });
   });
 
   it("does nothing to a line with no leading spaces", () => {
@@ -69,5 +74,22 @@ describe("lineCount", () => {
     expect(lineCount("")).toBe(1);
     expect(lineCount("a\nb")).toBe(2);
     expect(lineCount("a\n")).toBe(2);
+  });
+});
+
+describe("offsetOf and the compiler's columns", () => {
+  it("takes 1-based lines and columns", () => {
+    expect(offsetOf("ab\ncd", 1, 1)).toBe(0);
+    expect(offsetOf("ab\ncd", 2, 2)).toBe(4);
+  });
+
+  it("lands on the character the compiler names: its columns are 1-based", () => {
+    const source = "scene {\n  circle c {\n    radius: -1\n  }\n}";
+    const out = compileSource(source);
+    const e = out.errors.find((x) => /radius/.test(x.message));
+    expect(e?.line).toBe(3);
+    // The error names the value `-1`, which starts at column 13 (twelve characters precede it).
+    expect(e?.col).toBe(13);
+    expect(source.slice(offsetOf(source, e!.line!, e!.col!)).startsWith("-1")).toBe(true);
   });
 });

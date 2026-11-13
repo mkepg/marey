@@ -18,6 +18,19 @@ export const PLAYER_LIMIT = 12;
  * on screen), whenever that crosses a threshold the pool cares about. Named
  * for the browser API behind the real one; the pool is driven by hand in tests.
  */
+export type DistanceOf = (slot: Element) => number;
+
+/**
+ * How far a slot's box is from the viewport now, in pixels (0 while any of it
+ * is on screen). A box with no size, such as one inside a closed `details`,
+ * is infinitely far away.
+ */
+export function measureDistance(slot: Element): number {
+  const r = slot.getBoundingClientRect();
+  if (r.width === 0 && r.height === 0) return Number.POSITIVE_INFINITY;
+  return Math.max(0, r.top - window.innerHeight, -r.bottom);
+}
+
 export interface IntersectionObserverLike {
   observe(slot: Element, onDistance: (px: number) => void): void;
   unobserve(slot: Element): void;
@@ -25,7 +38,11 @@ export interface IntersectionObserverLike {
 
 interface Entry {
   readonly create: () => HTMLElement;
-  /** Distance from the viewport at the last report; Infinity until the first. */
+  /**
+   * Distance at the last report; Infinity until the first. The observer only
+   * reports when a margin is crossed, so this says "the observer has seen the
+   * slot" and decides removal; the order of waiting slots is measured afresh.
+   */
   distance: number;
   player: HTMLElement | null;
   /** Order of the request, to break ties between slots at the same distance. */
@@ -39,10 +56,12 @@ export class PlayerPool {
 
   private readonly limit: number;
   private readonly io: IntersectionObserverLike;
+  private readonly distanceOf: DistanceOf;
 
-  constructor(limit: number, io: IntersectionObserverLike) {
+  constructor(limit: number, io: IntersectionObserverLike, distanceOf: DistanceOf = measureDistance) {
     this.limit = limit;
     this.io = io;
+    this.distanceOf = distanceOf;
   }
 
   /** Players currently in the document. */
@@ -82,27 +101,39 @@ export class PlayerPool {
     this.liveCount--;
   }
 
-  /** Gives each free place to the nearest slot that wants one. */
+  /**
+   * Gives each free place to the nearest slot that wants one. Distances are
+   * measured here, not taken from the last report: a report is a snapshot from
+   * when a margin was crossed, and a slot that drifted away since would
+   * otherwise tie with one that has just scrolled in.
+   */
   private fill(): void {
     while (this.liveCount < this.limit) {
-      let best: [Element, Entry] | null = null;
-      for (const pair of this.entries) {
-        const [slot, entry] = pair;
-        if (entry.player || entry.distance > CREATE_WITHIN) continue;
-        if (!slot.isConnected) continue;
-        if (!best || entry.distance < best[1].distance || (entry.distance === best[1].distance && entry.order < best[1].order)) {
-          best = pair;
+      let best: { slot: Element; entry: Entry; distance: number } | null = null;
+      for (const [slot, entry] of [...this.entries]) {
+        if (entry.player || entry.distance === Number.POSITIVE_INFINITY) continue;
+        if (!slot.isConnected) {
+          // A slot taken out of the page will never be shown: stop tracking it.
+          this.io.unobserve(slot);
+          this.entries.delete(slot);
+          continue;
+        }
+        const distance = this.distanceOf(slot);
+        if (distance > CREATE_WITHIN) continue;
+        if (!best || distance < best.distance || (distance === best.distance && entry.order < best.entry.order)) {
+          best = { slot, entry, distance };
         }
       }
       if (!best) return;
-      const [slot, entry] = best;
+      const { slot, entry } = best;
       try {
         const player = entry.create();
         slot.append(player);
         entry.player = player;
         this.liveCount++;
-      } catch {
+      } catch (e) {
         // A sample whose player cannot be made is given up on; the others still get their turn.
+        console.error("The sample's player could not be made", e);
         this.io.unobserve(slot);
         this.entries.delete(slot);
       }
@@ -118,13 +149,8 @@ export class PlayerPool {
  */
 export function createViewportObserver(): IntersectionObserverLike {
   const callbacks = new Map<Element, (px: number) => void>();
-  const measure = (slot: Element): number => {
-    const r = slot.getBoundingClientRect();
-    if (r.width === 0 && r.height === 0) return Number.POSITIVE_INFINITY;
-    return Math.max(0, r.top - window.innerHeight, -r.bottom);
-  };
   const report = (entries: IntersectionObserverEntry[]): void => {
-    for (const e of entries) callbacks.get(e.target)?.(measure(e.target));
+    for (const e of entries) callbacks.get(e.target)?.(measureDistance(e.target));
   };
   const near = new IntersectionObserver(report, { rootMargin: `${CREATE_WITHIN}px 0px` });
   const far = new IntersectionObserver(report, { rootMargin: `${REMOVE_BEYOND}px 0px` });

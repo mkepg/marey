@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { CREATE_WITHIN, PlayerPool, REMOVE_BEYOND, type IntersectionObserverLike } from "./pool";
 
 /** A slot and a player that remember where they are, standing in for DOM nodes. */
@@ -28,14 +28,19 @@ class FakeObserver implements IntersectionObserverLike {
   unobserve(slot: Element): void {
     this.callbacks.delete(slot);
   }
-  move(slot: object, px: number): void {
+  /** Where each slot really is now, which the observer's last report may not say. */
+  readonly truth = new Map<object, number>();
+  /** Reports `px` for the slot; the slot is really `actual` away (default: the same). */
+  move(slot: object, px: number, actual = px): void {
+    this.truth.set(slot, actual);
     this.callbacks.get(slot as Element)?.(px);
   }
+  distanceOf = (slot: Element): number => this.truth.get(slot) ?? Number.POSITIVE_INFINITY;
 }
 
 function setup(limit = 12) {
   const io = new FakeObserver();
-  const pool = new PlayerPool(limit, io);
+  const pool = new PlayerPool(limit, io, io.distanceOf);
   const made: FakePlayer[] = [];
   const create = (): HTMLElement => {
     const p = new FakePlayer();
@@ -160,7 +165,7 @@ describe("PlayerPool", () => {
 
   it("survives a create function that throws, and fills the next slot", () => {
     const io = new FakeObserver();
-    const pool = new PlayerPool(1, io);
+    const pool = new PlayerPool(1, io, io.distanceOf);
     const [a, b] = [new FakeSlot(), new FakeSlot()];
     pool.request(a as unknown as Element, () => {
       throw new Error("no");
@@ -170,5 +175,55 @@ describe("PlayerPool", () => {
     io.move(b, 5);
     expect(pool.live).toBe(1);
     expect(b.children).toHaveLength(1);
+  });
+
+  it("orders waiting slots by their distance now, not by the last report", () => {
+    const { io, pool, request } = setup(1);
+    const [holder, drifted, arrived] = [new FakeSlot(), new FakeSlot(), new FakeSlot()];
+    for (const s of [holder, drifted, arrived]) request(s);
+    io.move(holder, 0);
+    // Both report 400 on crossing the margin; `drifted` has since moved away, `arrived` is on screen.
+    io.move(drifted, 400, 390);
+    io.move(arrived, 400, 10);
+    pool.release(holder as unknown as Element);
+    expect(arrived.children).toHaveLength(1);
+    expect(drifted.children).toHaveLength(0);
+  });
+
+  it("does not create for a waiting slot that has drifted beyond 400 px since its report", () => {
+    const { io, pool, request } = setup(1);
+    const [holder, drifted] = [new FakeSlot(), new FakeSlot()];
+    request(holder);
+    request(drifted);
+    io.move(holder, 0);
+    io.move(drifted, 400, 900);
+    pool.release(holder as unknown as Element);
+    expect(pool.live).toBe(0);
+  });
+
+  it("stops tracking a waiting slot that left the document", () => {
+    const { io, pool, request } = setup(1);
+    const [holder, gone] = [new FakeSlot(), new FakeSlot()];
+    request(holder);
+    request(gone);
+    io.move(holder, 0);
+    io.move(gone, 10);
+    gone.isConnected = false;
+    pool.release(holder as unknown as Element);
+    expect(io.callbacks.has(gone as unknown as Element)).toBe(false);
+    expect(pool.live).toBe(0);
+  });
+
+  it("logs a create function that throws", () => {
+    const io = new FakeObserver();
+    const pool = new PlayerPool(1, io, io.distanceOf);
+    const seen = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const a = new FakeSlot();
+    pool.request(a as unknown as Element, () => {
+      throw new Error("no");
+    });
+    io.move(a, 0);
+    expect(seen).toHaveBeenCalledOnce();
+    seen.mockRestore();
   });
 });

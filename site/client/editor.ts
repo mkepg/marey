@@ -28,7 +28,8 @@ export function applyTab(value: string, start: number, end: number, outdent: boo
   if (!outdent && start === end) {
     return { value: value.slice(0, start) + INDENT + value.slice(end), start: start + INDENT.length, end: start + INDENT.length };
   }
-  const first = value.lastIndexOf("\n", start - 1) + 1;
+  // lastIndexOf clamps a negative start to 0, which would find a newline at index 0.
+  const first = start === 0 ? 0 : value.lastIndexOf("\n", start - 1) + 1;
   // A selection that ends on a line's very start does not include that line.
   const reach = end > start && value[end - 1] === "\n" ? end - 1 : end;
   const eol = value.indexOf("\n", reach);
@@ -250,8 +251,16 @@ export function createEditor(initial: string, label: string, onInput: (value: st
     },
     moveCaret(line, col) {
       const at = offsetOf(textarea.value, line, col);
-      textarea.focus();
+      textarea.focus({ preventScroll: true });
       textarea.setSelectionRange(at, at);
+      // The textarea is as tall as the text, so the page, not the box, scrolls:
+      // bring the line into the middle of the window if it is not in view.
+      const top = textarea.getBoundingClientRect().top;
+      const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight) || 24;
+      const y = top + parseFloat(getComputedStyle(textarea).paddingTop) + (line - 1) * lineHeight;
+      if (y < 80 || y > window.innerHeight - 80) {
+        window.scrollBy({ top: y - window.innerHeight / 2, behavior: "auto" });
+      }
     },
   };
 }
