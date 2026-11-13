@@ -342,3 +342,62 @@ describe("fitKeyframes · exactValues", () => {
     expect(a).toBe(b);
   });
 });
+
+describe("fitKeyframes · long runs (spec F10)", () => {
+  const FRAMES = 3600; // 60 s at 60 fps
+  const tol = LOTTIE_FIT_TOLERANCE.position;
+
+  /** A ball that bounces and comes to rest at 500: exactly, or jittering inside the tolerance. */
+  function settles(jitter: boolean): number[][] {
+    const rand = lcg(7);
+    return bouncingBall(FRAMES).map(([y], f) => [f < 400 ? y : 500 + (jitter ? (rand() - 0.5) * tol : 0)]);
+  }
+
+  it("fits a minute of smooth motion in a few keyframes, quickly", () => {
+    const tracks = [
+      sample(scaled("linear"), FRAMES),
+      sample(scaled("easeIn"), FRAMES),
+      sample((t) => 300 + 400 * t - 150 * t * t, FRAMES),
+      sample(scaled("easeInOut"), FRAMES),
+    ];
+    const start = performance.now();
+    const fitted = tracks.map((values) => fitKeyframes(values, tol, OPTS));
+    const elapsed = performance.now() - start;
+    console.log(`fitKeyframes: 4 smooth tracks x ${FRAMES} frames in ${elapsed.toFixed(1)} ms`);
+    expect(elapsed).toBeLessThan(500);
+    for (const k of fitted.slice(0, 3)) expect(k.map((kf) => kf.t)).toEqual([0, FRAMES - 1]);
+    // easeInOut changes curve between frames 1799 and 1800, so it needs a short run there.
+    expect(fitted[3].length).toBeLessThanOrEqual(4);
+    tracks.forEach((values) => roundTrip(values, tol));
+  });
+
+  it("fits a body that comes to rest, exactly or inside the tolerance, quickly", () => {
+    for (const jitter of [false, true]) {
+      const values = settles(jitter);
+      const start = performance.now();
+      const k = fitKeyframes(values, tol, OPTS);
+      const elapsed = performance.now() - start;
+      console.log(`fitKeyframes: settling ${jitter ? "with jitter" : "exactly"}, ${FRAMES} frames in ${elapsed.toFixed(1)} ms, ${k.length} keyframes`);
+      expect(elapsed).toBeLessThan(500);
+      roundTrip(values, tol);
+      // The rest is one run: no keyframe between the first resting frames and the end.
+      expect(k.filter((kf) => kf.t > 401 && kf.t < FRAMES - 1)).toEqual([]);
+    }
+  });
+
+  it("is deterministic and inside tolerance on long irregular tracks", () => {
+    const rand = lcg(3);
+    let v = 250;
+    const walk: number[][] = [];
+    for (let f = 0; f < FRAMES; f++) {
+      walk.push([v]);
+      v += (rand() - 0.5) * 0.004;
+    }
+    for (const values of [walk, bouncingBall(FRAMES)]) {
+      const a = JSON.stringify(fitKeyframes(values, tol, OPTS));
+      expect(JSON.stringify(fitKeyframes(values, tol, OPTS))).toBe(a);
+      roundTrip(values, tol);
+      expectNoOvershoot(values, tol);
+    }
+  });
+});

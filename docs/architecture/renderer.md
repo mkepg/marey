@@ -386,6 +386,17 @@ Design: `docs/specs/2026-11-13-marey-lottie-fitted-keyframes-design.md`.
   (`DEFAULT_HANDLE_RANGE`); a run that needs more is split, never clamped.
 - **The final keyframe.** The last keyframe carries `t` and `s` only; it
   starts no segment. Both measured players read this form.
+- **Encoding time.** Growing a run one frame at a time and re-checking every
+  interior sample is quadratic in the run's length. Two kinds of run are
+  decided in constant time per frame with the same verdict: an exactly
+  constant run, and a run whose components are all flat, where each interior
+  sample bounds the slope of the straight line between the ends whatever the
+  run's length. A body at rest is one or the other. Any other run that
+  reaches 64 frames grows by galloping: its end advances by doubling steps
+  and the last fitting end is found by bisection, every candidate checked in
+  full. The end found is never earlier than the frame-by-frame one. The test
+  suite times `encodeLottie` on Dusk Hills at 60 fps and on Physics pile
+  lengthened to 60 s at 60 fps, and fails either above 2 s.
 - **The round-trip test.** `lottieFitted.test.ts` encodes the headless
   canonical scenes at 30 fps, evaluates every property of every layer at
   every frame, and requires each value within its tolerance. It also pins a

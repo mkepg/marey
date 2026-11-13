@@ -41,9 +41,11 @@ interface Run {
   readonly doc: LottieDoc;
   readonly layers: ReadonlyArray<LayerSpec>;
   readonly frames: ReadonlyArray<FrameSnapshot>;
+  /** Wall-clock milliseconds spent in `encodeLottie` alone. */
+  readonly encodeMs: number;
 }
 
-/** Compiles, plans, builds and samples `source` at `fps`, then encodes it. */
+/** Compiles, plans, builds and samples `source` at `fps`, then times the encode step on its own. */
 function runSource(name: string, source: string, fps: number): Run {
   const out = compileSource(source);
   if (!out.ir) throw new Error(`${name} did not compile: ${out.errors.map((e) => e.message).join("; ")}`);
@@ -57,10 +59,12 @@ function runSource(name: string, source: string, fps: number): Run {
   const runtime = new SceneRuntime(new MatterWorld(ir.width, ir.height), root);
   const frames = sampleFrames(runtime, root, exp.plan);
   runtime.destroy();
+  const start = performance.now();
   const doc = encodeLottie(geo.layers, frames, exp.plan, {
     width: ir.width, height: ir.height, background: hexToRgb01(ir.background), name,
   });
-  return { doc, layers: geo.layers, frames };
+  const encodeMs = performance.now() - start;
+  return { doc, layers: geo.layers, frames, encodeMs };
 }
 
 const RUNS = new Map<string, Run>();
@@ -106,8 +110,10 @@ function countKeyframes(node: unknown): number {
 // keyframe per frame under the shared easing, which is why the physics scenes
 // stay well above the count a per-component fit would give. Measured again
 // with opacity held exact at 0 and 100 (`exactValues`): every count is
-// unchanged on these five scenes. Section 4 of
-// `eval/RESULTS-LOTTIE-FITTED.md` has the exported examples' counts.
+// unchanged on these five scenes. Measured again with the run-growth
+// shortcuts and galloping of spec F10: every document is byte-identical.
+// Section 4 of `eval/RESULTS-LOTTIE-FITTED.md` has
+// the exported examples' counts.
 //
 //   scene          per-frame   fitted (= ceiling)
 //   compound-logo        480       99
@@ -210,4 +216,31 @@ describe("lottieFitted · canonical scenes", () => {
       });
     });
   }
+});
+
+describe("lottieFitted · encoding budget (spec F10)", () => {
+  // Only `encodeLottie` is timed; compiling and sampling happen outside the
+  // timed region. The spec's target is under 1 s; the test fails above 2 s.
+  const BUDGET_MS = 2000;
+
+  it("encodes Dusk Hills at 60 fps inside the budget", { timeout: 120_000 }, () => {
+    const { encodeMs, frames } = runOf("dusk-hills", 60);
+    console.log(`encodeLottie: dusk-hills, ${frames.length} frames at 60 fps, ${encodeMs.toFixed(0)} ms`);
+    expect(encodeMs).toBeLessThan(BUDGET_MS);
+  });
+
+  it("encodes a 60 s settled physics scene at 60 fps inside the budget", { timeout: 300_000 }, () => {
+    // Physics pile lengthened from 7 s to 60 s, with its bodies simulated to
+    // the end rather than frozen at 7 s: 3,600 frames, nearly all of them a
+    // heap at rest.
+    const source = sourceOf("physics-pile")
+      .replace(/^let end(\s*)= 7\b/m, "let end$1= 60")
+      .replace(/^(\s*)duration: 7\b/m, "$1duration: 60");
+    expect(source).toMatch(/^let end\s*= 60\b/m);
+    expect(source).toMatch(/^\s*duration: 60\b/m);
+    const run = runSource("physics-pile-60s", source, 60);
+    console.log(`encodeLottie: physics-pile at 60 s, ${run.frames.length} frames at 60 fps, ${run.encodeMs.toFixed(0)} ms, ${countKeyframes(run.doc)} keyframes`);
+    expect(run.frames.length).toBe(3600);
+    expect(run.encodeMs).toBeLessThan(BUDGET_MS);
+  });
 });

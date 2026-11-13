@@ -264,6 +264,25 @@ more keyframes on fades.
 The original bound and its misses stay recorded in
 `eval/RESULTS-LOTTIE-FITTED.md`, beside the restated measurements.
 
+### Correction, 2026-11-13: encoding time
+
+F5's greedy extension re-checked every interior sample each time a run grew by
+a frame, so a run of length L cost O(L²). Physics pile lengthened to 60 s at
+60 fps (3,600 frames, nearly all a heap at rest) took 3.7 to 11.6 s to
+encode in single runs on a loaded machine, against F10's 1 s target. The fitter now decides two kinds of run in
+constant time per frame, with the verdict the full check would give: an
+exactly constant run, and a run whose components are all flat, where every
+interior sample bounds the slope of the straight line between the run's ends
+independently of the run's length. A body at rest is one or the other. A run
+that is neither and reaches 64 frames grows by galloping: its end advances by
+1, 2, 4, … frames until a candidate does not fit, and the last fitting end is
+found by bisection, each candidate checked in full. **F5 is amended for runs
+past 64 frames:** the end found is never earlier than the frame-by-frame
+greedy end, because every shorter run fits, and it can be later only where a
+run fails at one length and fits again at a longer one. Every canonical
+scene's document is byte-identical under the change. The suite enforces F10
+on Dusk Hills at 60 fps and on the lengthened Physics pile.
+
 ## 5. Tests
 
 - **Unit tests on the fitter** (pure functions, no IR):
