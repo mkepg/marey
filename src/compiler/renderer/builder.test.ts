@@ -8,8 +8,9 @@
  * why no `text` fixture appears here.
  */
 import { describe, it, expect } from "vitest";
-import type { Graphics } from "pixi.js";
+import type { Container, Graphics } from "pixi.js";
 import { buildNode } from "./builder";
+import { compileSource } from "../compileSource";
 import type { IRObjectNode, IRObjectProps } from "../sceneIR";
 import type { BodyPart } from "./physicsWorld";
 
@@ -487,5 +488,44 @@ describe("builder · colour animation draws white and tints", () => {
     const g = buildNode(group("g", [circle("c", 0, 0, 20)]));
     expect(g.__mareyLayout!.currentColor).toBeUndefined();
     expect(g.__applyColor).toBeUndefined();
+  });
+});
+
+describe("builder · a group's alpha multiplies with its children's", () => {
+  // docs/LANGUAGE.md states this under "Scene model". The product is not
+  // computed by Marey: each child's wrapper is added to its group's
+  // container, and PixiJS multiplies every ancestor's `alpha` into what a
+  // shape is drawn at. These tests pin that wiring from real source, so a
+  // builder that flattened children onto the stage, or copied the group's
+  // alpha onto each child as well, would fail here.
+  function leafAlpha(source: string): number {
+    const outcome = compileSource(source);
+    expect(outcome.ok, JSON.stringify(outcome.errors)).toBe(true);
+    let node: Container = buildNode(outcome.ir!.children[0]);
+    while (node.children.length > 0) node = node.children[0] as Container;
+    return node.getGlobalAlpha();
+  }
+
+  it("draws a child at 0.5 inside a group at 0.5 at 0.25", () => {
+    expect(leafAlpha(`scene {
+      size: (100, 100)
+      group g {
+        alpha: 0.5
+        circle c { position: (0, 0), radius: 10, alpha: 0.5 }
+      }
+    }`)).toBeCloseTo(0.25, 10);
+  });
+
+  it("multiplies through every enclosing group, not only the nearest", () => {
+    expect(leafAlpha(`scene {
+      size: (100, 100)
+      group outer {
+        alpha: 0.5
+        group inner {
+          alpha: 0.5
+          circle c { position: (0, 0), radius: 10, alpha: 0.5 }
+        }
+      }
+    }`)).toBeCloseTo(0.125, 10);
   });
 });

@@ -109,7 +109,9 @@ radians internally (multiplying by `Math.PI / 180`) when applying it to the
 scene graph. It defaults to `0`.
 
 `alpha` runs from `0.0` to `1.0` inclusive. A value outside that range is a
-compile error. It defaults to `1.0` — fully opaque.
+compile error. It defaults to `1.0` — fully opaque. A `group`'s `alpha`
+multiplies with its children's, through every enclosing group: a shape at
+`alpha: 0.5` inside a group at `alpha: 0.5` is drawn at `0.25`.
 
 `scale` defaults to `(1, 1)` — unscaled — on every object, including `group`.
 
