@@ -17,9 +17,10 @@ started on. It is the showcase of
 
 Every part that comes and goes has one `sequence` of the same four kinds of
 step: a hold while it waits, an entrance, a hold while the card is complete,
-and an exit. A hold is an `animate` to the value the part already has, like
-the top bar's `to: (1, 1), duration: 4.4`. Each part's steps add up to its
-moment on the timeline, so no part refers to another. The comment at the top
+and an exit. The frame opens at 0, so its sequence has no wait. A hold is an
+`animate` to the value the part already has, like the top bar's
+`to: (1, 1), duration: 4.4`. Each part's steps add up to its moment on the
+timeline, so no part refers to another. The comment at the top
 of the source lists when each main part enters and leaves, from the frame
 opening at 0 to the frame closing at 5.6 seconds.
 
@@ -56,5 +57,10 @@ the frame, so its move and the frame's scaling add up.
 The bars and the text are in one group, `card`, with a single `animate` that
 scales it to 1.04 over the whole seven seconds, like a camera moving slowly in.
 The parts' own sequences run inside it at the same time. Behind everything, two
-faint slanted shafts of light drift left, and a warm glow of ten faint circles
-sits behind the title.
+faint slanted shafts of light drift 60 pixels left and back, each with
+`duration: 3.5, easing: easeInOut, yoyo: true` and no `loop`: a once-only
+yoyo, which finishes where it started, at seven seconds. Every part of the
+frame and the card is hidden from six seconds on, so the last frame matches
+the first and the scene loops without a seam, as
+[the lesson on timing](/learn/timing/) describes. A warm glow of ten faint
+circles sits behind the title.

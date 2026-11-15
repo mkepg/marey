@@ -102,6 +102,13 @@ describe("playgroundLink", () => {
     expect(shared.ir).toEqual(original.ir);
   });
 
+  it("works out each source's link once and gives the same answer after", () => {
+    const over = overCeilingScene();
+    const first = playgroundLink(over);
+    expect(playgroundLink(over)).toBe(first);
+    expect(first.url).toBe(buildShareURLFor(PLAYGROUND, stripComments(over)));
+  });
+
   it("gives no link, and the length, when even the stripped source is over the ceiling", () => {
     let source = "scene {\n  size: (1000, 1000)\n  duration: 2\n";
     for (let i = 0; i < 4000; i++) {
@@ -123,7 +130,9 @@ describe("every gallery scene without its comments", () => {
     for (const entry of entries) {
       const original = compileSource(entry.source);
       const stripped = compileSource(stripComments(entry.source));
+      expect(original.ok, entry.id).toBe(true);
       expect(stripped.errors, entry.id).toEqual([]);
+      expect(stripped.ok, entry.id).toBe(true);
       expect(stripped.ir, entry.id).toEqual(original.ir);
     }
   });
@@ -131,7 +140,11 @@ describe("every gallery scene without its comments", () => {
   it("is the same for the playground's example scenes", () => {
     for (const name of ["ledges", "physics-pile"]) {
       const source = readFileSync(join(repoRoot, `src/examples/${name}.marey`), "utf8");
-      expect(compileSource(stripComments(source)).ir, name).toEqual(compileSource(source).ir);
+      const original = compileSource(source);
+      const stripped = compileSource(stripComments(source));
+      expect(original.ok, name).toBe(true);
+      expect(stripped.ok, name).toBe(true);
+      expect(stripped.ir, name).toEqual(original.ir);
     }
   });
 });

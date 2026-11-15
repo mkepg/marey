@@ -21,6 +21,22 @@ everything that turns is inside it. Every position inside is therefore
 measured from the sun: an outer planet at `position: (236, 0)` is 236 pixels
 from it, whichever way its orbit has turned.
 
+### A dial to stand on
+
+The machine sits on a round dial, seen from above, inside `system` too, so it
+is written about the sun at (0, 0). Its brass rim is drawing order alone: a
+brass circle of `radius: 255`, a brighter one of `radius: 250`, then the dark
+face of `radius: 248.5` on top, so only a thin ring of each shows. The orbit
+guides are cut the same way, a circle in the guide's colour with one a pixel
+smaller in the face's colour on top, like `radius: 236.5` and then
+`radius: 235.5`. A tick every 10 degrees is a short bar placed at its middle and
+turned by its own angle, such as
+`position: (210, 121), size: (12, 2), rotation: 30`, so its length points at
+the sun. A bar of `size: (740, 12)` runs under the dial to a brass foot on each
+side, and two dark circles offset down and to the right are its shadow.
+[The first lesson](/learn/first-scene/) covers drawing order, and
+[the lesson on shapes](/learn/shapes/) covers `rotation`.
+
 ### An orbit is a turning group
 
 Each orbit is a group with no `position`, so its (0, 0), its pivot, is the

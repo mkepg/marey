@@ -121,8 +121,7 @@ scene {
 The ball arrives at one second, stays put for a second, and is back at its
 start at three. A `delay` on a step works too: inside a sequence, a step's
 delay counts as part of that step's time, so `delay: 1` on the last step
-instead of the hold would give the same picture. A hold can also come last, or
-first, where nothing follows it or nothing comes before it.
+instead of the hold would give the same picture.
 
 ## Staggering several shapes
 
@@ -172,7 +171,7 @@ scene {
 }
 ```
 
-The words rise in half a second apart, left to right. Each hold is on
+The words rise half a second apart, left to right. Each hold is on
 `alpha`, held at 0, so the word stays hidden while it waits; nothing else
 moves it during the hold either, so it stays where it was declared. The holds
 add up to the moment each word should move, which is how the showcase times
@@ -205,9 +204,9 @@ A yoyo does finish, but it takes twice the `duration` written beside it, so a
 reader could not see from the numbers when the next step starts. Write the way
 back as its own step instead, as the ball in "Holding still" does.
 
-A `sequence` block takes no properties, so it has no `loop` of its own either:
-it runs once. In the players on this site the whole scene starts again when it
-ends, and so does every sequence in it.
+A `sequence` holds only steps, so there is no `loop` for a whole sequence
+either: it runs once. In the players on this site the whole scene starts
+again when it ends, and so does every sequence in it.
 
 ## One sequence per object
 
@@ -275,8 +274,9 @@ group, because it is the group's child.
 Open "Show the source" under the Title Card player at the top of the page. The
 comment at the top lists when each part enters and leaves:
 
-- **Every part has one sequence of the same shape:** a hold while it waits, an
-  entrance, a hold while the card is complete, and an exit. Each hold is an
+- **Every part but the frame has one sequence of the same shape:** a hold
+  while it waits, an entrance, a hold while the card is complete, and an exit.
+  The frame opens at 0, so its sequence has no wait. Each hold is an
   `animate` to the value the part already has. The holds are sized so that
   each part's steps add up to its moment on the timeline; no part refers to
   another.

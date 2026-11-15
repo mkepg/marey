@@ -9,7 +9,7 @@
  */
 import LZString from "lz-string";
 import { lex } from "../../src/compiler/lexer";
-import { MAX_SHARE_LENGTH, buildShareURLFor } from "../../src/lib/share";
+import { MAX_SHARE_LENGTH } from "../../src/lib/share";
 
 export const PLAYGROUND = "https://marey.pages.dev/";
 
@@ -100,14 +100,34 @@ export interface PlaygroundLink {
   readonly length: number;
 }
 
+/** The share link for text already compressed, in the form `buildShareURLFor` gives; tests pin the two together. */
+function shareUrl(compressed: string): string {
+  return `${PLAYGROUND}#code=${compressed}`;
+}
+
+/**
+ * Links already worked out, by source. A gallery scene's link is asked for by
+ * the entry's check, by its page and by its lesson's showcase, and
+ * compressing a long scene is the slow part, so each source is compressed
+ * once per build.
+ */
+const links = new Map<string, PlaygroundLink>();
+
 /**
  * The playground link for a scene: its full source when that fits a share
  * link, and otherwise the source without comments.
  */
 export function playgroundLink(source: string): PlaygroundLink {
-  const full = buildShareURLFor(PLAYGROUND, source);
-  if (full !== null) return { url: full, stripped: false, length: LZString.compressToEncodedURIComponent(source).length };
-  const bare = stripComments(source);
-  const length = LZString.compressToEncodedURIComponent(bare).length;
-  return { url: length <= MAX_SHARE_LENGTH ? buildShareURLFor(PLAYGROUND, bare) : null, stripped: true, length };
+  const known = links.get(source);
+  if (known) return known;
+  let link: PlaygroundLink;
+  const full = LZString.compressToEncodedURIComponent(source);
+  if (full.length <= MAX_SHARE_LENGTH) {
+    link = { url: shareUrl(full), stripped: false, length: full.length };
+  } else {
+    const bare = LZString.compressToEncodedURIComponent(stripComments(source));
+    link = { url: bare.length <= MAX_SHARE_LENGTH ? shareUrl(bare) : null, stripped: true, length: bare.length };
+  }
+  links.set(source, link);
+  return link;
 }

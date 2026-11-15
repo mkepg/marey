@@ -14,7 +14,11 @@ function configOf(plugin: Plugin, root: string): UserConfig {
 }
 
 describe("site()", () => {
-  it("adds one rollup input per page beside the playground's index.html", () => {
+  // Builds the whole site twice, here and in the plugin's config hook, so it
+  // grows with every lesson and gallery scene. Alone it takes about 3 s; in
+  // the full suite on a loaded machine it was measured at 7.7–9.7 s, past
+  // Vitest's 5 s default.
+  it("adds one rollup input per page beside the playground's index.html", { timeout: 30_000 }, () => {
     const plugin = site();
     const pages = buildSite(repoRoot).pages;
     const input = configOf(plugin, repoRoot).build?.rollupOptions?.input as Record<string, string>;

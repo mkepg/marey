@@ -310,6 +310,10 @@ scene lasts twelve seconds and loops without a seam:
   `moonLight`, which turns -360 while `moonOrbit` turns 360. The two turns
   cancel, so that group's axes are the planet's, and the moon's night side
   points away from the sun like the planets'.
+- **The dial** under the machine is in `system` too, written about the sun.
+  Its rim and the orbit guides are rings made by drawing order: a circle, then
+  a slightly smaller one in the face's colour on top. Each tick is a short bar
+  turned by its own angle.
 - **The sun's glow** is twelve faint circles in one group, `corona`, with one
   `animate` on its `scale`, so the whole glow breathes together.
 - **Every period**, 2, 3, 4, 6 or 12 seconds, divides the twelve, and nothing
@@ -491,7 +495,10 @@ still has no seam.
 :::try Tilt the whole system
 At the start, both planets are lined up to the right of the sun. Make them
 start lined up on a line that rises to the right at 30 degrees instead, by
-changing one group.
+changing one group. The player starts at once, so pause it at 0 or at 6
+seconds to check: at 6 seconds the inner planet has gone round one and a half
+times and the outer one half a time, so they line up again on the same line,
+on the other side of the sun.
 
 ```marey
 scene {
@@ -566,8 +573,8 @@ scene {
 `system` gets `rotation: -30`. A negative rotation is anticlockwise, and with y
 pointing down, anticlockwise from the right is up and to the right. Every
 orbit is inside `system`, so the whole machine turns 30 degrees and the orbits
-still turn inside it at their own rates: the planets start on the tilted line
-and go round from there.
+still turn inside it at their own rates: the planets start on the tilted line,
+go round from there, and line up on it again at 6 seconds.
 :::
 
 ## Recap
