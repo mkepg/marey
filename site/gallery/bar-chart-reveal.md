@@ -30,7 +30,7 @@ indexing, `length` and arithmetic.
 `generate v, i in values` runs once per value, with `v` the value and `i` its
 position in the list, and makes three objects each time: the bar, the number
 above it and the week name below the baseline. All three use `step * (i + 1)`
-for their x, so they line up. The lesson on generate covers this.
+for their x, so they line up. [The lesson on generate](/learn/generate/) covers this.
 
 ### Bars grow from the baseline
 

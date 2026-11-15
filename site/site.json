@@ -7,9 +7,11 @@
     { "slug": "groups", "vocabulary": ["group"] },
     { "slug": "sequence", "vocabulary": ["sequence", "parallel"] },
     { "slug": "colour", "vocabulary": [] },
-    { "slug": "values", "vocabulary": ["let", "if", "then", "else", "and", "or", "not", "sin", "cos", "length"] }
+    { "slug": "values", "vocabulary": ["let", "if", "then", "else", "and", "or", "not", "sin", "cos", "length"] },
+    { "slug": "generate", "vocabulary": ["generate", "in"] },
+    { "slug": "templates", "vocabulary": ["template", "use"] }
   ],
   "guides": [],
   "reference": ["language", "properties", "determinism"],
-  "gallery": ["lighthouse", "dusk-hills", "ledges", "logo-reveal", "bar-chart-reveal", "physics-pile", "orrery", "day-to-night", "title-card", "metronome", "postcard", "easing-race", "set-sail", "sunrise"]
+  "gallery": ["lighthouse", "dusk-hills", "ledges", "logo-reveal", "bar-chart-reveal", "physics-pile", "orrery", "forest", "day-to-night", "ripple", "title-card", "metronome", "postcard", "easing-race", "set-sail", "sunrise"]
 }

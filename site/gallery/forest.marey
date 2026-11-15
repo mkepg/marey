@@ -1,0 +1,188 @@
+// Forest. Three rows of pines sway under a full moon, fog
+// breathes between them, and fireflies blink in the clearing.
+//
+// Every tree comes from one template, Tree(height, tone, sway),
+// used 38 times. The three rows differ in what they pass it:
+// far trees are short, pale and nearly still, near ones are
+// tall, dark and sway the most, and the rows are drawn far to
+// near with fog between them.
+//
+// Every loop repeats on a period that divides 12 s and none is
+// delayed. The fireflies' blinks are delayed, so they do not
+// loop: each blinks three times and is dark again by 11.9 s.
+// The last frame matches the first.
+
+let moonAt  = (720, 112)
+let moonlit = #d9e0fb
+let spark   = #ffd23f
+
+// Sky bands, top to bottom, ending at the far treeline.
+let sky = [#090e22, #0c122a, #0f1732, #131c3a, #172142, #1c264a, #222c51, #293258, #31395e, #3b4264]
+
+// A pine, drawn upward from its own (0, 0), the foot of the
+// trunk. Every size is a fraction of `height`. The shapes sit
+// in `crown`, a group at (0, 0), so its rotation turns the
+// tree about the foot of its trunk, as wind bends a tree. It
+// leans `sway` degrees one way and then the other; a negative
+// `sway` starts it leaning the other way, half a period out of
+// step with a positive one. Taller trees swing more slowly:
+// period 6 s above 160 pixels, 4 s below.
+template Tree(height, tone, sway) {
+  group crown {
+    position: (0, 0)
+    rotation: -sway
+    animate { property: rotation, to: sway, duration: if height > 160 then 3 else 2, loop: true, yoyo: true }
+
+    rectangle trunk { position: (0, 0), origin: (0.5, 1), size: (height * 0.06, height * 0.25), color: tone }
+
+    // Three tiers, each a triangle standing on its base line.
+    polygon low  { position: (0, -height * 0.14), origin: (0.5, 1), color: tone
+                   points: [(-height * 0.3, 0), (height * 0.3, 0), (0, -height * 0.42)] }
+    polygon mid  { position: (0, -height * 0.38), origin: (0.5, 1), color: tone
+                   points: [(-height * 0.23, 0), (height * 0.23, 0), (0, -height * 0.4)] }
+    polygon top  { position: (0, -height * 0.6), origin: (0.5, 1), color: tone
+                   points: [(-height * 0.16, 0), (height * 0.16, 0), (0, -height * 0.4)] }
+
+    // Moonlight on the right-hand slope of each tier: the right
+    // half of the triangle again, in pale light at low alpha.
+    polygon lowLit { position: (0, -height * 0.14), origin: (0, 1), color: moonlit, alpha: 0.09
+                     points: [(0, 0), (height * 0.3, 0), (0, -height * 0.42)] }
+    polygon midLit { position: (0, -height * 0.38), origin: (0, 1), color: moonlit, alpha: 0.09
+                     points: [(0, 0), (height * 0.23, 0), (0, -height * 0.4)] }
+    polygon topLit { position: (0, -height * 0.6), origin: (0, 1), color: moonlit, alpha: 0.09
+                     points: [(0, 0), (height * 0.16, 0), (0, -height * 0.4)] }
+  }
+}
+
+// A bank of fog: three long, faint strips on one centre, the
+// widest palest, so its edges soften. It drifts 40 px and back
+// every 12 s and thickens and thins every 6 s.
+template Fog(tone, depth) {
+  group bank {
+    position: (0, 0)
+    alpha: 0.5
+    animate { property: position, to: (40, 0), duration: 6, loop: true, yoyo: true }
+    animate { property: alpha, to: 1, duration: 3, loop: true, yoyo: true }
+    rectangle wide { position: (0, 0), size: (1200, depth), color: tone, alpha: 0.08 }
+    rectangle body { position: (0, 0), size: (1200, depth * 0.6), color: tone, alpha: 0.1 }
+    rectangle core { position: (0, 0), size: (1200, depth * 0.3), color: tone, alpha: 0.12 }
+  }
+}
+
+// A firefly. It hovers on a small loop and blinks three times,
+// 3.7 s apart, starting after `wait` seconds. The blinks are
+// steps in a sequence, not a loop, so `wait` can differ from
+// one firefly to the next without breaking the seam.
+template Firefly(wait, drift) {
+  group hover {
+    position: (0, 0)
+    animate { property: position, to: drift, duration: 2, loop: true, yoyo: true }
+    group light {
+      alpha: 0
+      circle haze { position: (0, 0), radius: 18, color: spark, alpha: 0.14 }
+      circle halo { position: (0, 0), radius: 7, color: spark, alpha: 0.45 }
+      circle body { position: (0, 0), radius: 2.6, color: #fff6c2 }
+      sequence {
+        animate { property: alpha, to: 1, duration: 0.3, delay: wait, easing: easeOut }
+        animate { property: alpha, to: 0, duration: 0.9, easing: easeIn }
+        animate { property: alpha, to: 1, duration: 0.3, delay: 2.5, easing: easeOut }
+        animate { property: alpha, to: 0, duration: 0.9, easing: easeIn }
+        animate { property: alpha, to: 1, duration: 0.3, delay: 2.5, easing: easeOut }
+        animate { property: alpha, to: 0, duration: 0.9, easing: easeIn }
+      }
+    }
+  }
+}
+
+scene {
+  size: (960, 540)
+  background: #090e22
+  duration: 12
+
+  // ── Sky ── Ten bands of 34 px, down to the far treeline.
+  generate c, i in sky {
+    rectangle band { position: (480, i * 34), origin: (0.5, 0), size: (960, 34), color: c }
+  }
+
+  // Stars twinkle on beats of 1, 1.5, 2 and 3 s: cycles of
+  // 2, 3, 4 and 6 s.
+  generate p, i in [(42, 38), (128, 92), (206, 24), (282, 130), (350, 56), (446, 104),
+                    (520, 30), (590, 150), (862, 40), (920, 128), (800, 196), (640, 214),
+                    (96, 186), (402, 196), (238, 230), (884, 252), (560, 88), (30, 262)] {
+    circle star {
+      position: p, radius: [1.2, 1.6, 1, 2][i % 4], color: moonlit
+      animate { property: alpha, to: 0.2, duration: [1, 1.5, 2, 3][i % 4], loop: true, yoyo: true }
+    }
+  }
+
+  // The moon's glow is stacked transparency: six discs at one
+  // faint alpha, so the light builds up towards the moon.
+  generate r in [170, 132, 100, 76, 58, 45] {
+    circle halo { position: moonAt, radius: r, color: moonlit, alpha: 0.035 }
+  }
+  circle moon   { position: moonAt, radius: 34, color: #f4eed8 }
+  circle mare1  { position: (708, 102), radius: 9, color: #c9c3b0, alpha: 0.35 }
+  circle mare2  { position: (733, 124), radius: 6, color: #c9c3b0, alpha: 0.3 }
+
+  // ── Far row ── Twenty short, pale trees, nearly still. Their
+  // heights and their gaps cycle through short lists, so the
+  // treeline is uneven without being random.
+  group far {
+    rectangle ground { position: (480, 336), origin: (0.5, 0), size: (960, 204), color: #2c3860 }
+    generate i in 0 to 19 {
+      use Tree([84, 102, 76, 112, 92][i % 5], #34416b, [0.8, -0.6, 1, -0.9][i % 4]) tree {
+        position: (12 + i * 50 + [0, 16, -10, 8][i % 4], 340)
+      }
+    }
+  }
+  use Fog(#9aa5cf, 90) farFog { position: (480, 344) }
+
+  // ── Middle row ── Twelve trees of middle height and tone.
+  group middle {
+    rectangle ground { position: (480, 404), origin: (0.5, 0), size: (960, 136), color: #18213c }
+    generate i in 0 to 11 {
+      use Tree([150, 178, 140, 196][i % 4], #1c2644, [1.6, -1.2, 1.4, -1.8][i % 4]) tree {
+        position: (30 + i * 82 + [0, 20, -14, 10][i % 4], 410)
+      }
+    }
+  }
+  use Fog(#8590bb, 70) nearFog { position: (440, 420) }
+
+  // ── The clearing ── The ground darkens in steps towards you,
+  // and moonlight lies across it: discs at one faint alpha in
+  // a group scaled to 0.22 of its height, so they lie flat as
+  // ellipses.
+  rectangle field1 { position: (480, 440), origin: (0.5, 0), size: (960, 40), color: #151d36 }
+  rectangle field2 { position: (480, 480), origin: (0.5, 0), size: (960, 60), color: #111830 }
+  group pool {
+    position: (500, 462)
+    scale: (1, 0.22)
+    generate r in [260, 200, 150, 105] {
+      circle light { position: (0, 0), radius: r, color: moonlit, alpha: 0.035 }
+    }
+  }
+  use Fog(#7d88b3, 50) lowFog { position: (520, 500) }
+
+  // ── Fireflies ── Twenty of them over the clearing. Their
+  // waits, (i * 1.3) % 3.4, scatter the first blinks over the
+  // first 3.3 s. The longest wait is 3.3 s, and three blinks
+  // take 8.6 s, so the last one is over at 11.9 s.
+  generate p, i in [(250, 430), (318, 462), (386, 418), (452, 476), (520, 440), (580, 470),
+                    (646, 428), (708, 458), (290, 384), (470, 396), (610, 392), (360, 500),
+                    (540, 506), (680, 498), (230, 486), (420, 446), (560, 412), (740, 420),
+                    (500, 488), (338, 400)] {
+    use Firefly((i * 1.3) % 3.4, [(10, -8), (-12, -6), (8, 10), (-6, 12)][i % 4]) fly { position: p }
+  }
+
+  // ── Near row ── Six tall, dark trees that frame the clearing.
+  // They stand below the bottom edge, so only their upper parts
+  // are seen, and they sway the most.
+  group near {
+    generate p, i in [(40, 560), (170, 600), (300, 590), (790, 580), (905, 560), (660, 620)] {
+      use Tree([360, 330, 250, 300, 380, 240][i], #090d1a, [2.4, -2, 1.8, -2.6, 2.2, -1.6][i]) tree {
+        position: p
+      }
+    }
+    rectangle ground { position: (480, 540), origin: (0.5, 1), size: (960, 26), color: #070a14 }
+  }
+}

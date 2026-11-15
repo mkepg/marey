@@ -29,7 +29,7 @@ crates, so the 26 shapes are numbered 0 to 25. From that number, `let w = n % 3`
 picks the wave, `let j = (n - w) / 3` counts how many shapes came before in that
 wave, and `let c = j % 3` picks the column, at `280 + c * 120`. Consecutive
 shapes go to different waves, so each wave gets a mix of kinds. [The lesson on
-values](/learn/values/) covers `let` and the arithmetic, and the lesson on generate covers the
+values](/learn/values/) covers `let` and the arithmetic, and [the lesson on generate](/learn/generate/) covers the
 blocks.
 
 ### Appear, fall, stop together

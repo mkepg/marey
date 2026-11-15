@@ -21,7 +21,7 @@ colour and animates to the band at the same index in a second list:
 Two lists of the same length, read with one index, keep each day colour paired
 with its night colour. The ridges do the same with `to: shades[i]`. Colours
 blend channel by channel, so the sky passes through the in-between shades on its
-own. [The lesson on colour](/learn/colour/) covers this, and the lesson on generate covers the
+own. [The lesson on colour](/learn/colour/) covers this, and [the lesson on generate](/learn/generate/) covers the
 two-name form `c, i`.
 
 ### Stars that come out at night
@@ -31,7 +31,7 @@ and back. Each star also twinkles on its own, fading to 0.3 and back over
 `duration: beat`, and a group's alpha multiplies with its children's, so the
 stars twinkle all the time but are only visible as night falls. The beats
 `[0.5, 0.75, 1, 1.5][i % 4]` give the twinkles four different periods, so the
-stars drift in and out of step. [The lesson on groups](/learn/groups/) and the lesson on templates
+stars drift in and out of step. [The lesson on groups](/learn/groups/) and [the lesson on templates](/learn/templates/)
 cover this.
 
 ### A face measured in one number
@@ -41,7 +41,7 @@ The sun's face is written in fractions of `let R = 115`: the eyes have
 `let stroke = 0.052 * R`. Change R and the whole face rescales with it. The two
 eyes and brows come from `generate s in [-1, 1]`, where `s` mirrors each x
 offset, as in `s * 0.281 * R`, and each brow's tilt. [The lesson on values](/learn/values/) covers
-`let` and arithmetic, and the lesson on generate covers looping over a list.
+`let` and arithmetic, and [the lesson on generate](/learn/generate/) covers looping over a list.
 
 ### Falling asleep
 
@@ -84,7 +84,7 @@ for the nearest, so their peaks crowd closer together. Each outline closes at y
 
 The ridges are written after the sun, and objects draw in source order, so the
 sun sets behind them. It sinks by `to: (0, sink)`, deep enough to drop it below
-the farthest ridge. [The lesson on values](/learn/values/) and the lesson on generate cover the ridges,
+the farthest ridge. [The lesson on values](/learn/values/) and [the lesson on generate](/learn/generate/) cover the ridges,
 [the lesson on shapes](/learn/shapes/) covers origin, and
 [the first lesson](/learn/first-scene/) covers drawing order.
 
@@ -95,5 +95,5 @@ rotates between the two angles: it starts at `rotation: s * up` and animates
 `to: s * down, duration: 0.25`. The middle bird is `use Bird(40, 0) left`, with
 the angles swapped, so it beats against the other two. The whole flock moves
 from `position: (-130, 0)` to `to: (930, 0)` in six seconds, linearly, starting
-and ending off screen, so the jump back to the start is never seen. The lesson
-on templates and [the lesson on timing](/learn/timing/) cover this.
+and ending off screen, so the jump back to the start is never seen. [The lesson
+on templates](/learn/templates/) and [the lesson on timing](/learn/timing/) cover this.
