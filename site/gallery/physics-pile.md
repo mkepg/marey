@@ -28,8 +28,8 @@ block shifts its own counter into one shared numbering, `let n = i + 8` for the
 crates, so the 26 shapes are numbered 0 to 25. From that number, `let w = n % 3`
 picks the wave, `let j = (n - w) / 3` counts how many shapes came before in that
 wave, and `let c = j % 3` picks the column, at `280 + c * 120`. Consecutive
-shapes go to different waves, so each wave gets a mix of kinds. The lesson on
-values covers `let` and the arithmetic, and the lesson on generate covers the
+shapes go to different waves, so each wave gets a mix of kinds. [The lesson on
+values](/learn/values/) covers `let` and the arithmetic, and the lesson on generate covers the
 blocks.
 
 ### Appear, fall, stop together
@@ -71,4 +71,4 @@ Small changes keep the heap from looking stamped out. The colours rotate through
 four with an offset per kind, as in `colors[(i + 1) % 4]`. Crates come in three
 sizes, `34 + (i % 3) * 10`, and planks at different angles,
 `(i * 37) % 60 - 30`. The bounce differs by kind, from `bounce: 0.3` for the
-balls down to 0.2 for crates and planks. The lesson on values covers this.
+balls down to 0.2 for crates and planks. [The lesson on values](/learn/values/) covers this.

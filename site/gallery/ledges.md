@@ -40,7 +40,7 @@ Marey has no random numbers, so the tiles are scattered with arithmetic. Tile
 `i` enters `(i * 197) % span` pixels to the right of `entry`. 197 shares no
 factor with the span of 480, so the 24 entry points never repeat and land in a
 scrambled order. Sizes come from `18 + (i % 3) * 5`, starting angles from
-`(i * 29) % 90`, and colours from `colors[i % 4]`. The lesson on values covers
+`(i * 29) % 90`, and colours from `colors[i % 4]`. [The lesson on values](/learn/values/) covers
 the arithmetic, and the lesson on generate covers `generate i in 0 to 23`.
 
 ### Spin and drag

@@ -5,9 +5,11 @@
     { "slug": "animate", "vocabulary": ["easing", "linear", "easeIn", "easeOut", "easeInOut", "scale"] },
     { "slug": "timing", "vocabulary": ["loop", "yoyo", "delay", "true", "false"] },
     { "slug": "groups", "vocabulary": ["group"] },
-    { "slug": "sequence", "vocabulary": ["sequence", "parallel"] }
+    { "slug": "sequence", "vocabulary": ["sequence", "parallel"] },
+    { "slug": "colour", "vocabulary": [] },
+    { "slug": "values", "vocabulary": ["let", "if", "then", "else", "and", "or", "not", "sin", "cos", "length"] }
   ],
   "guides": [],
   "reference": ["language", "properties", "determinism"],
-  "gallery": ["lighthouse", "dusk-hills", "ledges", "logo-reveal", "bar-chart-reveal", "physics-pile", "orrery", "title-card", "metronome", "easing-race", "set-sail", "sunrise"]
+  "gallery": ["lighthouse", "dusk-hills", "ledges", "logo-reveal", "bar-chart-reveal", "physics-pile", "orrery", "day-to-night", "title-card", "metronome", "postcard", "easing-race", "set-sail", "sunrise"]
 }

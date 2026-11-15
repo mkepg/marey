@@ -22,7 +22,7 @@ The three lists are read with the same index, as `tags[i]` and `weeks[i]`, so
 they must stay the same length. Indexing has no wrap-around: an eighth value
 with no eighth tag or week name is a compile error, "Index 7 is out of range for
 a list of length 7". Add the value, its string and its week name together, and
-the chart respaces itself for eight bars. The lesson on values covers lists,
+the chart respaces itself for eight bars. [The lesson on values](/learn/values/) covers lists,
 indexing, `length` and arithmetic.
 
 ### Three objects per value

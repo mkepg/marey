@@ -21,7 +21,7 @@ colour and animates to the band at the same index in a second list:
 Two lists of the same length, read with one index, keep each day colour paired
 with its night colour. The ridges do the same with `to: shades[i]`. Colours
 blend channel by channel, so the sky passes through the in-between shades on its
-own. The lesson on colour covers this, and the lesson on generate covers the
+own. [The lesson on colour](/learn/colour/) covers this, and the lesson on generate covers the
 two-name form `c, i`.
 
 ### Stars that come out at night
@@ -40,7 +40,7 @@ The sun's face is written in fractions of `let R = 115`: the eyes have
 `radius: 0.094 * R`, the brows sit at `-0.5315 * R`, and the line thickness is
 `let stroke = 0.052 * R`. Change R and the whole face rescales with it. The two
 eyes and brows come from `generate s in [-1, 1]`, where `s` mirrors each x
-offset, as in `s * 0.281 * R`, and each brow's tilt. The lesson on values covers
+offset, as in `s * 0.281 * R`, and each brow's tilt. [The lesson on values](/learn/values/) covers
 `let` and arithmetic, and the lesson on generate covers looping over a list.
 
 ### Falling asleep
@@ -68,7 +68,7 @@ half-width and depth. The language has `sin` and `cos` but no inverse, so the
 angle step is computed once and written as a number, `let st = 7.0053`. The
 arc's half-angle is asin(half / rho), and `st` is a sixth of it, as the comment
 beside it says, so six steps either side of the middle point reach the arc's two
-ends. The lesson on values covers `sin`, `cos` and the expressions around them.
+ends. [The lesson on values](/learn/values/) covers `sin`, `cos` and the expressions around them.
 
 ### Hills from two waves
 
@@ -84,7 +84,7 @@ for the nearest, so their peaks crowd closer together. Each outline closes at y
 
 The ridges are written after the sun, and objects draw in source order, so the
 sun sets behind them. It sinks by `to: (0, sink)`, deep enough to drop it below
-the farthest ridge. The lessons on values and on generate cover the ridges,
+the farthest ridge. [The lesson on values](/learn/values/) and the lesson on generate cover the ridges,
 [the lesson on shapes](/learn/shapes/) covers origin, and
 [the first lesson](/learn/first-scene/) covers drawing order.
 

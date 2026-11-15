@@ -30,7 +30,7 @@ timing](/learn/timing/) covers loop, yoyo and why a delay would break this.
 one more entry than `sky`: its last value, `horizon`, is the bottom of the
 lowest band. `origin: (0.5, 0)` puts the band's pivot at its top centre, so
 `position: (480, edges[i])` places its top edge exactly on the list's value. To
-add a band, you add an edge and a colour together. The lesson on values covers
+add a band, you add an edge and a colour together. [The lesson on values](/learn/values/) covers
 lists and indexing, and the lesson on generate covers the loop.
 
 ### Stars and clouds are templates
@@ -121,7 +121,7 @@ The five bands go from 48-pixel wavelengths far away to 220 nearest you, with
 taller crests and darker water as they come closer. `group back` and
 `group near` start one wavelength to the left, with `position: (-72, 0)` and
 `position: (-160, 0)`, and slide right, so neighbouring bands move against each
-other. The lessons on templates, on values (`cos`) and on generate cover the
+other. The lesson on templates, [the lesson on values](/learn/values/) (`cos`) and the lesson on generate cover the
 pieces.
 
 ### Three motions on one boat
@@ -144,5 +144,5 @@ The headland is a polygon with `position: (0, 292), origin: (0, 0)`. The top
 left of its points' bounding box is (0, 292), so pinning that corner there makes
 every point read as a scene coordinate. The tower's red stripes are trapezoids
 whose corners, such as `(-20.28, 9), (20.28, 9), (19.09, -9)`, were computed to
-sit on the tower's sloping sides. The lesson on values covers `let` inside a
+sit on the tower's sloping sides. [The lesson on values](/learn/values/) covers `let` inside a
 `generate`, and [the lesson on shapes](/learn/shapes/) covers `origin`.
