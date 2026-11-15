@@ -336,8 +336,12 @@ Open "Show the source" under the Easing Race player at the top of the page:
   each eighth of the two seconds. The `linear` copies are evenly spaced, on the
   faint lines every 80 pixels; the others bunch up where their runner was
   slow.
-- **The dark rim** under each runner is one more circle with the same move
-  as the runner, so the two travel as one.
+- **The glow and the dark rim** under each runner are two more circles with
+  the same move as the runner, so the three travel as one.
+- **The curve** beside each lane's name is a `line` through the same eighths
+  as the trail: across is time, 3 pixels per eighth, and up is the fraction of
+  the distance covered, 16 pixels for all of it. `easeIn`'s curve hugs the
+  bottom and climbs late; `easeOut`'s climbs at once and levels off.
 - **The clock** on the scoreboard is a bar with `origin: (0, 0.5)` and
   `scale: (0, 1)` that grows to `(1, 1)` with `linear` easing, so it fills
   from its left end at an even rate.

@@ -16,9 +16,10 @@ each one spends the time. It is the showcase of
 
 Each runner is one `animate` on `position`. The `easeIn` runner's is
 `to: (840, 248), duration: 2, easing: easeIn`, and the other three differ only
-in the lane's y and the easing. Under each runner, a dark rim is
-one more circle with the same move, so the two travel as one; the rim keeps
-the runner readable when it stops on the finish squares.
+in the lane's y and the easing. Under each runner are two more circles with
+the same move, so the three travel as one: a soft glow in the runner's own
+colour, `radius: 28` at `alpha: 0.18`, and a dark rim that keeps the runner
+readable when it stops on the finish squares.
 
 ### A trail drawn by copies
 
@@ -33,6 +34,18 @@ photograph that caught each runner every quarter of a second.
 Faint lines cross the track every 80 pixels, an eighth of the distance. The
 `linear` copies sit on them. The `easeIn` copies crowd the start and the
 `easeOut` copies crowd the finish, and the `easeInOut` copies crowd both ends.
+
+### The curve beside each name
+
+Beside each lane's name is a small graph of its easing: a `line` through the
+same eighths the trail uses, with time across and distance up. It has
+`origin: (0, 1)`, which pins the bottom-left corner of its box to its
+`position`, so each point is an offset from that corner: 3 pixels across per
+eighth of the time, and up by 16 pixels times the fraction of the distance
+covered. The `easeIn` curve passes `(21, -12.25)`: at seven eighths of the
+time, its runner has covered 49/64 of the way. A faint L under each curve
+draws the two axes. [The lesson on shapes](/learn/shapes/) covers `line` and
+`origin`.
 
 ### A clock that fills
 
