@@ -206,7 +206,12 @@ back as its own step instead, as the ball in "Holding still" does.
 
 A `sequence` holds only steps, so there is no `loop` for a whole sequence
 either: it runs once. In the players on this site the whole scene starts
-again when it ends, and so does every sequence in it.
+again when it ends, and so does every sequence in it. On an object with no
+`animate` block outside its sequence, the first step starts one tick, 1/120 of
+a second, after the scene does. So steps that add up exactly to the scene's
+`duration` are one tick short of finishing when the scene starts again: end
+such a timeline a little before the scene does.
+([Sequencing](/reference/language/#sequencing))
 
 ## One sequence per object
 

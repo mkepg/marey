@@ -20,8 +20,8 @@ showcase of [the lesson on templates](/learn/templates/).
 `template Tree(height, tone, sway)` draws a pine upward from its own (0, 0),
 the foot of its trunk. Every size is a fraction of `height`: the trunk, three
 triangular tiers each standing on its base line with `origin: (0.5, 1)`, and a
-copy of each tier's right half in pale light at `alpha: 0.09`, the side facing
-the moon. All of it sits in `group crown` at (0, 0). A group turns about its own
+copy of each tier's right half in pale light at `alpha: 0.09`, so every tree
+is lit from the upper right. All of it sits in `group crown` at (0, 0). A group turns about its own
 (0, 0), so the tree bends from the foot of its trunk, as a tree in the wind
 does. [The lesson on templates](/learn/templates/) covers drawing a template
 around the point it should turn on.
@@ -44,11 +44,12 @@ in a pale `#34416b`, with sways of a degree or less. The middle row is twelve
 trees from 140 to 196 high in `#1c2644`. The near row is six trees from 240 to
 380 high in a near-black `#090d1a`, standing below the bottom edge so that only
 their crowns are seen, and swaying up to 2.6 degrees. The rows are drawn far to
-near, so each one covers the one behind. In the far and middle rows the
-heights, gaps and sways come from short lists read with `i % 5` and `i % 4`,
-as in `[150, 178, 140, 196][i % 4]`, so neighbouring trees differ. Each row is
-inside its own group, so all three can call their copies `tree`.
-[The lesson on generate](/learn/generate/) covers `use` inside a loop.
+near, so each one covers the one behind. The far row reads its heights with
+`i % 5` and its gaps and sways with `i % 4`; the middle row reads all three with
+`i % 4`, as in `[150, 178, 140, 196][i % 4]`. So neighbouring trees differ.
+Each row is inside its own group, so all three can call their copies `tree`.
+[The lesson on templates](/learn/templates/) covers `use` inside a `generate`,
+and [the lesson on generate](/learn/generate/) covers the loop itself.
 
 ### Fog that breathes
 
@@ -63,9 +64,9 @@ and low across the clearing.
 `template Firefly(wait, drift)` hovers out to the offset `drift` and back every
 four seconds and blinks three times, 3.7 seconds apart. Twenty of them come from
 a `generate` over their places, each passed `(i * 1.3) % 3.4` as its wait,
-which scatters the first blinks between 0 and 3.3 seconds. The brief for this
-scene asked for blinks on staggered loops, but a loop that starts after a delay
-leaves a seam when the scene restarts, as [the lesson on timing](/learn/timing/)
+which scatters the first blinks between 0 and 3.3 seconds. Blinks on loops
+staggered by `delay` would leave a seam, because a loop that starts after a
+delay waits again when the scene restarts, as [the lesson on timing](/learn/timing/)
 shows. So each firefly's blinks are steps of a `sequence`, the first delayed by
 `wait`, and the last firefly is dark again at 11.9 seconds.
 

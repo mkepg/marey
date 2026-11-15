@@ -86,7 +86,9 @@ The second badge's tab points right: the whole badge turned 90 degrees about
 its centre, because a group turns about its own (0, 0), as
 [the lesson on groups](/learn/groups/) showed, and the template drew the badge
 around that point. The third is scaled to 0.6 about the same point, and the
-fourth is faded, its group's alpha multiplying with each shape's.
+fourth is faded, its group's alpha multiplying with each shape's. Each shape is
+faded on its own, so the red disc now shows through the dark rim drawn over it,
+as [the lesson on colour](/learn/colour/) showed for a faded group.
 
 The wrapper is a group, so it has no colour. A colour is passed in as a
 parameter, never set on the instance:
@@ -140,9 +142,11 @@ All three stand on the ground at y 420, whatever their height, because
 `height` above the foot, so a pine is exactly as tall as the number passed.
 
 Where (0, 0) sits also decides how a copy turns. Below, both pines lean by the
-same `rotation: 30`. The left one is the template above; the right one draws
+same `rotation: 45`. The left one is the template above; the right one draws
 the same tree with (0, 0) halfway up it, so its `use` is placed 110 pixels
-higher, at the tree's middle. Look at the two trunks:
+higher, at the tree's middle. A faint upright copy of each shows where it
+started, and a white dot marks each `use`'s `position`, the point it turns
+about. Look at the two trunks:
 
 ```marey
 template Pine(height) {
@@ -164,20 +168,27 @@ scene {
 
   rectangle ground { position: (480, 420), origin: (0.5, 0), size: (960, 120), color: #2f4434 }
 
-  use Pine(220) footed     { position: (300, 420), rotation: 30 }
-  use MidPine(220) centred { position: (660, 310), rotation: 30 }
+  use Pine(220) footedStill     { position: (300, 420), alpha: 0.25 }
+  use MidPine(220) centredStill { position: (660, 310), alpha: 0.25 }
+
+  use Pine(220) footed     { position: (300, 420), rotation: 45 }
+  use MidPine(220) centred { position: (660, 310), rotation: 45 }
+
+  circle pivotL { position: (300, 420), radius: 7, color: #f2e8d5 }
+  circle pivotR { position: (660, 310), radius: 7, color: #f2e8d5 }
 }
 ```
 
-The left pine leans from its foot, which stays on the ground, as a tree bent
-by the wind does. The right one turns about its middle, so its foot swings off
-to the left, above the ground. The showcase's trees are drawn from the foot so
-that their sway pivots there.
+The left pine leans from its foot, which stays on its dot on the ground, as a
+tree bent by the wind does. The right one turns about the dot at its middle:
+its top swings right as before, but its foot swings about 78 pixels to the
+left and lifts 32 pixels off the ground. The showcase's trees are drawn from
+the foot so that their sway pivots there.
 
 ## Any kind of value
 
 An argument can be any kind of value the language has: a number, a colour, a
-string, a point, a list, `true` or `false`, or an easing. A template takes as
+string, a point, a list, `true` or `false`, an easing, or a `fit` keyword. A template takes as
 many parameters as it names, in order.
 
 The racer below takes three: an easing, a colour and a string. Watch the three
@@ -293,10 +304,66 @@ are as long as `(posts - 1) * gap` plus a little, so they reach both ends. The
 count comes from an argument written in the source, so you can still count the
 posts by reading the file.
 
-A template can also use another template. What it cannot do is use itself,
-directly or through others. A `use` is replaced by a copy of the template's
-body, so a template that used itself would need a copy inside every copy, and
-the compiler refuses it.
+A template can also use another template, as long as that one is declared
+above it in the file. The gate below is two `Post`s and a bar, and `Post` is
+declared first:
+
+```marey
+template Post(h) {
+  rectangle post { position: (0, 0), origin: (0.5, 1), size: (12, h), color: #f2e8d5 }
+  circle cap { position: (0, -h), radius: 10, color: #ffc46b }
+}
+
+template Gate(gap) {
+  use Post(110) left  { position: (0, 0) }
+  use Post(110) right { position: (gap, 0) }
+  rectangle bar { position: (gap / 2, -80), size: (gap, 8), color: #f2e8d5 }
+}
+
+scene {
+  size: (960, 540)
+  background: #1d2c48
+
+  rectangle ground { position: (480, 400), origin: (0.5, 0), size: (960, 140), color: #2f4434 }
+
+  use Gate(140) narrow { position: (180, 400) }
+  use Gate(300) wide   { position: (500, 400) }
+}
+```
+
+Two gates, 140 and 300 pixels wide, each with a capped post at either end.
+Each `Gate` copy holds two `Post` copies, `left` and `right`, each its own group
+inside the gate's group.
+
+Written the other way round, with `Gate` first, the same file fails:
+
+```marey error
+template Gate(gap) {
+  use Post(110) left  { position: (0, 0) }
+  use Post(110) right { position: (gap, 0) }
+  rectangle bar { position: (gap / 2, -80), size: (gap, 8), color: #f2e8d5 }
+}
+
+template Post(h) {
+  rectangle post { position: (0, 0), origin: (0.5, 1), size: (12, h), color: #f2e8d5 }
+  circle cap { position: (0, -h), radius: 10, color: #ffc46b }
+}
+
+scene {
+  size: (960, 540)
+  background: #1d2c48
+
+  use Gate(140) narrow { position: (180, 400) }
+}
+```
+
+The message is misleading here: `Post` is defined at the top of the file,
+before the scene block, just as it asks. What it means is that `Post` is not
+declared yet where `Gate` uses it. The fix is to move `Post` above `Gate`.
+
+What a template cannot do is use itself, directly or through others. A `use`
+is replaced by a copy of the template's body, so a template that used itself
+would need a copy inside every copy, and the compiler refuses it.
 
 ## Templates that move
 
@@ -351,7 +418,7 @@ in the clearing. The scene lasts twelve seconds and loops without a seam:
 - **`template Tree(height, tone, sway)`** draws a pine upward from its own
   (0, 0), the foot of its trunk, with every size a fraction of `height`: a
   trunk, three tiers, and a pale copy of each tier's right half at
-  `alpha: 0.09` for moonlight on the side facing the moon. Its shapes sit in
+  `alpha: 0.09`, so every tree is lit from the upper right. Its shapes sit in
   `group crown` at (0, 0), so the sway pivots at the foot. The crown starts at
   `rotation: -sway` and swings to `sway` and back, so the parameter sets how far
   the tree leans. A negative `sway` starts it leaning the other way. Its
@@ -359,9 +426,10 @@ in the clearing. The scene lasts twelve seconds and loops without a seam:
   on periods of 6 and 4 seconds, both of which divide twelve.
 - **The rows** are 38 uses of that one template, drawn far to near. The far row
   is `generate i in 0 to 19`, with heights from 76 to 112, a pale blue tone and
-  a sway of a degree or less. The middle row is twelve trees from 140 to 196
-  high. In both, heights, gaps and sways come from short lists read with
-  `i % 5` and `i % 4`, so neighbours differ. The near row is six dark trees from
+  a sway of a degree or less; its heights come from a list read with `i % 5`,
+  and its gaps and sways from lists read with `i % 4`. The middle row is twelve
+  trees from 140 to 196 high, with its heights, gaps and sways all read with
+  `i % 4`. So neighbours differ. The near row is six dark trees from
   240 to 380 high, each with its own place, height and sway from a list, standing
   below the bottom edge and swaying up to 2.6 degrees. Each row is inside its
   own group, so all three can name their copies `tree`.
@@ -372,10 +440,11 @@ in the clearing. The scene lasts twelve seconds and loops without a seam:
 - **`template Firefly(wait, drift)`** hovers out to the offset `drift` and back
   every four seconds, and blinks three times, 3.7 seconds apart. The twenty fireflies
   come from a `generate` over their places, with `wait` from `(i * 1.3) % 3.4`,
-  which scatters the first blinks between 0 and 3.3 seconds. The showcase's brief
-  asked for blinks on staggered loops, but a delayed loop leaves a seam, as
-  [the lesson on timing](/learn/timing/) showed. So the blinks are steps of a
-  sequence, delayed by `wait`, and the last one is over at 11.9 seconds.
+  which scatters the first blinks between 0 and 3.3 seconds. Blinks on loops
+  staggered by `delay` would leave a seam, because a delayed loop waits again
+  when the scene restarts, as [the lesson on timing](/learn/timing/) showed. So
+  the blinks are steps of a sequence, the first delayed by `wait`, and the last
+  one is over at 11.9 seconds.
 - **The sky** is ten bands from `generate c, i in sky`, and the moon's glow is
   six discs from a `generate` over their radii, as in the
   [lesson on generate](/learn/generate/).
@@ -660,7 +729,7 @@ each way, is the same, so the scene still loops without a seam.
   around the point it should pivot on.
   ([Scene model](/reference/language/#scene-model))
 - A `use` can go inside a `generate`, and a `generate` inside a template. A
-  template can use another, but never itself.
+  template can use another declared above it, but never itself.
   ([generate](/reference/language/#generate),
   [template and use](/reference/language/#template-and-use))
 - A template carries motion in its own `animate` blocks, often on a group at

@@ -240,13 +240,15 @@ pass it is in.
 
 ## How copies are named
 
-Every object keeps a name, and copies are no exception. An object made inside a
-`generate` is named after the one written there, with `_` and its index added:
-the ticks on the clock are `tick_0` to `tick_11`. The number is always the
-element's place in the list, never its value, so the lamps in the first sample
-are `lamp_0` to `lamp_4`, not `lamp_120` to `lamp_840`. Inside two loops each
-level adds its own index, the inner one first: the dot in column 3 of row 1 is
-`dot_3_1`.
+Every object keeps a name, and copies are no exception. An object the loop
+writes directly is named after the one written there, with `_` and its index
+added: the ticks on the clock are `tick_0` to `tick_11`. The number is always
+the element's place in the list, never its value, so the lamps in the first
+sample are `lamp_0` to `lamp_4`, not `lamp_120` to `lamp_840`. Inside two loops
+each level adds its own index, the inner one first: the dot in column 3 of row 1
+is `dot_3_1`. Objects inside a copy keep their own names. Each light in the
+showcase is a group the loops write directly, such as `dot_3_5`, and the
+circles inside it are still `bloom`, `halo` and `core`.
 
 The picture never shows these names, but the compiler's messages do. In the
 sample below, each dot's alpha is computed from `i`, and one of them comes out
@@ -651,8 +653,9 @@ the three seconds.
   it. ([let](/reference/language/#let))
 - A `generate` can sit inside another; the inner one runs in full for every pass
   of the outer one. ([generate](/reference/language/#generate))
-- A copy is named after the object written in the loop, plus `_` and its index;
-  inside two loops, the inner index comes first. Generated names must be unique
+- An object the loop writes directly is named after the one written there, plus
+  `_` and its index; inside two loops, the inner index comes first. Objects
+  inside a copy keep their names. Generated names must be unique
   among the objects beside them, like any other.
   ([generate](/reference/language/#generate))
 - The same `duration` with a `delay` worked out from the index puts copies out
