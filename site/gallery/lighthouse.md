@@ -19,8 +19,8 @@ one direction, so `duration: 6, loop: true, yoyo: true` on the clouds is a
 12-second cycle. The stars twinkle on beats of `[1, 1.5, 2, 3][i % 4]`, which
 give cycles of 2, 3, 4 and 6 seconds. The five bands of waves take 6, 4, 3, 4
 and 6 seconds. No animation is delayed, so at 12 seconds every motion is back
-where it started, and the player's loop has no visible seam. The lesson on
-timing covers loop, yoyo and why a delay would break this.
+where it started, and the player's loop has no visible seam. [The lesson on
+timing](/learn/timing/) covers loop, yoyo and why a delay would break this.
 
 ### The sky is two lists
 
@@ -87,7 +87,7 @@ seconds in all, written out three times.
 `group beamLeft` is the same beam half a turn later. It starts at
 `scale: (0, 0)`, holds hidden for its first second, and its shorter cones,
 `[420, 340, 260, 190, 130, 80]`, hang off the lamp's left side with
-`origin: (1, 0.5)`. The lessons on animation, on groups and on sequences cover
+`origin: (1, 0.5)`. [The lesson on animation](/learn/animate/) and the lessons on groups and on sequences cover
 easing, scale and the steps.
 
 ### The flare

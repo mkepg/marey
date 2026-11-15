@@ -55,8 +55,8 @@ the arc's lowest point on that spot, so the smile shrinks towards its lowest
 point rather than its middle.
 
 A Marey line ends flat at its end points. The brows and the smile get round ends
-from a circle of `radius: stroke / 2` placed on each end point. The lesson on
-animation, [the lesson on shapes](/learn/shapes/) and the lesson on groups cover
+from a circle of `radius: stroke / 2` placed on each end point. [The lesson on
+animation](/learn/animate/), [the lesson on shapes](/learn/shapes/) and the lesson on groups cover
 these.
 
 ### A smile from sine and cosine
@@ -95,5 +95,5 @@ rotates between the two angles: it starts at `rotation: s * up` and animates
 `to: s * down, duration: 0.25`. The middle bird is `use Bird(40, 0) left`, with
 the angles swapped, so it beats against the other two. The whole flock moves
 from `position: (-130, 0)` to `to: (930, 0)` in six seconds, linearly, starting
-and ending off screen, so the jump back to the start is never seen. The lessons
-on templates and on timing cover this.
+and ending off screen, so the jump back to the start is never seen. The lesson
+on templates and [the lesson on timing](/learn/timing/) cover this.

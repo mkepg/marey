@@ -31,7 +31,7 @@ The paddle is locked too, `lockPosition: true, bounce: 0.6`, but it also has
 `to: (500, 350), duration: 1, easing: easeInOut, loop: true, yoyo: true`. The
 lock stops physics from moving the body, not an animation. So the paddle sweeps
 back and forth between the second and third ledges, and its body goes with it,
-shoving whatever is in its way. The lessons on timing and on the physics world
+shoving whatever is in its way. [The lesson on timing](/learn/timing/) and the lesson on the physics world
 cover the two halves.
 
 ### Scattering without randomness

@@ -265,7 +265,7 @@ scene {
 The ball starts where its own `position` puts it, at `(120, 270)`, and ends at
 `to`. There is no "from": an animation always starts from the value the shape
 has when it begins. The ball also starts slowly and slows down before it
-stops. That is the default easing, and lesson 3 shows how to
+stops. That is the default easing, and [lesson 3](/learn/animate/) shows how to
 change it. After three seconds the ball stays where it ended.
 
 Now put the two ideas together. The sun starts below the horizon, hidden by

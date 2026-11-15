@@ -43,7 +43,7 @@ The template's parameter `delay` is passed straight to the animation's property,
 `delay: delay`. The three uses pass 0.9, 1.2 and 1.5 as their second argument,
 so the ridges start 0.3 seconds apart: the back ridge lands first and the front
 one last. Each use has an empty body, `back {}`, because the template places the
-ridge itself. The lessons on templates and on timing cover this.
+ridge itself. The lesson on templates and [the lesson on timing](/learn/timing/) cover this.
 
 ### The horizon is drawing order
 
@@ -61,4 +61,4 @@ The lockup is complete at 3.1 seconds and holds until the scene ends at 5.
 
 A bounded scene that is not playing shows its last frame, which here is the
 finished lockup. That is why this gallery card needs no poster time. [The lesson
-on shapes](/learn/shapes/) (text) and the lesson on timing (delay) cover this.
+on shapes](/learn/shapes/) (text) and [the lesson on timing](/learn/timing/) (delay) cover this.

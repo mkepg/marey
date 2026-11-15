@@ -43,7 +43,7 @@ the sequence from ever moving on. The duration `end - waveAt[w]` gives every
 shape a simulation that runs to the end of the scene: with `let end = 7`, each
 ends at 7.01 seconds, the 7 plus the 0.01 second fade-in step. That is just
 after the last frame, so no shape is seen to freeze; the heap you see at the end
-is where the shapes lie at 7 seconds. The lessons on sequences and on timing
+is where the shapes lie at 7 seconds. The lesson on sequences and [the lesson on timing](/learn/timing/)
 cover this.
 
 ### Invisible but solid

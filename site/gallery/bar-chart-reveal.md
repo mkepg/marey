@@ -40,7 +40,7 @@ animates to full height with `easing: easeOut`, fast at first and settling at
 the end. Because the pivot is at the bottom, the bar grows upwards from the
 baseline rather than out from its middle. A zero scale is allowed here because
 the bar takes no part in physics; on an object that does, it is a compile error.
-[The lesson on shapes](/learn/shapes/) covers origin, and the lesson on animation
+[The lesson on shapes](/learn/shapes/) covers origin, and [the lesson on animation](/learn/animate/)
 covers scale and easing.
 
 ### A stagger is a delay
@@ -50,7 +50,7 @@ second after the one before. Every bar grows for the same `duration: grow`, so
 they all move at the same speed and only their start differs. The number above a
 bar waits for `delay: start + grow`, the moment its bar finishes, then fades in
 over a quarter of a second. It is placed at `baseline - v * unit - 20`, just
-above the bar's final height. The lesson on timing covers delay.
+above the bar's final height. [The lesson on timing](/learn/timing/) covers delay.
 
 ### Text in a scene
 
