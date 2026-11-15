@@ -503,6 +503,12 @@ root, and never inside another `sequence`. An object may hold at most one
 (`TYPE_ONE_STORY`). Each step of a `sequence` must be `animate`, `physics`,
 or `parallel` — any other block is a compile error.
 
+On an object with no `animate` or `physics` block outside its `sequence`, the
+sequence's first step starts one tick (1/120 s) after the scene starts, where a
+lone `animate` starts with the scene, so a sequence whose steps add up exactly
+to the scene's `duration` finishes one tick after the scene ends; a timeline
+meant to finish with the scene must end at least one tick before it.
+
 `parallel` must be placed directly inside a `sequence` — it cannot sit at the
 scene root, directly inside a shape, or nested inside another `parallel`. A
 `parallel` block holds `animate` and `physics` children only. All of a
