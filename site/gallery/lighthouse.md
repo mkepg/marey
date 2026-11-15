@@ -144,5 +144,6 @@ The headland is a polygon with `position: (0, 292), origin: (0, 0)`. The top
 left of its points' bounding box is (0, 292), so pinning that corner there makes
 every point read as a scene coordinate. The tower's red stripes are trapezoids
 whose corners, such as `(-20.28, 9), (20.28, 9), (19.09, -9)`, were computed to
-sit on the tower's sloping sides. [The lesson on values](/learn/values/) covers `let` inside a
-`generate`, and [the lesson on shapes](/learn/shapes/) covers `origin`.
+sit on the tower's sloping sides. [The lesson on values](/learn/values/) covers `let` and its
+scope, and the lesson on generate covers a `let` inside a loop.
+[The lesson on shapes](/learn/shapes/) covers `origin`.

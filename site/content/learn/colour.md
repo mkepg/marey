@@ -50,10 +50,16 @@ as it slows a moving shape.
 ## How two colours blend
 
 A colour is three numbers, its red, green and blue channels, each from 0 to
-255. A hex code writes them in pairs: `#e04000` is red `e0`, which is 224,
-green `40`, which is 64, and blue `00`, which is 0. An animation blends each
-channel on its own, from its start to its end, at the animation's progress, and
-every frame lands on whole numbers for all three.
+255. A six-digit hex code writes them in pairs: `#e04000` is red `e0`, which
+is 224, green `40`, which is 64, and blue `00`, which is 0. An animation blends
+each channel on its own, from its start to its end, at the animation's
+progress, and every frame lands on whole numbers for all three.
+
+This blend happens in sRGB, the colour space hex codes are written in. Each
+channel takes a straight line from one code's number to the other's, which is
+not the same as a straight line between the colours as the eye sees them.
+That is why two strong colours can meet in a dull middle, as the next sample
+shows.
 
 So the halfway colour is the halfway value of each channel. From `#e04000` to
 `#2080c0`, red goes from 224 to 32, green from 64 to 128 and blue from 0 to
@@ -217,6 +223,9 @@ shape two groups deep is multiplied by both.
 
 This is what makes a group's alpha useful. Animate it, and everything inside
 fades together, each shape keeping its own brightness relative to the others.
+Each child is still drawn on its own, though, so in a group below full alpha,
+where two children overlap, the one behind shows through the one in front: a
+group's alpha dims its shapes one by one, not as a single flat picture.
 A group at alpha 0 hides its children whatever their own alpha is doing, so a
 child can twinkle all through the scene and be seen only while its group is
 up. The showcase's stars and the lights on its river work like that.
@@ -557,7 +566,7 @@ Only the first step's `to` changes on each shape; every other step starts from
 wherever the last one left off, so the rest of the day needs no change. The
 sky's way to dusk now stays among blues and teals. Halfway from `#6aa2d5` to
 `#1f5f6b`, red is halfway from 106 to 31, green from 162 to 95 and blue from
-213 to 107: about 68, 128 and 160, a steel blue. The old dusk, `#c25577`, took
+213 to 107: about 69, 129 and 160, a steel blue. The old dusk, `#c25577`, took
 the sky through a purple-grey, about 150, 124 and 166, on the way.
 :::
 
@@ -566,8 +575,8 @@ the sky through a purple-grey, about 150, 124 and 166, on the way.
 - `property: color` animates a shape's colour. Its `to` is a colour, and the
   shape's declared `color` is where it starts.
   ([Animating colour](/reference/language/#animating-colour))
-- Two colours blend one channel at a time, red, green and blue, at the
-  animation's progress, and every frame lands on whole 8-bit values. The
+- Two colours blend in sRGB, one channel at a time, red, green and blue, at
+  the animation's progress, and every frame lands on whole 8-bit values. The
   halfway colour is the halfway value of each channel.
   ([Animating colour](/reference/language/#animating-colour))
 - `easing`, `loop`, `yoyo`, `delay`, `sequence` and `parallel` work on colour

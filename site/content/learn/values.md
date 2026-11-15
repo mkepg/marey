@@ -60,8 +60,8 @@ A `let` can go before the `scene` block, as here, or inside the scene, a
 group, a shape or an `animate`. It can hold any kind of value: a number, a
 colour, a string, a point, a list, `true` or `false`, an easing or a `fit`.
 
-A name is fixed once it is given. Giving the same name a second value is a
-compile error:
+A name is fixed once it is given. Giving the same name a second value in the
+same place, here the top of the file, is a compile error:
 
 ```marey error
 let gap = 160
@@ -74,8 +74,9 @@ scene {
 }
 ```
 
-There is no way to change a value after it is named, so whatever a name holds
-is the same everywhere it is used.
+There is no way to change a value after it is named, so a name holds one
+value wherever that `let` can be seen. An inner block can give the same name a
+value of its own; "Where a name can be seen", below, shows how.
 
 One more rule: the nine named colours, such as `red` and `cyan`, are words of
 the language, so none of them can be a `let` name.
@@ -83,10 +84,39 @@ the language, so none of them can be a `let` name.
 ## Arithmetic
 
 Anywhere a number goes, you can write a calculation instead: `+`, `-`, `*`,
-`/`, and `%` for the remainder after division. `*`, `/` and `%` happen before
-`+` and `-`, and parentheses group the way you mean: `2 * gap + 10` is twice
-the gap, plus 10, and `2 * (gap + 10)` is twice the sum. A `-` in front of a
-number or a name negates it.
+`/`, and `%` for the remainder after division. A `-` in front of a number or a
+name negates it. `*`, `/` and `%` happen before `+` and `-`, and parentheses
+group the way you mean.
+
+The three bars below have the same `gap` and the same three operations, in
+different orders. Each label is the bar's width as written. Before you run it,
+work out which bar is longest:
+
+```marey
+let gap = 100
+
+scene {
+  size: (960, 540)
+  background: #1d2c48
+  duration: 3
+
+  rectangle a { position: (100, 150), origin: (0, 0.5), size: (2 * gap + 100, 40), color: #ffc46b, scale: (0, 1)
+                animate { property: scale, to: (1, 1), duration: 1.5, easing: easeOut } }
+  rectangle b { position: (100, 270), origin: (0, 0.5), size: (2 * (gap + 100), 40), color: #2f8a94, scale: (0, 1)
+                animate { property: scale, to: (1, 1), duration: 1.5, easing: easeOut } }
+  rectangle c { position: (100, 390), origin: (0, 0.5), size: (2 * gap + 100 / 2, 40), color: #e4553b, scale: (0, 1)
+                animate { property: scale, to: (1, 1), duration: 1.5, easing: easeOut } }
+
+  text la { position: (100, 110), origin: (0, 0.5), content: "2 * gap + 100", fontSize: 18, color: #f2e8d5 }
+  text lb { position: (100, 230), origin: (0, 0.5), content: "2 * (gap + 100)", fontSize: 18, color: #f2e8d5 }
+  text lc { position: (100, 350), origin: (0, 0.5), content: "2 * gap + 100 / 2", fontSize: 18, color: #f2e8d5 }
+}
+```
+
+The middle bar is longest. The top one is 2 × 100 = 200, plus 100: 300 pixels.
+The parentheses in the middle one make the addition happen first, 100 + 100 =
+200, and then double it: 400. In the bottom one the division happens before the
+addition, 100 / 2 = 50, so it is 200 + 50 = 250.
 
 Every calculation is worked out once, when the file is compiled, down to a
 plain number. The posts above were placed at 260, 480 and 700 before the scene
@@ -194,9 +224,10 @@ switch is set. A mistake in the branch that isn't chosen today is still caught.
 ## Comparisons
 
 A comparison makes a boolean from two values. `<`, `>`, `<=` and `>=` compare
-two numbers; `==` and `!=` ask whether two values of the same kind are equal or
-different. `and`, `or` and `not` combine booleans: `h > 100 and h < 200` is
-`true` only when both sides are.
+two numbers; `==` and `!=` ask whether two numbers, strings, booleans or
+colours are equal or different. Points and lists cannot be compared. `and`,
+`or` and `not` combine booleans: `h > 100 and h < 200` is `true` only when both
+sides are, `a or b` when either is, and `not a` when `a` is `false`.
 
 The bars below take their heights from a list, and each one's colour from
 comparing its height with `tall`. Watch which bars cross the faint line at
@@ -335,31 +366,37 @@ out a single `if`. The data decides each object's position, size and colour;
 the source decides which objects there are.
 
 So a shape that should appear only sometimes is always there, and a value
-hides it. The lamp below has a glow that is seen only when `lit` is `true`,
-because its alpha is 0 otherwise. Change `lit` to `false`:
+hides it. The street lamp below has a glow that is seen only when the lamp is
+lit and it is night: its alpha is `if lit and night then 0.25 else 0`. Change
+`lit` to `false`; then set it back, and change `night` to `false`:
 
 ```marey
-let lit = true
+let lit   = true
+let night = true
 
 scene {
   size: (960, 540)
-  background: #0b1230
+  background: if night then #0b1230 else #9cc6e4
 
-  circle glow { position: (480, 230), radius: 120, color: #ffd27a, alpha: if lit then 0.25 else 0 }
+  circle glow { position: (480, 230), radius: 120, color: #ffd27a, alpha: if lit and night then 0.25 else 0 }
   rectangle post { position: (480, 330), size: (10, 200), color: #2b3245 }
   circle bulb { position: (480, 230), radius: 18, color: if lit then #fff0c4 else #59627a }
 }
 ```
 
 With `lit` false the glow is still in the scene, at alpha 0, and the bulb is
-grey. The scene has the same three objects either way, with the same names.
+grey. With `night` false the sky turns blue and the glow goes too, though the
+bulb stays lit: `and` needs both sides. The scene has the same three objects
+every way, with the same names.
 That is what lets you read a scene and know what it holds. The showcase's moon
 craters and its stars work this way.
 
 ## Reading the showcase
 
-Open "Show the source" under the Postcard player at the top of the page. All
-the values are named at the top, and the scene only reads them:
+Open "Show the source" under the Postcard player at the top of the page. The
+values that lay out the landscape are named at the top, and the scene reads
+them. The details inside the landscape, the stars, the clouds and the pines'
+places along the shore, are plain numbers:
 
 - **`night`** chooses the palette, with `let pal = if night then nightPal else
   dayPal`. The two palettes list the same parts in the same order, so `pal[4]`
@@ -379,7 +416,9 @@ the values are named at the top, and the scene only reads them:
 - **The reflections** are the same groups below the horizon, with lists whose
   every y is negated. A negative `scale` would be a compile error, so the
   mirror image is written out rather than flipped. Each reflection group's
-  alpha of 0.4 dims its rock and its snow together.
+  alpha of 0.4 dims its rock and its snow together; where the reflections
+  overlap, the one behind shows through, as [the lesson on colour](/learn/colour/)
+  describes.
 - **The sun's rays** are eight lines placed with `cos` and `sin` at every 45
   degrees. Their group turns 45 degrees in eight seconds, so the scene loops
   without a seam. At night the rays' group has alpha 0, and three craters,

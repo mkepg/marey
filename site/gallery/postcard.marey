@@ -1,12 +1,15 @@
 // A picture postcard from the mountains: three peaks over a still
 // lake, their reflections, a shore of pines, and a caption.
 //
-// Nothing below is placed by hand. A handful of named values at the
-// top decide every position, size and colour, so changing one of
-// them restyles the whole card: `night` swaps the palette, turns the
-// sun into the moon and rewrites the caption; `horizon` moves the
-// mountains, the lake and the shore together; `heights` reshapes
-// the range. Each `if` chooses a value. None of them decides whether
+// The landscape is laid out from a handful of named values at the
+// top, so changing one of them restyles the card: `night` swaps the
+// palette the landscape's colours come from, turns the sun into the moon and
+// rewrites the caption; `horizon` moves the sky bands, the peaks,
+// their reflections, the lake and the shore together; `heights`
+// reshapes the range. The details inside it, the stars, the clouds,
+// the sun's glow and rays, and where along the shore each pine
+// stands, are placed with plain numbers, so they stay where they
+// are. Each `if` chooses a value. None of them decides whether
 // a shape exists: the moon's craters and the stars are always
 // there, and by day their alpha is 0.
 //
@@ -228,8 +231,7 @@ scene {
 
   // ── The card ── The border is drawn last, on top, so it trims
   // everything that runs past the picture's edges. The caption is
-  // chosen by `night`; both captions have 24 characters, so it
-  // stays centred either way.
+  // chosen by `night`.
   rectangle edgeTop    { position: (480, inset / 2), size: (W, inset), color: paper }
   rectangle edgeLeft   { position: (inset / 2, 270), size: (inset, 540), color: paper }
   rectangle edgeRight  { position: (W - inset / 2, 270), size: (inset, 540), color: paper }
