@@ -276,8 +276,11 @@ scene lasts six seconds and loops without a seam:
   with `yoyo` and `duration: 0.5`, so one pulse per second. It is declared
   dim and animates to bright, so it rises from each beat as a lamp comes on and
   is brightest half a second in, when the lamp is full. Declared bright with a
-  dim `to`, the same loop would run half a beat out of step. Swapping the
-  start and the end shifts a yoyo loop by half its period, with no delay.
+  dim `to`, the same loop would run half a beat out of step. With `linear` or
+  the default `easeInOut`, swapping the start and the end shifts a yoyo loop by
+  half its period, with no delay. With `easeIn` or `easeOut` it also swaps
+  which end is sharp: the glow, on `easeOut`, now has a broad bright peak and
+  a quick dip to dim, where the bright-first version had a sharp peak.
 - **Everything else**, the room, the window, the desk and the wooden body,
   stands still.
 
