@@ -62,8 +62,8 @@ light catching the cloud's underside.
 
 The fishing boat is three rectangles, a mast, a cabin and a hull, each with the
 same 30-pixel move; the hull's is `to: (836, 333), duration: 6`. They travel
-together only because their moves match. The lesson on groups moves a set of
-shapes with a single `animate`.
+together only because their moves match. [The lesson on groups](/learn/groups/) moves a
+set of shapes with a single `animate`.
 
 ### The path of light
 

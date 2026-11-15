@@ -58,8 +58,8 @@ The shadow, the hull, its stripe, the mast, two sails and the pennant each
 carry the same move, 220 pixels to the right over the whole eight seconds; the
 hull's is `to: (470, 432), duration: 8`. No `easing` is written, so the boat
 eases in and out. The shadow is a dark copy of the hull at `alpha: 0.35`, on
-the water under the boat. The lesson on groups moves a set of shapes like this
-with a single `animate`.
+the water under the boat. [The lesson on groups](/learn/groups/) moves a set of shapes
+like this with a single `animate`.
 
 ### Gulls and waves are lines
 

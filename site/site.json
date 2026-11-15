@@ -3,9 +3,11 @@
     { "slug": "first-scene", "vocabulary": ["scene", "size", "background", "duration", "circle", "rectangle", "position", "radius", "color", "animate", "property", "to"] },
     { "slug": "shapes", "vocabulary": ["polygon", "line", "text", "points", "thickness", "content", "fontSize", "alpha", "rotation", "origin", "layer", "fit", "contain", "cover", "fill", "none"] },
     { "slug": "animate", "vocabulary": ["easing", "linear", "easeIn", "easeOut", "easeInOut", "scale"] },
-    { "slug": "timing", "vocabulary": ["loop", "yoyo", "delay", "true", "false"] }
+    { "slug": "timing", "vocabulary": ["loop", "yoyo", "delay", "true", "false"] },
+    { "slug": "groups", "vocabulary": ["group"] },
+    { "slug": "sequence", "vocabulary": ["sequence", "parallel"] }
   ],
   "guides": [],
   "reference": ["language", "properties", "determinism"],
-  "gallery": ["lighthouse", "dusk-hills", "ledges", "logo-reveal", "bar-chart-reveal", "physics-pile", "metronome", "easing-race", "set-sail", "sunrise"]
+  "gallery": ["lighthouse", "dusk-hills", "ledges", "logo-reveal", "bar-chart-reveal", "physics-pile", "orrery", "title-card", "metronome", "easing-race", "set-sail", "sunrise"]
 }

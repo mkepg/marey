@@ -63,5 +63,5 @@ A crate is `group crate` with two rectangles, a frame and a face, and the
 `physics` block is on the group. A group with physics becomes one rigid body
 made of its children's shapes. `lockRotation: true` sends every impact into the
 crate's movement and none into turning, so when the paddle strikes one off
-centre it slides instead of tumbling. The lessons on groups and on the physics
-world cover this.
+centre it slides instead of tumbling. [The lesson on groups](/learn/groups/) and the lesson on the
+physics world cover this.

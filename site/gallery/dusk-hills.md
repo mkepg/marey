@@ -31,8 +31,8 @@ and back. Each star also twinkles on its own, fading to 0.3 and back over
 `duration: beat`, and a group's alpha multiplies with its children's, so the
 stars twinkle all the time but are only visible as night falls. The beats
 `[0.5, 0.75, 1, 1.5][i % 4]` give the twinkles four different periods, so the
-stars drift in and out of step. The lessons on groups and on templates cover
-this.
+stars drift in and out of step. [The lesson on groups](/learn/groups/) and the lesson on templates
+cover this.
 
 ### A face measured in one number
 
@@ -56,8 +56,8 @@ point rather than its middle.
 
 A Marey line ends flat at its end points. The brows and the smile get round ends
 from a circle of `radius: stroke / 2` placed on each end point. [The lesson on
-animation](/learn/animate/), [the lesson on shapes](/learn/shapes/) and the lesson on groups cover
-these.
+animation](/learn/animate/), [the lesson on shapes](/learn/shapes/) and
+[the lesson on groups](/learn/groups/) cover these.
 
 ### A smile from sine and cosine
 

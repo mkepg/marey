@@ -321,8 +321,8 @@ Open "Show the source" under the Set Sail player at the top of the page:
 - **The boat** is seven shapes. Each carries the same `animate`, 220 pixels to
   the right over the whole eight seconds, so they sail together. The mast
   stands on the deck, and the sails and the pennant hang from the mast, each by
-  its own `origin`. A later lesson, on groups, moves a set of shapes with a
-  single `animate`.
+  its own `origin`. [The lesson on groups](/learn/groups/) moves a set of
+  shapes with a single `animate`.
 
 ## Try this
 

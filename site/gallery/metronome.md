@@ -29,8 +29,8 @@ shapes with the same `position`, the rod's foot, and the same swing. The rod
 stands on that point with `origin: (0.5, 1)`. The others sit higher up the arm,
 so their `origin` is outside their own box: the weight's is `origin: (0.5, 7)`,
 seven weight-heights below its top, and the knob's is `origin: (0.5, 25.5)`.
-They swing together only because their moves match. The lesson on groups moves
-a set of shapes with a single `animate`.
+They swing together only because their moves match.
+[The lesson on groups](/learn/groups/) moves a set of shapes with a single `animate`.
 [The lesson on shapes](/learn/shapes/) covers `origin`.
 
 ### A shadow that swings

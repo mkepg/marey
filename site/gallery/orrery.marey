@@ -1,0 +1,252 @@
+// A brass orrery under the stars. Three planets ride arms
+// around a lamp of a sun, the middle one carries a moon, and
+// every planet turns on its own axis as it goes.
+//
+// The whole machine is groups inside groups, and each group
+// does one job. An orbit group sits on the sun and turns: its
+// arm and its planet are its children, so turning the group
+// carries them round. Inside it, the planet's own group turns
+// its surface. Inside that orbit again, the moon's group turns
+// round the planet. Each group's motion is written once, in
+// its own space, and the nesting adds them up.
+//
+// Every turn is `linear`, 360 degrees, with `loop: true`, and
+// its period (12, 6, 4, 3 or 2 s) divides the scene's 12 s.
+// Nothing is delayed, so the last frame matches the first.
+
+scene {
+  size: (960, 540)
+  duration: 12
+  background: #070a18
+
+  // ── Sky ── Two faint clouds of colour, each six circles of the
+  // same low alpha in even steps, so they deepen towards their
+  // centres with no edge to see.
+  circle nebulaA6 { position: (120, 90), radius: 300, color: #5b3a96, alpha: 0.025 }
+  circle nebulaA5 { position: (120, 90), radius: 250, color: #5b3a96, alpha: 0.025 }
+  circle nebulaA4 { position: (120, 90), radius: 200, color: #5b3a96, alpha: 0.025 }
+  circle nebulaA3 { position: (120, 90), radius: 155, color: #5b3a96, alpha: 0.025 }
+  circle nebulaA2 { position: (120, 90), radius: 112, color: #5b3a96, alpha: 0.025 }
+  circle nebulaA1 { position: (120, 90), radius: 72, color: #5b3a96, alpha: 0.025 }
+  circle nebulaB6 { position: (860, 470), radius: 300, color: #1d6f86, alpha: 0.025 }
+  circle nebulaB5 { position: (860, 470), radius: 250, color: #1d6f86, alpha: 0.025 }
+  circle nebulaB4 { position: (860, 470), radius: 200, color: #1d6f86, alpha: 0.025 }
+  circle nebulaB3 { position: (860, 470), radius: 155, color: #1d6f86, alpha: 0.025 }
+  circle nebulaB2 { position: (860, 470), radius: 112, color: #1d6f86, alpha: 0.025 }
+  circle nebulaB1 { position: (860, 470), radius: 72, color: #1d6f86, alpha: 0.025 }
+
+  // Stars of three sizes. A few twinkle: alpha yoyo loops whose
+  // periods, twice their durations, are 2, 3, 4 and 6 s.
+  circle s1  { position: (38, 34),   radius: 1.2, color: #dfe6ff, alpha: 0.8 }
+  circle s2  { position: (96, 152),  radius: 0.9, color: #dfe6ff, alpha: 0.6 }
+  circle s3  { position: (152, 62),  radius: 1.6, color: #fff3d6
+               animate { property: alpha, to: 0.25, duration: 1.5, loop: true, yoyo: true } }
+  circle s4  { position: (208, 196), radius: 1, color: #dfe6ff, alpha: 0.7 }
+  circle s5  { position: (262, 28),  radius: 1.3, color: #dfe6ff, alpha: 0.9 }
+  circle s6  { position: (318, 112), radius: 0.8, color: #dfe6ff, alpha: 0.5 }
+  circle s7  { position: (60, 258),  radius: 1.4, color: #cfe0ff
+               animate { property: alpha, to: 0.2, duration: 2, loop: true, yoyo: true } }
+  circle s8  { position: (132, 330), radius: 0.9, color: #dfe6ff, alpha: 0.6 }
+  circle s9  { position: (24, 398),  radius: 1.1, color: #dfe6ff, alpha: 0.7 }
+  circle s10 { position: (190, 412), radius: 1.5, color: #fff3d6, alpha: 0.85 }
+  circle s11 { position: (96, 516),  radius: 1, color: #dfe6ff, alpha: 0.6 }
+  circle s12 { position: (226, 490), radius: 0.8, color: #dfe6ff, alpha: 0.5 }
+  circle s13 { position: (372, 40),  radius: 1, color: #dfe6ff, alpha: 0.6 }
+  circle s14 { position: (430, 92),  radius: 1.4, color: #cfe0ff
+               animate { property: alpha, to: 0.3, duration: 3, loop: true, yoyo: true } }
+  circle s15 { position: (546, 18),  radius: 1.1, color: #dfe6ff, alpha: 0.75 }
+  circle s16 { position: (604, 86),  radius: 0.8, color: #dfe6ff, alpha: 0.5 }
+  circle s17 { position: (672, 30),  radius: 1.6, color: #fff3d6
+               animate { property: alpha, to: 0.2, duration: 1, loop: true, yoyo: true } }
+  circle s18 { position: (742, 128), radius: 1, color: #dfe6ff, alpha: 0.7 }
+  circle s19 { position: (806, 52),  radius: 1.3, color: #dfe6ff, alpha: 0.85 }
+  circle s20 { position: (872, 160), radius: 0.9, color: #dfe6ff, alpha: 0.55 }
+  circle s21 { position: (930, 30),  radius: 1.2, color: #dfe6ff, alpha: 0.8 }
+  circle s22 { position: (918, 236), radius: 1.5, color: #cfe0ff
+               animate { property: alpha, to: 0.25, duration: 2, loop: true, yoyo: true } }
+  circle s23 { position: (842, 300), radius: 0.8, color: #dfe6ff, alpha: 0.5 }
+  circle s24 { position: (938, 364), radius: 1, color: #dfe6ff, alpha: 0.65 }
+  circle s25 { position: (780, 420), radius: 1.3, color: #fff3d6, alpha: 0.8 }
+  circle s26 { position: (900, 508), radius: 0.9, color: #dfe6ff, alpha: 0.6 }
+  circle s27 { position: (700, 512), radius: 1.4, color: #dfe6ff
+               animate { property: alpha, to: 0.3, duration: 1.5, loop: true, yoyo: true } }
+  circle s28 { position: (612, 470), radius: 0.8, color: #dfe6ff, alpha: 0.5 }
+  circle s29 { position: (360, 504), radius: 1.1, color: #dfe6ff, alpha: 0.7 }
+  circle s30 { position: (300, 400), radius: 0.8, color: #dfe6ff, alpha: 0.45 }
+  circle s31 { position: (402, 180), radius: 0.9, color: #dfe6ff, alpha: 0.5 }
+  circle s32 { position: (566, 196), radius: 1, color: #dfe6ff, alpha: 0.55 }
+  circle s33 { position: (640, 360), radius: 0.8, color: #dfe6ff, alpha: 0.45 }
+  circle s34 { position: (346, 300), radius: 1.2, color: #cfe0ff, alpha: 0.6 }
+  circle s35 { position: (690, 230), radius: 1.1, color: #dfe6ff, alpha: 0.6 }
+  circle s36 { position: (520, 430), radius: 0.9, color: #dfe6ff, alpha: 0.5 }
+
+  // ── The machine ── One group on the sun holds everything that
+  // turns, so moving or turning this group would move or turn
+  // the whole orrery.
+  group system {
+    position: (480, 270)
+
+    // The orbit guides are closed `line`s through points on a
+    // circle, one every few degrees. Their boxes are centred on
+    // (0, 0), so they sit centred on the sun.
+    line track3 { position: (0, 0), thickness: 1, color: #c9a25a, alpha: 0.22
+      points: [(236, 0), (234.7, 24.7), (230.8, 49.1), (224.4, 72.9), (215.6, 96), (204.4, 118), (190.9, 138.7), (175.4, 157.9), (157.9, 175.4), (138.7, 190.9), (118, 204.4), (96, 215.6), (72.9, 224.4), (49.1, 230.8), (24.7, 234.7), (0, 236), (-24.7, 234.7), (-49.1, 230.8), (-72.9, 224.4), (-96, 215.6), (-118, 204.4), (-138.7, 190.9), (-157.9, 175.4), (-175.4, 157.9), (-190.9, 138.7), (-204.4, 118), (-215.6, 96), (-224.4, 72.9), (-230.8, 49.1), (-234.7, 24.7), (-236, 0), (-234.7, -24.7), (-230.8, -49.1), (-224.4, -72.9), (-215.6, -96), (-204.4, -118), (-190.9, -138.7), (-175.4, -157.9), (-157.9, -175.4), (-138.7, -190.9), (-118, -204.4), (-96, -215.6), (-72.9, -224.4), (-49.1, -230.8), (-24.7, -234.7), (0, -236), (24.7, -234.7), (49.1, -230.8), (72.9, -224.4), (96, -215.6), (118, -204.4), (138.7, -190.9), (157.9, -175.4), (175.4, -157.9), (190.9, -138.7), (204.4, -118), (215.6, -96), (224.4, -72.9), (230.8, -49.1), (234.7, -24.7), (236, 0)] }
+    line track2 { position: (0, 0), thickness: 1, color: #c9a25a, alpha: 0.22
+      points: [(162, 0), (160.6, 21.1), (156.5, 41.9), (149.7, 62), (140.3, 81), (128.5, 98.6), (114.6, 114.6), (98.6, 128.5), (81, 140.3), (62, 149.7), (41.9, 156.5), (21.1, 160.6), (0, 162), (-21.1, 160.6), (-41.9, 156.5), (-62, 149.7), (-81, 140.3), (-98.6, 128.5), (-114.6, 114.6), (-128.5, 98.6), (-140.3, 81), (-149.7, 62), (-156.5, 41.9), (-160.6, 21.1), (-162, 0), (-160.6, -21.1), (-156.5, -41.9), (-149.7, -62), (-140.3, -81), (-128.5, -98.6), (-114.6, -114.6), (-98.6, -128.5), (-81, -140.3), (-62, -149.7), (-41.9, -156.5), (-21.1, -160.6), (0, -162), (21.1, -160.6), (41.9, -156.5), (62, -149.7), (81, -140.3), (98.6, -128.5), (114.6, -114.6), (128.5, -98.6), (140.3, -81), (149.7, -62), (156.5, -41.9), (160.6, -21.1), (162, 0)] }
+    line track1 { position: (0, 0), thickness: 1, color: #c9a25a, alpha: 0.22
+      points: [(92, 0), (90.6, 16), (86.5, 31.5), (79.7, 46), (70.5, 59.1), (59.1, 70.5), (46, 79.7), (31.5, 86.5), (16, 90.6), (0, 92), (-16, 90.6), (-31.5, 86.5), (-46, 79.7), (-59.1, 70.5), (-70.5, 59.1), (-79.7, 46), (-86.5, 31.5), (-90.6, 16), (-92, 0), (-90.6, -16), (-86.5, -31.5), (-79.7, -46), (-70.5, -59.1), (-59.1, -70.5), (-46, -79.7), (-31.5, -86.5), (-16, -90.6), (0, -92), (16, -90.6), (31.5, -86.5), (46, -79.7), (59.1, -70.5), (70.5, -59.1), (79.7, -46), (86.5, -31.5), (90.6, -16), (92, 0)] }
+
+    // The sun's light: twelve faint circles, each step of alpha
+    // small enough that no edge shows. They are one group, so a
+    // single `animate` on the group's `scale` makes the whole
+    // glow breathe. Period 6 s: `duration: 3` with `yoyo`.
+    group corona {
+      animate { property: scale, to: 1.08, duration: 3, loop: true, yoyo: true }
+      circle glow12 { position: (0, 0), radius: 156, color: #ffb347, alpha: 0.03 }
+      circle glow11 { position: (0, 0), radius: 144, color: #ffb347, alpha: 0.03 }
+      circle glow10 { position: (0, 0), radius: 132, color: #ffb347, alpha: 0.03 }
+      circle glow9 { position: (0, 0), radius: 120, color: #ffb84f, alpha: 0.03 }
+      circle glow8 { position: (0, 0), radius: 108, color: #ffbd5c, alpha: 0.03 }
+      circle glow7 { position: (0, 0), radius: 97, color: #ffc46b, alpha: 0.03 }
+      circle glow6 { position: (0, 0), radius: 86, color: #ffc46b, alpha: 0.03 }
+      circle glow5 { position: (0, 0), radius: 76, color: #ffcc78, alpha: 0.03 }
+      circle glow4 { position: (0, 0), radius: 66, color: #ffd27a, alpha: 0.03 }
+      circle glow3 { position: (0, 0), radius: 56, color: #ffd88a, alpha: 0.03 }
+      circle glow2 { position: (0, 0), radius: 47, color: #ffdc93, alpha: 0.03 }
+      circle glow1 { position: (0, 0), radius: 38, color: #ffe4a8, alpha: 0.03 }
+    }
+
+    // ── Outer planet, one turn in 12 s ── The orbit group sits on
+    // the sun, so its (0, 0), its pivot, is the sun's centre. The
+    // arm and the planet are placed along its x axis; turning the
+    // group from 250 to 610 degrees carries both once round.
+    // Outer orbits are written first, so the inner arms pass over
+    // them, as the arms of a real orrery stack.
+    group orbit3 {
+      rotation: 250
+      animate { property: rotation, to: 610, duration: 12, easing: linear, loop: true }
+      rectangle arm3    { position: (118, 0), size: (236, 3), color: #a8844a }
+
+      // The planet's group is placed at the arm's end. It does not
+      // turn, so its axes stay the orbit's: the sun is always to
+      // its left, at -x. That is where the shade is drawn.
+      group planet3 {
+        position: (236, 0)
+        circle collar3 { position: (0, 0), radius: 27, color: #8a6a35 }
+        circle body3   { position: (0, 0), radius: 24, color: #b79be0 }
+
+        // The surface turns inside the planet: two bands and a
+        // storm, written about the planet's centre. 360 degrees in
+        // 4 s, on top of the orbit's own turn.
+        group surface3 {
+          animate { property: rotation, to: 360, duration: 4, easing: linear, loop: true }
+          polygon bandA3 { position: (0, -12), color: #8f73c9
+                           points: [(-18.7, -3), (18.7, -3), (22.2, 3), (-22.2, 3)] }
+          polygon bandB3 { position: (0, 5), color: #d9c6f2
+                           points: [(-23.9, -3), (23.9, -3), (22.6, 3), (-22.6, 3)] }
+          circle  storm3 { position: (9, 12), radius: 4, color: #e58f7a }
+        }
+
+        // The night side: a half disc pointing away from the sun.
+        // `origin: (0, 0.5)` puts its pivot on its straight edge, at
+        // the planet's centre.
+        polygon night3 { position: (0, 0), origin: (0, 0.5), color: #070a18, alpha: 0.55
+          points: [(0, -24), (6.2, -23.2), (12, -20.8), (17, -17), (20.8, -12), (23.2, -6.2), (24, 0),
+                   (23.2, 6.2), (20.8, 12), (17, 17), (12, 20.8), (6.2, 23.2), (0, 24)] }
+      }
+    }
+
+    // ── Middle planet, one turn in 6 s, with a moon ──
+    group orbit2 {
+      rotation: 150
+      animate { property: rotation, to: 510, duration: 6, easing: linear, loop: true }
+      rectangle arm2    { position: (81, 0), size: (162, 3), color: #a8844a }
+
+      group planet2 {
+        position: (162, 0)
+        circle collar2 { position: (0, 0), radius: 21, color: #8a6a35 }
+        circle body2   { position: (0, 0), radius: 18, color: #3d8fc0 }
+
+        // An ocean world: a continent and a cloud band, turning
+        // once every 3 s.
+        group surface2 {
+          animate { property: rotation, to: 360, duration: 3, easing: linear, loop: true }
+          polygon land2  { position: (-4, 2), color: #6fbf8a
+                           points: [(-6, -7), (1, -8), (6, -4), (7, 2), (3, 8), (-3, 6), (-7, 1)] }
+          polygon cloud2 { position: (0, -11.5), color: #e6f5fa, alpha: 0.75
+                           points: [(-12.4, -1.5), (12.4, -1.5), (14.9, 1.5), (-14.9, 1.5)] }
+        }
+        polygon night2 { position: (0, 0), origin: (0, 0.5), color: #070a18, alpha: 0.55
+          points: [(0, -18), (4.7, -17.4), (9, -15.6), (12.7, -12.7), (15.6, -9), (17.4, -4.7), (18, 0),
+                   (17.4, 4.7), (15.6, 9), (12.7, 12.7), (9, 15.6), (4.7, 17.4), (0, 18)] }
+
+        // The moon's orbit is a group inside the planet, so its
+        // pivot is the planet's centre and it is carried round the
+        // sun with the planet: two turns, one inside the other.
+        // Its crater faces the planet and turns with this group, so
+        // the moon always shows the planet the same face.
+        group moonOrbit {
+          animate { property: rotation, to: 360, duration: 3, easing: linear, loop: true }
+          rectangle moonArm { position: (27.5, 0), size: (13, 1.5), color: #a8844a }
+          circle moon       { position: (34, 0), radius: 6, color: #d9dde6 }
+          circle crater     { position: (31.5, 1), radius: 1.6, color: #9aa1b2 }
+
+          // The moon's night side must face away from the sun, not
+          // turn with the moon's orbit. This group turns the other
+          // way at the same rate: -360 against 360, so the two
+          // cancel and its axes are the planet's again.
+          group moonLight {
+            position: (34, 0)
+            animate { property: rotation, to: -360, duration: 3, easing: linear, loop: true }
+            polygon moonNight { position: (0, 0), origin: (0, 0.5), color: #070a18, alpha: 0.6
+              points: [(0, -6), (1.6, -5.8), (3, -5.2), (4.2, -4.2), (5.2, -3), (5.8, -1.6), (6, 0),
+                       (5.8, 1.6), (5.2, 3), (4.2, 4.2), (3, 5.2), (1.6, 5.8), (0, 6)] }
+          }
+        }
+      }
+    }
+
+    // ── Inner planet, one turn in 4 s ──
+    group orbit1 {
+      rotation: 30
+      animate { property: rotation, to: 390, duration: 4, easing: linear, loop: true }
+      rectangle arm1    { position: (46, 0), size: (92, 3), color: #a8844a }
+
+      group planet1 {
+        position: (92, 0)
+        circle collar1 { position: (0, 0), radius: 16, color: #8a6a35 }
+        circle body1   { position: (0, 0), radius: 13, color: #e07a4f }
+
+        // A small hot world with one dark band and a crater,
+        // turning once every 2 s.
+        group surface1 {
+          animate { property: rotation, to: 360, duration: 2, easing: linear, loop: true }
+          polygon band1   { position: (0, -4), color: #a94a32
+                            points: [(-11.5, -2), (11.5, -2), (12.8, 2), (-12.8, 2)] }
+          circle  crater1 { position: (5, 5), radius: 2.5, color: #a94a32 }
+        }
+        polygon night1 { position: (0, 0), origin: (0, 0.5), color: #070a18, alpha: 0.55
+          points: [(0, -13), (3.4, -12.6), (6.5, -11.3), (9.2, -9.2), (11.3, -6.5), (12.6, -3.4), (13, 0),
+                   (12.6, 3.4), (11.3, 6.5), (9.2, 9.2), (6.5, 11.3), (3.4, 12.6), (0, 13)] }
+      }
+    }
+
+    // The sun sits in a brass cup over the arms' roots: written
+    // last in the machine, so it is drawn over all of them.
+    circle cup     { position: (0, 0), radius: 36, color: #8a6a35 }
+    circle cupRim  { position: (0, 0), radius: 33, color: #c9a25a }
+    circle sunEdge { position: (0, 0), radius: 30, color: #ff9a3c }
+    circle sunBody { position: (0, 0), radius: 26, color: #ffc861 }
+    circle sunCore { position: (0, 0), radius: 17, color: #ffe8a8 }
+    circle sunHot  { position: (-5, -5), radius: 7, color: #fff8e6 }
+  }
+
+  // ── Key ── One turn of each arm, in the planets' colours.
+  text keyHead { position: (36, 402), origin: (0, 0.5), content: "ONE TURN", fontSize: 12, color: #8a90b0 }
+  circle key1  { position: (42, 426), radius: 5, color: #e07a4f }
+  text keyT1   { position: (56, 426), origin: (0, 0.5), content: "4 s", fontSize: 13, color: #c9cde0 }
+  circle key2  { position: (42, 446), radius: 5, color: #3d8fc0 }
+  text keyT2   { position: (56, 446), origin: (0, 0.5), content: "6 s, its moon 3 s", fontSize: 13, color: #c9cde0 }
+  circle key3  { position: (42, 466), radius: 5, color: #b79be0 }
+  text keyT3   { position: (56, 466), origin: (0, 0.5), content: "12 s", fontSize: 13, color: #c9cde0 }
+}

@@ -319,7 +319,7 @@ scene {
 
 The crate makes one full turn while it covers the first half of the way, then
 slides the rest of the way without turning. Both animations started at zero;
-the turn simply finished first. Lesson 6 shows how to make animations run one
+the turn simply finished first. [Lesson 6](/learn/sequence/) shows how to make animations run one
 after another instead.
 
 ## Reading the showcase

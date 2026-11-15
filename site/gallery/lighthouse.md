@@ -47,7 +47,8 @@ The clouds use the same idea with one more step. A cloud's drift is on an inner
 position in the parent's space. The drift animates from `(0, 0)` to
 `to: (40, 0)` relative to wherever `use` put the cloud, so one template serves
 all three clouds. `scale: 0.7` and `scale: 1.2` make the high cloud small and
-the low one large. The lessons on templates and on groups cover both.
+the low one large. The lesson on templates and [the lesson on groups](/learn/groups/) cover
+both.
 
 ### Light from stacked transparency
 
@@ -87,8 +88,8 @@ seconds in all, written out three times.
 `group beamLeft` is the same beam half a turn later. It starts at
 `scale: (0, 0)`, holds hidden for its first second, and its shorter cones,
 `[420, 340, 260, 190, 130, 80]`, hang off the lamp's left side with
-`origin: (1, 0.5)`. [The lesson on animation](/learn/animate/) and the lessons on groups and on sequences cover
-easing, scale and the steps.
+`origin: (1, 0.5)`. [The lesson on animation](/learn/animate/), [the lesson on groups](/learn/groups/) and
+[the lesson on sequences](/learn/sequence/) cover easing, scale and the steps.
 
 ### The flare
 
@@ -98,7 +99,7 @@ together. Its sequence climbs with `to: 1, duration: 1, easing: easeIn` to a
 peak at 1, 5 and 9 seconds, the moments the lamp faces you, and
 `to: 0.15, duration: 2` holds it low between, including while the lamp faces
 away. The flare uses the same easing as the beam, so the glow grows as the beam
-shortens towards you. The lesson on sequences covers this timeline.
+shortens towards you. [The lesson on sequences](/learn/sequence/) covers this timeline.
 
 ### Waves that scroll forever
 
@@ -130,8 +131,8 @@ with `to: (0, -4), duration: 1.5`, and `group rock` inside that tilts from
 `rotation: -5` to 5 degrees. Each group's animation happens in its parent's
 space, so the three combine without any arithmetic. The boat is written between
 `group middle` and `group near`, and objects draw in source order, so the near
-waves pass in front of its hull. The lesson on groups and [the first
-lesson](/learn/first-scene/) (drawing order) cover this.
+waves pass in front of its hull. [The lesson on groups](/learn/groups/) and
+[the first lesson](/learn/first-scene/) (drawing order) cover this.
 
 ### Moonlight and the headland
 

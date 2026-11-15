@@ -28,8 +28,8 @@ Because they are on the group, the rim and the disc grow as one.
 The `sequence` around the `parallel` has a single step, so here it plays the
 same as three plain `animate` blocks would, since those also start together.
 Written this way, a later step, such as a hold or an exit, can be added after
-the `parallel` without restructuring. The lessons on groups and on sequences
-cover both forms.
+the `parallel` without restructuring. [The lesson on groups](/learn/groups/) and
+[the lesson on sequences](/learn/sequence/) cover both forms.
 
 ### Three ridges from one template
 
