@@ -3,13 +3,13 @@
 //
 // The landscape is laid out from a handful of named values at the
 // top, so changing one of them restyles the card: `night` swaps the
-// palette the landscape's colours come from, turns the sun into the moon and
-// rewrites the caption; `horizon` moves the sky bands, the peaks,
-// their reflections, the lake and the shore together; `heights`
-// reshapes the range. The details inside it, the stars, the clouds,
-// the sun's glow and rays, and where along the shore each pine
-// stands, are placed with plain numbers, so they stay where they
-// are. Each `if` chooses a value. None of them decides whether
+// palette the landscape's colours come from, turns the sun into the
+// moon and rewrites the caption; `horizon` moves the sky bands, the
+// peaks, their reflections, the lake and the shore together;
+// `heights` reshapes the range. The details inside it, the stars,
+// the clouds, the sun's glow and rays, and where along the shore
+// each pine stands, are plain numbers that do not read `horizon`.
+// Each `if` chooses a value. None of them decides whether
 // a shape exists: the moon's craters and the stars are always
 // there, and by day their alpha is 0.
 //

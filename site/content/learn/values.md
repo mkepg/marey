@@ -88,8 +88,8 @@ Anywhere a number goes, you can write a calculation instead: `+`, `-`, `*`,
 name negates it. `*`, `/` and `%` happen before `+` and `-`, and parentheses
 group the way you mean.
 
-The three bars below have the same `gap` and the same three operations, in
-different orders. Each label is the bar's width as written. Before you run it,
+The three bars below are built from the same `gap` and the same numbers,
+combined three ways. Each label is the bar's width as written. Before you run it,
 work out which bar is longest:
 
 ```marey
@@ -416,9 +416,9 @@ places along the shore, are plain numbers:
 - **The reflections** are the same groups below the horizon, with lists whose
   every y is negated. A negative `scale` would be a compile error, so the
   mirror image is written out rather than flipped. Each reflection group's
-  alpha of 0.4 dims its rock and its snow together; where the reflections
-  overlap, the one behind shows through, as [the lesson on colour](/learn/colour/)
-  describes.
+  alpha of 0.4 dims its rock and its snow together. Each reflection is
+  see-through at 0.4, so where two overlap, the one drawn first shows through
+  the one in front; [the lesson on colour](/learn/colour/) covers group alpha.
 - **The sun's rays** are eight lines placed with `cos` and `sin` at every 45
   degrees. Their group turns 45 degrees in eight seconds, so the scene loops
   without a seam. At night the rays' group has alpha 0, and three craters,

@@ -30,7 +30,7 @@ chooses the caption.
 The horizon is `let horizon = 300`, and the shore is `let shore = horizon + 96`.
 The sky bands, the peaks, the lake, the reflections and the shimmer on the water
 are all placed from them, so changing the horizon moves the landscape. The
-sun, the clouds and the stars are placed with plain numbers, so they stay put.
+sun, the clouds and the stars do not read `horizon`, so they stay put.
 The peaks are spaced with `let gap = (W - 2 * inset) / (length(heights) + 1)`,
 so the spacing follows the number of heights in the list.
 
@@ -51,10 +51,11 @@ The reflections are the same three groups below the horizon, with lists whose
 every y is negated. A negative `scale` is a compile error, so a mirror image
 has to be written rather than flipped. Each reflection group has
 `alpha: 0.4`, and a group's alpha multiplies with its children's, so the rock
-and the snow dim together. Each shape is still drawn on its own, so where the
-reflections overlap, the middle peak's shows faintly through the nearer ones,
-like layers of tinted glass. [The lesson on colour](/learn/colour/) covers
-both.
+and the snow dim together. Each reflection is see-through, so where they
+overlap, the middle peak's, drawn first, shows faintly through the nearer ones,
+like layers of tinted glass. Inside each one the rock shows through its snow
+too, because a group's alpha dims its shapes one by one.
+[The lesson on colour](/learn/colour/) covers both.
 
 ### Rays from sin and cos
 
