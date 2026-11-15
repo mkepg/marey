@@ -248,23 +248,28 @@ ${body.text}`,
         return typeof value === "string" && value !== "" ? value : null;
       };
       const hero = sceneFor(doc, "hero", str("hero"));
+      const lead = str("summary") ?? doc.description;
+      const cards = entriesBySection.learn.map((lesson, i) => {
+        const m = lessonMeta.get(lesson)!;
+        const showcase = m.showcase === null ? undefined : galleryById.get(m.showcase);
+        return {
+          slug: lesson.slug,
+          number: i + 1,
+          title: lesson.title,
+          summary: m.summary,
+          poster: showcase ? { source: showcase.source, time: showcase.poster } : null,
+        };
+      });
       const front = learnFrontBody({
         heading: str("heading") ?? doc.title,
-        lead: str("summary") ?? doc.description,
+        lead,
         bodyHtml: rendered.html,
-        lessons: entriesBySection.learn.map((lesson, i) => {
-          const m = lessonMeta.get(lesson)!;
-          const showcase = m.showcase === null ? undefined : galleryById.get(m.showcase);
-          return {
-            slug: lesson.slug,
-            number: i + 1,
-            title: lesson.title,
-            summary: m.summary,
-            poster: showcase ? { source: showcase.source, time: showcase.poster } : null,
-          };
-        }),
+        lessons: cards,
         hero: hero ? sceneRef(hero) : null,
       });
+      // Search reads the page as a reader sees it: the hero's lead, the
+      // introduction, then each card's title and summary.
+      text = [lead, rendered.text, ...cards.map((c) => `${c.title}\n${c.summary}`)].filter((t) => t !== "").join("\n");
       bodyHtml = front.html;
       headings = [...front.headings.slice(0, 1), ...rendered.headings, ...front.headings.slice(1)];
       links = [...links, ...front.links.map((href) => ({ href, line: 1, file: doc.file }))];

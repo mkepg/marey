@@ -87,6 +87,7 @@
   --site-stage-edge: #2a2c33;
   --site-stage-text: #e4e6ec;
   --site-stage-text-2: #a3a9b4;
+  --site-stage-link: #a99bff;
 
   --site-font-ui: "Bricolage Grotesque", system-ui, sans-serif;
   --site-font-mono: "JetBrains Mono", ui-monospace, monospace;
@@ -2072,9 +2073,15 @@ details.solution[open] > figure.sample {
   color: var(--site-stage-text-2);
 }
 
-/* The stage is dark in both themes, so its links take the dark theme's link colour. */
-.hero-stage figcaption a {
-  color: #a99bff;
+/*
+ * The stage is dark in both themes, so a link on it takes the stage's own link
+ * colour. `.content` is part of the selector so it outranks the prose link rule
+ * (`.content a:not(...)`), which would otherwise give it the light theme's link
+ * colour on a dark ground.
+ */
+.content .hero-stage figcaption a {
+  color: var(--site-stage-link);
+  text-decoration-color: color-mix(in srgb, var(--site-stage-link) 40%, transparent);
 }
 
 .front-heading {

@@ -15,8 +15,8 @@ it.
 
 Nothing in the scene says which shape is in front. A shape covers every shape
 written before it, so the order of the file is the order from back to front:
-stars, dawn, sun, clouds, headlands, sea, the path of light, and the dunes and
-reeds last. The sun is written before the sea, so the sea hides it until it
+stars, dawn, sun, clouds, headlands, sea, the path of light, the lit band on the
+horizon, the boat, and the dunes and reeds last. The sun is written before the sea, so the sea hides it until it
 rises. [The first lesson](/learn/first-scene/) covers drawing order.
 
 ### Stars that go out
@@ -36,6 +36,10 @@ the warmest with `to: (480, 515), duration: 6`, only 40 pixels up. So the warm
 colours stay close to the horizon while the cool ones climb, and the upper
 bands, with shorter durations, settle first.
 
+Eight bands is a choice, not a requirement: three or four would draw a dawn
+too, but in wide, hard steps. Eight keep each step of colour small, so the sky
+reads as a gradient even though every band is one flat colour.
+
 ### The sun's glow
 
 The sun is four circles with one position and one move,
@@ -47,10 +51,12 @@ y = 330.
 
 ### Clouds with lit undersides
 
-The clouds are written after the sun, so it rises behind the low one. A cloud
-is a bar with a small circle on each end to round it off, `radius: 4.5` on a
-bar 9 pixels tall, over a thin rectangle of warm colour that shows below it:
-the light catching the cloud's underside.
+The clouds are written after the sun, so it rises behind the low one. Each
+cloud is a flat base with a circle on each end to round it off, heaped with
+circles of different sizes; the low cloud's base is `size: (230, 12)` and its
+largest heap `radius: 23`. Before the base comes a warm copy of it, 4 pixels
+lower. The base covers all of that copy except a strip along the bottom: the
+light catching the cloud's underside.
 
 ### A boat on the lit horizon
 
@@ -61,16 +67,20 @@ shapes with a single `animate`.
 
 ### The path of light
 
-Ten thin rectangles below the sun, wider the nearer they are, start out of
-sight below the frame and rise into place, the farthest to `to: (600, 336)`.
-All ten take the full six seconds, so the farthest, which has the furthest to
-go, moves fastest, and the path lengthens towards the horizon as the sun
-clears it.
+The sun's reflection is ten thin rectangles under it, wider the nearer they
+are, rather than one pale bar: broken light reads as moving water, where a
+single bar reads as a painted stripe. All ten start on the horizon at
+`position: (600, 335)` or beside it, hidden behind a lit band of water,
+`size: (960, 10)`, that is written after them. Each moves down to its own
+place, from `to: (600, 342)` for the farthest to `to: (604, 477)` for the
+nearest. All ten take the full six seconds, so the nearest, which has the
+furthest to go, moves fastest, and the path spreads from under the sun towards
+you as the sun rises.
 
 ### Dunes from very large circles
 
 A circle much larger than the frame shows only a shallow arc of its top. The
 near dune is `position: (860, 1320), radius: 820`, so its highest point is at
-y = 500, and its edge falls out of the frame on either side. The dunes and the
-reeds, thin upright rectangles, are written last, so they hide the path of
-light until it rises past them.
+y = 500, and its edge falls out of the frame on either side. The beach between
+the dunes is one more such circle. The dunes, the beach and the reeds, thin
+upright rectangles, are written last, so they are in front of everything else.

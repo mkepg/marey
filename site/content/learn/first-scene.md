@@ -68,7 +68,7 @@ scene {
 ```
 
 `circle` says what kind of shape to draw, and `sun` is the name you give it.
-Every shape in a scene needs its own name. Inside the braces, `position` is
+Each shape in the scene needs a name of its own. Inside the braces, `position` is
 where the circle's centre goes and `radius` is its size in pixels. `color` is
 optional; without it a shape is white.
 
@@ -84,6 +84,21 @@ scene {
   }
 }
 ```
+
+Names must also differ. Two shapes written directly in the scene with the same
+name do not compile, because a name is how the compiler, and you, tell them
+apart:
+
+```marey error
+scene {
+  size: (960, 540)
+
+  circle sun { position: (300, 270), radius: 60 }
+  circle sun { position: (660, 270), radius: 60 }
+}
+```
+
+Rename the second one, to `moon` for example, and both are drawn.
 
 ## Moving things by hand
 
@@ -195,8 +210,10 @@ stars stays easy to scan.
 
 `duration` is the length of the scene in seconds. A player stops when it
 reaches the end; the players on this site then start again from the beginning.
-`duration` is optional, but a scene without one has no set length, so every
-scene in this course gives one.
+`duration` is optional. A scene without one has no set length: the samples
+above leave it out, so their players show `∞` where the length would be. Every
+scene in this course that moves gives a `duration`, and so does every
+showcase.
 
 ```marey
 scene {
@@ -290,18 +307,19 @@ built from nothing but the ideas above:
   which is how the stars go out.
 - **The sun** is four circles with the same position and the same `animate`,
   largest first, so they stack into a glow, a rim and a core.
-- **The clouds** are written after the sun, so it rises behind them. Each is one
-  or two rectangles with a small circle on each end for rounded ends, over a
-  thin warm rectangle for the light on its underside.
+- **The clouds** are written after the sun, so it rises behind them. Each is a
+  flat rectangle with a small circle on each end for rounded ends, heaped with
+  larger circles, over a warm copy of the base for the light on its underside.
 - **The sea** is written after the sun, the dawn and the headlands, which is
   what hides everything below the horizon.
 - **The fishing boat** is three rectangles that each carry the same `animate`,
   so they travel together.
-- **The path of light** is ten thin rectangles that start below the frame and
-  rise into place with the sun.
-- **The dunes** are the tops of two circles much larger than the frame. They and
-  the reeds, thin rectangles, are written last, so they are in front of
-  everything.
+- **The path of light** is ten thin rectangles that start on the horizon,
+  hidden behind a thin band of water written after them, and spread towards
+  you as the sun rises.
+- **The dunes and the beach** are the tops of three circles much larger than
+  the frame. They and the reeds, thin rectangles, are written last, so they are
+  in front of everything.
 
 ## Try this
 

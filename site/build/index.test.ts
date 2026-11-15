@@ -165,6 +165,8 @@ describe("buildSite on a fixture", () => {
     expect(learn.html).toContain('<li class="lesson-card" data-lesson="two">');
     expect(learn.html).toContain('<figure class="hero-stage"><div class="sample-stage" data-source="scene {');
     expect(learn.text).toContain("Intro.");
+    // Search finds the hero's lead and every card's title and summary.
+    for (const words of ["A course.", "One", "About One.", "About Two."]) expect(learn.text).toContain(words);
   });
 
   it("reports a /learn/ hero that names no gallery entry", () => {

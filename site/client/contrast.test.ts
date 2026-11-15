@@ -75,6 +75,10 @@ const INTERFACE: Array<readonly [string, string]> = [
   ["accent", "bg"],
   ["control-border", "bg"],
   ["control-border", "raised"],
+  // The stage is dark in both themes: links and captions on it.
+  ["stage-link", "stage"],
+  ["stage-link", "stage-raised"],
+  ["stage-text-2", "stage"],
 ];
 
 /** Every class the highlighter emits, read from the highlighter itself. */
@@ -110,6 +114,16 @@ describe("the theme blocks", () => {
     for (const kind of TOKEN_KINDS) {
       expect(css, `.tk-${kind}`).toMatch(new RegExp(`\\.tk-${kind}\\b[^{]*\\{[^}]*var\\(--site-tk-${kind}\\)`));
     }
+  });
+});
+
+describe("links on the dark stage", () => {
+  it("take the stage's link colour in both themes, outranking the prose link rule", () => {
+    // The prose rule is `.content a:not(.anchor, .button, [class*="card"])`,
+    // specificity (0,2,1). The stage rule must beat it, or the light theme's
+    // link colour lands on the dark stage.
+    expect(css).toMatch(/\n\.content \.hero-stage figcaption a \{[^}]*color: var\(--site-stage-link\);/);
+    expect(dark["stage-link"]).toBe(light["stage-link"]);
   });
 });
 
