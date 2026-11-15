@@ -3,6 +3,7 @@ import { compileSource } from "../../src/compiler/compileSource";
 import { buildShareURLFor } from "../../src/lib/share";
 import { highlightMarey } from "../shared/highlight";
 import { escapeHtml } from "./escape";
+import { PLAYGROUND, playgroundLink } from "./playground";
 
 export type SampleMode = "live" | "run" | "error" | "fragment" | "solution" | "showcase";
 
@@ -16,8 +17,6 @@ export interface Sample {
   /** For `error` mode, the diagnostic code the sample must raise; null accepts any error. */
   readonly code: string | null;
 }
-
-const PLAYGROUND = "https://marey.pages.dev/";
 
 /** Every message the compiler gives for `source`, with the 1-based line it names. */
 export function compileMessages(source: string): { readonly ok: boolean; readonly errors: ReadonlyArray<{ readonly message: string; readonly line: number | undefined }> } {
@@ -77,7 +76,9 @@ export function checkSample(sample: Sample): string[] {
 
 /** The figure the client enhances; see the sample contract in the site's build notes. */
 export function renderSample(sample: Sample, messages: ReadonlyArray<string>): string {
-  const share = buildShareURLFor(PLAYGROUND, sample.source);
+  // A showcase is a gallery scene, so it links as the gallery page does. Every
+  // other sample links the text as written, the text its editor starts from.
+  const share = sample.mode === "showcase" ? playgroundLink(sample.source).url : buildShareURLFor(PLAYGROUND, sample.source);
   const attrs =
     `class="sample" data-mode="${sample.mode}" data-source="${escapeHtml(sample.source)}"` +
     (share === null ? "" : ` data-playground="${escapeHtml(share)}"`);

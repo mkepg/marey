@@ -15,8 +15,9 @@ import {
 } from "../../src/compiler/lexer/constants";
 import { buildShareURLFor } from "../../src/lib/share";
 import { escapeHtml } from "./escape";
-import { GALLERY_TAGS, gallerySourcePaths, loadGallery } from "./gallery";
+import { GALLERY_TAGS, galleryPages, gallerySourcePaths, loadGallery } from "./gallery";
 import { buildSite } from "./index";
+import { stripComments } from "./playground";
 
 const repoRoot = resolve(import.meta.dirname, "../..");
 
@@ -191,7 +192,10 @@ describe("the gallery pages", () => {
       expect(code, entry.id).not.toBeNull();
       expect(code![1]).toContain('<span class="tk-keyword">scene</span>');
       expect(strip(code![1]!)).toBe(entry.source);
-      const share = buildShareURLFor("https://marey.pages.dev/", entry.source);
+      // A scene over the share-link ceiling links the playground to its
+      // source without comments; every other scene links its full source.
+      const full = buildShareURLFor("https://marey.pages.dev/", entry.source);
+      const share = full ?? buildShareURLFor("https://marey.pages.dev/", stripComments(entry.source));
       expect(share, entry.id).not.toBeNull();
       expect(html).toContain(`href="${escapeHtml(share!)}"`);
       expect(html).toContain(">Open in playground<");
@@ -430,6 +434,51 @@ describe("loadGallery on a fixture", () => {
     expect(loadGallery(dir).errors).toEqual([
       'site/gallery/a.md:14: the notes sit under "How it\'s made"; start their headings at ###',
     ]);
+  });
+
+  /** A short scene under a long, varied comment that LZ cannot fold away. */
+  function commentHeavy(): string {
+    let seed = 11;
+    const lines: string[] = [];
+    for (let i = 0; i < 900; i++) {
+      let w = "//";
+      for (let k = 0; k < 24; k++) {
+        seed = (seed * 1103515245 + 12345) % 2147483648;
+        w += k % 6 === 0 ? " " : String.fromCharCode(97 + (seed % 26));
+      }
+      lines.push(w);
+    }
+    return lines.join("\n") + "\n" + SCENE;
+  }
+
+  it("gives a scene over the share-link ceiling a playground link to its source without comments", () => {
+    const source = commentHeavy();
+    expect(buildShareURLFor("https://marey.pages.dev/", source)).toBeNull();
+    const dir = fixture(["a"], { "site/gallery/a.md": entry(""), "site/gallery/a.marey": source });
+    const { entries, errors } = loadGallery(dir);
+    expect(errors).toEqual([]);
+    const html = galleryPages(entries, new Map())[1]!.html;
+    const share = buildShareURLFor("https://marey.pages.dev/", stripComments(source));
+    expect(share).not.toBeNull();
+    expect(html).toContain(`href="${escapeHtml(share!)}">Open in playground<`);
+    // The page still shows the commented source.
+    const code = /<pre class="code" data-lang="marey"><code>([\s\S]*?)<\/code><\/pre>/.exec(html);
+    expect(strip(code![1]!)).toBe(source);
+  });
+
+  it("reports a scene still over the ceiling without its comments, with its compressed length", () => {
+    let source = "scene {\n  size: (1000, 1000)\n  duration: 2\n";
+    for (let i = 0; i < 4000; i++) {
+      source += `  circle c${i} { position: (${(i * 7919) % 1000}, ${(i * 104729) % 1000}), radius: ${(i % 50) + 1} }\n`;
+    }
+    source += "}\n";
+    const dir = fixture(["a"], { "site/gallery/a.md": entry(""), "site/gallery/a.marey": source });
+    const { entries, errors } = loadGallery(dir);
+    expect(entries).toEqual([]);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatch(
+      /^site\/gallery\/a\.marey:1: the scene is too long for a playground link even without comments: \d[\d,]* compressed characters, over the 8,000 a share link takes$/,
+    );
   });
 
   it("reports a ## heading in the notes, which sit under the page's own", () => {

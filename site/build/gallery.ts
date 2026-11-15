@@ -2,11 +2,12 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { compileSource } from "../../src/compiler/compileSource";
 import { lex } from "../../src/compiler/lexer";
-import { buildShareURLFor } from "../../src/lib/share";
+import { MAX_SHARE_LENGTH } from "../../src/lib/share";
 import { checkOne } from "../../src/cli/check";
 import { highlightMarey } from "../shared/highlight";
 import { escapeHtml as esc } from "./escape";
 import { parseFrontMatter } from "./frontMatter";
+import { playgroundLink } from "./playground";
 import { renderLayout } from "./layout";
 import { renderMarkdown } from "./markdown";
 import { SLUG, parseSiteConfig } from "./siteConfig";
@@ -14,7 +15,6 @@ import type { Heading, SiteConfig, SitePage } from "./types";
 
 export const GALLERY_DIR = "site/gallery";
 const CONFIG_FILE = "site/site.json";
-const PLAYGROUND = "https://marey.pages.dev/";
 
 /** The tags a gallery entry may carry, in the order the filter shows them. */
 export const GALLERY_TAGS = ["physics", "generative", "text", "loop", "lesson"] as const;
@@ -248,6 +248,17 @@ function loadEntry(
   if (!hasText && tags.includes("text")) errors.push(`${at}: the scene has no text object, so drop the "text" tag`);
 
   const scene = checkScene(sourcePath, source, errors);
+  // A scene over the share-link ceiling links the playground to its source
+  // without comments; one still over it then gets no link, which is an error.
+  if (scene !== null) {
+    const link = playgroundLink(source);
+    if (link.url === null) {
+      errors.push(
+        `${sourcePath}:1: the scene is too long for a playground link even without comments: ` +
+          `${link.length.toLocaleString("en-US")} compressed characters, over the ${MAX_SHARE_LENGTH.toLocaleString("en-US")} a share link takes`,
+      );
+    }
+  }
   if (scene !== null && poster !== null && poster > scene.duration) {
     errors.push(`${at}: poster: ${posterText as string} is outside the scene's ${scene.duration} seconds`);
   }
@@ -372,7 +383,7 @@ function headingHtml(h: Heading): string {
 }
 
 function detailBody(entry: LoadedGalleryEntry, lesson: (LessonRef & { slug: string }) | null): string {
-  const share = buildShareURLFor(PLAYGROUND, entry.source);
+  const share = playgroundLink(entry.source).url;
   const lines = entry.source.split("\n").length - (entry.source.endsWith("\n") ? 1 : 0);
   const showcase = lesson
     ? `<p class="gallery-lesson">This scene is the showcase of <a href="/learn/${esc(lesson.slug)}/">Lesson ${lesson.number}: ${esc(lesson.title)}</a>, ` +

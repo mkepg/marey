@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { escapeHtml } from "./escape";
+import { buildShareURLFor } from "../../src/lib/share";
+import { stripComments } from "./playground";
 import { checkSample, renderSample, type Sample } from "./samples";
 
 const GOOD = "scene {\n  size: (960, 540)\n  circle dot { position: (10, 10), radius: 4 }\n}";
@@ -99,6 +101,26 @@ describe("renderSample", () => {
       .replace(/&amp;/g, "&");
     expect(decoded).toBe(source);
     expect(html).not.toContain("</script>");
+  });
+
+  it("links a showcase over the share-link ceiling to its source without comments, and shows it whole", () => {
+    let seed = 3;
+    const lines: string[] = [];
+    for (let i = 0; i < 900; i++) {
+      let w = "//";
+      for (let k = 0; k < 24; k++) {
+        seed = (seed * 1103515245 + 12345) % 2147483648;
+        w += k % 6 === 0 ? " " : String.fromCharCode(97 + (seed % 26));
+      }
+      lines.push(w);
+    }
+    const source = lines.join("\n") + "\n" + GOOD;
+    expect(buildShareURLFor("https://marey.pages.dev/", source)).toBeNull();
+    const html = renderSample(sample({ mode: "showcase", source }), []);
+    const share = buildShareURLFor("https://marey.pages.dev/", stripComments(source));
+    expect(share).not.toBeNull();
+    expect(html).toContain(`data-playground="${escapeHtml(share!)}"`);
+    expect(html).toContain(`data-source="${escapeHtml(source)}"`);
   });
 
   it("omits the playground link when the source is too long to share", () => {
