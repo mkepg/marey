@@ -13,15 +13,19 @@ scene {
   duration: 6
   background: #13221f
 
-  // ── The room ── Light from a lamp off to the upper left: six
-  // warm circles at a very low alpha, stacked so the wall is
-  // brightest there. Many small steps hide the circles' edges.
-  circle light6 { position: (200, 110), radius: 560, color: #f2c27b, alpha: 0.02 }
-  circle light5 { position: (200, 110), radius: 460, color: #f2c27b, alpha: 0.02 }
-  circle light4 { position: (200, 110), radius: 370, color: #f2c27b, alpha: 0.025 }
-  circle light3 { position: (200, 110), radius: 280, color: #f2c27b, alpha: 0.025 }
-  circle light2 { position: (200, 110), radius: 200, color: #f2c27b, alpha: 0.03 }
-  circle light1 { position: (200, 110), radius: 120, color: #f2c27b, alpha: 0.03 }
+  // ── The room ── Light from a lamp off to the upper left: ten
+  // warm circles at alpha 0.014, stacked so the wall is brightest
+  // there. Small steps keep the circles' edges from showing.
+  circle light10 { position: (200, 110), radius: 566, color: #f2c27b, alpha: 0.014 }
+  circle light9 { position: (200, 110), radius: 512, color: #f2c27b, alpha: 0.014 }
+  circle light8 { position: (200, 110), radius: 458, color: #f2c27b, alpha: 0.014 }
+  circle light7 { position: (200, 110), radius: 404, color: #f2c27b, alpha: 0.014 }
+  circle light6 { position: (200, 110), radius: 350, color: #f2c27b, alpha: 0.014 }
+  circle light5 { position: (200, 110), radius: 296, color: #f2c27b, alpha: 0.014 }
+  circle light4 { position: (200, 110), radius: 242, color: #f2c27b, alpha: 0.014 }
+  circle light3 { position: (200, 110), radius: 188, color: #f2c27b, alpha: 0.014 }
+  circle light2 { position: (200, 110), radius: 134, color: #f2c27b, alpha: 0.014 }
+  circle light1 { position: (200, 110), radius: 80, color: #f2c27b, alpha: 0.014 }
 
   // A window on the right, onto a night sky over a hill.
   rectangle windowFrame { position: (790, 170), size: (200, 236), color: #0c1715 }
@@ -203,13 +207,13 @@ scene {
   circle lamp6 { position: (580, 462), radius: 7, color: #ffd27a, alpha: 0
                  animate { property: alpha, to: 1, duration: 0.45, delay: 5, yoyo: true, easing: easeOut } }
 
-  // ── The beat on the desk ── The lamps light the desk in front
-  // of the base: a flattened warm circle that pulses once a
-  // beat. It starts bright and fades to 0.04 in half a second,
-  // then comes back up in the next half: a yoyo loop with
-  // `duration: 0.5`, so one pulse per one-second beat. easeOut
-  // leaves the bright end fast and returns to it fast, so the
-  // brightest moment is a short peak on each beat.
-  circle deskGlow { position: (480, 498), radius: 170, color: #ffb347, alpha: 0.22, scale: (1, 0.1)
-                    animate { property: alpha, to: 0.04, duration: 0.5, loop: true, yoyo: true, easing: easeOut } }
+  // ── The beat on the desk ── The lamps' light on the desk: a
+  // flattened warm circle, one pulse per one-second beat (a yoyo
+  // loop with `duration: 0.5`). It starts dim, so each pulse rises
+  // from the beat as a lamp comes on and is brightest half a
+  // second in, when the lamp is full. easeOut leaves the dim end
+  // fast and returns to it fast. Declared bright instead, the same
+  // loop would run half a beat out of step with the lamps.
+  circle deskGlow { position: (480, 498), radius: 170, color: #ffb347, alpha: 0.04, scale: (1, 0.1)
+                    animate { property: alpha, to: 0.22, duration: 0.5, loop: true, yoyo: true, easing: easeOut } }
 }

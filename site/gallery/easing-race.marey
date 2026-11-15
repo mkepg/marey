@@ -10,14 +10,20 @@ scene {
   duration: 4
   background: #0b0e17
 
-  // ── Stadium ── Each floodlight's glow is three faint circles,
-  // stacked so it is strongest at the lamps.
-  circle glowL3 { position: (130, -30), radius: 280, color: #ffe2a8, alpha: 0.03 }
-  circle glowL2 { position: (130, -30), radius: 180, color: #ffe2a8, alpha: 0.05 }
-  circle glowL1 { position: (130, -30), radius: 100, color: #ffe2a8, alpha: 0.08 }
-  circle glowR3 { position: (830, -30), radius: 280, color: #ffe2a8, alpha: 0.03 }
-  circle glowR2 { position: (830, -30), radius: 180, color: #ffe2a8, alpha: 0.05 }
-  circle glowR1 { position: (830, -30), radius: 100, color: #ffe2a8, alpha: 0.08 }
+  // ── Stadium ── Each floodlight glow is six faint circles, in
+  // small steps so their edges do not show.
+  circle glowL6 { position: (130, -30), radius: 310, color: #ffe2a8, alpha: 0.024 }
+  circle glowL5 { position: (130, -30), radius: 265, color: #ffe2a8, alpha: 0.024 }
+  circle glowL4 { position: (130, -30), radius: 220, color: #ffe2a8, alpha: 0.024 }
+  circle glowL3 { position: (130, -30), radius: 175, color: #ffe2a8, alpha: 0.024 }
+  circle glowL2 { position: (130, -30), radius: 130, color: #ffe2a8, alpha: 0.024 }
+  circle glowL1 { position: (130, -30), radius: 85, color: #ffe2a8, alpha: 0.024 }
+  circle glowR6 { position: (830, -30), radius: 310, color: #ffe2a8, alpha: 0.024 }
+  circle glowR5 { position: (830, -30), radius: 265, color: #ffe2a8, alpha: 0.024 }
+  circle glowR4 { position: (830, -30), radius: 220, color: #ffe2a8, alpha: 0.024 }
+  circle glowR3 { position: (830, -30), radius: 175, color: #ffe2a8, alpha: 0.024 }
+  circle glowR2 { position: (830, -30), radius: 130, color: #ffe2a8, alpha: 0.024 }
+  circle glowR1 { position: (830, -30), radius: 85, color: #ffe2a8, alpha: 0.024 }
   rectangle lampsL { position: (130, 14), size: (112, 22), color: #1d2234 }
   rectangle lightL { position: (130, 14), size: (100, 10), color: #fff6dc }
   rectangle lampsR { position: (830, 14), size: (112, 22), color: #1d2234 }

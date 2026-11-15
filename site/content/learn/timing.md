@@ -201,8 +201,10 @@ scene {
 
 At the start the second and third dots sit still while the first sets off.
 From then on the three bounce as a wave, and the wave keeps its shape: each dot
-stays the same fraction of a bounce behind the one before. That fixed lag is a
-**phase offset**: the same period, a different starting point.
+stays the same fraction of a bounce behind the one before. A looping
+animation's **period** is the time it takes to come back to where it started:
+here 1.2 seconds, up and down. That fixed lag is a **phase offset**: the same
+period, a different starting point.
 
 Different durations would not do this. Each dot would then have its own
 period, and the dots would drift further apart with every bounce instead of
@@ -211,12 +213,13 @@ keeping their places in the wave.
 ## Loops without a seam
 
 The players on this site start a scene again when it ends. A scene **loops
-without a seam** when its last frame matches its first, so the restart cannot
-be seen. Three rules get you there:
+without a seam** when the restart cannot be seen: its last frame matches its
+first, and everything carries on moving after the restart as it would have if
+the scene had kept going. Three rules get you there:
 
 - every looping animation's period divides the scene's `duration`: a loop
-  without `yoyo` repeats every `duration`, and one with `yoyo` every two
-  durations;
+  without `yoyo` has a period of one `duration`, and one with `yoyo` a period
+  of twice its `duration`;
 - no looping animation has a `delay`;
 - every animation that does not loop has finished by the end of the scene, on
   the value it started from, as a once-only yoyo does.
@@ -269,10 +272,12 @@ scene lasts six seconds and loops without a seam:
   and the last match. Six looping lamps put out of step with `delay` would
   break the second rule above, so each lamp is a once-only flash instead, and
   the player's loop repeats them.
-- **The glow on the desk** pulses once a beat: a loop with `yoyo` and
-  `duration: 0.5`, so one pulse per second. It starts at its brightest, and
-  easeOut leaves that value fast and comes back to it fast, so the bright
-  moment is a short peak on each beat.
+- **The glow on the desk** pulses once a beat, in step with the lamps: a loop
+  with `yoyo` and `duration: 0.5`, so one pulse per second. It is declared
+  dim and animates to bright, so it rises from each beat as a lamp comes on and
+  is brightest half a second in, when the lamp is full. Declared bright with a
+  dim `to`, the same loop would run half a beat out of step. Swapping the
+  start and the end shifts a yoyo loop by half its period, with no delay.
 - **Everything else**, the room, the window, the desk and the wooden body,
   stands still.
 
@@ -511,3 +516,8 @@ loop still has no seam.
   different durations make them drift. ([delay](/reference/language/#delay))
 - `loop` and `yoyo` take `true` or `false`, and both default to `false`.
   ([Properties](/reference/properties/))
+- A scene loops without a seam when every looping animation's period divides
+  its `duration`, no looping animation has a `delay`, and every other
+  animation ends on its starting value before the scene does. These follow from
+  the period rules ([loop and yoyo](/reference/language/#loop-and-yoyo)) and
+  from the delay being spent once ([delay](/reference/language/#delay)).

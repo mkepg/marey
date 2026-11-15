@@ -60,17 +60,21 @@ repeated by the player's loop instead.
 ### A pulse on the desk
 
 The lamps' light on the desk is one circle squashed flat with
-`scale: (1, 0.1)`. Its alpha has
-`duration: 0.5, loop: true, yoyo: true, easing: easeOut`: half a second down
-from its brightest and half a second back, so one pulse a second. easeOut
-leaves the bright value fast and returns to it fast, so each pulse peaks
-sharply on the beat.
+`scale: (1, 0.1)`. It starts dim, `alpha: 0.04`, and its alpha has
+`to: 0.22, duration: 0.5, loop: true, yoyo: true, easing: easeOut`: half a
+second up and half a second back, so one pulse a second. Each pulse starts on
+the beat, as a lamp comes on, is brightest half a second later, when the lamp
+is full, and is dim again as the lamp goes out. easeOut leaves the dim value
+fast and returns to it fast, so the desk brightens quickly with each lamp and
+darkens quickly after it. Declared bright, with `to` dim, the same loop would
+run half a beat out of step with the lamps; swapping the start and the end is
+what shifts it, with no delay.
 
 ### A room lit from one side
 
-The warm light on the wall is six circles at `alpha: 0.02` to `alpha: 0.03`,
-stacked so the wall is brightest at the upper left. The metronome's body, the
-sheet of music and the hill outside the window are polygons whose points are
+The warm light on the wall is ten circles, each at `alpha: 0.014`, in steps so
+small that their edges do not show; together they light the upper left. The
+metronome's body, the sheet of music and the hill outside the window are polygons whose points are
 written in scene coordinates, with `origin: (0, 0)` pinning the top-left of
 each outline to its `position`. Nothing in the room moves: only the arm, its
 shadow, the lamps and the glow do.
