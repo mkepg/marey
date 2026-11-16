@@ -1,0 +1,290 @@
+// Toy Box. Letter blocks spelling M, A, R, E and Y tumble into
+// a wooden box with balls, bricks, dice, two wedges, an L-piece
+// and a toy car, and settle into a heap.
+//
+// The box is the scene itself. Every scene edge is a wall that
+// a physics object collides with, so the side edges are the
+// box's sides, and its floor is a plank frozen in place. Every
+// toy is a physics object, so every toy lands on the others,
+// not only on the floor.
+//
+// A heap cannot turn back into toys in the air, so the scene
+// cannot loop on its own. The box's front board slides up as
+// the scene starts and drops shut just before it ends: the
+// first and last frames are both the closed board, and the
+// restart happens behind it.
+
+let maple  = #eac58c
+let cream  = #f6ead2
+let tomato = #d9452b
+let sun    = #f2b134
+let cobalt = #2c62a8
+let leaf   = #3f9a5b
+let ink    = #2a1a10
+let glow   = #ffdca6
+
+let plankTone = [#7e4c2a, #8a5532, #784827, #8e5935, #804d2b, #885331, #7b4a29, #8c5734]
+let moteX     = [120, 210, 290, 160, 340, 250, 90, 380]
+let moteY     = [150, 230, 120, 300, 260, 360, 230, 180]
+
+// A letter block. The physics block is on the group, so the
+// frame, the face and the letter are welded into one body with
+// one part each. A `text` collides as the box around it, and
+// that box lies inside the frame, so the block still collides
+// as the square you see.
+template Block(letter, paint, tilt, push) {
+  group cube {
+    position: (0, 0)
+    rotation: tilt
+    rectangle frame { position: (0, 0), size: (64, 64), color: paint }
+    rectangle face  { position: (0, 0), size: (50, 50), color: maple }
+    text glyph { position: (0, 1), content: letter, fontSize: 38, color: paint }
+    physics { velocity: push, bounce: 0.2, duration: indefinitely }
+  }
+}
+
+// A plain building brick, any size, with a paler painted face.
+template Brick(w, h, paint, tilt, push) {
+  group brick {
+    position: (0, 0)
+    rotation: tilt
+    rectangle body { position: (0, 0), size: (w, h), color: paint }
+    rectangle lit  { position: (-3, -3), size: (w - 14, h - 14), color: cream, alpha: 0.18 }
+    physics { velocity: push, bounce: 0.2, duration: indefinitely }
+  }
+}
+
+// A beach ball: two bow-tie panels through the centre leave the
+// cream skin showing between them, six segments in all. A bow
+// tie is concave and collides as its convex hull, but every
+// point of it lies on the circle or at the centre, so the hull
+// stays inside the ball. Air drag makes it float down last.
+template Ball(r, a, b, drag, push) {
+  group ball {
+    position: (0, 0)
+    circle skin { position: (0, 0), radius: r, color: cream }
+    generate k, i in [0, 120] {
+      polygon panel {
+        position: (0, 0), color: [a, b][i]
+        points: [(0, 0), (r * cos(k), r * sin(k)), (r * cos(k + 20), r * sin(k + 20)),
+                 (r * cos(k + 40), r * sin(k + 40)), (r * cos(k + 60), r * sin(k + 60)),
+                 (0, 0), (r * cos(k + 180), r * sin(k + 180)), (r * cos(k + 200), r * sin(k + 200)),
+                 (r * cos(k + 220), r * sin(k + 220)), (r * cos(k + 240), r * sin(k + 240))]
+      }
+    }
+    circle hub { position: (0, 0), radius: r * 0.18, color: cream }
+    physics { velocity: push, bounce: 0.6, airDrag: drag, duration: indefinitely }
+  }
+}
+
+// A rubber ball with a painted band. The band's corners stay
+// inside the circle, so the band adds nothing to the outline.
+template Rubber(r, tone, band, push) {
+  group ball {
+    position: (0, 0)
+    circle body { position: (0, 0), radius: r, color: tone }
+    rectangle stripe { position: (0, 0), size: (r * 1.84, r * 0.3), color: band }
+    physics { velocity: push, bounce: 0.6, duration: indefinitely }
+  }
+}
+
+// A small bouncy ball. Its spot shows it rolling.
+template Bouncer(r, tone, give, push) {
+  group ball {
+    position: (0, 0)
+    circle body { position: (0, 0), radius: r, color: tone }
+    circle dot  { position: (r * 0.4, -r * 0.35), radius: r * 0.28, color: cream }
+    physics { velocity: push, bounce: give, duration: indefinitely }
+  }
+}
+
+template Die(tilt, push) {
+  group die {
+    position: (0, 0)
+    rotation: tilt
+    rectangle cube { position: (0, 0), size: (40, 40), color: cream }
+    circle p1 { position: (-10, -10), radius: 4, color: ink }
+    circle p2 { position: (0, 0), radius: 4, color: ink }
+    circle p3 { position: (10, 10), radius: 4, color: ink }
+    physics { velocity: push, bounce: 0.25, duration: indefinitely }
+  }
+}
+
+scene {
+  size: (960, 540)
+  duration: 8
+  background: #7e4c2a
+
+  // ── The inside of the box ── None of this has physics, so
+  // nothing lands on it: the toys fall past the planks and the
+  // frieze as if they were painted on the far side of the box.
+  generate c, i in plankTone {
+    rectangle plank { position: (60 + i * 120, 231), size: (118, 462), color: c }
+    line seam { position: (120 + i * 120, 231), points: [(0, -231), (0, 231)], thickness: 2, color: #4e2c16, alpha: 0.7 }
+    line grainA { position: (30 + i * 120, 231), points: [(0, -231), (6, -80), (-4, 90), (3, 231)], thickness: 1.5, color: #5e351b, alpha: 0.35 }
+    line grainB { position: (84 + i * 120, 231), points: [(0, -231), (-5, -40), (5, 140), (0, 231)], thickness: 1.5, color: #a26a40, alpha: 0.3 }
+    circle nailT { position: (60 + i * 120, 26), radius: 3.5, color: #3d2412 }
+    circle nailB { position: (60 + i * 120, 446), radius: 3.5, color: #3d2412 }
+  }
+  rectangle floorBack { position: (480, 501), size: (960, 78), color: #9a6a42 }
+  rectangle footing { position: (480, 462), size: (960, 4), color: #4e2c16, alpha: 0.6 }
+
+  // The floor the toys land on is a physics body: a plank with no
+  // gravity and a duration of 0.05 s. With nothing pulling it, it
+  // stays where it is placed, and when its duration runs out it
+  // freezes there for good, solid scenery that every toy lands
+  // on. It lifts the heap off the scene's bottom edge, 18 px in
+  // front of the back wall, so the toys stand on the floor.
+  rectangle floor {
+    position: (480, 510), size: (960, 60), color: #9a6a42
+    physics { gravity: (0, 0), bounce: 0, duration: 0.05 }
+  }
+  generate y in [490, 508, 526] {
+    line board { position: (480, y), points: [(-480, 0), (480, 0)], thickness: 1.5, color: #6e4628, alpha: 0.6 }
+  }
+
+  // Light through the open lid, from the upper left: six discs
+  // at the same low alpha, so it builds towards the corner.
+  generate r in [420, 340, 270, 205, 150, 100] {
+    circle pool { position: (200, 40), radius: r, color: glow, alpha: 0.045 }
+  }
+
+  // A painted alphabet round the inside.
+  rectangle frieze { position: (480, 84), size: (960, 40), color: #f1e0ba, alpha: 0.6 }
+  line friezeTop { position: (480, 62), points: [(-480, 0), (480, 0)], thickness: 3, color: #c9a46a }
+  line friezeLow { position: (480, 106), points: [(-480, 0), (480, 0)], thickness: 3, color: #c9a46a }
+  generate ch, i in ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"] {
+    text paint { position: (43 + i * 35, 85), content: ch, fontSize: 24, color: [tomato, #b87d10, cobalt, leaf][i % 4], alpha: 0.75 }
+  }
+
+  // Dust drifting in the light, on periods of 4 and 8 s.
+  generate x, i in moteX {
+    circle mote {
+      position: (x, moteY[i]), radius: [1.6, 2.2, 1.2][i % 3], color: glow, alpha: 0.7
+      animate { property: position, to: (x + [10, -8][i % 2], moteY[i] - 24), duration: [2, 4][i % 2], easing: easeInOut, loop: true, yoyo: true }
+    }
+  }
+
+  // ── The toys ── Listed roughly from the lowest start to the
+  // highest. They all fall from the first tick, so a toy that
+  // starts higher lands later, and the arrivals come one after
+  // another. The beach balls' air drag keeps them aloft longest.
+  // All but the first get a small push, most of it upward.
+  // Bounce differs by material: 0.2 to 0.3 for wood, 0.6 for
+  // rubber, 0.8 for the small balls. When two collide, the higher
+  // bounce of the pair is the one used.
+  use Rubber(28, tomato, cream, (0, 0)) b0 { position: (450, 410) }
+  use Brick(44, 44, cobalt, 12, (20, -40)) k0 { position: (350, 393) }
+  use Brick(130, 22, maple, 6, (-20, -40)) k1 { position: (580, 367) }
+  use Block("M", cobalt, 8, (40, -60)) m { position: (290, 341) }
+  use Bouncer(15, sun, 0.8, (-60, -80)) s0 { position: (680, 333) }
+  use Die(10, (10, -60)) d0 { position: (430, 328) }
+  use Block("A", tomato, -12, (0, -90)) a { position: (520, 302) }
+  group wedge {
+    position: (360, 272)
+    rotation: -15
+    polygon outer { position: (0, 0), points: [(0, -46), (52, 40), (-52, 40)], color: sun }
+    polygon inner { position: (0, 10), points: [(0, -26), (30, 24), (-30, 24)], color: #f7cd6a }
+    physics { velocity: (30, -120), bounce: 0.2, duration: indefinitely }
+  }
+  use Brick(44, 44, tomato, -8, (-40, -120)) k2 { position: (630, 264) }
+  // Two rectangles welded at a right angle. The L is concave,
+  // and because its parts are separate, it collides concavely:
+  // a toy can come to rest in its corner.
+  group lpiece {
+    position: (730, 220)
+    rotation: 20
+    rectangle stem { position: (0, -20), size: (30, 100), color: leaf }
+    rectangle foot { position: (35, 15), size: (40, 30), color: leaf }
+    rectangle stemLit { position: (-6, -20), size: (8, 88), color: #5cb877 }
+    physics { velocity: (-80, -120), bounce: 0.2, duration: indefinitely }
+  }
+  use Rubber(28, leaf, sun, (60, -140)) b1 { position: (240, 238) }
+  use Block("R", leaf, 20, (0, -140)) r { position: (460, 220) }
+  // The car is welded too: its wheels are parts of one body, so
+  // they do not turn. It tumbles like any other block.
+  group car {
+    position: (590, 190)
+    rotation: 8
+    rectangle body  { position: (0, 0), size: (96, 26), color: tomato }
+    rectangle cabin { position: (-6, -22), size: (50, 22), color: tomato }
+    rectangle glass { position: (-6, -22), size: (38, 13), color: cream }
+    circle wheelA { position: (-28, 15), radius: 11, color: ink }
+    circle wheelB { position: (28, 15), radius: 11, color: ink }
+    circle hubA { position: (-28, 15), radius: 4, color: maple }
+    circle hubB { position: (28, 15), radius: 4, color: maple }
+    physics { velocity: (-60, -160), bounce: 0.3, duration: indefinitely }
+  }
+  use Ball(44, leaf, sun, 0.12, (-50, -60)) b2 { position: (740, 65) }
+  use Brick(44, 44, sun, 20, (30, -180)) k3 { position: (330, 160) }
+  use Block("E", sun, -6, (-10, -200)) e { position: (510, 134) }
+  use Bouncer(15, tomato, 0.8, (100, -220)) s1 { position: (250, 126) }
+  group wedge2 {
+    position: (660, 108)
+    rotation: 30
+    polygon outer { position: (0, 0), points: [(0, -40), (46, 34), (-46, 34)], color: cobalt }
+    polygon inner { position: (0, 9), points: [(0, -22), (26, 20), (-26, 20)], color: #4f86c9 }
+    physics { velocity: (-60, -200), bounce: 0.2, duration: indefinitely }
+  }
+  use Brick(130, 22, leaf, -6, (40, -220)) k4 { position: (390, 91) }
+  use Block("Y", cobalt, 14, (-30, -240)) y { position: (560, 57) }
+  use Ball(44, tomato, cobalt, 0.12, (40, -40)) b3 { position: (220, 57) }
+  use Die(-20, (-60, -240)) d1 { position: (720, 48) }
+  use Bouncer(15, cobalt, 0.8, (-120, -260)) s2 { position: (800, 39) }
+  use Brick(44, 44, leaf, -10, (10, -260)) k5 { position: (440, 36) }
+
+  // Shadow where the box's sides and rim meet the light, drawn
+  // over the toys so that a toy against a side is shaded too.
+  rectangle shadeL  { position: (12, 270), size: (24, 540), color: ink, alpha: 0.25 }
+  rectangle shadeR  { position: (936, 270), size: (48, 540), color: ink, alpha: 0.2 }
+  rectangle shadeR2 { position: (950, 270), size: (20, 540), color: ink, alpha: 0.2 }
+  rectangle shadeT  { position: (480, 10), size: (960, 20), color: ink, alpha: 0.3 }
+
+  // ── The front board ── It has no physics, so the toys never
+  // touch it. It starts closed, over the whole frame, and its
+  // sequence lifts it clear in 0.4 s, holds, and drops it shut
+  // with a small bounce. Its steps add up to 7.9 s, so it is
+  // shut again just after 7.9 s, before the scene ends. Each step
+  // is an `animate` on position. The shadow strips hang below
+  // the board, so they show only while it moves.
+  group lid {
+    position: (480, 270)
+    rectangle board { position: (0, 0), size: (960, 540), color: #5e3820 }
+    generate y, i in [-225, -135, -45, 45, 135, 225] {
+      rectangle band { position: (0, y), size: (960, 88), color: [#633b22, #5a351e][i % 2] }
+      line join { position: (0, y + 45), points: [(-480, 0), (480, 0)], thickness: 2, color: #3a2112 }
+      line grain { position: (0, y - 12 + (i % 3) * 9), points: [(-480, 0), (-200, 4), (60, -3), (300, 5), (480, 0)], thickness: 1.5, color: #4a2a15, alpha: 0.45 }
+    }
+    generate x in [-390, 390] {
+      rectangle batten { position: (x, 0), size: (60, 540), color: #4a2b17 }
+      generate y in [-220, -80, 80, 220] {
+        circle bolt { position: (x, y), radius: 5, color: #a88a5a }
+      }
+    }
+    rectangle plate   { position: (0, -10), size: (380, 130), color: #c9a46a }
+    rectangle plateIn { position: (0, -10), size: (364, 114), color: #f1e0ba }
+    rectangle rule    { position: (0, -10), size: (344, 94), color: tomato }
+    rectangle ruleIn  { position: (0, -10), size: (336, 86), color: #f1e0ba }
+    text label { position: (0, -10), content: "TOYS", fontSize: 84, color: tomato }
+    // Iron straps on the four corners.
+    generate sx in [-1, 1] {
+      generate sy in [-1, 1] {
+        rectangle strapH { position: (sx * 425, sy * 260), size: (110, 20), color: #2e2a26 }
+        rectangle strapV { position: (sx * 470, sy * 215), size: (20, 110), color: #2e2a26 }
+        circle rivet  { position: (sx * 400, sy * 260), radius: 4, color: #8d7a5c }
+        circle rivet2 { position: (sx * 470, sy * 190), radius: 4, color: #8d7a5c }
+      }
+    }
+    rectangle latch { position: (0, 236), size: (60, 34), color: #b8924e }
+    circle hole { position: (0, 240), radius: 6, color: ink }
+    rectangle shadow1 { position: (0, 282), size: (960, 24), color: ink, alpha: 0.3 }
+    rectangle shadow2 { position: (0, 300), size: (960, 14), color: ink, alpha: 0.15 }
+    sequence {
+      animate { property: position, to: (480, -330), duration: 0.4, easing: easeIn }
+      animate { property: position, to: (480, -330), duration: 6.95 }
+      animate { property: position, to: (480, 270), duration: 0.45, easing: easeIn }
+      animate { property: position, to: (480, 258), duration: 0.05, easing: easeOut }
+      animate { property: position, to: (480, 270), duration: 0.05, easing: easeIn }
+    }
+  }
+}

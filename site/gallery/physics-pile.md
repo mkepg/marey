@@ -17,9 +17,9 @@ numeric physics duration runs out, the body freezes where it is and stays solid,
 so later shapes land on it as they would on any fixed body. With no gravity a
 wall does not move in its 0.05 seconds, so it freezes exactly where it was
 placed. The walls lean out with `rotation: s * 6`, mirrored by
-`generate s in [-1, 1]`, so the bin widens upwards. The lesson on the physics
-world shows the direct way to write a wall that never moves, `lockPosition`,
-which Ledges uses. The lesson on physics covers freezing.
+`generate s in [-1, 1]`, so the bin widens upwards. [The lesson on the physics
+world](/learn/world/) shows the direct way to write a wall that never moves, `lockPosition`,
+which Ledges uses. [The lesson on physics](/learn/physics/) covers freezing.
 
 ### One numbering for four kinds of shape
 
@@ -43,8 +43,9 @@ the sequence from ever moving on. The duration `end - waveAt[w]` gives every
 shape a simulation that runs to the end of the scene: with `let end = 7`, each
 ends at 7.01 seconds, the 7 plus the 0.01 second fade-in step. That is just
 after the last frame, so no shape is seen to freeze; the heap you see at the end
-is where the shapes lie at 7 seconds. [The lesson on sequences](/learn/sequence/) and
-[the lesson on timing](/learn/timing/) cover this.
+is where the shapes lie at 7 seconds. [The lesson on sequences](/learn/sequence/),
+[the lesson on timing](/learn/timing/) and [the lesson on the physics world](/learn/world/)
+cover this.
 
 ### Invisible but solid
 
@@ -62,8 +63,8 @@ wave below it. Five pairs of shapes share a start point; the first `circle ball`
 and the fourth `polygon wedge`, for example, both start at (280, 370). When the
 earlier of the two waves is released, its shape's body overlaps the waiting one,
 which impacts cannot move, so it is pushed aside as its simulation starts, the
-ball to about (297, 360), and then falls past. The lesson on physics covers when
-a body is created.
+ball to about (297, 360), and then falls past. [The lesson on the physics
+world](/learn/world/) covers when a body is created.
 
 ### Variety from the index
 

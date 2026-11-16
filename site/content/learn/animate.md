@@ -195,7 +195,7 @@ scene {
 ```
 
 The reference states one more limit on zero: a shape that takes part in
-physics may not have a zero scale. Physics is lesson 11.
+physics may not have a zero scale. [Physics is lesson 11](/learn/physics/).
 
 ## Fading: alpha
 

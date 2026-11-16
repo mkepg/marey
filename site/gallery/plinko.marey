@@ -1,0 +1,200 @@
+// Plinko. Sixteen discs drop one after another into a fairground
+// board, ricochet down a triangle of pegs past a swinging paddle,
+// and land in the scoring bins. Then the bins' floor opens, the
+// discs fall out through the bottom of the frame, and the floor
+// closes again.
+//
+// The world has walls on the left and right only. The open top
+// lets the discs wait above the frame and fall in; the open
+// bottom lets them fall out, and by 10 s every disc has fallen
+// out of the frame. The paddle swings on a 2.5 s period,
+// the lights blink on 1 s and the stars on 2 and 5 s, all of
+// which divide 10, so the last frame matches the first and the
+// loop has no seam.
+
+let gap   = 64      // between pegs in a row, and between dividers
+let rise  = 34      // between rows of pegs
+let row0  = 135     // the height of the top peg
+let hold  = 0.2     // between one disc's release and the next
+let gold  = #e8b44a
+let cream = #f3e9d2
+let berry = #c23b55
+let lamp  = #ffe9a8
+let chips = [#ff7a59, #5fe0b5, #6cb4ff, #ffd84d]
+let sky   = [#0d1030, #0f1334, #111639, #13193e, #161d44, #19214a, #1c2550, #1f2956, #222d5b, #253160]
+
+scene {
+  size: (960, 540)
+  duration: 10
+  background: #0d1030
+
+  // One gravity for every physics block, and walls on two edges.
+  world {
+    gravity: (0, 900)
+    bounds: [left, right]
+  }
+
+  // ── Night behind the booth ──
+  generate c, i in sky {
+    rectangle band { position: (480, 27 + i * 54), size: (960, 54), color: c }
+  }
+  generate p, i in [(40, 150), (150, 250), (60, 380), (190, 470), (130, 120), (820, 140), (920, 260), (800, 330), (900, 440), (850, 200)] {
+    circle star {
+      position: p, radius: [1.5, 2, 1.2][i % 3], color: cream, alpha: 0.8
+      animate { property: alpha, to: 0.2, duration: [1, 2.5][i % 2], loop: true, yoyo: true }
+    }
+  }
+
+  // Light falling from the awning onto the booth: two
+  // overlapping trapezoids at low alpha, brightest where both are.
+  polygon wash  { position: (480, 300), color: lamp, alpha: 0.05, points: [(-420, -220), (420, -220), (330, 240), (-330, 240)] }
+  polygon wash2 { position: (480, 260), color: lamp, alpha: 0.05, points: [(-300, -180), (300, -180), (220, 180), (-220, 180)] }
+
+  // The board behind the field, in three tones, lighter towards
+  // the middle. It has no physics, so the discs pass over it.
+  polygon backing  { position: (480, 282), color: #1c2358,
+                     points: [(-80, -192), (80, -192), (300, 48), (300, 192), (-300, 192), (-300, 48)] }
+  polygon backing2 { position: (480, 290), color: #222a63,
+                     points: [(-64, -180), (64, -180), (270, 45), (270, 180), (-270, 180), (-270, 45)] }
+  polygon backing3 { position: (480, 303), color: #27306c,
+                     points: [(-48, -163), (48, -163), (230, 42), (230, 163), (-230, 163), (-230, 42)] }
+
+  // ── Pegs ── Row r has r + 1 pegs, because the inner loop runs
+  // to the outer loop's r: 36 pegs in eight rows, each row
+  // centred on the drop line at x = 480. A locked body never
+  // moves, so a peg needs nothing but its lock and its bounce.
+  generate r in 0 to 7 {
+    generate c in 0 to r {
+      circle peg { position: (480 + (c - r / 2) * gap, row0 + r * rise), radius: 6, color: gold,
+                   physics { lockPosition: true, bounce: 0.3 } }
+      circle shine { position: (478 + (c - r / 2) * gap, row0 + r * rise - 2), radius: 2, color: cream }
+    }
+  }
+
+  // The cabinet, all locked: a neck that the discs drop through,
+  // a rail along each side of the field, and a wall at each end
+  // of the bins.
+  generate s in [-1, 1] {
+    rectangle neck { position: (480 + s * 72, row0 - 112), size: (16, 224), color: gold,
+                     physics { lockPosition: true, bounce: 0.3 } }
+    rectangle rail { position: (480 + s * 172, row0 + 118), size: (322, 16), rotation: s * 47.4, color: gold,
+                     physics { lockPosition: true, bounce: 0.3 } }
+    rectangle wall { position: (480 + s * 288, 420), size: (16, 104), color: gold,
+                     physics { lockPosition: true, bounce: 0.2 } }
+  }
+
+  // ── Bins ── Eight locked dividers under the last row of pegs.
+  generate v, c in ["10", "25", "50", "100", "500", "100", "50", "25", "10"] {
+    text score { position: (224 + c * gap, 408), content: v, fontSize: 16, color: cream, alpha: 0.7 }
+  }
+  generate c in 0 to 7 {
+    rectangle divider { position: (256 + c * gap, 429), size: (6, 76), color: cream,
+                        physics { lockPosition: true, bounce: 0.2 } }
+    circle cap { position: (256 + c * gap, 391), radius: 3, color: cream }
+  }
+
+  // The bins' floor: one locked slat under each divider and wall.
+  // An animation still moves a locked body, and its body follows.
+  // At 7.8 s every slat turns a quarter about its centre and
+  // back, a yoyo that runs once. Upright, a slat stands in line
+  // with its divider, so the whole width of each bin opens.
+  generate c in 0 to 9 {
+    rectangle slat {
+      position: (192 + c * gap, 470), size: (gap - 4, 6), color: berry
+      physics { lockPosition: true, bounce: 0.1 }
+      animate { property: rotation, to: 90, duration: 1, delay: 7.8, easing: easeInOut, yoyo: true }
+    }
+  }
+
+  // ── The paddle ── A locked bar that slides across the neck
+  // and tilts as it goes, every 2.5 s, knocking each disc to one
+  // side or the other.
+  rectangle paddle {
+    position: (446, 104), size: (60, 10), rotation: -18, color: #ff6b6b
+    physics { lockPosition: true, bounce: 0.5 }
+    animate { property: position, to: (514, 104), duration: 1.25, easing: easeInOut, loop: true, yoyo: true }
+    animate { property: rotation, to: 18, duration: 1.25, easing: easeInOut, loop: true, yoyo: true }
+  }
+
+  // ── Discs ── They wait in a column above the frame, disc 0
+  // lowest. Each is a sequence. Its first step holds it where it
+  // is, for 0.2 s longer than the disc below it, so they drop in
+  // turn. Its body exists all through the hold, pinned in place.
+  // The first physics step spins it as it falls. The hold and
+  // that step add up to 7.8 s for every disc, so every disc's
+  // first step ends together, freezing it where it lies in its
+  // bin. The second starts at once, so every disc goes back into
+  // the simulation together, as the slats begin to turn.
+  generate k in 0 to 15 {
+    let x = 480 + [-3, 2, -1, 4, -4, 1, 3, -2][k % 8]
+    let y = -30 - k * 26
+    group disc {
+      position: (x, y)
+      circle rim  { position: (0, 0), radius: 10, color: chips[k % 4] }
+      circle face { position: (0, 0), radius: 6.5, color: cream }
+      rectangle bar { position: (0, 0), size: (12, 3), color: chips[k % 4] }
+      sequence {
+        animate { property: position, to: (x, y), duration: 0.3 + k * hold }
+        physics { spin: [240, -240][k % 2], bounce: 0.3, duration: 7.5 - k * hold }
+        physics { bounce: 0.3, duration: 2 }
+      }
+    }
+  }
+
+  // ── The booth ── Striped posts and two signs, each ringed
+  // with bulbs that blink in two alternating sets.
+  generate s in [-1, 1] {
+    rectangle post { position: (480 + s * 420, 300), size: (22, 480), color: cream }
+    generate j in 0 to 7 {
+      rectangle stripe { position: (480 + s * 420, 90 + j * 60), size: (22, 22), color: berry }
+    }
+    rectangle sign   { position: (480 + s * 360, 300), size: (110, 250), color: #2a1630 }
+    rectangle signIn { position: (480 + s * 360, 300), size: (96, 236), color: berry }
+    generate j in 0 to 9 {
+      circle signBulb {
+        position: (480 + s * 360 + [-52, 52][j % 2], 185 + (j - j % 2) / 2 * 57), radius: 4, color: lamp
+        alpha: [1, 0.25][(j + (j - j % 2) / 2) % 2]
+        animate { property: alpha, to: [0.25, 1][(j + (j - j % 2) / 2) % 2], duration: 0.5, loop: true, yoyo: true }
+      }
+    }
+  }
+  generate ch, i in ["P", "L", "I", "N", "K", "O"] {
+    text title { position: (120, 205 + i * 38), content: ch, fontSize: 34, color: cream }
+  }
+  text prizeA { position: (840, 225), content: "TOP", fontSize: 22, color: cream }
+  text prizeB { position: (840, 255), content: "PRIZE", fontSize: 22, color: cream }
+  text prizeC { position: (840, 330), content: "500", fontSize: 40, color: lamp }
+
+  // The counter the cabinet stands in, drawn after the discs, so a
+  // disc that drops through the open floor falls behind it and out
+  // of the frame. Its sides rise higher, to hide the ends of the
+  // two outer slats, which reach past the walls.
+  rectangle counter { position: (480, 508), size: (960, 64), color: #2a1630 }
+  generate s in [-1, 1] {
+    rectangle counterSide { position: (480 + s * 387, 500), size: (186, 80), color: #2a1630 }
+    rectangle sideTop     { position: (480 + s * 387, 461), size: (186, 3), color: gold }
+  }
+  rectangle counterTop { position: (480, 477), size: (582, 3), color: gold }
+  generate i in 0 to 7 {
+    rectangle panel { position: (60 + i * 120, 520), size: (108, 36), color: #331b3a }
+  }
+  generate i in 0 to 15 {
+    circle lamp {
+      position: (30 + i * 60, 490), radius: 4, color: lamp, alpha: [0.25, 1][i % 2]
+      animate { property: alpha, to: [1, 0.25][i % 2], duration: 0.5, loop: true, yoyo: true }
+    }
+  }
+
+  // ── Awning ── Drawn last, so the discs fall in from behind it.
+  generate i in 0 to 15 {
+    rectangle canvas  { position: (30 + i * 60, 26), size: (60, 52), color: [berry, cream][i % 2] }
+    circle    scallop { position: (30 + i * 60, 52), radius: 30, color: [berry, cream][i % 2] }
+  }
+  rectangle pelmet { position: (480, 4), size: (960, 8), color: gold }
+  generate i in 0 to 15 {
+    circle bulb {
+      position: (30 + i * 60, 84), radius: 4, color: lamp, alpha: [1, 0.25][i % 2]
+      animate { property: alpha, to: [0.25, 1][i % 2], duration: 0.5, loop: true, yoyo: true }
+    }
+  }
+}

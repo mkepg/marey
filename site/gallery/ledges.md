@@ -15,15 +15,15 @@ because the simulation steps at a fixed rate and its inputs are fixed.
 The `world` block sets `gravity: (0, 980)` once for every physics block, and
 `bounds: [left, right, bottom]` puts walls on three edges. There is no top wall,
 so the tiles can start above the frame, at heights of `-40 - i * rise`, and fall
-in. The lesson on the physics world covers `world` and `bounds`.
+in. [The lesson on the physics world](/learn/world/) covers `world` and `bounds`.
 
 ### Ledges that never move
 
 Each ledge has `physics { lockPosition: true, bounce: 0.5 }`. A locked body is
 static for the whole scene: tiles land on it and slide off, and nothing moves
 it. The three ledges tilt with `rotation: slope * [1, -1, 1][i]`, so each one
-falls away from its wall towards the middle and passes the tiles inwards. The
-lesson on the physics world covers locked bodies.
+falls away from its wall towards the middle and passes the tiles inwards. [The
+lesson on the physics world](/learn/world/) covers locked bodies.
 
 ### A paddle moved by animation
 
@@ -31,7 +31,7 @@ The paddle is locked too, `lockPosition: true, bounce: 0.6`, but it also has
 `to: (500, 350), duration: 1, easing: easeInOut, loop: true, yoyo: true`. The
 lock stops physics from moving the body, not an animation. So the paddle sweeps
 back and forth between the second and third ledges, and its body goes with it,
-shoving whatever is in its way. [The lesson on timing](/learn/timing/) and the lesson on the physics world
+shoving whatever is in its way. [The lesson on timing](/learn/timing/) and [the lesson on the physics world](/learn/world/)
 cover the two halves.
 
 ### Scattering without randomness
@@ -54,8 +54,8 @@ each tile in the simulation for the whole scene. A tile at rest is only asleep:
 when the paddle or another tile strikes it, it wakes and moves again. A numeric
 duration works differently: when it runs out, the body freezes where it is, and
 stays frozen until a later `animate` or `physics` step on the same object
-starts. The lesson on physics covers air drag and the duration, and the lesson
-on the physics world covers spin.
+starts. [The lesson on physics](/learn/physics/) covers air drag and the duration, and [the lesson
+on the physics world](/learn/world/) covers spin.
 
 ### Crates that stay level
 
@@ -63,5 +63,6 @@ A crate is `group crate` with two rectangles, a frame and a face, and the
 `physics` block is on the group. A group with physics becomes one rigid body
 made of its children's shapes. `lockRotation: true` sends every impact into the
 crate's movement and none into turning, so when the paddle strikes one off
-centre it slides instead of tumbling. [The lesson on groups](/learn/groups/) and the lesson on the
-physics world cover this.
+centre it slides instead of tumbling. [The lesson on groups](/learn/groups/) covers
+groups, [the lesson on physics](/learn/physics/) a group welded into one body, and
+[the lesson on the physics world](/learn/world/) `lockRotation`.
