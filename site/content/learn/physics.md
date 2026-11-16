@@ -16,7 +16,8 @@ Until now you have written every motion yourself: where a shape goes, how
 long it takes and how it eases. A `physics` block hands that to a simulation.
 You say where a shape starts and what it is like, heavy or bouncy or light,
 and the simulation works out how it falls, what it hits and where it comes to
-rest. The showcase above has no motion written by hand except its front board.
+rest. In the showcase above, no toy is moved by hand: the only motions written
+out are its front board and the dust in the light.
 
 ## A falling ball
 
@@ -48,7 +49,9 @@ of the scene is a wall for physics bodies.
 The block's `duration` says how long the simulation runs this body, and
 `duration: indefinitely` means for as long as the scene runs. It is a
 different thing from the scene's own `duration`, which says how long the scene
-lasts. A physics block must have one; leave it out and the compiler says so:
+lasts. A physics block must have one; leave it out and the compiler says so.
+(The one exception is a body that never moves at all, which
+[the next lesson](/learn/world/) covers.)
 
 ```marey error
 scene {
@@ -64,6 +67,9 @@ scene {
   }
 }
 ```
+
+The message says the block is missing its `duration`. Add
+`duration: indefinitely` inside the braces and the scene runs.
 
 The simulation steps at a fixed rate, 120 times a second, however fast the
 screen draws, so the same scene plays out the same way every time it runs.
@@ -226,8 +232,9 @@ A physics block's `duration` is a number of seconds or `indefinitely`, and the
 two end differently.
 
 - **A number.** When the time is up, the body **freezes** where it is, mid-air
-  included. It stays solid, but nothing can move it again: it becomes part of
-  the scenery.
+  included. It stays solid, but nothing in the simulation can move it: it
+  becomes part of the scenery. A later `animate` or `physics` step on the same
+  object can set it moving again, as [the next lesson](/learn/world/) shows.
 - **`indefinitely`.** The body never stops being simulated. Once it comes to
   rest it is **asleep**, which saves work, but it still collides, and anything
   that strikes it wakes it.
@@ -357,13 +364,14 @@ scene {
   }
 
   circle ballA { position: (320, 80), radius: 24, color: #f2b134, physics { bounce: 0.2, duration: indefinitely } }
-  circle ballB { position: (680, 80), radius: 24, color: #f2b134, physics { bounce: 0.2, duration: indefinitely } }
+  circle ballB { position: (644, 80), radius: 24, color: #f2b134, physics { bounce: 0.2, duration: indefinitely } }
 }
 ```
 
 The left ball lands on the slope of the polygon's hull, which runs from the top
 of the stem to the tip of the foot, and rolls off it onto the floor. The right
-ball drops into the corner and stays there, held by the stem and the foot.
+ball drops into the corner and stays there, resting on the foot against the
+stem, well below where the hull's slope would have stopped it.
 
 The objects inside a physics group have no physics blocks of their own; the
 group's block is the one that counts, and giving a child one as well is a
@@ -709,10 +717,12 @@ scene {
 
 Every toy comes from one of the two templates, so two changes do it:
 `duration: indefinitely` becomes `duration: 4` in each, and the floor keeps
-its own 0.05. The letters and balls have settled by then, so they look no
-different. The beach ball shows what freezing means: it is still drifting down
-at four seconds, and it stops dead in mid-air and hangs there for the rest of
-the scene, because a frozen body stays exactly where it was.
+its own 0.05. The letters have settled by then, so they look no different.
+The other toys show what freezing means, because a frozen body stays exactly
+where it was. The beach ball, still drifting down at four seconds, stops dead
+in mid-air and hangs there for the rest of the scene. The small yellow ball is
+caught in the middle of a bounce, 16 pixels above the floor, and stays there
+too.
 :::
 
 ## Recap
@@ -730,9 +740,10 @@ the scene, because a frozen body stays exactly where it was.
 - The scene's edges are walls; `collideBounds: false` lets a body pass them,
   and a body 800 pixels beyond the scene is removed and hidden.
   ([Properties](/reference/language/#properties))
-- A physics block needs a `duration`. When a number runs out, the body freezes
-  where it is and nothing moves it again; with `indefinitely`, a body at rest
-  is asleep and wakes when struck.
+- A physics block needs a `duration`, unless it is locked, as the next lesson
+  shows. When a number runs out, the body freezes where it is and nothing in
+  the simulation moves it; with `indefinitely`, a body at rest is asleep and
+  wakes when struck.
   ([When duration expires](/reference/language/#when-duration-expires))
 - A circle collides as a circle, a rectangle as a rectangle, a text as the box
   round it and a polygon as its convex hull. A line cannot have physics.
