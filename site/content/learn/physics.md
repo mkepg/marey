@@ -50,7 +50,7 @@ The block's `duration` says how long the simulation runs this body, and
 `duration: indefinitely` means for as long as the scene runs. It is a
 different thing from the scene's own `duration`, which says how long the scene
 lasts. A physics block must have one; leave it out and the compiler says so.
-(The one exception is a body that never moves at all, which
+(The one exception is a body the simulation never moves, which
 [the next lesson](/learn/world/) covers.)
 
 ```marey error
