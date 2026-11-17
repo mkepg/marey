@@ -174,6 +174,20 @@ describe("buildSite on a fixture", () => {
     ]);
   });
 
+  it("reports an embedded scene whose text holds the start of an HTML comment", () => {
+    const dir = fixture(
+      { ...empty, learn: [lesson("one")], gallery: ["sun"] },
+      {
+        "site/content/learn/one.md": lessonPage("One", "embed: sun\n"),
+        "site/gallery/sun.md": entry("one"),
+        "site/gallery/sun.marey": scene.replace("circle c", "// <!-- in a comment\n  circle c"),
+      },
+    );
+    expect(buildSite(dir).errors).toEqual([
+      'site/content/learn/one.md:1: embed "sun" cannot be written inline: its source contains "</script" or "<!--"',
+    ]);
+  });
+
   it("gives /learn/ exactly one h1, the hero's, with cards for the lessons", () => {
     const dir = fixture(
       { ...empty, learn: [lesson("one"), lesson("two")], gallery: ["lighthouse", "sun"] },
@@ -199,6 +213,27 @@ describe("buildSite on a fixture", () => {
     expect(learn.text).toContain("Intro.");
     // Search finds the hero's lead and every card's title and summary.
     for (const words of ["A course.", "One", "About One.", "About Two."]) expect(learn.text).toContain(words);
+  });
+
+  it("gives a lesson card the poster of the scene its lesson embeds when it has no showcase", () => {
+    const moon = scene.replace("circle c", "circle moon");
+    const dir = fixture(
+      { ...empty, learn: [lesson("one"), lesson("two")], gallery: ["moon"] },
+      {
+        "site/content/learn/one.md": lessonPage("One"),
+        "site/content/learn/two.md": lessonPage("Two", "embed: moon\n"),
+        "site/gallery/moon.md": "---\ntitle: Moon\nsummary: A moon.\nposter: 1\n---\n\nNotes.\n",
+        "site/gallery/moon.marey": moon,
+      },
+    );
+    const site = buildSite(dir);
+    expect(site.errors).toEqual([]);
+    const html = site.pages.find((p) => p.url === "/learn/")!.html;
+    const card = (slug: string) => html.slice(html.indexOf(`data-lesson="${slug}"`), html.indexOf("</li>", html.indexOf(`data-lesson="${slug}"`)));
+    expect(card("two")).toContain('<div class="lesson-card-poster sample-stage" data-source="scene {');
+    expect(card("two")).toContain("circle moon");
+    expect(card("two")).toContain('data-poster="1"');
+    expect(card("one")).toContain('<div class="lesson-card-poster"></div>');
   });
 
   it("reports a /learn/ hero that names no gallery entry", () => {

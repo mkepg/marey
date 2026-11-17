@@ -39,17 +39,18 @@ let ends   = [800, 800, 800, 838]
 //     0.15 s longer than the one before, so its simulation starts a
 //     little before the run reaches it. Simulated from the start
 //     instead, the dominoes stand still long enough to fall asleep,
-//     and in this scene the run slows and the tenth is the last to
-//     fall.
+//     the run slows to about half a second a domino, and when the
+//     physics steps end it has only reached the first book.
 //  2. Simulated for 4.5 s, the same for every domino. It falls, and
 //     freezes where it lies when the time is up.
 //  3. Rewound. Its position and its rotation animate back together
 //     in 0.5 s, so the dominoes stand up in the order they fell,
 //     0.15 s apart.
 //  4. Held where it started for `5 - wait` seconds. The four steps
-//     add up to exactly 10 s, and a sequence starts one tick after
-//     the scene, so the hold is still running in the last frame, and
-//     the domino stands exactly where it stood in the first.
+//     add up to exactly 10 s. The sequence is the group's only
+//     motion, so it starts one tick after the scene, the hold is
+//     still running in the last frame, and the domino stands exactly
+//     where it stood in the first.
 template Domino(tone, wait) {
   group tile {
     position: (0, 0)
@@ -193,19 +194,20 @@ scene {
   }
 
   // ── The desk ── Its top is a locked body, wider than the frame.
-  // Drawn as the front of the desk, with a lit top edge and grain.
+  // Drawn as the front of the desk, with a lit top edge, two drawers and grain.
   rectangle desk { position: (480, 490), size: (1300, 100), color: #4e301c,
                    physics { lockPosition: true, bounce: 0.1 } }
   rectangle deskEdge { position: (480, 443), size: (960, 6), color: #9a6a42 }
   rectangle deskLip  { position: (480, 448), size: (960, 4), color: #6b4428 }
-  generate y, i in [462, 474, 489, 503, 521] {
-    line grain { position: (480, y), points: [(-480, 0), (-120 + i * 40, [-2, 1, -1, 2, 0][i]), (480, 0)],
-                 thickness: 1, color: #3e2615, alpha: 0.8 }
-  }
   generate x in [240, 720] {
     rectangle drawer { position: (x, 494), size: (400, 64), color: #573620 }
     rectangle drawerLip { position: (x, 463), size: (400, 2), color: #7a4f2f }
     circle knob { position: (x, 494), radius: 6, color: brass }
+  }
+  // Grain across the drawer fronts, each line bent a little at its own point.
+  generate y, i in [470, 478, 486, 506, 516] {
+    line grain { position: (480, y), points: [(-480, 0), (-120 + i * 40, [-2, 1, -1, 2, 0][i]), (480, 0)],
+                 thickness: 1, color: #3e2615, alpha: 0.6 }
   }
   circle pool { position: (830, 444), radius: 150, scale: (1.6, 0.12), color: #ffc477, alpha: 0.16 }
 

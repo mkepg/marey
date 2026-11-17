@@ -12,7 +12,7 @@ learn:
 embed: lighthouse
 ---
 
-Every scene in this course has run in a player on this page. To use one
+Every scene in this course has run in a player on this site. To use one
 anywhere else you need it as a file, and something that reads the file: a
 command that checks it, a command that turns it into a video or an animation
 file, or a player on your own web page. The scene above is the Lighthouse from
@@ -122,9 +122,10 @@ its own rather than report `ok` for a check it did not make.
 
 ## Export
 
-`marey export` writes one output file per run. It draws the frames in a
-headless Chromium, the same way the playground's export button does, so it
-needs that browser installed once before the first export:
+`marey export` writes one output per run: a file, or for `png` a directory of
+frames. It draws the frames in a headless Chromium, the same way the
+playground's export button does, so it needs that browser installed once
+before the first export:
 
 ```bash
 npx --package playwright-core@1.62.1 playwright-core install chromium-headless-shell
@@ -172,6 +173,18 @@ npx marey export lighthouse.marey --format lottie
 ```text
 wrote lighthouse.json  360 frames @ 30 fps  960x540  243532 B  sha256 d10f271d2b2a0fac24eb12e459ba41aae0711858f664115c455621df604fcb01  frames 679a454e
 ```
+
+That line comes from 0.7.0, the version this site documents, which is not on
+npm yet. Version 0.6.0 writes the same scene as a different Lottie file, from
+an older encoder:
+
+```text
+wrote lighthouse.json  360 frames @ 30 fps  960x540  1304303 B  sha256 bd81f6c23bfa32c046a7708db8849626c0e937d05bc625496e7d3cdfddb61241  frames 679a454e
+```
+
+The bytes and the `sha256` differ, and the `frames` hash, `679a454e`, is the
+same, which is what the next section is about. The APNG line above is the same
+from both versions.
 
 ## The frames hash
 
@@ -235,9 +248,36 @@ language as this course teaches it.
 
 ## Check scenes on every push
 
-The Marey repository is also a GitHub Action. A workflow in your repository,
-at `.github/workflows/marey.yml`, checks every tracked `.marey` file on each
-push and pull request, and can export them too:
+A workflow that runs `marey check` on each push stops a broken scene before it
+is merged. With the published version, 0.6.0, write the step yourself. This one,
+at `.github/workflows/marey.yml` in your repository, sets up Node 22 and
+checks every scene in a `scenes` folder:
+
+```yaml
+name: Marey
+on: [push, pull_request]
+jobs:
+  scenes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npx --yes marey-lang@0.6.0 check scenes/*.marey
+```
+
+The shell expands `scenes/*.marey` to the file names, `check` prints each
+error with its file, line and column, and its exit code of 1 fails the step,
+and with it the run.
+
+The Marey repository is also a GitHub Action, which does more: it puts each
+error on its line in the pull request's diff, and can export every scene. It
+runs `check` with an option 0.6.0 does not have, so **the action needs
+`marey-lang` 0.7.0 or later**, which is not published yet. It installs the
+version named in the `package.json` of the commit you pin, and stops with a
+message saying so when npm does not have that version. Once 0.7.0 is on npm,
+this workflow uses it:
 
 ```yaml
 name: Marey
@@ -252,14 +292,12 @@ jobs:
           export: apng lottie
 ```
 
-Replace `<commit-sha>` with a full commit hash from the repository. Each
-diagnostic becomes an annotation on its file and line, in the run and in the
-pull request's diff. When every scene passes, each is exported in each format
-listed in `export` and uploaded as a workflow artifact; if any scene fails,
-nothing is exported. The action installs the `marey-lang` version named in the
-`package.json` of the commit you pin, and stops with a message saying so if
-npm does not have that version yet, so pin a commit whose version is
-published.
+Replace `<commit-sha>` with the full hash of a commit whose `package.json`
+names a published version. The action checks every tracked file that matches
+its `files` input, `*.marey` unless you give one. Each diagnostic becomes an
+annotation on its file and line, in the run and in the pull request's diff.
+When every scene passes, each is exported in each format listed in `export`
+and uploaded as a workflow artifact; if any scene fails, nothing is exported.
 
 ## Where to go from here
 
@@ -371,6 +409,6 @@ seconds, twice in the scene, and ends where it started, as
 - `<marey-player>` plays a scene from `src` or from an inline
   `<script type="text/marey">`, with the `autoplay`, `loop` and `controls`
   attributes. ([The guides](/guides/))
-- The GitHub Action checks every tracked scene on each push, annotates each
-  error on its line, and can export and upload the results.
-  ([The guides](/guides/))
+- A workflow step running `npx --yes marey-lang@0.6.0 check` checks scenes on
+  each push today. The GitHub Action, which needs 0.7.0, annotates each error on
+  its line and can export and upload the results. ([The guides](/guides/))

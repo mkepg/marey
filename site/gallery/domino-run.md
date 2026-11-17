@@ -56,10 +56,12 @@ Each domino is a `Domino` template whose sequence starts with a hold,
 `animate { property: position, to: (0, 0), duration: wait }`, where `wait` is
 `0.45 + i * 0.15`. During the hold the domino is a body, pinned where it
 stands, and its simulation starts when the hold ends, a little before the run
-reaches it. Measured in this scene, each domino starts to move between 0.18
-and 0.46 seconds after its simulation starts. With the holds taken out, the
-dominoes stand still long enough to fall asleep, the run slows, and the tenth
-domino is the last to fall. The red ball on the top book is held the same way,
+reaches it. Measured in this scene, each domino starts to move between 0.16
+and 0.47 seconds after its simulation starts. With the holds taken out, the
+dominoes stand still long enough to fall asleep, the run slows to about half a
+second a domino, and when the 4.5-second physics steps end it has only reached
+the first book: the tenth domino is part way over and the last three have not
+fallen. The red ball on the top book is held the same way,
 until 2.4 seconds. [The lesson on handing animation to physics](/learn/handoff/)
 covers a body that exists before its physics step, and
 [the lesson on physics](/learn/physics/) covers sleep.
@@ -87,11 +89,13 @@ book. Both have their rotation animated back to 0 on the way.
 
 ### A hold that outlasts the scene
 
-When an animation on a body ends, the simulation has the body again, so the
-marble, left on the slope of the ruler, would roll down it. Every rewound body
+Once a body's sequence has reached a `physics` step, an animation that ends
+afterwards leaves the body to the simulation, so the marble, left on the slope
+of the ruler, would roll down it. Every rewound body
 therefore ends with one more hold, an `animate` to where it already is. A
 domino's lasts `duration: 5 - wait`, so its four steps add up to the scene's 10
-seconds. A sequence starts one tick after the scene does, so every hold is
+seconds. On an object whose only motion is its sequence, the sequence starts
+one tick after the scene does, so every hold is
 still running in the last frame, and the last frame matches the first.
 [The lesson on handing animation to physics](/learn/handoff/) shows a body
 falling again when its last animation ends.

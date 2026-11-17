@@ -240,9 +240,34 @@ with its own code:
   clear.
 - It cannot hand off to a locked body, which the simulation never moves.
 
-A `yoyo` animation can hand off too. It finishes travelling back towards where
-it started, so it leaves in that direction, and its release multiples are
-different. [handoff](/reference/language/#handoff) has the full table.
+A `yoyo` animation can hand off too, but only with the `physics` block beside
+it. A step of a `sequence` cannot be a `yoyo`, since it would run for twice its
+`duration` and hide when the next step starts, so every handoff written as a
+sequence step is a one-way animation:
+
+```marey error=TYPE_SEQ_YOYO
+scene {
+  size: (960, 540)
+  background: #1b2433
+  duration: 3
+
+  circle ball {
+    position: (200, 300)
+    radius: 20
+    color: #ff7a59
+    sequence {
+      animate { property: position, to: (500, 300), duration: 1, easing: easeIn, yoyo: true, handoff: true }
+      physics { bounce: 0.3, duration: 1.5 }
+    }
+  }
+}
+```
+
+The message suggests the fix: write the return leg as a second `animate` step,
+and put `handoff` on that one. A `yoyo` beside its `physics` block finishes
+travelling back towards where it started, so it leaves in that direction, and
+its release multiples differ from the table above.
+[handoff](/reference/language/#handoff) has the full table.
 
 ## Animate, simulate, animate again
 
@@ -274,11 +299,13 @@ scene {
 }
 ```
 
-The ball is lifted, dropped, and bounces to a stop. At 4 seconds its physics
-step ends and it freezes. The last step carries it up to (660, 120). Then that
+The ball is lifted and dropped, bounces, and is still rolling slowly to the
+left when its physics step ends at 4 seconds and it freezes. The last step
+carries it up to (660, 120). Then that
 animation ends, nothing holds the ball any more, and it falls a second time.
-When an animation on a body ends, the simulation has it again, whether or not
-a `physics` step comes next. To keep a body where an animation leaves it, end
+Once a body's sequence has reached a `physics` step, an animation that ends
+afterwards leaves the body to the simulation, whether or not another
+`physics` step comes next. To keep a body where an animation leaves it, end
 the sequence with a step that holds it there until the scene is over, as the
 showcase does.
 
@@ -298,9 +325,11 @@ into a cup of tea. Then everything goes back to where it started.
 - **Each domino** is a `Domino` template with a four-step sequence. It is held
   first, for `0.45 + i * 0.15` seconds, so its simulation starts a little before
   the run reaches it. Measured in this scene, every domino starts moving between
-  0.18 and 0.46 seconds after its simulation starts. With the hold taken out,
-  the dominoes stand still long enough to fall asleep, the run slows, and the
-  tenth domino is the last to fall.
+  0.16 and 0.47 seconds after its simulation starts. With the hold taken out,
+  the dominoes stand still long enough to fall asleep, and the run slows from
+  about 0.15 seconds a domino to about half a second. When the dominoes'
+  4.5-second physics steps end, it has only reached the first book: the tenth
+  domino is part way over, and the last three have not fallen.
 - **The red ball** is held on the top book until 2.4 seconds and then
   simulated. The last domino knocks it off the end of the book, and it drops
   into the cup at about 3.2 seconds. The cup is a locked welded group of a base
@@ -316,8 +345,9 @@ into a cup of tea. Then everything goes back to where it started.
   it already is that lasts past the end of the scene: a domino's is
   `5 - wait`, so its four steps add up to the scene's 10 seconds. Without it,
   the marble would roll down the ruler again, as the ball in the last sample
-  fell. A sequence starts one tick after the scene does, so in the last frame
-  every hold is still running, and the last frame matches the first.
+  fell. On an object whose only motion is its sequence, the sequence starts one
+  tick after the scene does, so in the last frame every hold is still running,
+  and the last frame matches the first.
 - **Everything else** loops on its own: the steam, the stars, the clouds and
   the clock's pendulum all have periods that divide 10.
 
@@ -502,8 +532,14 @@ scene {
 At `gap = 80` the first domino falls flat and only touches the second, which
 barely moves, and the run stops there. A domino is 72 pixels tall and pivots on
 its front corner, so a gap close to its height leaves it almost lying down by
-the time it reaches the next one, with nothing left to push with. In this
-scene the run still works at 72 and breaks at 78.
+the time it reaches the next one, with little left to push with. In this scene
+the run works at 72, and from 76 it stops at the second domino in this way.
+
+At 74 it breaks for a second reason. The weaker pushes make the run slower, but
+the holds still end 0.15 seconds apart, so the run falls behind them. The
+fifth domino's hold ends 1.7 seconds before the run reaches it, it has stood
+still long enough to fall asleep, and in this scene the slow push it gets
+moves it a little and leaves it standing. The first four fall.
 :::
 
 :::try Add a second run triggered by the first
@@ -607,9 +643,9 @@ The book is a locked rectangle 14 pixels thick, from x 530 to 910, so its top
 is at y 426, and the second run stands on it at y 390, one `gap` on from the
 last domino of the first. The last orange domino falls at about 2 seconds and
 knocks over the first violet one, and the violet run falls to the end of the
-book by about 3.3 seconds. Their holds start where the first run's leave off,
-`1.8 + j * 0.2` seconds, so each one's simulation starts a little before the
-run reaches it.
+book by about 3.3 seconds. Their holds are `1.8 + j * 0.2`
+seconds, 0.2 seconds apart, so each one's simulation starts a little before
+the run reaches it.
 :::
 
 ## Recap
@@ -628,7 +664,7 @@ run reaches it.
 - `handoff` needs a `physics` block on the same object, works on `position`
   only, cannot loop, and the receiving block cannot set `velocity`.
   ([handoff](/reference/language/#handoff))
-- An `animate` step after a `physics` step lifts the freeze, and when an
+- An `animate` step after a `physics` step lifts the freeze, and when that
   animation ends the body is back in the simulation.
   ([When duration expires](/reference/language/#when-duration-expires),
   [Animation and physics together](/reference/language/#animation-and-physics-together))

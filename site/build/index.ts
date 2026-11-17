@@ -264,7 +264,9 @@ ${body.text}`,
       const lead = str("summary") ?? doc.description;
       const cards = entriesBySection.learn.map((lesson, i) => {
         const m = lessonMeta.get(lesson)!;
-        const showcase = m.showcase === null ? undefined : galleryById.get(m.showcase);
+        // A lesson with no showcase shows the scene it embeds, so no card is left blank.
+        const id = m.showcase ?? m.embed;
+        const showcase = id === null ? undefined : galleryById.get(id);
         return {
           slug: lesson.slug,
           number: i + 1,
