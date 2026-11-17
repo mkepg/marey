@@ -260,10 +260,13 @@ scene {
 
   // ── Sand behind the grains ── The heap fades in under the grains
   // as the last of them settle, so the pile reads as one mass when
-  // they fade out. The packed shape sits under them while they fade
-  // back in at the top, and goes as they drop.
-  polygon underlay {
-    position: (cx, cy + heapAt), color: heap, alpha: 0, points: heapPts
+  // they fade out. The packed shape is under the grains when they are
+  // back at the top; they fade in over it in 0.1 s, and it fades out
+  // behind them in the next 0.1 s, before they drop.
+  group underlay {
+    position: (cx, cy + heapAt), alpha: 0
+    polygon mass { position: (0, 0), color: heap, points: heapPts }
+    use Specks() specks { scale: (1, 0.8) }
     sequence {
       animate { property: alpha, to: 0, duration: 3.6 }
       animate { property: alpha, to: 1, duration: 0.4 }
@@ -275,17 +278,20 @@ scene {
       animate { property: alpha, to: 0, duration: 0.01 }
     }
   }
-  polygon topSand {
-    position: (cx, cy - packedAt), rotation: 180, color: heap, alpha: 1, points: packedPts
+  group topSand {
+    position: (cx, cy - packedAt), rotation: 180, alpha: 0
+    polygon mass { position: (0, 0), color: heap, points: packedPts }
+    use Specks() specks { scale: (1, 1.2) }
     sequence {
-      animate { property: alpha, to: 0, duration: 0.01 }
-      animate { property: alpha, to: 0, duration: 5.78 }
+      animate { property: alpha, to: 0, duration: 5.79 }
       animate { property: alpha, to: 1, duration: 0.01 }
-      animate { property: alpha, to: 1, duration: 0.19 }
-      animate { property: alpha, to: 0, duration: 0.01 }
-      animate { property: alpha, to: 0, duration: 5.76 }
+      animate { property: alpha, to: 1, duration: 0.1 }
+      animate { property: alpha, to: 0, duration: 0.1 }
+      animate { property: alpha, to: 0, duration: 5.77 }
       animate { property: alpha, to: 1, duration: 0.01 }
-      animate { property: alpha, to: 1, duration: 1 }
+      animate { property: alpha, to: 1, duration: 0.1 }
+      animate { property: alpha, to: 0, duration: 0.1 }
+      animate { property: alpha, to: 0, duration: 1 }
     }
   }
 
@@ -310,7 +316,7 @@ scene {
             animate { property: rotation, to: 0, duration: 1.6 }
           }
           parallel {
-            animate { property: alpha, to: 1, duration: fade }
+            animate { property: alpha, to: 1, duration: 0.1 }
             animate { property: position, to: (2 * cx - x, y), duration: fade }
           }
           physics { bounce: 0.1, duration: pour }
@@ -320,7 +326,7 @@ scene {
             animate { property: rotation, to: 0, duration: 1.58 }
           }
           parallel {
-            animate { property: alpha, to: 1, duration: fade }
+            animate { property: alpha, to: 1, duration: 0.1 }
             animate { property: position, to: (x, y), duration: 0.4 }
           }
         }
@@ -350,9 +356,12 @@ scene {
         animate { property: rotation, to: 0, duration: 1 }
       }
 
-      // The sand while it turns: the heap takes over from the grains,
-      // and halfway round, while the glass moves fastest, it becomes
-      // the packed shape the grains will fill. One pair for each end.
+      // The sand while it turns: the heap takes over from the grains.
+      // Near the middle of the turn, while the glass moves fastest, the
+      // packed shape the grains will fill replaces it, at first squashed
+      // to the heap's depth, (1, 0.72), and then stretched to its own
+      // over 0.4 s as if the sand loosened. Its position moves with the
+      // scale, so its end at the cap stays put. One pair for each end.
       generate b, i in [1, -1] {
         let at = i * 6
         group heapShape {
@@ -362,18 +371,22 @@ scene {
           sequence {
             animate { property: alpha, to: 0, duration: 4.19 + at }
             animate { property: alpha, to: 1, duration: 0.01 }
-            animate { property: alpha, to: 1, duration: 0.75 }
+            animate { property: alpha, to: 1, duration: 0.66 }
             animate { property: alpha, to: 0, duration: 0.1 }
           }
         }
         group packed {
-          position: (0, b * packedAt), rotation: 90 - b * 90, alpha: 0
+          position: (0, b * heapAt), rotation: 90 - b * 90, scale: (1, 0.72), alpha: 0
           polygon mass { position: (0, 0), color: heap, points: packedPts }
           use Specks() specks { scale: (1, 1.2) }
           sequence {
-            animate { property: alpha, to: 0, duration: 4.9 + at }
-            animate { property: alpha, to: 1, duration: 0.1 }
-            animate { property: alpha, to: 1, duration: 0.79 - i * 0.02 }
+            animate { property: alpha, to: 0, duration: 4.85 + at }
+            animate { property: alpha, to: 1, duration: 0.01 }
+            parallel {
+              animate { property: scale, to: (1, 1), duration: 0.4 }
+              animate { property: position, to: (0, b * packedAt), duration: 0.4 }
+            }
+            animate { property: alpha, to: 1, duration: 0.53 - i * 0.02 }
             animate { property: alpha, to: 0, duration: 0.01 }
           }
         }

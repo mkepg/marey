@@ -88,10 +88,12 @@ the last spark has faded by 10.9 seconds and the last smoke by 11.9.
 ### The river
 
 `let water = 384` is the waterline and `let deep = 0.5` the squash of a
-reflection. Every height in the templates is written as
-`water + k * (by - water)`. With `k` at 1 that is just `by`. With
+reflection. In the three templates the river reflects, `Ring`, `Flash` and
+`Glitter`, every height is the waterline plus `k` times the height above it,
+as in `water + k * (by - water)`. With `k` at 1 that is just `by`. With
 `-deep` it is the same height mirrored about the waterline and halved, so a
-burst 200 px above the water shows 100 px below it. The reflection is the
+burst 200 px above the water shows 100 px below it. `template Smoke` is not
+reflected, and places its puffs at plain `by + oy`. The reflection is the
 same templates used again with `-deep` and a lower alpha:
 `use Ring(burstX[k], burstY[k], reach[k], sparks[k], k * 7, t, outerHues[k], -deep) outerR { alpha: 0.4 }`.
 The city is mirrored the same way, `towerR` at height `h * deep`.
@@ -122,5 +124,5 @@ and 2, and the ripples, whose loops last 2, 3, 4 or 6 seconds. A yoyo's cycle
 is twice its `duration`, so every cycle divides 12 seconds. Everything else
 that moves plays once, waiting out its `delay`, and is invisible both before
 it starts and after it ends. In Chromium the frames at 0 and 12 seconds are
-identical, pixel for pixel. [The lesson on timing](/learn/timing/) covers loops without
-a seam.
+identical, pixel for pixel. [The lesson on timing](/learn/timing/) covers
+loops without a seam.

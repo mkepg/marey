@@ -77,14 +77,20 @@ moves each one 1.5 px outward and 1.5 px up and back, ten times a second.
 A locked body that an animation moves wakes the bodies that touch it, so no
 grain against the glass stays asleep. `let shake = if b < 0 then 1.5 else 0`
 leaves the lower strips still: with a shake of 0, `to` is where the strip
-already is. The strips are invisible, so the shake is too.
+already is. The strips themselves are not drawn, and the grains they push
+barely move more than they would anyway. Measured in Chromium from 1 to 1.4
+seconds, a grain above the neck strays from its own 13-tick moving average by
+at most 0.59 px in 95 percent of ticks with the shake, and 0.58 px without
+it.
 
-With the shake, the top bulb empties in both pours: the first grains reach
-the neck within half a second, the top bulb is empty by 3 seconds, and the
-second pour, which starts at 6, empties it by 9.2. It still empties in every
-pour with the grains 8.2 px apart instead of 8.1, the honeycomb started
-0.8 px lower, the sizes given to the other sets, or the shake slowed to
-0.06 seconds each way. [The lesson on the physics world](/learn/world/)
+With the shake, in Chromium, the top bulb empties in both pours: the first
+grains reach the neck within half a second, the top bulb is empty by 3
+seconds, and the second pour, which starts at 6, empties it by 9.2. It still
+empties in every pour with the grains 8.2 px apart instead of 8.1, the
+honeycomb started 0.8 px lower, the sizes given to the other sets, or the
+shake slowed to 0.06 seconds each way. The pour is chaotic, so other engines
+give other figures: measured the same way in Firefox, the top bulb is empty
+by 3.1 seconds and by 9.2. [The lesson on the physics world](/learn/world/)
 covers moving a locked body.
 
 ### One sequence per grain
@@ -126,14 +132,20 @@ other side. The posts and plates are templates too, the same at either end.
 ### Sand that turns with the glass
 
 The grains cannot turn with the glass, so a drawn copy of the sand does. As
-the last grains settle, `polygon underlay`, the shape of the heap, fades in
-behind them, so the heap reads as one mass. The grains fade out over it, and
-the drawn heap in the turning group takes over from it at once. Halfway
-through the turn, while the glass moves fastest, the heap gives way to the
-packed shape the grains will fill against the other cap. When the hourglass
-is down, `polygon topSand` takes over from that behind the grains, which fade
-back in over it, and it goes as they start to fall. The heap's outline,
-`heapPts`, is drawn to the heap the grains settle into: measured in
+the last grains settle, `group underlay`, the shape of the heap with its
+specks, fades in behind them, so the heap reads as one mass. The grains fade
+out over it, and the same drawing in the turning group takes over from it at
+once. Near the middle of the turn, while the glass moves fastest, the heap
+gives way to the packed shape the grains will fill against the other cap.
+That shape starts squashed to the heap's depth, `scale: (1, 0.72)`, so the
+swap barely changes the outline, and it stretches to full depth over 0.4
+seconds, as if the sand loosened as it tipped. Its `position` moves with the
+scale, so its end at the cap stays put.
+
+When the hourglass is down, `group topSand` takes over from that shape behind
+the grains. The grains fade in over it in 0.1 seconds, and it fades out
+behind them in the next 0.1, so it has gone before they start to fall. The
+heap's outline, `heapPts`, is drawn to the heap the grains settle into: measured in
 Chromium, its top edge is within 12 px of the top grains at 4 and at 10
 seconds. The packed shape, `packedPts`, follows the honeycomb.
 
@@ -147,6 +159,5 @@ drawing order, and [the lesson on shapes](/learn/shapes/) covers alpha.
 The flame flickers on periods of 0.5 and 1.5 seconds, the glows breathe on
 1.5 and 6, and the upper strips shake on 0.1. Each divides 12. Everything
 else is a timeline that ends where it began: the glass back at 0 degrees,
-and the grains held against the top cap over the drawn packed sand, as in
-the first frame. In Chromium the frames at 0 and 12 seconds are
-identical, pixel for pixel.
+the grains held against the top cap, and the drawn sand hidden. In Chromium
+the frames at 0 and 12 seconds are identical, pixel for pixel.

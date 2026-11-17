@@ -125,7 +125,9 @@ describe("playgroundLink", () => {
 describe("every gallery scene without its comments", () => {
   const { entries } = loadGallery(repoRoot);
 
-  it("compiles to the same scene as the commented source", () => {
+  // Compiles every gallery scene twice, so its time grows with the gallery;
+  // under a full parallel run the default 5 s was exceeded at 22 scenes.
+  it("compiles to the same scene as the commented source", { timeout: 30_000 }, () => {
     expect(entries.length).toBeGreaterThan(0);
     for (const entry of entries) {
       const original = compileSource(entry.source);

@@ -5,9 +5,9 @@
 // violets, each on its own period, and the stars twinkle.
 //
 // Every motion is a yoyo whose there-and-back period divides 12 s,
-// and nothing is delayed except one shooting star that has gone by
-// the end, so the last frame matches the first and the loop has no
-// seam.
+// or a plain loop that does (the cabin's smoke), and nothing is
+// delayed except one shooting star that has gone by the end, so the
+// last frame matches the first and the loop has no seam.
 
 let jade   = #3dffb0
 let teal   = #2fd8d0
@@ -227,8 +227,8 @@ scene {
   // A cabin with a lit window, and smoke on periods of 2, 3 and 4 s.
   group cabin {
     position: (700, 474)
-    generate f in [1, 0.75, 0.55, 0.38, 0.24] {
-      circle warmth { position: (10, -10), radius: 46 * f, color: #ffb860, alpha: 0.05 }
+    generate f in [1, 0.9, 0.8, 0.71, 0.62, 0.53, 0.45, 0.37, 0.3, 0.23, 0.17, 0.11] {
+      circle warmth { position: (10, -10), radius: 46 * f, color: #ffb860, alpha: 0.022 }
     }
     rectangle chimney { position: (-15, -40), size: (7, 16), color: #070b14 }
     rectangle walls { position: (0, -10), size: (52, 22), color: #070b14 }
