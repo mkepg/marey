@@ -1,0 +1,257 @@
+// Fireworks over a city by a river. Five rockets climb in turn and
+// burst into rings of sparks; each spark flies out, droops, changes
+// colour and fades, and the river below repeats it all upside down.
+//
+// Nothing loops but the stars, the city's lights and the ripples,
+// each on a period that divides 12 s. Every rocket, spark and puff of
+// smoke waits out its delay, plays once and ends unseen, the last
+// spark by 11 s and the last smoke by 12, so the scene's first and
+// last frames are the same quiet sky.
+
+let water = 384             // the waterline, and the line reflections turn about
+let deep  = 0.5             // a reflection is squashed to half its height
+
+// One rocket per burst: when it leaves, how long it climbs, and where
+// it bursts.
+let launch = [0.2, 1.7, 3.3, 4.9, 6.5]
+let climb  = [1.2, 1.3, 1.1, 1.25, 1.45]
+let burstX = [310, 650, 470, 790, 190]
+let burstY = [165, 150, 210, 180, 150]
+let reach  = [105, 115, 85, 100, 130]   // the outer ring's radius
+let sparks = [28, 32, 24, 28, 36]       // sparks in the outer ring
+
+// Each ring's colours: bright at the burst, its own hue as it flies,
+// and a deeper one as it fades. Outer rings, then inner rings.
+let outerHues = [[#fff4cc, #ffc247, #ff5b2e], [#ffe8fa, #ff6ec7, #7b3cff],
+                 [#eafff5, #4dffa8, #1f86ff], [#ffffff, #ff4a5c, #7a1230],
+                 [#fffbe8, #ffe08a, #ff9b3d]]
+let innerHues = [[#ffffff, #ffe9a8, #ff9a3c], [#ffffff, #ffd1f2, #c04dff],
+                 [#ffffff, #b8ffe0, #3fd0ff], [#ffffff, #ffd0d4, #ff3355],
+                 [#ffffff, #9ad7ff, #4a5cff]]
+
+// A y position as seen in the river: k = 1 in the sky, and -deep for
+// the reflection, which turns about the waterline.
+// Y = water + k * (y - water)
+
+// A ring of n sparks around (bx, by), reaching radius r, bursting at
+// time t. Each spark is a small comet pointing away from the centre,
+// placed with cos and sin of its angle. Its sequence waits for the
+// burst, flies out while it warms to its hue, then droops as if
+// falling, deepens and fades.
+template Ring(bx, by, r, n, turn, t, hues, k) {
+  generate i in 0 to n - 1 {
+    let ang = turn + i * 360 / n
+    let dx  = cos(ang)
+    let dy  = sin(ang)
+    let jag = [1, 0.9, 0.95][i % 3]
+    polygon spark {
+      position: (bx, water + k * (by - water))
+      rotation: if k > 0 then ang else -ang
+      origin: (0.88, 0.5)
+      points: [(3, 0), (0, 1.6), (-22, 0), (0, -1.6)]
+      color: hues[0], alpha: 0, scale: 0.5
+      sequence {
+        animate { property: alpha, to: 1, duration: 0.04, delay: t }
+        parallel {
+          animate { property: position, to: (bx + jag * r * dx, water + k * (by + jag * r * dy - water)),
+                    duration: 1.3, easing: easeOut }
+          animate { property: color, to: hues[1], duration: 1.3, easing: easeIn }
+          animate { property: scale, to: jag, duration: 0.25, easing: easeOut }
+        }
+        parallel {
+          animate { property: position, to: (bx + 1.12 * jag * r * dx, water + k * (by + 1.12 * jag * r * dy + 36 - water)),
+                    duration: 1.5, easing: easeIn }
+          animate { property: color, to: hues[2], duration: 1.5 }
+          animate { property: alpha, to: 0, duration: 1.5, easing: easeIn }
+          animate { property: scale, to: 0.35, duration: 1.5 }
+        }
+      }
+    }
+  }
+}
+
+// The light of a burst: a flash at its heart, and a wash over the
+// sky that comes and goes with it.
+template Flash(bx, by, t, tint, k) {
+  group flash {
+    position: (bx, water + k * (by - water))
+    alpha: 0
+    sequence {
+      animate { property: alpha, to: 1, duration: 0.05, delay: t }
+      animate { property: alpha, to: 0, duration: 1.2, easing: easeOut }
+    }
+    generate f in [1, 0.86, 0.73, 0.61, 0.5, 0.4, 0.31, 0.23, 0.16, 0.1] {
+      circle wash { position: (0, 0), radius: 300 * f, color: tint, alpha: 0.012 }
+    }
+    generate f in [1, 0.75, 0.55, 0.38, 0.24] {
+      circle bloom { position: (0, 0), radius: 46 * f, color: #ffffff, alpha: 0.08 }
+    }
+  }
+}
+
+// Glitter: points of light scattered through a burst that flicker
+// on and off as they fall, after the rings have spread.
+template Glitter(bx, by, r, t, k) {
+  generate i in 0 to 17 {
+    let ang = i * 137.5
+    let d   = r * (0.35 + ((i * 7) % 10) / 14)
+    circle glint {
+      position: (bx + d * cos(ang), water + k * (by + d * sin(ang) - water)), radius: 1.3, color: #fffbe6, alpha: 0
+      sequence {
+        animate { property: alpha, to: 1, duration: 0.05, delay: t + 0.9 + (i % 6) * 0.08 }
+        animate { property: alpha, to: 0.1, duration: 0.12 }
+        animate { property: alpha, to: 1, duration: 0.05 }
+        animate { property: alpha, to: 0.1, duration: 0.15 }
+        animate { property: alpha, to: 0.9, duration: 0.05 }
+        parallel {
+          animate { property: alpha, to: 0, duration: 0.6, easing: easeIn }
+          animate { property: position, to: (bx + d * cos(ang), water + k * (by + d * sin(ang) + 22 - water)), duration: 0.6 }
+        }
+      }
+    }
+  }
+}
+
+// Smoke left behind by a burst, drifting with the wind as it thins.
+template Smoke(bx, by, t) {
+  generate ox, i in [-30, 10, 36, -6, 24] {
+    let oy = [10, -16, 14, 30, 40][i]
+    group puff {
+      position: (bx + ox, by + oy), alpha: 0
+      circle outerPuff { position: (0, 0), radius: [34, 28, 30, 26, 22][i], color: #8a8fb0, alpha: 0.5 }
+      circle innerPuff { position: (0, 0), radius: [22, 18, 20, 17, 14][i], color: #8a8fb0, alpha: 0.5 }
+      sequence {
+        animate { property: alpha, to: 0.045, duration: 0.8, delay: t + 0.5 }
+        parallel {
+          animate { property: alpha, to: 0, duration: 2.6, easing: easeIn }
+          animate { property: position, to: (bx + ox + 40, by + oy - 8), duration: 2.6, easing: linear }
+        }
+      }
+    }
+  }
+}
+
+scene {
+  size: (960, 540)
+  duration: 12
+  background: #060818
+
+  // ── Sky ──
+  generate c, i in [#060818, #08091d, #0b0b23, #0f0d29, #140f2f, #1a1234, #211538, #2a193b] {
+    rectangle sky { position: (480, 24 + i * 48), size: (960, 48), color: c }
+  }
+  generate p, i in [(40, 30), (120, 80), (210, 20), (280, 64), (360, 36), (430, 90), (520, 24),
+                    (580, 70), (690, 40), (740, 96), (820, 26), (880, 74), (930, 34), (160, 140),
+                    (400, 150), (560, 160), (860, 150), (60, 200), (720, 220), (940, 230)] {
+    circle star {
+      position: p, radius: [1.2, 1.6, 1, 1.4][i % 4], color: #e8e6ff, alpha: 0.8
+      animate { property: alpha, to: 0.2, duration: [1, 1.5, 2, 3][i % 4], loop: true, yoyo: true }
+    }
+  }
+
+  // ── The display ── Each burst's light, smoke, rings and rocket. The
+  // rockets are drawn before the city, so each one rises from behind
+  // the rooftops.
+  generate k in 0 to 4 {
+    let t = launch[k] + climb[k]
+    use Flash(burstX[k], burstY[k], t, outerHues[k][1], 1) light { }
+    use Smoke(burstX[k], burstY[k], t) smoke { }
+    use Ring(burstX[k], burstY[k], reach[k], sparks[k], k * 7, t, outerHues[k], 1) outer { }
+    use Ring(burstX[k], burstY[k], reach[k] * 0.55, sparks[k] / 2, k * 7 + 180 / sparks[k], t + 0.06, innerHues[k], 1) inner { }
+    use Glitter(burstX[k], burstY[k], reach[k], t, 1) glitter { }
+
+    // The rocket: a bright head over a fading trail. It waits out its
+    // delay below the rooftops, then climbs on easeOut, slowing as it
+    // reaches the top, and goes out as the burst begins.
+    group rocket {
+      position: (burstX[k] + [-30, 20, -12, 26, -22][k], 400)
+      alpha: 0
+      sequence {
+        animate { property: alpha, to: 1, duration: 0.05, delay: launch[k] }
+        animate { property: position, to: (burstX[k], burstY[k]), duration: climb[k], easing: easeOut }
+        animate { property: alpha, to: 0, duration: 0.05 }
+      }
+      generate d, i in [26, 19, 13, 8, 4] {
+        circle trail { position: (0, d), radius: 0.8 + i * 0.25, color: #ffd9a0, alpha: 0.12 + i * 0.12 }
+      }
+      circle head { position: (0, 0), radius: 2.4, color: #fff6dc }
+    }
+  }
+
+  // ── City ── Rooftops along the far bank, from one list of heights.
+  let roofs = [70, 96, 58, 120, 84, 150, 66, 104, 78, 132, 60, 92, 140, 72, 110, 64]
+  generate h, i in roofs {
+    rectangle tower { position: (30 + i * 60, water - h / 2), size: (56 + (i % 3) * 6, h), color: #0b0c1c }
+    generate r in 0 to 5 {
+      generate c in 0 to 2 {
+        // A rule on tower, row and column decides which windows are
+        // lit, and a second which of those flicker. Every window
+        // exists; an unlit one is just clear.
+        let on = if (i * 7 + r * 3 + c * 5) % 4 == 0 and r * 18 + 22 < h then 0.85 else 0
+        let flicker = (i + r + c) % 5 == 0
+        rectangle window {
+          position: (30 + i * 60 + (c - 1) * 14, water - h + 14 + r * 18)
+          size: (6, 8), color: #ffd27a, alpha: on
+          animate { property: alpha, to: if flicker then on * 0.2 else on,
+                    duration: [1.5, 2, 3][(i + c) % 3], loop: true, yoyo: true }
+        }
+      }
+    }
+  }
+  // Two landmarks: a spire and a dome.
+  polygon spire { position: (330, water - 196), color: #0b0c1c, points: [(0, -60), (10, 0), (10, 60), (-10, 60), (-10, 0)] }
+  circle dome { position: (690, water - 100), radius: 34, color: #0b0c1c }
+  rectangle domeBase { position: (690, water - 70), size: (80, 60), color: #0b0c1c }
+  circle beacon {
+    position: (330, water - 258), radius: 2.5, color: #ff4a4a
+    animate { property: alpha, to: 0.15, duration: 1, loop: true, yoyo: true }
+  }
+
+  // ── River ──
+  generate c, i in [#0c1030, #0a0e2a, #090c25, #080b21, #070a1d, #06081a, #050716, #040612] {
+    rectangle river { position: (480, water + 10 + i * 20), size: (960, 20), color: c }
+  }
+
+  // The city upside down in the river, squashed to half its height.
+  generate h, i in roofs {
+    rectangle towerR { position: (30 + i * 60, water + h * deep / 2), size: (56 + (i % 3) * 6, h * deep),
+                       color: #10132e, alpha: 0.9 }
+  }
+  polygon spireR { position: (330, water + 101), color: #10132e, alpha: 0.9,
+                   points: [(0, 28), (10, 0), (10, -28), (-10, -28), (-10, 0)] }
+  circle domeR { position: (690, water + 50), radius: 34, scale: (1, 0.5), color: #10132e, alpha: 0.9 }
+  rectangle domeBaseR { position: (690, water + 35), size: (80, 30), color: #10132e, alpha: 0.9 }
+
+  // Every burst again in the river, faint, upside down and squashed.
+  generate k in 0 to 4 {
+    let t = launch[k] + climb[k]
+    use Flash(burstX[k], burstY[k], t, outerHues[k][1], -deep) lightR { alpha: 0.5 }
+    use Ring(burstX[k], burstY[k], reach[k], sparks[k], k * 7, t, outerHues[k], -deep) outerR { alpha: 0.4 }
+    use Ring(burstX[k], burstY[k], reach[k] * 0.55, sparks[k] / 2, k * 7 + 180 / sparks[k], t + 0.06, innerHues[k], -deep) innerR { alpha: 0.4 }
+    use Glitter(burstX[k], burstY[k], reach[k], t, -deep) glitterR { alpha: 0.4 }
+  }
+
+  // Lit windows smear into short streaks on the water.
+  generate x, i in [30, 150, 270, 330, 450, 570, 690, 750, 870] {
+    line streak {
+      position: (x + [0, 14, -14][i % 3], water + 18 + (i % 4) * 9)
+      points: [(-6, 0), (6, 0)], thickness: 2, color: #ffd27a, alpha: 0.35
+      animate { property: scale, to: (1.8, 1), duration: [1, 1.5, 2][i % 3], loop: true, yoyo: true }
+    }
+  }
+
+  // Ripples: dashes that slide one spacing each loop, so the jump back
+  // is invisible.
+  generate y, j in [394, 410, 428, 448, 470, 494, 520] {
+    group ripples {
+      position: ([0, -60, -30, -90, -15, -75, -45][j], y)
+      animate { property: position, to: ([0, -60, -30, -90, -15, -75, -45][j] - 120, y), duration: [6, 4, 3, 6, 4, 3, 2][j],
+                easing: linear, loop: true }
+      generate x in 0 to 10 {
+        line dash { position: (x * 120 + 40, 0), points: [(-14 - j * 3, 0), (14 + j * 3, 0)],
+                    thickness: 1 + j * 0.2, color: #6e78b8, alpha: 0.16 }
+      }
+    }
+  }
+  line bank { position: (480, water), points: [(-480, 0), (480, 0)], thickness: 2, color: #1c2048 }
+}

@@ -1,0 +1,250 @@
+// Aurora. Curtains of light over snow-capped mountains on a winter
+// night. Each curtain is a stack of translucent ribbons that share
+// one wavy lower edge, so it is brightest along that edge and fades
+// upward. The curtains sway, stretch and shift between greens and
+// violets, each on its own period, and the stars twinkle.
+//
+// Every motion is a yoyo whose there-and-back period divides 12 s,
+// and nothing is delayed except one shooting star that has gone by
+// the end, so the last frame matches the first and the loop has no
+// seam.
+
+let jade   = #3dffb0
+let teal   = #2fd8d0
+let violet = #a77bff
+let rose   = #e07bd8
+
+// A curtain of light, w px wide, centred on its own (0, 0).
+//
+// Its lower edge is a sine wave sampled every 30 degrees, 13 points
+// across: low[i] = amp * sin(phase + 30 * i). Because phase is a
+// multiple of 30, one sample lands on 90 degrees, where sin is exactly
+// 1, so the lowest point of every ribbon is y = amp. With origin
+// (0.5, 1) and position (0, amp), that point is placed where it was
+// written, and every point reads as written.
+//
+// Six ribbons share that edge and reach up a growing share of `tall`.
+// Their tops rise and fall on waves of their own, and every one comes
+// down to the edge at both ends, along env[i] = sin(15 * i). Each
+// ribbon is faint, so the light builds up where they overlap:
+// brightest along the lower edge, fading upward and towards the ends.
+// The low ribbons blend from `lo` to `hi` and the tall ones the
+// other way, over `beat` seconds and back.
+template Curtain(w, amp, phase, tall, lo, hi, beat) {
+  let u = w / 12
+  let low = [amp * sin(phase), amp * sin(phase + 30), amp * sin(phase + 60), amp * sin(phase + 90),
+             amp * sin(phase + 120), amp * sin(phase + 150), amp * sin(phase + 180),
+             amp * sin(phase + 210), amp * sin(phase + 240), amp * sin(phase + 270),
+             amp * sin(phase + 300), amp * sin(phase + 330), amp * sin(phase + 360)]
+  let env = [0, sin(15), sin(30), sin(45), sin(60), sin(75), 1, sin(105), sin(120), sin(135),
+             sin(150), sin(165), 0]
+  generate f, n in [0.2, 0.36, 0.52, 0.68, 0.84, 1] {
+    let h = tall * f
+    polygon ribbon {
+      position: (0, amp), origin: (0.5, 1)
+      color: if n < 3 then lo else hi, alpha: 0.085
+      points: [(-6 * u, low[0]), (-5 * u, low[1]), (-4 * u, low[2]), (-3 * u, low[3]), (-2 * u, low[4]),
+               (-u, low[5]), (0, low[6]), (u, low[7]), (2 * u, low[8]), (3 * u, low[9]), (4 * u, low[10]),
+               (5 * u, low[11]), (6 * u, low[12]),
+               (6 * u, low[12] - h * env[12] * (0.75 + 0.25 * sin(2 * phase + 720 + 50 * n))),
+               (5 * u, low[11] - h * env[11] * (0.75 + 0.25 * sin(2 * phase + 660 + 50 * n))),
+               (4 * u, low[10] - h * env[10] * (0.75 + 0.25 * sin(2 * phase + 600 + 50 * n))),
+               (3 * u, low[9] - h * env[9] * (0.75 + 0.25 * sin(2 * phase + 540 + 50 * n))),
+               (2 * u, low[8] - h * env[8] * (0.75 + 0.25 * sin(2 * phase + 480 + 50 * n))),
+               (u, low[7] - h * env[7] * (0.75 + 0.25 * sin(2 * phase + 420 + 50 * n))),
+               (0, low[6] - h * env[6] * (0.75 + 0.25 * sin(2 * phase + 360 + 50 * n))),
+               (-u, low[5] - h * env[5] * (0.75 + 0.25 * sin(2 * phase + 300 + 50 * n))),
+               (-2 * u, low[4] - h * env[4] * (0.75 + 0.25 * sin(2 * phase + 240 + 50 * n))),
+               (-3 * u, low[3] - h * env[3] * (0.75 + 0.25 * sin(2 * phase + 180 + 50 * n))),
+               (-4 * u, low[2] - h * env[2] * (0.75 + 0.25 * sin(2 * phase + 120 + 50 * n))),
+               (-5 * u, low[1] - h * env[1] * (0.75 + 0.25 * sin(2 * phase + 60 + 50 * n))),
+               (-6 * u, low[0] - h * env[0] * (0.75 + 0.25 * sin(2 * phase + 0 + 50 * n)))]
+      animate { property: color, to: if n < 3 then hi else lo, duration: beat, loop: true, yoyo: true }
+    }
+  }
+  // The hem: a bright line along the lower edge.
+  line hem {
+    position: (0, amp), origin: (0.5, 1), thickness: 2.5, color: lo, alpha: 0.45
+    points: [(-6 * u, low[0]), (-5 * u, low[1]), (-4 * u, low[2]), (-3 * u, low[3]), (-2 * u, low[4]),
+             (-u, low[5]), (0, low[6]), (u, low[7]), (2 * u, low[8]), (3 * u, low[9]), (4 * u, low[10]),
+             (5 * u, low[11]), (6 * u, low[12])]
+    animate { property: color, to: hi, duration: beat, loop: true, yoyo: true }
+  }
+  // Rays: faint strokes rising from the edge, following the curtain's
+  // taper, each flickering on a beat of its own. Ray i stands at the
+  // middle of the i-th of 24 equal slices, 3.75 + 7.5 * i degrees
+  // along the taper and 7.5 + 15 * i along the edge's wave.
+  generate i in 0 to 23 {
+    let x   = -w / 2 + (i + 0.5) * w / 24
+    let len = tall * sin(3.75 + i * 7.5) * (0.5 + 0.4 * ((i * 7) % 5) / 4)
+    line ray {
+      position: (x, amp * sin(phase + 7.5 + i * 15) - len / 2)
+      points: [(0, len / 2), (0, -len / 2)], thickness: 1.5 + (i % 3)
+      color: if i % 2 == 0 then lo else hi, alpha: 0.13
+      animate { property: alpha, to: 0.02, duration: [0.75, 1, 1.5, 2][i % 4], loop: true, yoyo: true }
+    }
+  }
+}
+
+// A snow cap on the peak at (px, py), between the valleys (lx, ly) and
+// (rx, ry). Its two upper corners lie 36% of the way down each ridge,
+// and its lower edge is ragged. With origin (0, 0) the position is the
+// top-left of its box: the peak's height, and the left corner's x.
+template Cap(px, py, lx, ly, rx, ry, tint) {
+  polygon snow {
+    position: (px + (lx - px) * 0.36, py), origin: (0, 0), color: tint
+    points: [(px, py), (px + (rx - px) * 0.36, py + (ry - py) * 0.36),
+             (px + (rx - px) * 0.16, py + (ry - py) * 0.2), (px + (rx - px) * 0.08, py + (ry - py) * 0.27),
+             (px, py + (ry - py) * 0.17), (px + (lx - px) * 0.1, py + (ly - py) * 0.26),
+             (px + (lx - px) * 0.2, py + (ly - py) * 0.19), (px + (lx - px) * 0.36, py + (ly - py) * 0.36)]
+    animate { property: color, to: #d8cff4, duration: 6, loop: true, yoyo: true }
+  }
+}
+
+// A pine: three tiers of branches on a short trunk.
+template Pine(s) {
+  rectangle trunk { position: (0, -4), size: (4 * s, 10 * s), color: #04070d }
+  generate t, n in [0, 1, 2] {
+    polygon tier { position: (0, -12 * s - n * 14 * s), color: #050a12,
+                   points: [(0, -18 * s), (12 * s - n * 3 * s, 8 * s), (-12 * s + n * 3 * s, 8 * s)] }
+  }
+}
+
+scene {
+  size: (960, 540)
+  duration: 12
+  background: #030713
+
+  // ── Sky ── darkest at the top, with a cold glow at the horizon.
+  generate c, i in [#02050f, #030713, #040917, #050b1c, #060e21, #071126, #08152b, #0a1a31, #0c1f36] {
+    rectangle sky { position: (480, 20 + i * 40), size: (960, 40), color: c }
+  }
+  generate x, i in [40, 95, 150, 210, 270, 330, 395, 450, 510, 570, 630, 690, 750, 815, 870, 925,
+                    70, 180, 300, 420, 540, 660, 780, 900, 120, 360, 600, 840] {
+    let y = [26, 70, 18, 52, 30, 90, 14, 60, 36, 22, 74, 40, 16, 58, 28, 84,
+             130, 150, 120, 165, 140, 128, 156, 118, 200, 210, 190, 205][i]
+    circle star {
+      position: (x, y), radius: [1.1, 1.5, 0.9, 1.3][i % 4], color: #eef2ff, alpha: 0.85
+      animate { property: alpha, to: 0.15, duration: [1, 1.5, 2, 3][(i * 3) % 4], loop: true, yoyo: true }
+    }
+  }
+
+  // One shooting star, from 7 s to 7.7 s.
+  line meteor {
+    position: (640, 70), points: [(-46, -12), (0, 0)], thickness: 1.5, color: #ffffff, alpha: 0
+    sequence {
+      animate { property: alpha, to: 0.9, duration: 0.1, delay: 7 }
+      parallel {
+        animate { property: position, to: (820, 118), duration: 0.6, easing: easeIn }
+        animate { property: alpha, to: 0, duration: 0.6, easing: easeIn }
+      }
+    }
+  }
+
+  // A jade glow low in the sky under the curtains, breathing with them.
+  generate f in [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3] {
+    circle airglow {
+      position: (480, 340), radius: 560 * f, scale: (1, 0.4), color: jade, alpha: 0.014
+      animate { property: color, to: violet, duration: 6, loop: true, yoyo: true }
+    }
+  }
+
+  // ── The aurora ── Four curtains, back to front. Each group sways
+  // sideways, stretches upward from its lower edge and leans, on
+  // periods of 3, 4, 6 and 12 s.
+  group farCurtain {
+    position: (720, 150)
+    alpha: 0.7
+    animate { property: position, to: (680, 146), duration: 6, loop: true, yoyo: true }
+    animate { property: scale, to: (1.06, 1.2), duration: 2, loop: true, yoyo: true }
+    use Curtain(480, 18, 60, 120, violet, rose, 3) sheet { }
+  }
+  group highCurtain {
+    position: (300, 196)
+    rotation: -4
+    animate { property: position, to: (340, 190), duration: 3, loop: true, yoyo: true }
+    animate { property: scale, to: (1.08, 1.22), duration: 1.5, loop: true, yoyo: true }
+    animate { property: rotation, to: 3, duration: 6, loop: true, yoyo: true }
+    use Curtain(620, 28, 0, 180, jade, violet, 6) sheet { }
+  }
+  group lowCurtain {
+    position: (650, 262)
+    rotation: 3
+    animate { property: position, to: (610, 270), duration: 2, loop: true, yoyo: true }
+    animate { property: scale, to: (0.94, 1.18), duration: 3, loop: true, yoyo: true }
+    animate { property: rotation, to: -2, duration: 6, loop: true, yoyo: true }
+    use Curtain(660, 24, 120, 200, teal, jade, 6) sheet { }
+  }
+  group sideCurtain {
+    position: (130, 250)
+    alpha: 0.8
+    animate { property: position, to: (150, 246), duration: 1.5, loop: true, yoyo: true }
+    animate { property: scale, to: (1.1, 1.15), duration: 6, loop: true, yoyo: true }
+    use Curtain(300, 16, 30, 120, jade, teal, 3) sheet { }
+  }
+
+  // ── Mountains ── Two ranges. Each outline's highest peak sets the
+  // top of its box, so with origin (0, 0) its points are scene
+  // coordinates.
+  polygon farRange {
+    position: (0, 300), origin: (0, 0), color: #0c1828
+    points: [(0, 380), (70, 340), (130, 362), (210, 312), (280, 350), (330, 336), (410, 300),
+             (490, 352), (560, 330), (640, 368), (720, 318), (790, 350), (860, 326), (960, 372),
+             (960, 540), (0, 540)]
+  }
+  line farRidge {
+    position: (0, 300), origin: (0, 0), thickness: 1.5, color: jade, alpha: 0.22
+    points: [(0, 380), (70, 340), (130, 362), (210, 312), (280, 350), (330, 336), (410, 300),
+             (490, 352), (560, 330), (640, 368), (720, 318), (790, 350), (860, 326), (960, 372)]
+    animate { property: color, to: violet, duration: 6, loop: true, yoyo: true }
+  }
+  use Cap(210, 312, 130, 362, 280, 350, #cfe6ee) capA { }
+  use Cap(410, 300, 330, 336, 490, 352, #cfe6ee) capB { }
+  use Cap(720, 318, 640, 368, 790, 350, #cfe6ee) capC { }
+  use Cap(860, 326, 790, 350, 960, 372, #cfe6ee) capD { }
+
+  polygon nearRange {
+    position: (0, 352), origin: (0, 0), color: #060c17
+    points: [(0, 420), (90, 372), (170, 410), (250, 380), (330, 430), (420, 392), (520, 440),
+             (600, 400), (680, 352), (770, 418), (850, 386), (960, 430), (960, 540), (0, 540)]
+  }
+  use Cap(90, 372, 0, 420, 170, 410, #e4f1f6) capE { }
+  use Cap(420, 392, 330, 430, 520, 440, #e4f1f6) capF { }
+  use Cap(680, 352, 600, 400, 770, 418, #e4f1f6) capG { }
+
+  // ── Foreground ── A snowfield catching the sky's colour, and pines.
+  polygon snowfield {
+    position: (0, 462), origin: (0, 0), color: #13233a
+    points: [(0, 478), (160, 466), (330, 474), (500, 462), (680, 472), (840, 464), (960, 470),
+             (960, 540), (0, 540)]
+    animate { property: color, to: #1d2040, duration: 6, loop: true, yoyo: true }
+  }
+  line snowRim {
+    position: (0, 462), origin: (0, 0), thickness: 2, color: #6fd8b8, alpha: 0.35
+    points: [(0, 478), (160, 466), (330, 474), (500, 462), (680, 472), (840, 464), (960, 470)]
+    animate { property: color, to: #9a86e6, duration: 6, loop: true, yoyo: true }
+  }
+  // A cabin with a lit window, and smoke on periods of 2, 3 and 4 s.
+  group cabin {
+    position: (700, 474)
+    generate f in [1, 0.75, 0.55, 0.38, 0.24] {
+      circle warmth { position: (10, -10), radius: 46 * f, color: #ffb860, alpha: 0.05 }
+    }
+    rectangle chimney { position: (-15, -40), size: (7, 16), color: #070b14 }
+    rectangle walls { position: (0, -10), size: (52, 22), color: #070b14 }
+    polygon roof { position: (0, -32), color: #070b14, points: [(-34, 12), (0, -12), (34, 12)] }
+    line roofSnow { position: (0, -34), points: [(-34, 12), (0, -12), (34, 12)], thickness: 3, color: #dce9f2 }
+    rectangle window { position: (10, -10), size: (10, 9), color: #ffcf7a }
+    rectangle door { position: (-10, -6), size: (9, 14), color: #0d1420 }
+    generate d, i in [2, 3, 4] {
+      circle smoke {
+        position: (-15, -50), radius: 4 + i, color: #8fa0b8, alpha: 0
+        animate { property: position, to: (-15 + 10 + i * 4, -84 - i * 6), duration: d, easing: linear, loop: true }
+        animate { property: alpha, to: 0.22, duration: d / 2, loop: true, yoyo: true }
+      }
+    }
+  }
+  generate x, i in [26, 58, 84, 118, 842, 870, 902, 936] {
+    use Pine([1.4, 1.9, 1.2, 1.6, 1.5, 2, 1.3, 1.7][i]) pine { position: (x, 478 + (i % 3) * 4) }
+  }
+}

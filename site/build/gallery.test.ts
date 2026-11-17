@@ -83,6 +83,33 @@ describe("the gallery in the repository", () => {
     expect(gallery.entries.map((e) => e.id)).toEqual(config.gallery);
   });
 
+  it("lists the twenty-two scenes in the gallery's order", () => {
+    expect(config.gallery).toEqual([
+      "lighthouse",
+      "dusk-hills",
+      "ledges",
+      "fireworks",
+      "aurora",
+      "hourglass",
+      "orrery",
+      "forest",
+      "day-to-night",
+      "plinko",
+      "domino-run",
+      "ripple",
+      "title-card",
+      "toy-box",
+      "metronome",
+      "postcard",
+      "easing-race",
+      "set-sail",
+      "sunrise",
+      "logo-reveal",
+      "bar-chart-reveal",
+      "physics-pile",
+    ]);
+  });
+
   it("gives every site.json gallery id its .md and its scene", () => {
     for (const id of config.gallery) {
       const md = join(repoRoot, "site/gallery", `${id}.md`);

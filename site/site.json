@@ -17,5 +17,5 @@
   ],
   "guides": [],
   "reference": ["language", "properties", "determinism"],
-  "gallery": ["lighthouse", "dusk-hills", "ledges", "logo-reveal", "bar-chart-reveal", "physics-pile", "orrery", "forest", "day-to-night", "plinko", "domino-run", "ripple", "title-card", "toy-box", "metronome", "postcard", "easing-race", "set-sail", "sunrise"]
+  "gallery": ["lighthouse", "dusk-hills", "ledges", "fireworks", "aurora", "hourglass", "orrery", "forest", "day-to-night", "plinko", "domino-run", "ripple", "title-card", "toy-box", "metronome", "postcard", "easing-race", "set-sail", "sunrise", "logo-reveal", "bar-chart-reveal", "physics-pile"]
 }
