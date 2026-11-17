@@ -1455,7 +1455,25 @@ figure.sample > .sample-stage + .sample-toolbar {
   padding-left: 1.2em;
 }
 
+/*
+ * A lesson's embedded scene: a bare <marey-player> in the page, framed like a
+ * showcase. The element sizes itself to the scene's aspect ratio.
+ */
+figure.lesson-embed {
+  margin: 2em 0;
+  overflow: hidden;
+  border: 1px solid var(--site-border);
+  border-radius: var(--site-radius-lg);
+  background: var(--site-stage);
+}
+
+figure.lesson-embed > marey-player {
+  display: block;
+  width: 100%;
+}
+
 /* A lesson's showcase: the caption sits above the player it describes. */
+figure.lesson-embed > .showcase-caption,
 figure.sample > .showcase-caption {
   padding: 12px 16px;
   border-bottom: 1px solid var(--site-border);

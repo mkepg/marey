@@ -63,8 +63,8 @@ wave below it. Five pairs of shapes share a start point; the first `circle ball`
 and the fourth `polygon wedge`, for example, both start at (280, 370). When the
 earlier of the two waves is released, its shape's body overlaps the waiting one,
 which impacts cannot move, so it is pushed aside as its simulation starts, the
-ball to about (297, 360), and then falls past. [The lesson on the physics
-world](/learn/world/) covers when a body is created.
+ball to about (297, 360), and then falls past. [The lesson on handing
+animation to physics](/learn/handoff/) covers a body before its physics step.
 
 ### Variety from the index
 

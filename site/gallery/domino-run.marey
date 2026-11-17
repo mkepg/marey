@@ -1,0 +1,350 @@
+// Domino Run. On a desk at night a glass marble rolls down a ruler
+// and strikes the first of thirteen dominoes. The run topples along
+// the desk and up a staircase of books, and the last domino knocks a
+// red ball off the top book into a cup of tea. Then the run rewinds:
+// the marble rolls back up, the dominoes stand up again in the order
+// they fell, and the ball hops out of the cup to wait on its book.
+//
+// The marble's roll is an animation; everything after it is the
+// simulation. The rewind is animation again, and it puts every body
+// back where it started, so the last frame matches the first.
+
+let ink   = #1a1410
+let cream = #efe3c8
+let lamp  = #ffd9a0
+let brass = #c9a24a
+let china = #f1e8d6
+let cobalt = #2f5fa8
+
+// The run: 13 dominoes, 52 px apart. The first nine stand on the
+// desk; the last four stand one on each book of the staircase, `lift`
+// books up. Their colours sweep from coral to violet along the run.
+let deskY = 440
+let rise  = 14        // one book's thickness: the height of each stair
+let dx    = [134, 186, 238, 290, 342, 394, 446, 498, 550, 601, 653, 705, 757]
+let lift  = [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4]
+let tones = [#f26b4f, #f2864a, #f2a145, #eebd45, #d6cf4a, #a9d05a, #6fcf7d,
+             #4fc6a5, #45b8c6, #4fa0d8, #6688e0, #8577de, #a26fd6]
+
+// The four stairs, bottom book first: where each starts, and its cover.
+let stairX = [575, 627, 679, 731]
+let covers = [#7a2f2f, #2e5947, #2b3f66, #b8862f]
+let ends   = [800, 800, 800, 838]
+
+// A domino is a welded group: a tile and a dark seam across its
+// middle, both centred, so the body balances on its own centre. Its
+// sequence has four steps, and they add up to the scene's 10 s.
+//  1. Held. `to` is where it already stands, so it waits, pinned, as
+//     a solid body that nothing can knock over. Each domino waits
+//     0.15 s longer than the one before, so its simulation starts a
+//     little before the run reaches it. Simulated from the start
+//     instead, the dominoes stand still long enough to fall asleep,
+//     and in this scene the run slows and the tenth is the last to
+//     fall.
+//  2. Simulated for 4.5 s, the same for every domino. It falls, and
+//     freezes where it lies when the time is up.
+//  3. Rewound. Its position and its rotation animate back together
+//     in 0.5 s, so the dominoes stand up in the order they fell,
+//     0.15 s apart.
+//  4. Held where it started for `5 - wait` seconds. The four steps
+//     add up to exactly 10 s, and a sequence starts one tick after
+//     the scene, so the hold is still running in the last frame, and
+//     the domino stands exactly where it stood in the first.
+template Domino(tone, wait) {
+  group tile {
+    position: (0, 0)
+    rectangle face { position: (0, 0), size: (10, 72), color: tone }
+    rectangle seam { position: (0, 0), size: (10, 2), color: ink, alpha: 0.55 }
+    sequence {
+      animate { property: position, to: (0, 0), duration: wait }
+      physics { bounce: 0.4, duration: 4.5 }
+      parallel {
+        animate { property: position, to: (0, 0), duration: 0.5, easing: easeOut }
+        animate { property: rotation, to: 0, duration: 0.5, easing: easeIn }
+      }
+      animate { property: position, to: (0, 0), duration: 5 - wait }
+    }
+  }
+}
+
+// A book lying flat, seen from its fore-edge: the cover, and the
+// cream block of pages inside it.
+template Book(long, thick, tone) {
+  rectangle board { position: (0, 0), size: (long, thick), color: tone }
+  rectangle pages { position: (3, 0), size: (long - 10, thick - 5), color: cream }
+  line leaf { position: (3, 0), points: [(-(long - 10) / 2, 0), ((long - 10) / 2, 0)],
+              thickness: 1, color: #c9b994 }
+}
+
+// A wisp of steam: a short S of line that rises 36 px and fades,
+// every 2.5 s. It is invisible at the start and the end of each
+// period, so the jump back down never shows.
+template Steam(beat) {
+  group wisp {
+    position: (0, 0)
+    alpha: 0
+    line curl { position: (0, 0), thickness: 2, color: china, alpha: 0.45,
+                points: [(0, 14), (3, 10), (4, 6), (2, 2), (-2, -2), (-4, -6), (-3, -10), (0, -14)] }
+    animate { property: position, to: (0, -36), duration: 2.5, easing: linear, loop: true }
+    animate { property: alpha, to: 1, duration: beat, easing: easeOut, loop: true, yoyo: true }
+  }
+}
+
+scene {
+  size: (960, 540)
+  duration: 10
+  background: #0e1a20
+
+  // Small dominoes fall fast. At the default gravity a 72 px domino
+  // topples like a tall slab; six times it reads as a tile on a desk.
+  // The world has no walls: the desk and the books are the floor.
+  world {
+    gravity: (0, 6000)
+    bounds: []
+  }
+
+  // ── The wall ── Seven bands, a shade lighter each towards the
+  // desk, and faint stripes of wallpaper.
+  generate c, i in [#0e1a20, #101d23, #122026, #14242a, #17272c, #1a2b2f, #1d2e31] {
+    rectangle band { position: (480, 31 + i * 62), size: (960, 62), color: c }
+  }
+  generate i in 0 to 23 {
+    rectangle paper { position: (20 + i * 40, 220), size: (1, 440), color: #2a3d40, alpha: 0.35 }
+  }
+
+  // ── The window ── Night in five bands, a moon with a halo of two
+  // faint discs, stars that twinkle on beats that divide 10 s, two
+  // clouds that drift 24 px and back, and rooftops with lit windows.
+  // The frame is drawn after them and covers the panes' edges.
+  generate c, i in [#0f1f3d, #13254a, #182c55, #1e3460, #253c6a] {
+    rectangle sky { position: (400, 61 + i * 42), size: (260, 42), color: c }
+  }
+  circle moonHalo2 { position: (470, 92), radius: 44, color: #dfe8ff, alpha: 0.05 }
+  circle moonHalo1 { position: (470, 92), radius: 28, color: #dfe8ff, alpha: 0.09 }
+  circle moon      { position: (470, 92), radius: 16, color: #f4efd8 }
+  generate p, i in [(298, 66), (338, 120), (372, 58), (412, 150), (520, 160), (316, 176), (430, 64), (508, 130)] {
+    circle star {
+      position: p, radius: [1.4, 1, 1.6, 1.1][i % 4], color: #f4efd8, alpha: 0.9
+      animate { property: alpha, to: 0.2, duration: [1, 1.25, 2.5, 5][i % 4], loop: true, yoyo: true }
+    }
+  }
+  group cloudA {
+    position: (326, 100)
+    animate { property: position, to: (350, 100), duration: 5, easing: easeInOut, loop: true, yoyo: true }
+    rectangle base { position: (0, 4), size: (54, 8), color: #2c4373 }
+    circle puffA { position: (-12, 0), radius: 9, color: #2c4373 }
+    circle puffB { position: (6, -3), radius: 11, color: #2c4373 }
+  }
+  group cloudB {
+    position: (476, 182)
+    animate { property: position, to: (452, 182), duration: 5, easing: easeInOut, loop: true, yoyo: true }
+    rectangle base { position: (0, 4), size: (44, 7), color: #34507f }
+    circle puffA { position: (-8, 0), radius: 8, color: #34507f }
+    circle puffB { position: (8, -2), radius: 9, color: #34507f }
+  }
+  polygon roofs { position: (400, 232), color: #0b1426,
+                  points: [(-130, 18), (-130, 2), (-104, -14), (-78, 2), (-78, -6), (-38, -6), (-38, 6),
+                           (4, 6), (4, -20), (18, -20), (18, -2), (56, -22), (94, -2), (94, -10), (130, -10), (130, 18)] }
+  generate x, i in [-104, -56, 56, 112] {
+    rectangle roofLight { position: (400 + x, 232 + [0, 2, -6, 2][i]), size: (5, 6), color: lamp, alpha: 0.8 }
+  }
+  generate s in [-1, 1] {
+    rectangle jamb { position: (400 + s * 136, 145), size: (12, 222), color: #2b1f17 }
+  }
+  rectangle head     { position: (400, 36), size: (284, 12), color: #2b1f17 }
+  rectangle sill     { position: (400, 255), size: (304, 10), color: #3b2a1e }
+  rectangle sillLit  { position: (400, 251), size: (304, 2), color: #6b4f39 }
+  rectangle mullion  { position: (400, 145), size: (6, 210), color: #2b1f17 }
+  rectangle transom  { position: (400, 145), size: (260, 6), color: #2b1f17 }
+
+  // Moonlight falls from the window down to the left, and lamplight
+  // falls from the shade to the right: each is a few polygons at low
+  // alpha, narrower ones over wider ones, so each is brightest in its
+  // middle. The warm and the cool meet over the run.
+  polygon moonbeam  { position: (330, 352), color: #cfe0ff, alpha: 0.035,
+                      points: [(-60, -92), (200, -92), (60, 88), (-200, 88)] }
+  polygon moonbeam2 { position: (330, 352), color: #cfe0ff, alpha: 0.03,
+                      points: [(-20, -92), (150, -92), (20, 88), (-150, 88)] }
+  generate k, i in [1, 0.72, 0.46] {
+    polygon lampLight { position: (855, 313), color: #ffc477, alpha: [0.06, 0.06, 0.07][i],
+                        points: [(-50 * k, -127), (50 * k, -127), (160 * k, 127), (-170 * k, 127)] }
+  }
+  circle shadeGlow { position: (855, 192), radius: 56, scale: (1.6, 0.4), color: #ffc477, alpha: 0.12 }
+
+  // ── The clock ── Twelve marks placed with `sin` and `cos`, two
+  // hands, and a pendulum that swings 12 degrees each way about its
+  // pivot, there and back every 2 s.
+  circle clockRim  { position: (150, 120), radius: 40, color: #2b1f17 }
+  circle clockFace { position: (150, 120), radius: 34, color: #e9dcc0 }
+  generate k in 0 to 11 {
+    circle mark { position: (150 + 28 * sin(k * 30), 120 - 28 * cos(k * 30)),
+                  radius: if k % 3 == 0 then 2.4 else 1.3, color: #2b1f17 }
+  }
+  line hourHand   { position: (150, 120), points: [(0, 0), (-12, -11)], thickness: 3, color: #2b1f17 }
+  line minuteHand { position: (150, 120), points: [(0, 0), (5, -24)], thickness: 2, color: #2b1f17 }
+  circle clockPin { position: (150, 120), radius: 3, color: brass }
+  group pendulum {
+    position: (150, 162)
+    rotation: -12
+    animate { property: rotation, to: 12, duration: 1, easing: easeInOut, loop: true, yoyo: true }
+    rectangle rod { position: (0, 34), size: (3, 68), color: #a8843a }
+    circle bob    { position: (0, 70), radius: 11, color: brass }
+    circle bobLit { position: (-3, 67), radius: 4, color: #f0d98a }
+  }
+
+  // ── The desk ── Its top is a locked body, wider than the frame.
+  // Drawn as the front of the desk, with a lit top edge and grain.
+  rectangle desk { position: (480, 490), size: (1300, 100), color: #4e301c,
+                   physics { lockPosition: true, bounce: 0.1 } }
+  rectangle deskEdge { position: (480, 443), size: (960, 6), color: #9a6a42 }
+  rectangle deskLip  { position: (480, 448), size: (960, 4), color: #6b4428 }
+  generate y, i in [462, 474, 489, 503, 521] {
+    line grain { position: (480, y), points: [(-480, 0), (-120 + i * 40, [-2, 1, -1, 2, 0][i]), (480, 0)],
+                 thickness: 1, color: #3e2615, alpha: 0.8 }
+  }
+  generate x in [240, 720] {
+    rectangle drawer { position: (x, 494), size: (400, 64), color: #573620 }
+    rectangle drawerLip { position: (x, 463), size: (400, 2), color: #7a4f2f }
+    circle knob { position: (x, 494), radius: 6, color: brass }
+  }
+  circle pool { position: (830, 444), radius: 150, scale: (1.6, 0.12), color: #ffc477, alpha: 0.16 }
+
+  // ── The launch ── A ruler leans on a stack of books at the left.
+  // The ruler is a locked rectangle; its markings ride on a group
+  // turned to the same 24 degrees.
+  use Book(150, 30, #3a2a4f) stackA { position: (-5, 425) }
+  use Book(140, 34, #6b2e2a) stackB { position: (-10, 393) }
+  use Book(150, 30, #2e5947) stackC { position: (-5, 361) }
+  rectangle ruler { position: (7.2, 347.8), size: (210, 8), rotation: 24, color: #d9c27a,
+                    physics { lockPosition: true, bounce: 0.1 } }
+  group rulerMarks {
+    position: (7.2, 347.8)
+    rotation: 24
+    generate k in 0 to 20 {
+      line tick { position: (-100 + k * 10, -4), points: [(0, 0), (0, [3, 2, 2, 2, 2][k % 5] + 1)],
+                  thickness: 1, color: #6b5426 }
+    }
+  }
+
+  // ── The staircase ── Four locked books, each one a stair higher
+  // and one domino-space shorter, so each tread holds one domino.
+  // The top book is the ledge the red ball waits on.
+  generate x, k in stairX {
+    rectangle stair { position: ((x + ends[k]) / 2, deskY - rise / 2 - k * rise), size: (ends[k] - x, rise),
+                      color: covers[k], physics { lockPosition: true, bounce: 0.1 } }
+    rectangle leaves { position: ((x + ends[k]) / 2 + 3, deskY - rise / 2 - k * rise), size: (ends[k] - 10 - x, rise - 5),
+                       color: cream }
+  }
+
+  // ── The cup ── Its collider is a locked welded group, a base and
+  // two walls, so the ball can drop inside it. It is drawn dark, as
+  // the inside of the cup; the china front is drawn after the ball.
+  group cupInside {
+    position: (853, 440)
+    rectangle base  { position: (0, -4), size: (60, 8), color: #3a2416 }
+    rectangle wallL { position: (-27, -20), size: (6, 40), color: #3a2416 }
+    rectangle wallR { position: (27, -20), size: (6, 40), color: #3a2416 }
+    physics { lockPosition: true, bounce: 0.1 }
+  }
+  rectangle tea { position: (853, 404), size: (54, 6), color: #6b3b1f }
+
+  // ── The run ──
+  generate x, i in dx {
+    use Domino(tones[i], 0.45 + i * 0.15) domino { position: (x, deskY - lift[i] * rise - 36) }
+  }
+
+  // ── The marble ── Rolled by hand down the ruler: an `easeIn`
+  // animation, which starts slow and speeds up the way a rolling
+  // ball does. `handoff` carries the speed it reaches, twice its
+  // average for `easeIn`, into the simulation as it leaves the end of
+  // the ruler, so it strikes the first domino near the top. At 4.4 s
+  // it is rewound: back to the end of the ruler, then up it, its
+  // rotation undone on the way. A last hold keeps it there, pinned,
+  // past the end of the scene; free on the slope, it would roll.
+  group marble {
+    position: (18.6, 333.8)
+    circle glass { position: (0, 0), radius: 13, color: #23527f }
+    circle body  { position: (0, 0), radius: 11, color: #3e8fd6 }
+    circle core  { position: (0, 0), radius: 5, color: #a8dcff, alpha: 0.6 }
+    sequence {
+      animate { property: position, to: (110, 375), duration: 0.6, easing: easeIn, handoff: true }
+      physics { bounce: 0.2, duration: 3.8 }
+      animate { property: position, to: (110, 375), duration: 0.25, easing: easeOut }
+      parallel {
+        animate { property: position, to: (18.6, 333.8), duration: 0.5, easing: easeInOut }
+        animate { property: rotation, to: 0, duration: 0.5, easing: easeInOut }
+      }
+      animate { property: position, to: (18.6, 333.8), duration: 4.85 }
+    }
+  }
+
+  // ── The red ball ── It waits on the top book, held like a domino
+  // until 2.4 s and simulated after, until the last domino knocks it
+  // off the end of the book into the cup. At 7.3 s it hops back out,
+  // up and over, and is held on the book to the end of the scene.
+  group ball {
+    position: (835, 373)
+    circle skin  { position: (0, 0), radius: 11, color: #a8301e }
+    circle paint { position: (0, 0), radius: 9, color: #d9452b }
+    circle gleam { position: (0, 0), radius: 4, color: #ff9a7a, alpha: 0.7 }
+    sequence {
+      animate { property: position, to: (835, 373), duration: 2.4 }
+      physics { bounce: 0.3, duration: 4.9 }
+      animate { property: position, to: (850, 330), duration: 0.35, easing: easeOut }
+      parallel {
+        animate { property: position, to: (835, 373), duration: 0.35, easing: easeIn }
+        animate { property: rotation, to: 0, duration: 0.35 }
+      }
+      animate { property: position, to: (835, 373), duration: 2 }
+    }
+  }
+
+  // ── The cup's china front ── Drawn after the ball, so the ball
+  // drops out of sight into the tea. A saucer, the bowl with a
+  // cobalt band, and a handle made of two circles.
+  circle saucer { position: (853, 437), radius: 46, scale: (1, 0.12), color: #d9cfbb }
+  circle handle  { position: (887, 418), radius: 11, color: china }
+  circle handleIn { position: (887, 418), radius: 6, color: #1d2e31 }
+  polygon bowl { position: (853, 418), color: china,
+                 points: [(-31, -16), (31, -16), (27, 8), (18, 18), (-18, 18), (-27, 8)] }
+  rectangle band { position: (853, 409), size: (61, 4), color: cobalt }
+  rectangle rim  { position: (853, 402), size: (62, 2), color: #fffaf0 }
+
+  // The splash: four drops leap from the tea as the ball drops below
+  // the rim, 3.15 s in, and fall back. They are invisible before
+  // and after.
+  generate dxs, i in [-14, -5, 5, 14] {
+    circle drop {
+      position: (853 + dxs, 402)
+      radius: [3, 3.5, 3.5, 3][i]
+      color: #c58a5a
+      alpha: 0
+      sequence {
+        animate { property: alpha, to: 0, duration: 3.15 }
+        parallel {
+          animate { property: position, to: (853 + dxs * 2.2, 402 - [18, 30, 28, 16][i]), duration: 0.22, easing: easeOut }
+          animate { property: alpha, to: 1, duration: 0.05 }
+        }
+        parallel {
+          animate { property: position, to: (853 + dxs * 2.8, 404), duration: 0.22, easing: easeIn }
+          animate { property: alpha, to: 0, duration: 0.22, easing: easeIn }
+        }
+        animate { property: position, to: (853 + dxs, 402), duration: 0.05 }
+      }
+    }
+  }
+
+  // Steam over the cup, three wisps on beats that divide 10 s.
+  use Steam(1.25) steam1 { position: (843, 386) }
+  use Steam(1.25) steam2 { position: (859, 380) }
+  use Steam(1.25) steam3 { position: (851, 392), scale: 0.8 }
+
+  // ── The lamp ── A banker's lamp at the right edge: a brass foot
+  // and stem, and a green shade with its lit underside.
+  rectangle lampFoot { position: (930, 434), size: (70, 12), color: brass }
+  rectangle lampStem { position: (930, 300), size: (6, 260), color: #a8843a }
+  rectangle lampArm  { position: (895, 172), size: (76, 5), color: #a8843a }
+  polygon shade { position: (855, 172), color: #2f6b4f,
+                  points: [(-50, 14), (50, 14), (40, -12), (-40, -12)] }
+  rectangle shadeLit { position: (855, 185), size: (100, 3), color: lamp }
+}

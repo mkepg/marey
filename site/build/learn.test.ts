@@ -14,7 +14,18 @@ describe("parseLessonMeta", () => {
   it("reads a complete front matter with no errors", () => {
     const { meta, errors } = parseLessonMeta({ ...complete, showcase: "sunrise" }, FILE);
     expect(errors).toEqual([]);
-    expect(meta).toEqual({ ...complete, minutes: 12, showcase: "sunrise" });
+    expect(meta).toEqual({ ...complete, minutes: 12, showcase: "sunrise", embed: null });
+  });
+
+  it("reads an embedded scene instead of a showcase, and reports a lesson with both", () => {
+    const { meta, errors } = parseLessonMeta({ ...complete, embed: "lighthouse" }, FILE);
+    expect(errors).toEqual([]);
+    expect(meta.embed).toBe("lighthouse");
+    expect(meta.showcase).toBeNull();
+    expect(parseLessonMeta({ ...complete, embed: ["a"] }, FILE).errors).toEqual([`${FILE}:1: "embed" must be one gallery id`]);
+    expect(parseLessonMeta({ ...complete, showcase: "sunrise", embed: "lighthouse" }, FILE).errors).toEqual([
+      `${FILE}:1: a lesson has a showcase or an embedded scene, not both`,
+    ]);
   });
 
   it("has no showcase when the key is absent", () => {
@@ -51,7 +62,7 @@ describe("parseLessonMeta", () => {
 
   it("reports an unknown key and a showcase written as a list", () => {
     expect(parseLessonMeta({ ...complete, colour: "red", showcase: ["a"] }, FILE).errors).toEqual([
-      `${FILE}:1: unknown front matter key "colour"; a lesson takes title, summary, description, minutes, learn, showcase`,
+      `${FILE}:1: unknown front matter key "colour"; a lesson takes title, summary, description, minutes, learn, showcase, embed`,
       `${FILE}:1: "showcase" must be one gallery id`,
     ]);
   });
@@ -65,6 +76,7 @@ describe("lessonBody", () => {
     minutes: 12,
     learn: ["Draw a <circle>", "Move it"],
     showcase: "sunrise",
+    embed: null,
   };
   const scene = 'scene {\n  size: (100, 100)\n  text t { position: (5, 5), content: "</script>" }\n}';
   const html = lessonBody({
@@ -72,6 +84,7 @@ describe("lessonBody", () => {
     meta,
     bodyHtml: "<h2 id=\"part\">Part</h2>\n<p>Body.</p>\n",
     showcase: { id: "sunrise", title: "Sunrise & sea", source: scene },
+    embed: null,
   });
 
   it("opens with the summary as the lead and the reading time", () => {
@@ -110,9 +123,27 @@ describe("lessonBody", () => {
   });
 
   it("leaves the showcase out when the lesson has none", () => {
-    const plain = lessonBody({ slug: "one", meta: { ...meta, showcase: null }, bodyHtml: "", showcase: null });
+    const plain = lessonBody({ slug: "one", meta: { ...meta, showcase: null }, bodyHtml: "", showcase: null, embed: null });
     expect(plain).not.toContain("<figure");
     expect(plain).toContain("finish-button");
+  });
+
+  it("embeds a scene as a player with the scene written inline, where a showcase would be", () => {
+    const source = 'scene {\n  size: (100, 100)\n  duration: 2\n  text t { position: (5, 5), content: "a < b & c" }\n}';
+    const page = lessonBody({
+      slug: "one",
+      meta: { ...meta, showcase: null, embed: "lamp" },
+      bodyHtml: '<h2 id="part">Part</h2>\n',
+      showcase: null,
+      embed: { id: "lamp", title: "Lamp & light", source },
+    });
+    const figure = page.slice(page.indexOf("<figure"), page.indexOf("</figure>") + 9);
+    expect(figure).toContain('<figure class="lesson-embed">');
+    // The source goes in as it is: a script's text is never decoded, so escaping it would change it.
+    expect(figure).toContain(`<marey-player autoplay loop controls><script type="text/marey">\n${source}\n</script></marey-player>`);
+    expect(figure).toContain('<a href="/gallery/lamp/">Lamp &amp; light</a>');
+    expect(figure).not.toContain('data-mode="showcase"');
+    expect(page.indexOf("<figure")).toBeLessThan(page.indexOf('id="part"'));
   });
 });
 

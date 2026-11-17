@@ -2,8 +2,8 @@ import { escapeHtml as esc } from "./escape";
 import { renderSample } from "./samples";
 import type { Heading } from "./types";
 
-/** The front matter keys a lesson takes; `showcase` is the only optional one. */
-export const LESSON_KEYS = ["title", "summary", "description", "minutes", "learn", "showcase"] as const;
+/** The front matter keys a lesson takes; `showcase` and `embed` are optional. */
+export const LESSON_KEYS = ["title", "summary", "description", "minutes", "learn", "showcase", "embed"] as const;
 const REQUIRED = ["title", "summary", "description", "minutes", "learn"] as const;
 
 export interface LessonMeta {
@@ -16,6 +16,11 @@ export interface LessonMeta {
   readonly learn: ReadonlyArray<string>;
   /** The gallery id of the lesson's showcase scene. */
   readonly showcase: string | null;
+  /**
+   * The gallery id of a scene the lesson shows embedded, the way a reader's
+   * own page would embed it, in place of a showcase.
+   */
+  readonly embed: string | null;
 }
 
 /**
@@ -71,12 +76,17 @@ export function parseLessonMeta(
     }
   }
 
-  let showcase: string | null = null;
-  const rawShowcase = data.showcase;
-  if (Array.isArray(rawShowcase)) errors.push(`${at}: "showcase" must be one gallery id`);
-  else if (rawShowcase !== undefined && rawShowcase !== "") showcase = rawShowcase;
+  const galleryId = (key: "showcase" | "embed"): string | null => {
+    const raw = data[key];
+    if (Array.isArray(raw)) errors.push(`${at}: "${key}" must be one gallery id`);
+    else if (raw !== undefined && raw !== "") return raw;
+    return null;
+  };
+  const showcase = galleryId("showcase");
+  const embed = galleryId("embed");
+  if (showcase !== null && embed !== null) errors.push(`${at}: a lesson has a showcase or an embedded scene, not both`);
 
-  return { meta: { title, summary, description, minutes, learn, showcase }, errors };
+  return { meta: { title, summary, description, minutes, learn, showcase, embed }, errors };
 }
 
 /** The heading the generator writes above "You'll learn". */
@@ -105,6 +115,18 @@ export interface LessonBodyInput {
   /** The lesson's Markdown body, rendered. */
   readonly bodyHtml: string;
   readonly showcase: SceneRef | null;
+  /** The scene the lesson embeds; the build has checked it can be written inline. */
+  readonly embed: SceneRef | null;
+}
+
+/**
+ * Whether a scene's text can sit inside `<script type="text/marey">`. A
+ * script's text is used as it is, never decoded, so it cannot be escaped:
+ * `</script` would close the element early, and `<!--` changes how the parser
+ * looks for that close.
+ */
+export function canWriteInline(source: string): boolean {
+  return !/<\/script|<!--/i.test(source);
 }
 
 /**
@@ -130,6 +152,19 @@ export function lessonBody(input: LessonBodyInput): string {
       `<a href="/gallery/${esc(scene.id)}/">${esc(scene.title)}</a>, from the gallery.</figcaption>\n`;
     // The caption leads the figure, above the player, so it reads before the scene plays.
     parts.push(figure.replace(/^(<figure [^>]*>\n)/, (open) => open + caption));
+  }
+  if (input.embed) {
+    // The markup a reader's own page would hold: the element, its three
+    // attributes and the scene written inline. The site defines the element
+    // from its own build of the player.
+    const scene = input.embed;
+    parts.push(
+      `<figure class="lesson-embed">\n` +
+        `<figcaption class="showcase-caption"><a href="/gallery/${esc(scene.id)}/">${esc(scene.title)}</a>, from the gallery, ` +
+        `embedded with a <code>&lt;marey-player&gt;</code> element and its scene written inline.</figcaption>\n` +
+        `<marey-player autoplay loop controls><script type="text/marey">\n${scene.source}\n</script></marey-player>\n` +
+        `</figure>`,
+    );
   }
   parts.push(input.bodyHtml);
   parts.push(

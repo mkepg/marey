@@ -105,6 +105,25 @@ describe("lesson vocabulary in the repository", () => {
   const config = parseSiteConfig(JSON.parse(readFileSync(join(repoRoot, "site/site.json"), "utf8")), "site/site.json").config;
   const gallery = loadGallery(repoRoot);
 
+  it("lists the course's fourteen lessons in order, each with the vocabulary it introduces", () => {
+    expect(config.learn).toEqual([
+      { slug: "first-scene", vocabulary: ["scene", "size", "background", "duration", "circle", "rectangle", "position", "radius", "color", "animate", "property", "to"] },
+      { slug: "shapes", vocabulary: ["polygon", "line", "text", "points", "thickness", "content", "fontSize", "alpha", "rotation", "origin", "layer", "fit", "contain", "cover", "fill", "none"] },
+      { slug: "animate", vocabulary: ["easing", "linear", "easeIn", "easeOut", "easeInOut", "scale"] },
+      { slug: "timing", vocabulary: ["loop", "yoyo", "delay", "true", "false"] },
+      { slug: "groups", vocabulary: ["group"] },
+      { slug: "sequence", vocabulary: ["sequence", "parallel"] },
+      { slug: "colour", vocabulary: [] },
+      { slug: "values", vocabulary: ["let", "if", "then", "else", "and", "or", "not", "sin", "cos", "length"] },
+      { slug: "generate", vocabulary: ["generate", "in"] },
+      { slug: "templates", vocabulary: ["template", "use"] },
+      { slug: "physics", vocabulary: ["physics", "gravity", "velocity", "bounce", "airDrag", "collideBounds", "indefinitely"] },
+      { slug: "world", vocabulary: ["world", "bounds", "lockPosition", "lockRotation", "spin", "left", "right", "top", "bottom"] },
+      { slug: "handoff", vocabulary: ["handoff"] },
+      { slug: "ship-it", vocabulary: [] },
+    ]);
+  });
+
   it("lists only words of the language, each introduced by one lesson", () => {
     const known = new Set<string>([
       ...KEYWORDS,

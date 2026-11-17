@@ -11,9 +11,11 @@
     { "slug": "generate", "vocabulary": ["generate", "in"] },
     { "slug": "templates", "vocabulary": ["template", "use"] },
     { "slug": "physics", "vocabulary": ["physics", "gravity", "velocity", "bounce", "airDrag", "collideBounds", "indefinitely"] },
-    { "slug": "world", "vocabulary": ["world", "bounds", "lockPosition", "lockRotation", "spin", "left", "right", "top", "bottom"] }
+    { "slug": "world", "vocabulary": ["world", "bounds", "lockPosition", "lockRotation", "spin", "left", "right", "top", "bottom"] },
+    { "slug": "handoff", "vocabulary": ["handoff"] },
+    { "slug": "ship-it", "vocabulary": [] }
   ],
   "guides": [],
   "reference": ["language", "properties", "determinism"],
-  "gallery": ["lighthouse", "dusk-hills", "ledges", "logo-reveal", "bar-chart-reveal", "physics-pile", "orrery", "forest", "day-to-night", "plinko", "ripple", "title-card", "toy-box", "metronome", "postcard", "easing-race", "set-sail", "sunrise"]
+  "gallery": ["lighthouse", "dusk-hills", "ledges", "logo-reveal", "bar-chart-reveal", "physics-pile", "orrery", "forest", "day-to-night", "plinko", "domino-run", "ripple", "title-card", "toy-box", "metronome", "postcard", "easing-race", "set-sail", "sunrise"]
 }

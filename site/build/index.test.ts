@@ -142,6 +142,38 @@ describe("buildSite on a fixture", () => {
     ]);
   });
 
+  it("embeds a gallery scene inline in a lesson that names it, and links its gallery page", () => {
+    const dir = fixture(
+      { ...empty, learn: [lesson("one")], gallery: ["sun"] },
+      {
+        "site/content/learn/one.md": lessonPage("One", "embed: sun\n", "## Part"),
+        "site/gallery/sun.md": entry("one"),
+        "site/gallery/sun.marey": scene,
+      },
+    );
+    const site = buildSite(dir);
+    expect(site.errors).toEqual([]);
+    const one = site.pages.find((p) => p.url === "/learn/one/")!;
+    expect(one.html).toContain('<script type="text/marey">\n' + scene + "\n</script>");
+    expect(one.links.map((l) => l.href)).toContain("/gallery/sun/");
+  });
+
+  it("reports an embedded scene that names no gallery entry, or whose text would end its script early", () => {
+    const dir = fixture(
+      { ...empty, learn: [lesson("one"), lesson("two")], gallery: ["sun"] },
+      {
+        "site/content/learn/one.md": lessonPage("One", "embed: moon\n"),
+        "site/content/learn/two.md": lessonPage("Two", "embed: sun\n"),
+        "site/gallery/sun.md": entry("two"),
+        "site/gallery/sun.marey": scene.replace("circle c", "// a </SCRIPT> in a comment\n  circle c"),
+      },
+    );
+    expect(buildSite(dir).errors).toEqual([
+      'site/content/learn/one.md:1: embed "moon" is not a gallery entry in site/site.json',
+      'site/content/learn/two.md:1: embed "sun" cannot be written inline: its source contains "</script" or "<!--"',
+    ]);
+  });
+
   it("gives /learn/ exactly one h1, the hero's, with cards for the lessons", () => {
     const dir = fixture(
       { ...empty, learn: [lesson("one"), lesson("two")], gallery: ["lighthouse", "sun"] },

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { parseFrontMatter } from "./frontMatter";
 import { renderLayout, ORIGIN, SECTION_LABELS, type Crumb, type NavLink, type SidebarItem } from "./layout";
 import { galleryPages, loadGallery, type LessonRef, type LoadedGalleryEntry } from "./gallery";
-import { YOULL_LEARN, learnFrontBody, lessonBody, lessonText, parseLessonMeta, type LessonMeta, type SceneRef } from "./learn";
+import { YOULL_LEARN, canWriteInline, learnFrontBody, lessonBody, lessonText, parseLessonMeta, type LessonMeta, type SceneRef } from "./learn";
 import { checkLinks } from "./links";
 import { renderMarkdown } from "./markdown";
 import { loadReference, rewriteRepoLink } from "./reference";
@@ -187,8 +187,8 @@ export function buildSite(repoRoot: string): BuiltSite {
     errors.push(...parsed.errors);
     lessonMeta.set(doc, parsed.meta);
   }
-  /** The scene a lesson's `showcase` or the front page's `hero` names; reports an id the gallery does not list. */
-  const sceneFor = (doc: Doc, key: "showcase" | "hero", id: string | null): LoadedGalleryEntry | null => {
+  /** The scene a lesson's `showcase` or `embed`, or the front page's `hero`, names; reports an id the gallery does not list. */
+  const sceneFor = (doc: Doc, key: "showcase" | "embed" | "hero", id: string | null): LoadedGalleryEntry | null => {
     if (id === null) return null;
     if (!config.gallery.includes(id)) {
       errors.push(`${doc.file}:1: ${key} "${id}" is not a gallery entry in ${CONFIG_FILE}`);
@@ -238,9 +238,22 @@ ${body.text}`,
       if (rendered.headings.some((h) => h.id === YOULL_LEARN.id)) {
         errors.push(`${doc.file}:1: the heading "${YOULL_LEARN.text}" is the page's own; give the body's heading another name`);
       }
-      bodyHtml = lessonBody({ slug: doc.slug, meta, bodyHtml: rendered.html, showcase: entry ? sceneRef(entry) : null });
+      let embedded = sceneFor(doc, "embed", meta.embed);
+      if (embedded && !canWriteInline(embedded.source)) {
+        errors.push(`${doc.file}:1: embed "${embedded.id}" cannot be written inline: its source contains "</script" or "<!--"`);
+        embedded = null;
+      }
+      bodyHtml = lessonBody({
+        slug: doc.slug,
+        meta,
+        bodyHtml: rendered.html,
+        showcase: entry ? sceneRef(entry) : null,
+        embed: embedded ? sceneRef(embedded) : null,
+      });
       headings = [YOULL_LEARN, ...rendered.headings];
-      if (entry) links = [...links, { href: `/gallery/${entry.id}/`, line: 1, file: doc.file }];
+      for (const scene of [entry, embedded]) {
+        if (scene) links = [...links, { href: `/gallery/${scene.id}/`, line: 1, file: doc.file }];
+      }
       text = lessonText(meta, rendered.text);
     } else if (doc.section === "learn" && doc.kind === "index") {
       const str = (key: string): string | null => {
