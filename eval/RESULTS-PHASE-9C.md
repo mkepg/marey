@@ -75,12 +75,11 @@ version is published. This lists them:
 grep -rn "0\.6\.0\|0\.7\.0\|not published\|not on npm" site/content README.md
 ```
 
-What is left to change by hand is the embed snippet's pinned
-`marey-lang@0.6.0` URL (`embed.md`, `ship-it.md`, the README), which stays
-valid because a pinned CDN URL keeps serving the same file, and can move to a
-newer version whenever one should be taught. The other hits stay
-version-specific on purpose: the workflow steps pinned to 0.6.0, which run the
-same with a later version; the comparisons of 0.6.0 and 0.7.0 output; the
+After `marey-lang@0.7.0` was published (2026-11-20), the embed snippet's
+pinned URL (`embed.md`, `ship-it.md`, the README) and the workflow steps
+pinned to 0.6.0 (`ci.md`, `ship-it.md`, and the one-off `npx` command in
+`install.md`) moved to 0.7.0. The other hits stay
+version-specific on purpose: the comparisons of 0.6.0 and 0.7.0 output; the
 `--reporter github` step pinned to 0.7.0; the action's own message, quoted
 with `<version>`; and the lines that name `main` as 0.7.0 (`embed.md`,
 `install.md`, the README's status), which change when `main` moves on.

@@ -14,15 +14,14 @@ pause and scrub it, and you change it by editing text.
 From jsDelivr, with one script tag anywhere in the page:
 
 ```html
-<script type="module" src="https://cdn.jsdelivr.net/npm/marey-lang@0.6.0/dist/player/marey-player.mjs"></script>
+<script type="module" src="https://cdn.jsdelivr.net/npm/marey-lang@0.7.0/dist/player/marey-player.mjs"></script>
 ```
 
-The URL pins `marey-lang@0.6.0`, the first version with the player. A pinned
-URL keeps serving the same file, so a later release cannot change your page
-under you. To move to a newer version, change the number:
-`npm view marey-lang version` prints the newest. The players on this site are
-built from Marey's `main` branch, version 0.7.0; the attributes, events and
-methods below are the same in 0.6.0 and 0.7.0.
+The URL pins `marey-lang@0.7.0`. A pinned URL keeps serving the same file,
+so a later release cannot change your page under you. To move to a newer
+version, change the number: `npm view marey-lang version` prints the newest.
+The player first shipped in 0.6.0; the attributes, events and methods below
+are the same in 0.6.0 and 0.7.0.
 
 In a project with a bundler, install the package:
 
@@ -112,7 +111,7 @@ or, when you make the element in JavaScript, before you add it to the page.
   intro.addEventListener("ready", (e) => console.log("ready", e.detail.duration));
   intro.addEventListener("error", (e) => console.warn(e.detail.code, e.detail.errors));
 </script>
-<script type="module" src="https://cdn.jsdelivr.net/npm/marey-lang@0.6.0/dist/player/marey-player.mjs"></script>
+<script type="module" src="https://cdn.jsdelivr.net/npm/marey-lang@0.7.0/dist/player/marey-player.mjs"></script>
 ```
 
 `code` is one of five:

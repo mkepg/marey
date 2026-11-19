@@ -13,8 +13,8 @@ which annotates each error on its line and can export every scene, and needs
 
 This workflow, saved as `.github/workflows/marey.yml` in your repository, sets
 up Node 22 and checks every scene in a `scenes` folder on each push and pull
-request. It pins `marey-lang` 0.6.0, and runs the same with any later version
-in its place:
+request. It pins `marey-lang` 0.7.0; 0.6.0 and any later version run the
+same for this step:
 
 ```yaml
 name: Marey
@@ -27,7 +27,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - run: npx --yes marey-lang@0.6.0 check scenes/*.marey
+      - run: npx --yes marey-lang@0.7.0 check scenes/*.marey
 ```
 
 The shell expands `scenes/*.marey` to the file names. `check` prints each

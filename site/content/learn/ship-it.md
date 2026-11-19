@@ -211,7 +211,7 @@ a script tag, then give each player a scene, either as a file it fetches with
 `src` or written inline in a `<script type="text/marey">` inside it:
 
 ```html
-<script type="module" src="https://cdn.jsdelivr.net/npm/marey-lang@0.6.0/dist/player/marey-player.mjs"></script>
+<script type="module" src="https://cdn.jsdelivr.net/npm/marey-lang@0.7.0/dist/player/marey-player.mjs"></script>
 
 <marey-player src="lighthouse.marey" autoplay loop controls></marey-player>
 
@@ -226,8 +226,8 @@ a script tag, then give each player a scene, either as a file it fetches with
 </marey-player>
 ```
 
-The script tag pins a version: `0.6.0`, the first `marey-lang` release with the
-player. Put the newest version npm lists in its place (`npm view marey-lang
+The script tag pins a version: `0.7.0`. The player first shipped in 0.6.0, and
+any later release works in its place: put the newest version npm lists there (`npm view marey-lang
 version` prints it). In a project that uses a bundler, install the package
 and write `import "marey-lang/player";` instead of the script tag.
 
@@ -250,8 +250,8 @@ language as this course teaches it.
 A workflow that runs `marey check` on each push stops a broken scene before it
 is merged. You can write the step yourself. This one, at
 `.github/workflows/marey.yml` in your repository, sets up Node 22 and checks
-every scene in a `scenes` folder with `marey-lang` 0.6.0; any later version
-works the same in its place:
+every scene in a `scenes` folder with `marey-lang` 0.7.0; 0.6.0 and any later
+version work the same for this step:
 
 ```yaml
 name: Marey
@@ -264,7 +264,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - run: npx --yes marey-lang@0.6.0 check scenes/*.marey
+      - run: npx --yes marey-lang@0.7.0 check scenes/*.marey
 ```
 
 The shell expands `scenes/*.marey` to the file names, `check` prints each
@@ -412,7 +412,7 @@ seconds, twice in the scene, and ends where it started, as
 - `<marey-player>` plays a scene from `src` or from an inline
   `<script type="text/marey">`, with the `autoplay`, `loop` and `controls`
   attributes. ([Embed a scene](/guides/embed/))
-- A workflow step running `npx --yes marey-lang@0.6.0 check` checks scenes on
+- A workflow step running `npx --yes marey-lang@0.7.0 check` checks scenes on
   each push. The GitHub Action, which needs 0.7.0 or later, annotates each
   error on its line and can export and upload the results.
   ([Check scenes in CI](/guides/ci/))

@@ -47,7 +47,7 @@ To run the command once without adding it to a project, name the package and
 pin its version:
 
 ```bash
-npx --yes marey-lang@0.6.0 check scene.marey
+npx --yes marey-lang@0.7.0 check scene.marey
 ```
 
 `--yes` lets npx download the package without asking, which a script or a CI

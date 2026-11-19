@@ -345,7 +345,7 @@ explicitly rather than quietly deviating.
     `docs/specs/2026-10-30-marey-phase-9a-embeddable-player-design.md`.
     Plan: `docs/plans/2026-10-30-phase-9a-embeddable-player.md`.
 - **Phase 9B — GitHub Action and Gate C** (roadmap §13, past the finish line).
-  - **Status: 9B (GitHub Action and Gate C) merged into `main` on 2026-11-13 (fast-forward to `c1808c9`); Gate C measured on the PR #2 runs; evidence in `eval/RESULTS-PHASE-9B.md`. 0.7.0 carries 9B and fitted Lottie keyframes together (below).** It adds `action.yml` and `action/` at the repository
+  - **Status: 9B (GitHub Action and Gate C) merged into `main` on 2026-11-13 (fast-forward to `c1808c9`); Gate C measured on the PR #2 runs; evidence in `eval/RESULTS-PHASE-9B.md`. 0.7.0 carries 9B and fitted Lottie keyframes together (below), and was published on npm on 2026-11-20 (127 files).** It adds `action.yml` and `action/` at the repository
     root, `marey check --reporter github`, `examples/starter/` and
     `.github/workflows/action.yml`. Design:
     `docs/specs/2026-11-12-marey-phase-9b-github-action-design.md`.
@@ -364,8 +364,8 @@ explicitly rather than quietly deviating.
     pushed and deployed to `https://marey.pages.dev/`; evidence in
     `eval/RESULTS-PHASE-9C.md`.** 14 lessons, six guides, a generated
     reference and a 22-entry gallery, served beside the playground. Version
-    notes read "0.7.0 or later", so they stay true once 0.7.0 is published;
-    the embed snippet keeps its pinned 0.6.0 URL until it is bumped. Design:
+    notes read "0.7.0 or later"; after 0.7.0 was published the embed snippet
+    and the workflow examples moved their pins to 0.7.0. Design:
     `docs/specs/2026-11-13-marey-phase-9c-docs-site-and-gallery-design.md`.
     Plan: `docs/plans/2026-11-13-phase-9c-docs-site-and-gallery.md`.
 

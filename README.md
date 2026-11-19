@@ -227,7 +227,7 @@ runs the action against it on every pull request.
 edit: a file the element fetches, or the scene written inline.
 
 ```text
-<script type="module" src="https://cdn.jsdelivr.net/npm/marey-lang@0.6.0/dist/player/marey-player.mjs"></script>
+<script type="module" src="https://cdn.jsdelivr.net/npm/marey-lang@0.7.0/dist/player/marey-player.mjs"></script>
 
 <marey-player src="bars-reveal.marey" autoplay loop controls></marey-player>
 
