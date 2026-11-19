@@ -3,7 +3,10 @@
  * WebGL context, and browsers drop the oldest context past a small limit, so
  * a long page of samples cannot give every sample a live player. A sample asks
  * for a slot; the pool makes the player when the slot is near the viewport and
- * a place is free, and removes it again when the slot is far away.
+ * a place is free, and removes it again when the slot is far away. A slot on
+ * screen that is still waiting when every place is taken gets the place of the
+ * player farthest off screen, so nothing the reader is looking at stays empty
+ * while a player they cannot see holds a place.
  */
 
 /** A slot closer than this many pixels to the viewport may get a player. */
@@ -101,13 +104,46 @@ export class PlayerPool {
     this.liveCount--;
   }
 
+  /** Fills the free places, then trades off-screen players for on-screen slots until none is left waiting. */
+  private fill(): void {
+    for (;;) {
+      this.fillFreePlaces();
+      if (!this.evictForOnScreen()) return;
+    }
+  }
+
+  /**
+   * When every place is taken and a slot on screen is still waiting, removes
+   * the player whose slot is farthest from the viewport, if that slot is off
+   * screen. Returns whether a place was freed. A player whose slot is on
+   * screen is never removed for another, so when more slots are on screen
+   * than there are places, the extra ones wait.
+   */
+  private evictForOnScreen(): boolean {
+    if (this.liveCount < this.limit) return false;
+    let waitingOnScreen = false;
+    let farthest: { entry: Entry; distance: number } | null = null;
+    for (const [slot, entry] of this.entries) {
+      if (!slot.isConnected) continue;
+      if (entry.player) {
+        const distance = this.distanceOf(slot);
+        if (!farthest || distance > farthest.distance) farthest = { entry, distance };
+      } else if (entry.distance !== Number.POSITIVE_INFINITY && this.distanceOf(slot) === 0) {
+        waitingOnScreen = true;
+      }
+    }
+    if (!waitingOnScreen || !farthest || farthest.distance === 0) return false;
+    this.drop(farthest.entry);
+    return true;
+  }
+
   /**
    * Gives each free place to the nearest slot that wants one. Distances are
    * measured here, not taken from the last report: a report is a snapshot from
    * when a margin was crossed, and a slot that drifted away since would
    * otherwise tie with one that has just scrolled in.
    */
-  private fill(): void {
+  private fillFreePlaces(): void {
     while (this.liveCount < this.limit) {
       let best: { slot: Element; entry: Entry; distance: number } | null = null;
       for (const [slot, entry] of [...this.entries]) {
@@ -142,28 +178,29 @@ export class PlayerPool {
 }
 
 /**
- * The browser's observer behind the interface. Two observers, with margins of
- * the two thresholds, wake the pool when a slot crosses either; the distance
- * itself is measured from the slot's box at that moment. A box with no size
- * (inside a closed `details`) is infinitely far away.
+ * The browser's observer behind the interface. Three observers wake the pool
+ * when a slot crosses the edge of the viewport or either threshold; the
+ * distance itself is measured from the slot's box at that moment. A box with
+ * no size (inside a closed `details`) is infinitely far away.
  */
 export function createViewportObserver(): IntersectionObserverLike {
   const callbacks = new Map<Element, (px: number) => void>();
   const report = (entries: IntersectionObserverEntry[]): void => {
     for (const e of entries) callbacks.get(e.target)?.(measureDistance(e.target));
   };
-  const near = new IntersectionObserver(report, { rootMargin: `${CREATE_WITHIN}px 0px` });
-  const far = new IntersectionObserver(report, { rootMargin: `${REMOVE_BEYOND}px 0px` });
+  // The viewport's own edge matters too: a slot that scrolls on screen while
+  // every place is taken can then claim one (PlayerPool.evictForOnScreen).
+  const observers = [0, CREATE_WITHIN, REMOVE_BEYOND].map(
+    (margin) => new IntersectionObserver(report, { rootMargin: `${margin}px 0px` }),
+  );
   return {
     observe(slot, onDistance) {
       callbacks.set(slot, onDistance);
-      near.observe(slot);
-      far.observe(slot);
+      for (const o of observers) o.observe(slot);
     },
     unobserve(slot) {
       callbacks.delete(slot);
-      near.unobserve(slot);
-      far.unobserve(slot);
+      for (const o of observers) o.unobserve(slot);
     },
   };
 }

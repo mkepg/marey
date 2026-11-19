@@ -23,16 +23,23 @@
  *             Enter opens the first result.
  *   mobile    at 390 px no page scrolls sideways, and at 360 px no lesson or
  *             guide does.
- *   budget    the JavaScript each page loads before any player mounts (the
- *             player's renderer chunk is held, never served), gzipped, is
- *             under 90 kB.
+ *   budget    the JavaScript each page loads before any player mounts, gzipped,
+ *             is under 90 kB. Each player's own IntersectionObserver (its
+ *             200 px margin) is given one that never reports, so no player
+ *             asks for its renderer; the pool still makes players, which
+ *             compile and fire `ready`.
  *   text      a lesson sample with `text` reaches `ready`, and the scene font
  *             is served from the build with a 200 (spec C21).
- *   pool      /gallery/ at 1280x2400, scrolled top to bottom and then jumped
- *             up and down: at most 12 players are ever in the page (C20).
- *   controls  a playing player's control bar fades out with the pointer away
- *             and nothing in it focused, shows on hover, on focus and while
- *             paused, and always on a screen that cannot hover.
+ *   pool      /gallery/ at 1280x900 and 1280x2400, scrolled top to bottom:
+ *             with the page still, every card on screen gets a player, up to
+ *             the 12-player limit; then jumped up and down. At most 12
+ *             players are ever in the page (C20).
+ *   controls  on a gallery scene, a lesson sample and lesson 14's embed: a
+ *             playing player's control bar fades with the pointer away and
+ *             nothing in it focused, and after a mouse click on its buttons;
+ *             it shows on hover, while paused and while a control has the
+ *             keyboard focus; and always on a screen that cannot hover. Each
+ *             step waits for the opacity it expects.
  *   nojs      with JavaScript off, the course, a lesson and the gallery still
  *             render, with navigation and no search field.
  *   shots     a screenshot of every gallery scene and every lesson showcase
@@ -647,75 +654,93 @@ async function checkText() {
 
 // ─── pool ───────────────────────────────────────────────────────────────────
 
-async function checkPool() {
-  const { context, page, log } = await newPage({ viewport: { width: 1280, height: 2400 } });
-  const out = { path: "/gallery/", viewport: "1280x2400" };
+/** How long a still page may take to give every card on screen it can hold a player. */
+const SETTLE_TIMEOUT = 4000;
+
+/**
+ * Scrolls /gallery/ top to bottom at one viewport size. After each step, with
+ * the page still, every card on screen must get a player, except those over
+ * the 12-player limit when more than 12 cards are on screen at once. Then
+ * jumps between the top and the bottom: a player removed while it loads must
+ * not throw. Never more than 12 players connected.
+ */
+async function poolAt(width, height) {
+  const { context, page, log } = await newPage({ viewport: { width, height } });
+  const out = { path: "/gallery/", viewport: `${width}x${height}`, steps: [] };
   try {
     await page.goto(`${ORIGIN}/gallery/`, { waitUntil: "load" });
-    await page.waitForTimeout(1500);
-    const height = await page.evaluate(() => document.documentElement.scrollHeight);
-    out.pageHeight = height;
-    const samples = [];
-    // Cards on screen with no player yet, a second after each step: the pool
-    // serves the nearest waiting card only when a place frees, and a place
-    // frees only when a player's card is over 1,200 px away.
-    const waitingOnScreen = [];
-    const onScreenWithout = () =>
-      page.evaluate(
-        () =>
-          [...document.querySelectorAll("li.gallery-card .sample-stage")].filter((s) => {
-            const r = s.getBoundingClientRect();
-            return r.bottom > 0 && r.top < innerHeight && !s.querySelector("marey-player");
-          }).length,
-      );
-    for (let y = 0; y <= height; y += 200) {
+    await page.waitForTimeout(1000);
+    const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+    out.pageHeight = pageHeight;
+    const cardsOnScreen = () =>
+      page.evaluate(() => {
+        const stages = [...document.querySelectorAll("li.gallery-card .sample-stage")].filter((s) => {
+          const r = s.getBoundingClientRect();
+          return r.bottom > 0 && r.top < innerHeight;
+        });
+        return { onScreen: stages.length, without: stages.filter((s) => !s.querySelector("marey-player")).length, live: document.querySelectorAll("marey-player").length };
+      });
+    for (let y = 0; y <= pageHeight; y += 300) {
       await page.evaluate((top) => window.scrollTo(0, top), y);
-      await page.waitForTimeout(150);
-      samples.push(await page.evaluate(() => document.querySelectorAll("marey-player").length));
+      const t0 = Date.now();
+      let c = await cardsOnScreen();
+      // More cards on screen than places: the extra ones wait for a place, and only those.
+      while (c.without > Math.max(0, c.onScreen - PLAYER_LIMIT) && Date.now() - t0 < SETTLE_TIMEOUT) {
+        await page.waitForTimeout(100);
+        c = await cardsOnScreen();
+      }
+      const allowed = Math.max(0, c.onScreen - PLAYER_LIMIT);
+      out.steps.push({ y, ...c, allowed, settledMs: Date.now() - t0 });
+      if (c.without > allowed) {
+        fail("pool", `${width}x${height} at y=${y}: ${c.without} of ${c.onScreen} cards on screen have no player after ${SETTLE_TIMEOUT} ms (${c.live} players live)`);
+      }
     }
-    for (let y = 0; y <= height; y += 600) {
-      await page.evaluate((top) => window.scrollTo(0, top), y);
-      await page.waitForTimeout(1000);
-      waitingOnScreen.push({ y, cards: await onScreenWithout() });
-    }
-    // Fast up and down: a player removed while it loads must not throw.
     for (let i = 0; i < 12; i++) {
-      await page.evaluate((top) => window.scrollTo(0, top), i % 2 === 0 ? 0 : height);
+      await page.evaluate((top) => window.scrollTo(0, top), i % 2 === 0 ? 0 : pageHeight);
       await page.waitForTimeout(60);
-      samples.push(await page.evaluate(() => document.querySelectorAll("marey-player").length));
     }
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(2000);
     const state = await page.evaluate(() => window.__siteCheck);
-    out.connectedSampled = samples;
-    out.onScreenWithoutPlayer = waitingOnScreen;
     out.maxConnected = state.maxLive;
     out.readyEvents = state.ready;
     out.playerErrors = state.errors;
-    if (state.maxLive > PLAYER_LIMIT) fail("pool", `${state.maxLive} players were connected at once on /gallery/ at 1280x2400`);
-    if (state.ready === 0) fail("pool", "no player reached ready while scrolling the gallery");
+    out.maxOnScreen = Math.max(...out.steps.map((s) => s.onScreen));
+    out.maxWithout = Math.max(...out.steps.map((s) => s.without));
+    if (state.maxLive > PLAYER_LIMIT) fail("pool", `${state.maxLive} players were connected at once on /gallery/ at ${width}x${height}`);
+    if (state.ready === 0) fail("pool", `no player reached ready while scrolling the gallery at ${width}x${height}`);
     for (const e of state.errors) fail("pool", `player error ${e.code}`);
     for (const p of logProblems(log)) fail("pool", p);
   } finally {
     await context.close();
   }
-  console.log(`pool: at most ${out.maxConnected} players connected on /gallery/ at 1280x2400`);
-  report.checks.pool = out;
+  console.log(`pool: ${width}x${height}: at most ${out.maxConnected} players connected; at most ${out.maxOnScreen} cards on screen, ${out.maxWithout} without a player once still`);
+  return out;
+}
+
+async function checkPool() {
+  report.checks.pool = { at900: await poolAt(1280, 900), at2400: await poolAt(1280, 2400) };
 }
 
 // ─── controls ───────────────────────────────────────────────────────────────
 
-async function barState(page) {
-  return page.evaluate(() => {
-    const player = document.querySelector(".gallery-stage marey-player");
-    const bar = player?.shadowRoot?.querySelector("[part=controls]");
-    return {
-      playing: player ? !player.paused : null,
-      cls: player?.classList.contains("is-playing") ?? null,
-      hovered: player?.matches(":hover") ?? null,
-      focusWithin: player?.matches(":focus-within") ?? null,
-      opacity: bar ? getComputedStyle(bar).opacity : null,
-    };
-  });
+/** The player a controls step is about, its page, and how to find it. */
+const CONTROL_TARGETS = [
+  { name: "gallery scene", path: "/gallery/lighthouse/", near: ".gallery-stage", selector: ".gallery-stage marey-player" },
+  { name: "lesson sample", path: "/learn/animate/", near: 'figure.sample[data-mode="live"]', selector: 'figure.sample[data-mode="live"] marey-player' },
+  { name: "lesson 14 embed", path: "/learn/ship-it/", near: ".lesson-embed", selector: ".lesson-embed > marey-player" },
+];
+
+function barStateOf(selector) {
+  const player = document.querySelector(selector);
+  const bar = player?.shadowRoot?.querySelector("[part=controls]");
+  return {
+    playing: player ? !player.paused : null,
+    cls: player?.classList.contains("is-playing") ?? null,
+    hovered: player?.matches(":hover") ?? null,
+    focusWithin: player?.matches(":focus-within") ?? null,
+    focused: player?.shadowRoot?.activeElement?.getAttribute("part") ?? null,
+    opacity: bar ? getComputedStyle(bar).opacity : null,
+  };
 }
 
 /** Moves the keyboard focus to an element outside the player, as a reader tabbing on would. */
@@ -724,82 +749,119 @@ function moveFocusOut() {
   outside?.focus();
 }
 
-async function checkControls() {
-  const path = "/gallery/lighthouse/";
-  const out = { path, steps: [] };
+/**
+ * Waits until the bar's computed opacity is `want` ("0" or "1"), so a fade
+ * still in progress on a loaded machine is not read as a failure. Returns the
+ * state seen last, with whether it got there.
+ */
+async function waitForBar(page, selector, want, timeout = 5000) {
+  const reached = await page
+    .waitForFunction(
+      ({ sel, want }) => {
+        const bar = document.querySelector(sel)?.shadowRoot?.querySelector("[part=controls]");
+        return !!bar && getComputedStyle(bar).opacity === want;
+      },
+      { sel: selector, want },
+      { timeout },
+    )
+    .then(() => true, () => false);
+  return { reached, ...(await page.evaluate(barStateOf, selector)) };
+}
+
+async function controlsOn(target, out) {
   const step = (name, ok, detail) => {
-    out.steps.push({ name, ok, ...detail });
-    if (!ok) fail("controls", `${name} ${JSON.stringify(detail)}`);
+    out.steps.push({ target: target.name, name, ok, ...detail });
+    if (!ok) fail("controls", `${target.name}: ${name} ${JSON.stringify(detail)}`);
   };
   const { context, page, log } = await newPage();
+  const sel = target.selector;
   try {
-    await page.goto(ORIGIN + path, { waitUntil: "load" });
-    await page.waitForFunction(() => !!document.querySelector(".gallery-stage .sample-stage")?.dataset.checkReady, null, { timeout: READY_TIMEOUT });
-    const player = page.locator(".gallery-stage marey-player");
+    await page.goto(ORIGIN + target.path, { waitUntil: "load" });
+    // A pooled player exists only once its slot is near the viewport.
+    await page.locator(target.near).first().scrollIntoViewIfNeeded();
+    const player = page.locator(sel).first();
+    await page.waitForFunction(
+      (sel) => {
+        const p = document.querySelector(sel);
+        const slot = p?.parentElement?.classList.contains("sample-stage") ? p.parentElement : p;
+        return !!slot?.dataset.checkReady && p.classList.contains("is-playing");
+      },
+      sel,
+      { timeout: READY_TIMEOUT },
+    );
     const box = await player.boundingBox();
-    const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-    const settle = () => page.waitForTimeout(450);
+    const centre = { x: box.x + box.width / 2, y: box.y + box.height / 3 };
+    const away = () => page.mouse.move(2, 2);
 
-    await page.mouse.move(2, 2);
-    await settle();
-    let s = await barState(page);
-    step("playing, pointer away: the bar is hidden", s.playing === true && s.opacity === "0", s);
+    await away();
+    let s = await waitForBar(page, sel, "0");
+    step("playing, pointer away: the bar is hidden", s.reached && s.playing === true, s);
 
     await page.mouse.move(centre.x, centre.y);
-    await settle();
-    s = await barState(page);
-    step("pointer on the player: the bar shows", s.opacity === "1", s);
-    await player.screenshot({ path: join(outDir, "controls-hover.png") });
+    s = await waitForBar(page, sel, "1");
+    step("pointer on the player: the bar shows", s.reached, s);
+    if (target.name === "gallery scene") await player.screenshot({ path: join(outDir, "controls-hover.png") });
 
+    // A mouse click: pause, then play. The site takes the focus off the
+    // clicked button, so with the pointer away the bar fades once playing.
     await player.locator("[part=play]").click();
-    await page.mouse.move(2, 2);
-    await settle();
-    s = await barState(page);
-    step("paused, pointer away: the bar stays", s.playing === false && s.cls === false && s.opacity === "1", s);
-
-    // A click leaves the keyboard focus on the play button, and focus in the
-    // bar keeps it showing: the bar hides only when nothing in it has focus.
+    await away();
+    s = await waitForBar(page, sel, "1");
+    step("paused by a mouse click, pointer away: the bar stays", s.reached && s.playing === false && s.cls === false, s);
     await page.mouse.move(centre.x, centre.y);
     await player.locator("[part=play]").click();
-    await page.mouse.move(2, 2);
-    await settle();
-    s = await barState(page);
-    step("playing again after a click, pointer away: the bar stays while the button has focus", s.playing === true && s.opacity === "1", s);
-    await page.evaluate(moveFocusOut);
-    await settle();
-    s = await barState(page);
-    step("focus leaves the button: hidden again", s.playing === true && s.opacity === "0", s);
-    await player.screenshot({ path: join(outDir, "controls-away.png") });
-    // A headed browser recomputes hover from the real cursor after the
-    // capture scrolls; put the pointer away again.
-    await page.mouse.move(2, 2);
+    await away();
+    s = await waitForBar(page, sel, "0");
+    step("playing after a mouse click, pointer away: the bar fades and nothing in it keeps the focus", s.reached && s.playing === true && s.focused === null, s);
+    if (target.name === "gallery scene") {
+      await player.screenshot({ path: join(outDir, "controls-away.png") });
+      // A headed browser recomputes hover from the real cursor after the capture scrolls.
+      await away();
+    }
 
-    await page.evaluate(() => document.querySelector(".gallery-stage marey-player")?.shadowRoot?.querySelector("[part=seek]")?.focus());
-    await settle();
-    s = await barState(page);
-    step("focus in the bar, pointer away: the bar shows", s.opacity === "1", s);
+    // The keyboard: focus the play button and press Enter twice (pause,
+    // play). The focus stays on the button, and so does the bar.
+    await page.evaluate((sel) => document.querySelector(sel)?.shadowRoot?.querySelector("[part=play]")?.focus(), sel);
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Enter");
+    s = await waitForBar(page, sel, "1");
+    step("playing after Enter on the focused button, pointer away: the bar stays", s.reached && s.playing === true && s.focused === "play", s);
     await page.evaluate(moveFocusOut);
-    await settle();
-    s = await barState(page);
-    step("focus gone: hidden again", s.opacity === "0", s);
+    s = await waitForBar(page, sel, "0");
+    step("focus moves out of the player: the bar fades", s.reached && s.focusWithin === false, s);
+
+    await page.evaluate((sel) => document.querySelector(sel)?.shadowRoot?.querySelector("[part=seek]")?.focus(), sel);
+    s = await waitForBar(page, sel, "1");
+    step("focus on the seek bar, pointer away: the bar shows", s.reached && s.focusWithin === true, s);
+    await page.evaluate(moveFocusOut);
+    s = await waitForBar(page, sel, "0");
+    step("focus gone: the bar fades again", s.reached, s);
     for (const p of logProblems(log)) step("no console or page errors", false, { problem: p });
   } catch (e) {
     step("ran to the end", false, { error: e instanceof Error ? e.message : String(e) });
   } finally {
     await context.close();
   }
+}
+
+async function checkControls() {
+  const out = { steps: [] };
+  for (const target of CONTROL_TARGETS) await controlsOn(target, out);
 
   // A screen that cannot hover keeps the bar.
+  const target = CONTROL_TARGETS[0];
   const touch = await newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   try {
-    await touch.page.goto(ORIGIN + path, { waitUntil: "load" });
+    await touch.page.goto(ORIGIN + target.path, { waitUntil: "load" });
     await touch.page.waitForFunction(() => !!document.querySelector(".gallery-stage .sample-stage")?.dataset.checkReady, null, { timeout: READY_TIMEOUT });
-    await touch.page.waitForTimeout(450);
+    await touch.page.waitForTimeout(1000);
     const hoverNone = await touch.page.evaluate(() => matchMedia("(hover: none)").matches);
-    const s = await barState(touch.page);
-    step("a screen that cannot hover: the bar shows while playing", hoverNone && s.playing === true && s.opacity === "1", { hoverNone, ...s });
+    const s = await touch.page.evaluate(barStateOf, target.selector);
+    const ok = hoverNone && s.playing === true && s.opacity === "1";
+    out.steps.push({ target: target.name, name: "a screen that cannot hover: the bar shows while playing", ok, hoverNone, ...s });
+    if (!ok) fail("controls", `touch: ${JSON.stringify({ hoverNone, ...s })}`);
   } catch (e) {
-    step("touch ran to the end", false, { error: e instanceof Error ? e.message : String(e) });
+    fail("controls", `touch: ${e instanceof Error ? e.message : String(e)}`);
   } finally {
     await touch.context.close();
   }

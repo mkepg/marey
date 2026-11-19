@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { PLAYING_CLASS, PLAYING_EVENTS, syncPlaying, trackPlaying, type PlayingTarget } from "./controls";
+import { PLAYING_CLASS, PLAYING_EVENTS, releasePointerFocus, syncPlaying, trackPlaying, type PlayingTarget } from "./controls";
 
 function fakePlayer(paused: boolean) {
   const classes = new Set<string>();
-  const listeners = new Map<string, Array<() => void>>();
+  const listeners = new Map<string, Array<(event: Event) => void>>();
+  const button = { blurred: 0, blur() { this.blurred++; } };
+  const shadowRoot = { activeElement: button as unknown as Element | null };
   const player = {
     paused,
+    shadowRoot,
     classList: {
       toggle(name: string, force?: boolean) {
         const on = force ?? !classes.has(name);
@@ -14,14 +17,14 @@ function fakePlayer(paused: boolean) {
         return on;
       },
     },
-    addEventListener(type: string, listener: () => void) {
+    addEventListener(type: string, listener: (event: Event) => void) {
       listeners.set(type, [...(listeners.get(type) ?? []), listener]);
     },
   };
-  const fire = (type: string) => {
-    for (const l of listeners.get(type) ?? []) l();
+  const fire = (type: string, detail = 0) => {
+    for (const l of listeners.get(type) ?? []) l({ type, detail } as unknown as Event);
   };
-  return { player: player as PlayingTarget & { paused: boolean }, classes, fire, listeners };
+  return { player: player as PlayingTarget & { paused: boolean }, classes, fire, listeners, button, shadowRoot };
 }
 
 describe("the control bar's playing class", () => {
@@ -57,7 +60,27 @@ describe("the control bar's playing class", () => {
   it("listens for the scene loading, the bar's input and the scene ending", () => {
     const { player, listeners } = fakePlayer(true);
     trackPlaying(player, () => undefined);
-    expect([...listeners.keys()].sort()).toEqual([...PLAYING_EVENTS].sort());
+    expect([...listeners.keys()].sort()).toEqual([...new Set<string>([...PLAYING_EVENTS, "click"])].sort());
     expect(PLAYING_EVENTS).toEqual(expect.arrayContaining(["ready", "ended", "click", "input"]));
+  });
+
+  it("takes the focus off a control after a pointer click, so the bar can fade", () => {
+    const { player, fire, button } = fakePlayer(false);
+    trackPlaying(player, () => undefined);
+    fire("click", 1);
+    expect(button.blurred).toBe(1);
+  });
+
+  it("leaves the focus on a control clicked from the keyboard", () => {
+    const { player, fire, button } = fakePlayer(false);
+    trackPlaying(player, () => undefined);
+    fire("click", 0);
+    expect(button.blurred).toBe(0);
+  });
+
+  it("does nothing when nothing in the player has focus", () => {
+    const { player, shadowRoot } = fakePlayer(false);
+    shadowRoot.activeElement = null;
+    expect(() => releasePointerFocus(player, { detail: 1 } as unknown as Event)).not.toThrow();
   });
 });

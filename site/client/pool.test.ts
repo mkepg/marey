@@ -214,6 +214,76 @@ describe("PlayerPool", () => {
     expect(pool.live).toBe(0);
   });
 
+  it("gives a waiting slot on screen the place of the player farthest off screen", () => {
+    const { io, pool, request } = setup(2);
+    const [near, far, onScreen] = [new FakeSlot(), new FakeSlot(), new FakeSlot()];
+    for (const s of [near, far, onScreen]) request(s);
+    io.move(near, 0);
+    io.move(far, 0);
+    // Scrolled: both players are now off screen but inside 1,200 px, so neither is removed by distance.
+    io.move(near, 300);
+    io.move(far, 900);
+    expect(pool.live).toBe(2);
+    io.move(onScreen, 0);
+    expect(onScreen.children).toHaveLength(1);
+    expect(far.children).toHaveLength(0);
+    expect(near.children).toHaveLength(1);
+    expect(pool.live).toBe(2);
+  });
+
+  it("frees as many places as there are waiting slots on screen, and no more", () => {
+    const { io, pool, request } = setup(3);
+    const old = [new FakeSlot(), new FakeSlot(), new FakeSlot()];
+    const fresh = [new FakeSlot(), new FakeSlot()];
+    for (const s of [...old, ...fresh]) request(s);
+    for (const s of old) io.move(s, 0);
+    old.forEach((s, i) => io.move(s, 100 + i * 300));
+    for (const s of fresh) io.move(s, 0);
+    expect(fresh.every((s) => s.children.length === 1)).toBe(true);
+    // The nearest of the old players keeps its place.
+    expect(old.map((s) => s.children.length)).toEqual([1, 0, 0]);
+    expect(pool.live).toBe(3);
+  });
+
+  it("never removes a player on screen for another slot on screen", () => {
+    const { io, pool, request } = setup(2);
+    const slots = [new FakeSlot(), new FakeSlot(), new FakeSlot()];
+    for (const s of slots) request(s);
+    for (const s of slots) io.move(s, 0);
+    expect(slots.map((s) => s.children.length)).toEqual([1, 1, 0]);
+    expect(pool.live).toBe(2);
+  });
+
+  it("does not take a place for a waiting slot that is near but not on screen", () => {
+    const { io, pool, request } = setup(1);
+    const [holder, near] = [new FakeSlot(), new FakeSlot()];
+    request(holder);
+    request(near);
+    io.move(holder, 0);
+    io.move(holder, 600);
+    io.move(near, 100);
+    expect(holder.children).toHaveLength(1);
+    expect(near.children).toHaveLength(0);
+    expect(pool.live).toBe(1);
+  });
+
+  it("keeps the evicted slot waiting, and gives it a player again when it is back on screen", () => {
+    const { io, pool, made, request } = setup(1);
+    const [a, b] = [new FakeSlot(), new FakeSlot()];
+    request(a);
+    request(b);
+    io.move(a, 0);
+    io.move(a, 700);
+    io.move(b, 0);
+    expect(b.children).toHaveLength(1);
+    io.move(b, 700);
+    io.move(a, 0);
+    expect(a.children).toHaveLength(1);
+    expect(b.children).toHaveLength(0);
+    expect(made).toHaveLength(3);
+    expect(pool.live).toBe(1);
+  });
+
   it("logs a create function that throws", () => {
     const io = new FakeObserver();
     const pool = new PlayerPool(1, io, io.distanceOf);

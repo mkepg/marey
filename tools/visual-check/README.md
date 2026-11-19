@@ -890,10 +890,10 @@ requirement is a named check:
 | `editor` | On `/learn/animate/`, an edit that compiles gives the player a new `src` and reaches `ready`; an unknown property is listed as `line 2, col …` and dims the player; Reset restores the text and plays it again. |
 | `search` | `/` opens search, Escape closes it, Ctrl+K reopens it empty, a query lists grouped results with the first selected, the arrow keys move the selection, and Enter opens the first result. |
 | `mobile` | No page scrolls sideways at 390 px, and no lesson or guide at 360 px. |
-| `budget` | The JavaScript a page loads before any player mounts, gzipped, is under 90 kB. The renderer chunk is held unanswered, so nothing past it loads. |
+| `budget` | The JavaScript a page loads before any player mounts, gzipped, is under 90 kB. Each player's own IntersectionObserver (its 200 px margin) is given one that never reports, so no player asks for its renderer, while the pool still makes players that compile and fire `ready`. Holding the renderer chunk's request instead does not work: Vite's preload helper fetches its dependency chunks beside it. |
 | `text` | A lesson sample with `text` reaches `ready`, and the scene font comes from `/assets/fonts/JetBrainsMono-Regular.ttf` with a 200 (spec C21). |
-| `pool` | `/gallery/` at 1280x2400, scrolled top to bottom and jumped up and down: never more than 12 players in the page (spec C20). |
-| `controls` | A playing player's bar is hidden with the pointer away and nothing focused, and shows on hover, with focus in it, while paused, and on a touch screen (`docs/architecture/site.md`). |
+| `pool` | `/gallery/` at 1280x900 and at 1280x2400, scrolled top to bottom in 300 px steps. With the page still, every card on screen must get a player within 4 s, except those over the 12-player limit when more than 12 cards are on screen at once. Then jumped up and down. Never more than 12 players in the page (spec C20). |
+| `controls` | On a gallery scene, a lesson sample and lesson 14's embed: a playing player's bar fades with the pointer away and nothing focused, and after a mouse click on its play button; it shows on hover, while paused, while a control has the keyboard focus (Enter on the play button, focus on the seek bar), and on a touch screen (`docs/architecture/site.md`). Each step waits up to 5 s for the opacity it expects. |
 | `nojs` | With JavaScript off, `/learn/`, a lesson and `/gallery/` render with their heading and navigation, and no search button. |
 | `shots` | A screenshot of every gallery scene and every lesson showcase at its poster time, with the control bar removed. |
 
@@ -921,9 +921,10 @@ capture after `ready` can come before the canvas has painted. `check.mjs`'s
 little early and the first can be blank; use this check, or a seek of your
 own, for frames that must be exact.
 
-Headless Chromium under SwiftShader logs `GPU stall due to ReadPixels`
-performance warnings on pages with several players. They are warnings, not
-errors, and are counted in `report.json` apart from errors.
+Headless Chromium under SwiftShader has logged `GPU stall due to ReadPixels`
+performance warnings on pages with several players (none in the runs recorded
+in `eval/RESULTS-PHASE-9C.md`). They are warnings, not errors, and are counted
+in `report.json` apart from errors.
 
 ## Forcing a device-limit refusal
 

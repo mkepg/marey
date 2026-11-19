@@ -418,7 +418,7 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
     <header className={`${styles.topBar}${narrow ? ` ${styles.narrow}` : ""}`} data-topbar>
       <div className={styles.left}>
         <span className={styles.logo}>Marey</span>
-        <div className={styles.status} role="status" title={narrow ? statusText : undefined}>
+        <div className={styles.status} role="status" title={statusText}>
           <span className={`${styles.statusDot} ${dotMod}`} aria-hidden="true" />
           <span className={narrow ? styles.visuallyHidden : styles.statusLabel}>{statusText}</span>
         </div>

@@ -186,7 +186,12 @@ sample, card or stage asks for a player for its slot; the pool creates one
 when the slot comes within 400 px of the viewport and a place is free, and
 removes it (which releases its context) once the slot is more than 1,200 px
 away. Waiting slots are served nearest first, measured when a place frees
-up. A lesson's `embed` scene is written into the page as a bare player,
+up. When every place is taken and a slot on screen is still waiting, the
+player whose slot is farthest off screen gives up its place, so nothing the
+reader is looking at stays empty while a player they cannot see holds one; a
+player on screen is never removed for another, so with more than 12 slots on
+screen at once the extra ones wait. Observers at the viewport's edge, at
+400 px and at 1,200 px wake the pool. A lesson's `embed` scene is written into the page as a bare player,
 outside the pool, because that is what the embed guide shows a reader doing;
 a page has at most one.
 
@@ -199,7 +204,10 @@ while the scene plays and the reader is neither pointing at the player nor
 focused in it (`site.css`, `controls.ts`). It stays on screens without hover
 and while paused. The player fires no play or pause event, so `controls.ts`
 reads `paused` after the events that can change it, and the bar's default is
-visible.
+visible. Focus in the bar keeps it showing for keyboard readers; after a
+pointer click (`detail` above 0) the site blurs the clicked control through
+the player's open shadow root, so the bar can fade for mouse readers too.
+The shipped player is not changed for any of this.
 
 `src/player/render.ts` loads the scene font from
 `./fonts/JetBrainsMono-Regular.ttf` beside its own chunk. The plugin emits the
