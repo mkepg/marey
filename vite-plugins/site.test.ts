@@ -29,7 +29,10 @@ describe("site()", () => {
     }
   });
 
-  it("serves each page's html for its output path and nothing else", () => {
+  // Builds the whole site once in the config hook. It is quick only when the
+  // test above has already warmed the process-wide scene cache; on a loaded
+  // machine it was measured at 6.9 s, past Vitest's 5 s default.
+  it("serves each page's html for its output path and nothing else", { timeout: 30_000 }, () => {
     const plugin = site();
     configOf(plugin, repoRoot);
     const resolveId = plugin.resolveId as (id: string) => string | null;
