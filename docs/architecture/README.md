@@ -213,6 +213,17 @@ github`, `examples/starter/` and `.github/workflows/action.yml`. It ships as
 Lottie keyframes, merged into `main` on 2026-11-13
 (`docs/specs/2026-11-13-marey-lottie-fitted-keyframes-design.md`).
 
+**9C (documentation site and gallery) merged into `main` on 2026-11-19 (merge
+commit `64af52f`), pushed and deployed to `https://marey.pages.dev/`;
+evidence in `eval/RESULTS-PHASE-9C.md`, section 4 measured on the deployed
+site.** Design: `docs/specs/2026-11-13-marey-phase-9c-docs-site-and-gallery-design.md`;
+plan: `docs/plans/2026-11-13-phase-9c-docs-site-and-gallery.md`. It adds a
+static site beside the playground: 14 lessons with live samples, error
+samples and exercises, six guides, a reference generated from `LANGUAGE.md`,
+and a 22-entry gallery, built by `vite-plugins/site.ts` from `site/` (see
+`site.md`), with `tools/visual-check/site-check.mjs` as its browser check.
+`roadmap-and-process.md`'s Phase 9C bullet carries the same status.
+
 **8 — physics authoring syntax is merged into `main`** (2026-10-11, `2caf55c`),
 and with it the roadmap's finish line is declared. It adds
 `world { gravity, bounds }`, `lockPosition`, `lockRotation` and `spin`, with

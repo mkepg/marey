@@ -15,7 +15,8 @@ Scope of every browser number: the Chromium headless shell that Playwright
 1.62.1 installs, under SwiftShader, on one Windows machine, unless a row says
 otherwise.
 
-Section 4, the deployed site, is written after the push to `main`.
+Section 4, the deployed site, was measured on 2026-11-19 after the merge
+(`64af52f`) was pushed to `main`.
 
 ## 1. The site
 
@@ -207,3 +208,47 @@ scene page. Each scene matched its brief at its poster time. No scene was
 reworked in this change: each had been reviewed against its brief
 at three moments when it was added (spec §6.5), and reworked then where it
 fell short.
+
+## 4. The deployed site
+
+Measured on 2026-11-19 against `https://marey.pages.dev/`, after the merge
+commit `64af52f` was pushed to `main` and Cloudflare Pages had deployed it
+(the new `/learn/` title appeared within a minute of the push).
+
+Status codes, from `curl -sI https://marey.pages.dev/<path>`:
+
+| Path | Status | `<title>` |
+|---|---|---|
+| `/learn/` | 200 | Learn · Marey |
+| `/learn/first-scene/` | 200 | Your first scene · Learn Marey |
+| `/gallery/` | 200 | Gallery · Marey |
+| `/gallery/hourglass/` | 200 | Hourglass · Gallery Marey |
+| `/reference/` | 200 | Reference · Marey |
+| `/404.html` | 308 to `/404` | (Pages strips `.html`) |
+| `/404` | 200 | Page not found · Marey |
+| `/nope-xyz/` (no such page) | 404 | Page not found · Marey |
+
+Cloudflare Pages redirects every `*.html` path to its extensionless form, so
+`/404.html` answers 308; the page itself is served at `/404`, and an unknown
+path gets it with a real 404 status.
+
+The scene font's caching rule holds on the deployed site:
+`curl -sI https://marey.pages.dev/assets/fonts/JetBrainsMono-Regular.ttf`
+returns `Cache-Control: public, max-age=0, must-revalidate`, while the
+content-hashed files under `/assets/` keep `immutable`.
+
+Players on the deployed pages, from
+`MSYS_NO_PATHCONV=1 node tools/visual-check/site-check.mjs --url https://marey.pages.dev --out .visual-check/deployed --only pages,mobile --pages /learn/,/learn/first-scene/,/gallery/,/gallery/hourglass/,/reference/`
+(on Git Bash, `MSYS_NO_PATHCONV=1` stops the shell rewriting the leading `/`
+of each path into a Windows path):
+
+| Page | Players ready | Most live at once | Problems |
+|---|---|---|---|
+| `/learn/` | 15/15 | 12 | 0 |
+| `/learn/first-scene/` | 15/15 | 4 | 0 |
+| `/gallery/` | 22/22 | 12 | 0 |
+| `/gallery/hourglass/` | 1/1 | 1 | 0 |
+| `/reference/` | 0/0 | 0 | 0 |
+
+The run exited 0 with no console errors and no horizontal overflow at 390 px
+on those pages.

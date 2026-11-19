@@ -359,6 +359,15 @@ explicitly rather than quietly deviating.
   `docs/plans/2026-11-13-lottie-fitted-keyframes.md`; measurements:
   `eval/RESULTS-LOTTIE-FITTED.md`. Earlier problem statement:
   `docs/specs/2026-11-06-marey-lottie-keyframe-recovery-design.md`.
+- **Phase 9C — documentation site and gallery** (past the finish line).
+  - **Status: merged into `main` on 2026-11-19 (merge commit `64af52f`),
+    pushed and deployed to `https://marey.pages.dev/`; evidence in
+    `eval/RESULTS-PHASE-9C.md`.** 14 lessons, six guides, a generated
+    reference and a 22-entry gallery, served beside the playground. Version
+    notes read "0.7.0 or later", so they stay true once 0.7.0 is published;
+    the embed snippet keeps its pinned 0.6.0 URL until it is bumped. Design:
+    `docs/specs/2026-11-13-marey-phase-9c-docs-site-and-gallery-design.md`.
+    Plan: `docs/plans/2026-11-13-phase-9c-docs-site-and-gallery.md`.
 
 ## Reference docs
 
