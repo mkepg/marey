@@ -1,0 +1,378 @@
+// Day to night over a city. In twelve seconds the sky goes from
+// noon through dusk, night and dawn and back to noon. The sun
+// sets on the right, the windows light up, the moon comes up on
+// the left and the stars come out, and then it all runs on into
+// morning.
+//
+// Colour carries the whole scene. Every sky band, cloud and
+// skyline, the river and the quay has one `sequence` of four
+// `property: color` steps of 3 s each: to its dusk colour, to
+// night, to dawn, and back to its day colour. Each step blends
+// the red, green and blue channels separately, so a band passes
+// through the shades in between on its own, and the default
+// easeInOut lets each time of day linger before the next. Every
+// one of them changes at the same moments, 3, 6, 9 and 12 s,
+// which is what keeps the sky and the city changing together.
+//
+// Each sequence ends on the colour its shape started with, every
+// other part ends where it began, and the loops have periods
+// that divide 12 s and no delay. So the twelfth second matches
+// the first and the scene loops without a seam.
+
+scene {
+  size: (960, 540)
+  duration: 12
+  background: #2f6fb6
+
+  // ── Sky ── Nine bands, top to bottom, each with its own four
+  // colours. Read down the bands and the sky grades from deep to
+  // pale; follow one band and it runs noon, dusk, night, dawn.
+  // At dusk the lowest bands go to the warmest colours, so the
+  // afterglow sits on the horizon where the sun has just gone.
+  rectangle sky1 { position: (480, 0), origin: (0.5, 0), size: (960, 50), color: #2f6fb6
+    sequence { animate { property: color, to: #1f1d4f, duration: 3 }
+               animate { property: color, to: #050817, duration: 3 }
+               animate { property: color, to: #2c3a6c, duration: 3 }
+               animate { property: color, to: #2f6fb6, duration: 3 } } }
+  rectangle sky2 { position: (480, 50), origin: (0.5, 0), size: (960, 48), color: #3a7bbf
+    sequence { animate { property: color, to: #2c2360, duration: 3 }
+               animate { property: color, to: #070b1d, duration: 3 }
+               animate { property: color, to: #3f4a7c, duration: 3 }
+               animate { property: color, to: #3a7bbf, duration: 3 } } }
+  rectangle sky3 { position: (480, 98), origin: (0.5, 0), size: (960, 46), color: #4888c8
+    sequence { animate { property: color, to: #41296d, duration: 3 }
+               animate { property: color, to: #090e23, duration: 3 }
+               animate { property: color, to: #565b89, duration: 3 }
+               animate { property: color, to: #4888c8, duration: 3 } } }
+  rectangle sky4 { position: (480, 144), origin: (0.5, 0), size: (960, 44), color: #5895cf
+    sequence { animate { property: color, to: #5b3075, duration: 3 }
+               animate { property: color, to: #0c1229, duration: 3 }
+               animate { property: color, to: #6f6b92, duration: 3 }
+               animate { property: color, to: #5895cf, duration: 3 } } }
+  rectangle sky5 { position: (480, 188), origin: (0.5, 0), size: (960, 40), color: #6aa2d5
+    sequence { animate { property: color, to: #7a387a, duration: 3 }
+               animate { property: color, to: #0f1630, duration: 3 }
+               animate { property: color, to: #8b7a98, duration: 3 }
+               animate { property: color, to: #6aa2d5, duration: 3 } } }
+  rectangle sky6 { position: (480, 228), origin: (0.5, 0), size: (960, 34), color: #7eaed9
+    sequence { animate { property: color, to: #9d437a, duration: 3 }
+               animate { property: color, to: #131a37, duration: 3 }
+               animate { property: color, to: #a8889b, duration: 3 }
+               animate { property: color, to: #7eaed9, duration: 3 } } }
+  rectangle sky7 { position: (480, 262), origin: (0.5, 0), size: (960, 30), color: #94badc
+    sequence { animate { property: color, to: #c25577, duration: 3 }
+               animate { property: color, to: #171f3e, duration: 3 }
+               animate { property: color, to: #c4979b, duration: 3 }
+               animate { property: color, to: #94badc, duration: 3 } } }
+  rectangle sky8 { position: (480, 292), origin: (0.5, 0), size: (960, 28), color: #abc6de
+    sequence { animate { property: color, to: #e2716f, duration: 3 }
+               animate { property: color, to: #232a52, duration: 3 }
+               animate { property: color, to: #dca699, duration: 3 }
+               animate { property: color, to: #abc6de, duration: 3 } } }
+  rectangle sky9 { position: (480, 320), origin: (0.5, 0), size: (960, 180), color: #c3d3df
+    sequence { animate { property: color, to: #f39a66, duration: 3 }
+               animate { property: color, to: #2e3360, duration: 3 }
+               animate { property: color, to: #edb995, duration: 3 }
+               animate { property: color, to: #c3d3df, duration: 3 } } }
+
+  // ── Stars ── All in one group, which fades in after sunset and
+  // out before sunrise. A group's alpha multiplies with its
+  // children's, so the twinkling stars go on twinkling all day
+  // and are only seen while the group is up. The twinkles are
+  // yoyo loops of 1, 1.5, 2 and 3 s: periods of 2, 3, 4 and 6 s,
+  // which all divide 12.
+  group stars {
+    alpha: 0
+    sequence {
+      animate { property: alpha, to: 0, duration: 3.2 }
+      animate { property: alpha, to: 1, duration: 1.8 }
+      animate { property: alpha, to: 1, duration: 2.4 }
+      animate { property: alpha, to: 0, duration: 1.8 }
+    }
+    circle star1 { position: (34, 28), radius: 1.6, color: #fff4dc, alpha: 0.9 }
+    circle star2 { position: (92, 70), radius: 1.1, color: #dfe6ff
+                   animate { property: alpha, to: 0.2, duration: 1, loop: true, yoyo: true } }
+    circle star3 { position: (150, 22), radius: 1.3, color: #dfe6ff, alpha: 0.75 }
+    circle star4 { position: (214, 96), radius: 0.9, color: #fff4dc
+                   animate { property: alpha, to: 0.2, duration: 1.5, loop: true, yoyo: true } }
+    circle star5 { position: (262, 40), radius: 1.8, color: #dfe6ff, alpha: 0.6 }
+    circle star6 { position: (318, 128), radius: 1.2, color: #dfe6ff
+                   animate { property: alpha, to: 0.2, duration: 2, loop: true, yoyo: true } }
+    circle star7 { position: (372, 58), radius: 1.6, color: #fff4dc, alpha: 0.9 }
+    circle star8 { position: (430, 18), radius: 1.1, color: #dfe6ff, alpha: 0.6 }
+    circle star9 { position: (468, 112), radius: 1.3, color: #dfe6ff
+                   animate { property: alpha, to: 0.2, duration: 3, loop: true, yoyo: true } }
+    circle star10 { position: (528, 44), radius: 0.9, color: #fff4dc
+                   animate { property: alpha, to: 0.2, duration: 1.5, loop: true, yoyo: true } }
+    circle star11 { position: (590, 90), radius: 1.8, color: #dfe6ff, alpha: 0.6 }
+    circle star12 { position: (636, 24), radius: 1.2, color: #dfe6ff
+                   animate { property: alpha, to: 0.2, duration: 1, loop: true, yoyo: true } }
+    circle star13 { position: (806, 30), radius: 1.6, color: #fff4dc
+                   animate { property: alpha, to: 0.2, duration: 3, loop: true, yoyo: true } }
+    circle star14 { position: (858, 104), radius: 1.1, color: #dfe6ff, alpha: 0.6 }
+    circle star15 { position: (918, 52), radius: 1.3, color: #dfe6ff
+                   animate { property: alpha, to: 0.2, duration: 1.5, loop: true, yoyo: true } }
+    circle star16 { position: (60, 150), radius: 0.9, color: #fff4dc, alpha: 0.9 }
+    circle star17 { position: (560, 168), radius: 1.8, color: #dfe6ff
+                   animate { property: alpha, to: 0.2, duration: 2, loop: true, yoyo: true } }
+  }
+
+  // ── Sun and moon ── One group below the middle of the skyline
+  // turns a full circle in 12 s, linearly, carrying the sun 380 px
+  // above its centre and the moon 380 px below. Turning the group
+  // moves both along one great circle: the sun is at the top at
+  // 0 s and is behind the buildings on the right soon after 2 s.
+  // The moon, on the far side of the same turn, clears the roofs
+  // on the left at about 4.5 s, is at the top at 6 s and sets on
+  // the right; the sun climbs back over the left-hand roofs from
+  // about 10.5 s. A full turn ends where it began.
+  group sky {
+    position: (480, 520)
+    animate { property: rotation, to: 360, duration: 12, easing: linear, loop: true }
+
+    // The sun is pale at noon and reddens as it nears the horizon:
+    // deep orange by the time it sets, held while it is down, and
+    // back to pale yellow as it climbs again.
+    group sun {
+      position: (0, -380)
+      circle sunHalo3 { position: (0, 0), radius: 96, color: #ffd98c, alpha: 0.05 }
+      circle sunHalo2 { position: (0, 0), radius: 68, color: #ffd98c, alpha: 0.08 }
+      circle sunHalo1 { position: (0, 0), radius: 46, color: #ffe2a0, alpha: 0.14 }
+      circle sunDisc  { position: (0, 0), radius: 26, color: #fff4d6
+        sequence {
+          animate { property: color, to: #ff7f3f, duration: 2.6, easing: easeIn }
+          animate { property: color, to: #ff7f3f, duration: 6.8 }
+          animate { property: color, to: #fff4d6, duration: 2.6, easing: easeOut }
+        }
+      }
+    }
+
+    // The moon's group turns back as the sky turns forward, so its
+    // net turn is none and its craters stay the same way up. It
+    // rises amber, silvers at the top of its arc, and is amber
+    // again as it sets.
+    group moon {
+      position: (0, 380)
+      animate { property: rotation, to: -360, duration: 12, easing: linear, loop: true }
+      circle moonHalo2 { position: (0, 0), radius: 62, color: #dfe6ff, alpha: 0.04 }
+      circle moonHalo1 { position: (0, 0), radius: 40, color: #dfe6ff, alpha: 0.08 }
+      circle moonDisc  { position: (0, 0), radius: 20, color: #f2c47f
+        sequence {
+          animate { property: color, to: #f2c47f, duration: 3.5 }
+          animate { property: color, to: #eef1fb, duration: 2.5 }
+          animate { property: color, to: #f2c47f, duration: 2.5 }
+        }
+      }
+      // See-through black craters darken whatever colour the
+      // disc has reached.
+      circle crater1 { position: (-6, -4), radius: 5, color: black, alpha: 0.1 }
+      circle crater2 { position: (7, 6), radius: 3.5, color: black, alpha: 0.1 }
+    }
+  }
+
+  // ── Clouds ── Each cloud is a lumpy top over a flatter, darker
+  // underside, with four colours each: white over grey at noon,
+  // pink over plum at dusk, nearly the sky's own colour at night
+  // and peach at dawn. Each drifts 50 px and back, a yoyo of 6 s
+  // each way.
+  // The drift is on a group and the colours are on its shapes,
+  // since a group can move but has no colour of its own.
+  group cloudA {
+    position: (250, 96)
+    animate { property: position, to: (300, 96), duration: 6, loop: true, yoyo: true }
+    polygon cloudABody { position: (0, 0), alpha: 0.92, color: #f5f8fc
+      points: [(-80, 10), (-70, -4), (-52, -12), (-36, -10), (-24, -24), (-2, -30), (18, -24), (30, -14), (48, -18), (66, -8), (80, 4), (80, 12), (-80, 12)]
+      sequence { animate { property: color, to: #e9928a, duration: 3 }
+                 animate { property: color, to: #1a2140, duration: 3 }
+                 animate { property: color, to: #f2bfa8, duration: 3 }
+                 animate { property: color, to: #f5f8fc, duration: 3 } } }
+    polygon cloudAUnder { position: (0, 9), alpha: 0.92, color: #d3dce8
+      points: [(-74, -4), (74, -4), (68, 6), (-68, 6)]
+      sequence { animate { property: color, to: #b9607a, duration: 3 }
+                 animate { property: color, to: #121834, duration: 3 }
+                 animate { property: color, to: #d99b93, duration: 3 }
+                 animate { property: color, to: #d3dce8, duration: 3 } } }
+  }
+  group cloudB {
+    position: (712, 178)
+    animate { property: position, to: (662, 178), duration: 6, loop: true, yoyo: true }
+    polygon cloudBBody { position: (0, 0), alpha: 0.92, color: #f5f8fc
+      points: [(-60, 8), (-52, -4), (-36, -10), (-20, -20), (0, -24), (16, -16), (34, -18), (50, -6), (60, 6), (60, 10), (-60, 10)]
+      sequence { animate { property: color, to: #e9928a, duration: 3 }
+                 animate { property: color, to: #1a2140, duration: 3 }
+                 animate { property: color, to: #f2bfa8, duration: 3 }
+                 animate { property: color, to: #f5f8fc, duration: 3 } } }
+    polygon cloudBUnder { position: (0, 9), alpha: 0.92, color: #d3dce8
+      points: [(-56, -3), (56, -3), (50, 5), (-50, 5)]
+      sequence { animate { property: color, to: #b9607a, duration: 3 }
+                 animate { property: color, to: #121834, duration: 3 }
+                 animate { property: color, to: #d99b93, duration: 3 }
+                 animate { property: color, to: #d3dce8, duration: 3 } } }
+  }
+
+  // ── Far skyline ── One hazy silhouette across the whole width.
+  // `origin: (0, 0)` pins its top-left corner to `position`, so
+  // its points read as scene coordinates. Its colours are greyed
+  // versions of the sky's, so it sits back in the haze.
+  polygon farCity { position: (0, 256), origin: (0, 0), color: #8196b0
+    points: [(0, 316), (28, 316), (28, 286), (60, 286), (60, 302), (104, 302), (104, 274),
+             (126, 274), (126, 256), (148, 256), (148, 296), (196, 296), (196, 278), (230, 278),
+             (230, 308), (290, 308), (290, 290), (318, 290), (318, 268), (340, 268), (340, 302),
+             (470, 302), (470, 276), (500, 276), (500, 262), (516, 262), (516, 292), (560, 292),
+             (560, 308), (612, 308), (612, 282), (650, 282), (650, 298), (690, 298), (690, 272),
+             (720, 272), (720, 304), (782, 304), (782, 286), (808, 286), (808, 260), (826, 260),
+             (826, 294), (870, 294), (870, 308), (920, 308), (920, 282), (960, 282), (960, 500), (0, 500)]
+    sequence { animate { property: color, to: #6a4a7a, duration: 3 }
+               animate { property: color, to: #171d3a, duration: 3 }
+               animate { property: color, to: #8a7896, duration: 3 }
+               animate { property: color, to: #8196b0, duration: 3 } } }
+
+  // ── Buildings ── Two rows of them, each one polygon: a tall row
+  // behind, with its crowns, its spire, its water tower and its
+  // mast in the one outline, and a low row in front in a darker
+  // grey. A row needs one colour sequence, however many buildings
+  // its outline holds. Both are written in scene coordinates with
+  // `origin: (0, 0)`, like the far skyline.
+  polygon cityBack { position: (0, 168), origin: (0, 0), color: #5e6f88
+    points: [(0, 300), (40, 300), (40, 286), (58, 286), (58, 300), (72, 300), (72, 282), (86, 282), (86, 268), (136, 268), (136, 282), (150, 282), (150, 330), (214, 330), (214, 318), (238, 318), (242, 304), (238, 304), (238, 288), (254, 278), (270, 288), (270, 304), (266, 304), (270, 318), (298, 318), (298, 340), (350, 340), (350, 262), (362, 262), (362, 240), (376, 240), (376, 222), (394, 222), (398, 168), (402, 222), (420, 222), (420, 240), (434, 240), (434, 262), (446, 262), (446, 320), (522, 320), (522, 300), (567, 278), (612, 300), (612, 336), (668, 336), (668, 262), (708, 262), (708, 250), (717, 250), (719, 196), (721, 250), (730, 250), (730, 262), (770, 262), (770, 312), (842, 312), (842, 290), (900, 290), (900, 276), (930, 276), (930, 290), (960, 290), (960, 492), (0, 492)]
+    sequence { animate { property: color, to: #3f2f54, duration: 3 }
+               animate { property: color, to: #0f1528, duration: 3 }
+               animate { property: color, to: #4d4664, duration: 3 }
+               animate { property: color, to: #5e6f88, duration: 3 } } }
+
+  // ── Windows ── Each window is dark glass by day. Its sequence
+  // has two steps, and a step's `delay` counts as part of that
+  // step, so each step is a wait and then a change. The first
+  // waits for the window's own moment at dusk, between 2.2 and
+  // 4.8 s, and warms the glass to lamplight in 0.4 s. The second
+  // is the same for every window: it waits 5.6 s and cools the
+  // glass back to dark in 0.6 s. So each window starts to cool
+  // six seconds after it started to warm, the windows go out in
+  // the morning in the order they came on at dusk, and the last
+  // is dark again at 11.4 s. The back
+  // row's windows are written before the front row, which hides
+  // their lower floors.
+  rectangle win1 { position: (110, 290), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffd27a, duration: 0.4, delay: 2.2 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win2 { position: (90, 330), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffc463, duration: 0.4, delay: 3.2 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win3 { position: (130, 330), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffe2a6, duration: 0.4, delay: 4.2 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win4 { position: (256, 340), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffb95c, duration: 0.4, delay: 2.4 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win5 { position: (280, 380), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffd27a, duration: 0.4, delay: 3.4 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win6 { position: (398, 250), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffc463, duration: 0.4, delay: 4.4 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win7 { position: (368, 290), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffe2a6, duration: 0.4, delay: 2.6 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win8 { position: (428, 290), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffb95c, duration: 0.4, delay: 3.6 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win9 { position: (398, 330), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffd27a, duration: 0.4, delay: 4.6 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win10 { position: (368, 370), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffc463, duration: 0.4, delay: 2.8 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win11 { position: (428, 370), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffe2a6, duration: 0.4, delay: 3.8 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win12 { position: (567, 318), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffb95c, duration: 0.4, delay: 4.8 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win13 { position: (712, 284), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffd27a, duration: 0.4, delay: 3.0 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win14 { position: (740, 330), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffc463, duration: 0.4, delay: 4.0 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win15 { position: (930, 310), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffe2a6, duration: 0.4, delay: 2.2 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+
+  polygon cityFront { position: (0, 352), origin: (0, 0), color: #404d64
+    points: [(0, 372), (60, 372), (60, 356), (84, 356), (84, 410), (150, 410), (150, 372), (214, 358), (214, 410), (298, 410), (298, 396), (350, 396), (350, 430), (446, 430), (446, 352), (522, 352), (522, 418), (612, 418), (612, 382), (668, 382), (668, 424), (770, 424), (770, 362), (842, 362), (842, 404), (960, 404), (960, 492), (0, 492)]
+    sequence { animate { property: color, to: #2a1f3e, duration: 3 }
+               animate { property: color, to: #06091a, duration: 3 }
+               animate { property: color, to: #352f4b, duration: 3 }
+               animate { property: color, to: #404d64, duration: 3 } } }
+  rectangle win16 { position: (24, 390), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffb95c, duration: 0.4, delay: 3.2 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win17 { position: (176, 400), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffd27a, duration: 0.4, delay: 4.2 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win18 { position: (200, 440), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffc463, duration: 0.4, delay: 2.4 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win19 { position: (320, 420), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffe2a6, duration: 0.4, delay: 3.4 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win20 { position: (380, 452), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffb95c, duration: 0.4, delay: 4.4 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win21 { position: (484, 380), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffd27a, duration: 0.4, delay: 2.6 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win22 { position: (640, 404), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffc463, duration: 0.4, delay: 3.6 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+  rectangle win23 { position: (890, 430), size: (8, 11), color: #2a3248
+    sequence { animate { property: color, to: #ffe2a6, duration: 0.4, delay: 4.6 }
+               animate { property: color, to: #2a3248, duration: 0.6, delay: 5.6 } } }
+
+  // ── Quay and river ── The river takes the sky's colours, a shade
+  // deeper, and the quay above it the buildings'.
+  rectangle river { position: (480, 500), origin: (0.5, 0), size: (960, 40), color: #4a78a8
+    sequence { animate { property: color, to: #8f4f73, duration: 3 }
+               animate { property: color, to: #080f2a, duration: 3 }
+               animate { property: color, to: #b4868f, duration: 3 }
+               animate { property: color, to: #4a78a8, duration: 3 } } }
+  line ripple1 { position: (120, 508), points: [(-40, 0), (40, 0)], thickness: 1.5, color: white, alpha: 0.12 }
+  line ripple2 { position: (330, 518), points: [(-26, 0), (26, 0)], thickness: 1.5, color: white, alpha: 0.12 }
+  line ripple3 { position: (560, 510), points: [(-54, 0), (54, 0)], thickness: 1.5, color: white, alpha: 0.12 }
+  line ripple4 { position: (780, 524), points: [(-30, 0), (30, 0)], thickness: 1.5, color: white, alpha: 0.12 }
+  line ripple5 { position: (250, 532), points: [(-34, 0), (34, 0)], thickness: 1.5, color: white, alpha: 0.12 }
+  rectangle quay { position: (480, 496), size: (960, 8), color: #6f7889
+    sequence { animate { property: color, to: #3e3050, duration: 3 }
+               animate { property: color, to: #0e1222, duration: 3 }
+               animate { property: color, to: #5d566d, duration: 3 }
+               animate { property: color, to: #6f7889, duration: 3 } } }
+
+  // ── Lights on the water ── The windows' reflections, broken by
+  // the river into short strokes, are one more group that fades
+  // with the night like the stars: what a group cannot do with
+  // colour, it does with alpha. Each stroke brightens and dims on
+  // a yoyo loop of 1, 1.5 or 2 s.
+  group shine {
+    alpha: 0
+    sequence {
+      animate { property: alpha, to: 0, duration: 3.4 }
+      animate { property: alpha, to: 1, duration: 1.6 }
+      animate { property: alpha, to: 1, duration: 3.6 }
+      animate { property: alpha, to: 0, duration: 1.6 }
+    }
+    line shine1 { position: (110, 512), points: [(-10, 0), (10, 0)], thickness: 3, color: #ffcf7a, alpha: 0.75
+                    animate { property: alpha, to: 0.2, duration: 1.5, loop: true, yoyo: true } }
+    line shine2 { position: (268, 520), points: [(-8, 0), (8, 0)], thickness: 3, color: #ffcf7a, alpha: 0.75
+                    animate { property: alpha, to: 0.2, duration: 2, loop: true, yoyo: true } }
+    line shine3 { position: (398, 510), points: [(-12, 0), (12, 0)], thickness: 3, color: #ffcf7a, alpha: 0.75
+                    animate { property: alpha, to: 0.2, duration: 1, loop: true, yoyo: true } }
+    line shine4 { position: (578, 514), points: [(-10, 0), (10, 0)], thickness: 3, color: #ffcf7a, alpha: 0.75
+                    animate { property: alpha, to: 0.2, duration: 2, loop: true, yoyo: true } }
+    line shine5 { position: (712, 512), points: [(-12, 0), (12, 0)], thickness: 3, color: #ffcf7a, alpha: 0.75
+                    animate { property: alpha, to: 0.2, duration: 1, loop: true, yoyo: true } }
+    line shine6 { position: (880, 520), points: [(-10, 0), (10, 0)], thickness: 3, color: #ffcf7a, alpha: 0.75
+                    animate { property: alpha, to: 0.2, duration: 1.5, loop: true, yoyo: true } }
+    line shine7 { position: (184, 530), points: [(-6, 0), (6, 0)], thickness: 3, color: #ffcf7a, alpha: 0.75
+                    animate { property: alpha, to: 0.2, duration: 2, loop: true, yoyo: true } }
+  }
+}

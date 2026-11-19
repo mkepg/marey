@@ -1,0 +1,219 @@
+// A wooden metronome on a desk at 60 beats a minute. The arm
+// swings from one side to the other in one second, a beat, and
+// a row of lamps on the base counts the six beats of the loop.
+//
+// The scene lasts 6 s and loops without a seam. The swing is a
+// `loop` with `yoyo`, and its period, two seconds there and
+// back, divides the six. The only delays are on the lamps, and
+// each lamp's flash is over well before the scene ends, so the
+// last frame matches the first.
+
+scene {
+  size: (960, 540)
+  duration: 6
+  background: #13221f
+
+  // ── The room ── Light from a lamp off to the upper left: ten
+  // warm circles at alpha 0.014, stacked so the wall is brightest
+  // there. Small steps keep the circles' edges from showing.
+  circle light10 { position: (200, 110), radius: 566, color: #f2c27b, alpha: 0.014 }
+  circle light9 { position: (200, 110), radius: 512, color: #f2c27b, alpha: 0.014 }
+  circle light8 { position: (200, 110), radius: 458, color: #f2c27b, alpha: 0.014 }
+  circle light7 { position: (200, 110), radius: 404, color: #f2c27b, alpha: 0.014 }
+  circle light6 { position: (200, 110), radius: 350, color: #f2c27b, alpha: 0.014 }
+  circle light5 { position: (200, 110), radius: 296, color: #f2c27b, alpha: 0.014 }
+  circle light4 { position: (200, 110), radius: 242, color: #f2c27b, alpha: 0.014 }
+  circle light3 { position: (200, 110), radius: 188, color: #f2c27b, alpha: 0.014 }
+  circle light2 { position: (200, 110), radius: 134, color: #f2c27b, alpha: 0.014 }
+  circle light1 { position: (200, 110), radius: 80, color: #f2c27b, alpha: 0.014 }
+
+  // A window on the right, onto a night sky over a hill.
+  rectangle windowFrame { position: (790, 170), size: (200, 236), color: #0c1715 }
+  rectangle sky         { position: (790, 170), size: (184, 220), color: #18273f }
+  rectangle skyLow      { position: (790, 240), size: (184, 80), color: #213454 }
+  circle moonHalo       { position: (838, 112), radius: 30, color: #e9e4d0, alpha: 0.08 }
+  circle moon           { position: (838, 112), radius: 15, color: #e9e4d0 }
+  circle star1 { position: (730, 90),  radius: 1.5, color: #e9e4d0, alpha: 0.8 }
+  circle star2 { position: (764, 132), radius: 1,   color: #e9e4d0, alpha: 0.6 }
+  circle star3 { position: (712, 176), radius: 1.5, color: #e9e4d0, alpha: 0.7 }
+  circle star4 { position: (866, 186), radius: 1,   color: #e9e4d0, alpha: 0.6 }
+  polygon hill { position: (698, 236), origin: (0, 0), color: #0f1a24
+                 points: [(698, 262), (740, 246), (790, 236), (842, 248), (882, 258), (882, 280), (698, 280)] }
+  rectangle mullionV { position: (790, 170), size: (6, 220), color: #0c1715 }
+  rectangle mullionH { position: (790, 170), size: (184, 6), color: #0c1715 }
+  rectangle sill     { position: (790, 292), size: (222, 10), color: #1d302c }
+
+  // A rail along the wall, and the desk the metronome stands on.
+  rectangle rail      { position: (480, 330), size: (960, 10), color: #0f1c19 }
+  line railLight      { position: (480, 325), points: [(-480, 0), (480, 0)], thickness: 1, color: #2c4440 }
+  rectangle deskTop   { position: (480, 500), size: (960, 40), color: #3a2416 }
+  rectangle deskFront { position: (480, 530), size: (960, 20), color: #24160e }
+  line deskEdge       { position: (480, 520), points: [(-480, 0), (480, 0)], thickness: 2, color: #5a3a24 }
+
+  // Two books under the lamp, spines towards you.
+  rectangle book1     { position: (215, 478), size: (170, 26), color: #6e2a26 }
+  rectangle book1Band { position: (215, 478), size: (170, 3), color: #c79a52 }
+  rectangle book2     { position: (205, 455), size: (140, 20), color: #2c4a63 }
+  rectangle book2Band { position: (250, 455), size: (4, 20), color: #c79a52 }
+
+  // A sheet of music and a pencil. The sheet lies flat on the
+  // desk, so it is drawn as a slanted four-sided polygon. Its
+  // points are written in scene coordinates: `origin: (0, 0)`
+  // pins the top-left of its box to `position`, which is that
+  // corner.
+  polygon sheet { position: (612, 486), origin: (0, 0), color: #e7dfcc
+                  points: [(632, 486), (842, 486), (872, 514), (612, 514)] }
+  line staff1 { position: (742, 492), points: [(-104, 0), (104, 0)], thickness: 1, color: #6b5a48, alpha: 0.6 }
+  line staff2 { position: (742, 497), points: [(-108, 0), (108, 0)], thickness: 1, color: #6b5a48, alpha: 0.6 }
+  line staff3 { position: (742, 502), points: [(-112, 0), (112, 0)], thickness: 1, color: #6b5a48, alpha: 0.6 }
+  line staff4 { position: (742, 507), points: [(-116, 0), (116, 0)], thickness: 1, color: #6b5a48, alpha: 0.6 }
+  rectangle pencil   { position: (300, 506), size: (130, 7), color: #e3b448, rotation: -4 }
+  polygon pencilTip  { position: (370, 501), color: #e8cfa2, rotation: -4
+                       points: [(0, -3.5), (14, 0), (0, 3.5)] }
+
+  // The metronome's shadow on the desk: a circle squashed flat
+  // with `scale`.
+  circle contact { position: (492, 482), radius: 180, color: #000000, alpha: 0.45, scale: (1, 0.08) }
+
+  // ── The body ── A pyramid seen from the front. Every wooden
+  // part is written in scene coordinates with `origin: (0, 0)`.
+  // The right side shows as a darker sliver; the light comes
+  // from the left.
+  polygon side { position: (516, 118), origin: (0, 0), color: #4a2716
+                 points: [(516, 118), (526, 122), (618, 446), (605, 446)] }
+  polygon body { position: (355, 118), origin: (0, 0), color: #7a4527
+                 points: [(444, 118), (516, 118), (605, 446), (355, 446)] }
+  line edgeLight { position: (355, 118), origin: (0, 0), thickness: 2, color: #a8673e
+                   points: [(444, 118), (355, 446)] }
+  // Grain: faint lines that follow the slope of each side.
+  line grain1 { position: (380, 150), origin: (0, 0), thickness: 1.5, color: #5f341c, alpha: 0.5
+                points: [(452, 150), (380, 420)] }
+  line grain2 { position: (510, 160), origin: (0, 0), thickness: 1.5, color: #5f341c, alpha: 0.5
+                points: [(510, 160), (582, 430)] }
+  polygon cap { position: (440, 104), origin: (0, 0), color: #5e341d
+                points: [(448, 104), (512, 104), (520, 120), (440, 120)] }
+
+  // The recess in front, where the arm swings, and the ivory
+  // scale behind the arm.
+  polygon recess { position: (388, 150), origin: (0, 0), color: #2e190f
+                   points: [(456, 150), (504, 150), (572, 410), (388, 410)] }
+  polygon plate { position: (462, 160), origin: (0, 0), color: #e9dcc0
+                  points: [(468, 160), (492, 160), (498, 340), (462, 340)] }
+  line tick1 { position: (480, 180), points: [(-8, 0), (8, 0)], thickness: 1.5, color: #6b4a2c }
+  line tick2 { position: (480, 200), points: [(-5, 0), (5, 0)], thickness: 1, color: #6b4a2c }
+  line tick3 { position: (480, 220), points: [(-9, 0), (9, 0)], thickness: 1.5, color: #6b4a2c }
+  line tick4 { position: (480, 240), points: [(-5, 0), (5, 0)], thickness: 1, color: #6b4a2c }
+  line tick5 { position: (480, 260), points: [(-10, 0), (10, 0)], thickness: 1.5, color: #6b4a2c }
+  line tick6 { position: (480, 280), points: [(-6, 0), (6, 0)], thickness: 1, color: #6b4a2c }
+  line tick7 { position: (480, 300), points: [(-11, 0), (11, 0)], thickness: 1.5, color: #6b4a2c }
+  line tick8 { position: (480, 320), points: [(-6, 0), (6, 0)], thickness: 1, color: #6b4a2c }
+
+  // The winding key on the right side.
+  rectangle keyStem { position: (612, 420), size: (14, 4), color: #b8862f }
+  circle keyHead    { position: (622, 420), radius: 7, color: #d9a441 }
+
+  // ── The arm ── A rod, a sliding weight with a highlight, and a
+  // knob, each its own shape with the same pivot: the rod's foot
+  // at (480, 400). The rod stands on it with `origin: (0.5, 1)`.
+  // The other parts sit higher up the arm, so their pivot is
+  // outside their own boxes: the weight's box is 30 px tall and
+  // its top is 210 px above the pivot, so `origin: (0.5, 7)`.
+  //
+  // Each part starts at `rotation: -28` and swings to 28 and
+  // back, forever: `loop: true, yoyo: true`. `duration: 1` is
+  // one direction, so one beat; there and back takes two. No
+  // easing is written, so the default easeInOut slows the arm
+  // at each end of its swing, as a pendulum slows.
+  //
+  // First, its shadow on the recess: the same rod and weight in
+  // black, see-through, pivoting 10 px right and 6 px lower.
+  rectangle rodShadow    { position: (490, 406), origin: (0.5, 1), size: (12, 300), color: #000000, alpha: 0.2
+                           rotation: -28
+                           animate { property: rotation, to: 28, duration: 1, loop: true, yoyo: true } }
+  rectangle rodShadowCore { position: (490, 406), origin: (0.5, 1), size: (5, 300), color: #000000, alpha: 0.22
+                           rotation: -28
+                           animate { property: rotation, to: 28, duration: 1, loop: true, yoyo: true } }
+  polygon weightShadow   { position: (490, 406), origin: (0.5, 7), color: #000000, alpha: 0.3
+                           points: [(-18, -15), (18, -15), (22, 15), (-22, 15)]
+                           rotation: -28
+                           animate { property: rotation, to: 28, duration: 1, loop: true, yoyo: true } }
+
+  rectangle rod { position: (480, 400), origin: (0.5, 1), size: (6, 300), color: #cfd3da
+                  rotation: -28
+                  animate { property: rotation, to: 28, duration: 1, loop: true, yoyo: true } }
+  circle knob   { position: (480, 400), origin: (0.5, 25.5), radius: 6, color: #d9a441
+                  rotation: -28
+                  animate { property: rotation, to: 28, duration: 1, loop: true, yoyo: true } }
+  polygon weight { position: (480, 400), origin: (0.5, 7), color: #d9a441
+                   points: [(-18, -15), (18, -15), (22, 15), (-22, 15)]
+                   rotation: -28
+                   animate { property: rotation, to: 28, duration: 1, loop: true, yoyo: true } }
+  rectangle shine { position: (480, 400), origin: (0.5, 51.5), size: (30, 4), color: #f6d88e
+                    rotation: -28
+                    animate { property: rotation, to: 28, duration: 1, loop: true, yoyo: true } }
+
+  circle hub { position: (480, 400), radius: 7, color: #b8862f }
+  circle hubCap { position: (480, 400), radius: 3, color: #f6d88e }
+
+  // ── The base ── A plinth with six beat lamps on its front.
+  rectangle plinth      { position: (480, 462), size: (310, 36), color: #5e341d }
+  line plinthLight      { position: (480, 445), points: [(-155, 0), (155, 0)], thickness: 2, color: #9a5c35 }
+  rectangle plinthShade { position: (480, 478), size: (310, 4), color: #3e2112 }
+
+  // The lamps' glass, dark when unlit.
+  circle glass1 { position: (380, 462), radius: 8, color: #2a1810 }
+  circle glass2 { position: (420, 462), radius: 8, color: #2a1810 }
+  circle glass3 { position: (460, 462), radius: 8, color: #2a1810 }
+  circle glass4 { position: (500, 462), radius: 8, color: #2a1810 }
+  circle glass5 { position: (540, 462), radius: 8, color: #2a1810 }
+  circle glass6 { position: (580, 462), radius: 8, color: #2a1810 }
+
+  // Each lamp lights once, on its own beat, as the arm reaches
+  // the end of a swing. It is a once-only yoyo from `alpha: 0` up
+  // and back down, 0.45 s each way, held back by a `delay` of
+  // the second its beat starts: none for the first lamp, then 1
+  // to 5. A yoyo without `loop` finishes where it started, so
+  // the last lamp is dark again at 5.9 s and the loop has no
+  // seam. easeOut makes each lamp come on fast and go off fast.
+  //
+  // A looping lamp could not be phased with `delay` here: the
+  // delay is spent once, so for its first seconds the lamp would
+  // sit still while every later cycle moves, and the loop would
+  // show a seam each time the scene restarts.
+  //
+  // The first lamp marks the start of the loop, so it is red.
+  circle halo1 { position: (380, 462), radius: 20, color: #ff6a4d, alpha: 0
+                 animate { property: alpha, to: 0.35, duration: 0.45, yoyo: true, easing: easeOut } }
+  circle lamp1 { position: (380, 462), radius: 7, color: #ff7a5c, alpha: 0
+                 animate { property: alpha, to: 1, duration: 0.45, yoyo: true, easing: easeOut } }
+  circle halo2 { position: (420, 462), radius: 20, color: #ffb347, alpha: 0
+                 animate { property: alpha, to: 0.35, duration: 0.45, delay: 1, yoyo: true, easing: easeOut } }
+  circle lamp2 { position: (420, 462), radius: 7, color: #ffd27a, alpha: 0
+                 animate { property: alpha, to: 1, duration: 0.45, delay: 1, yoyo: true, easing: easeOut } }
+  circle halo3 { position: (460, 462), radius: 20, color: #ffb347, alpha: 0
+                 animate { property: alpha, to: 0.35, duration: 0.45, delay: 2, yoyo: true, easing: easeOut } }
+  circle lamp3 { position: (460, 462), radius: 7, color: #ffd27a, alpha: 0
+                 animate { property: alpha, to: 1, duration: 0.45, delay: 2, yoyo: true, easing: easeOut } }
+  circle halo4 { position: (500, 462), radius: 20, color: #ffb347, alpha: 0
+                 animate { property: alpha, to: 0.35, duration: 0.45, delay: 3, yoyo: true, easing: easeOut } }
+  circle lamp4 { position: (500, 462), radius: 7, color: #ffd27a, alpha: 0
+                 animate { property: alpha, to: 1, duration: 0.45, delay: 3, yoyo: true, easing: easeOut } }
+  circle halo5 { position: (540, 462), radius: 20, color: #ffb347, alpha: 0
+                 animate { property: alpha, to: 0.35, duration: 0.45, delay: 4, yoyo: true, easing: easeOut } }
+  circle lamp5 { position: (540, 462), radius: 7, color: #ffd27a, alpha: 0
+                 animate { property: alpha, to: 1, duration: 0.45, delay: 4, yoyo: true, easing: easeOut } }
+  circle halo6 { position: (580, 462), radius: 20, color: #ffb347, alpha: 0
+                 animate { property: alpha, to: 0.35, duration: 0.45, delay: 5, yoyo: true, easing: easeOut } }
+  circle lamp6 { position: (580, 462), radius: 7, color: #ffd27a, alpha: 0
+                 animate { property: alpha, to: 1, duration: 0.45, delay: 5, yoyo: true, easing: easeOut } }
+
+  // ── The beat on the desk ── The lamps' light on the desk: a
+  // flattened warm circle, one pulse per one-second beat (a yoyo
+  // loop with `duration: 0.5`). It starts dim, so each pulse rises
+  // from the beat as a lamp comes on and is brightest half a
+  // second in, when the lamp is full. easeOut leaves the dim end
+  // fast and returns to it fast. Declared bright instead, the same
+  // loop would run half a beat out of step with the lamps.
+  circle deskGlow { position: (480, 498), radius: 170, color: #ffb347, alpha: 0.04, scale: (1, 0.1)
+                    animate { property: alpha, to: 0.22, duration: 0.5, loop: true, yoyo: true, easing: easeOut } }
+}

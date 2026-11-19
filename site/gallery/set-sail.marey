@@ -1,0 +1,160 @@
+// A travel poster: a sailboat crossing a bay at sunrise,
+// under a striped sky with the sun's rays fanned out
+// behind it.
+//
+// Shapes are placed by their pivot, and `origin` moves the
+// pivot: the mast and the lighthouse stand on their feet,
+// the sails hang from the mast, and the rays all turn about
+// the sun's centre.
+
+scene {
+  size: (960, 540)
+  duration: 8
+  background: #f7ead4
+
+  // ── Title and border ── Written first because they are
+  // what the poster says first. `layer: 1` draws them over
+  // everything else, which stays on the default layer 0.
+  // The cream rectangle under the navy one shows as an edge
+  // round it; the banner and its title share one position,
+  // so a rotation of -3 tilts them about the same point.
+  rectangle bannerEdge { position: (214, 78), size: (330, 92), color: #fbf3e4, rotation: -3, layer: 1 }
+  rectangle banner     { position: (214, 78), size: (318, 80), color: #1d2c48, rotation: -3, layer: 1 }
+  text title {
+    position: (214, 78), content: "SET SAIL", fontSize: 56
+    color: #fbf3e4, rotation: -3, layer: 1
+  }
+  text strap {
+    position: (214, 140), content: "THE MORNING CROSSING", fontSize: 15
+    color: #1d2c48, rotation: -3, layer: 1
+  }
+  rectangle frameTop    { position: (480, 5),   size: (960, 10), color: #fbf3e4, layer: 1 }
+  rectangle frameBottom { position: (480, 535), size: (960, 10), color: #fbf3e4, layer: 1 }
+  rectangle frameLeft   { position: (5, 270),   size: (10, 540), color: #fbf3e4, layer: 1 }
+  rectangle frameRight  { position: (955, 270), size: (10, 540), color: #fbf3e4, layer: 1 }
+
+  // ── Sky ── Stripes of graded colour, cream at the top to
+  // apricot at the horizon. Each stripe stops 2 px short
+  // of the next, so a fine line of the background shows
+  // between them.
+  rectangle sky1 { position: (480, 20),  size: (960, 40), color: #f8ecd8 }
+  rectangle sky2 { position: (480, 61),  size: (960, 38), color: #f7e2c4 }
+  rectangle sky3 { position: (480, 101), size: (960, 38), color: #f6d7b0 }
+  rectangle sky4 { position: (480, 141), size: (960, 38), color: #f5cb9d }
+  rectangle sky5 { position: (480, 181), size: (960, 38), color: #f3bd8a }
+  rectangle sky6 { position: (480, 221), size: (960, 38), color: #f1ae79 }
+  rectangle sky7 { position: (480, 261), size: (960, 38), color: #ee9e6b }
+  rectangle sky8 { position: (480, 306), size: (960, 48), color: #eb8e60 }
+
+  // ── Rays ── One thin wedge, written seven times with a
+  // different rotation. Its points run up from (0, 0), and
+  // `origin: (0.5, 1)` puts the pivot at the bottom centre
+  // of its bounding box, which is that point. So `position`
+  // sets each ray's tip at the sun's centre, and each turns
+  // about it. White at alpha 0.16 lightens whatever stripe
+  // it crosses.
+  polygon ray1 { position: (600, 292), origin: (0.5, 1), rotation: -72, color: white, alpha: 0.16
+                 points: [(0, 0), (-26, -620), (26, -620)] }
+  polygon ray2 { position: (600, 292), origin: (0.5, 1), rotation: -48, color: white, alpha: 0.16
+                 points: [(0, 0), (-26, -620), (26, -620)] }
+  polygon ray3 { position: (600, 292), origin: (0.5, 1), rotation: -24, color: white, alpha: 0.16
+                 points: [(0, 0), (-26, -620), (26, -620)] }
+  polygon ray4 { position: (600, 292), origin: (0.5, 1), rotation: 0,   color: white, alpha: 0.16
+                 points: [(0, 0), (-26, -620), (26, -620)] }
+  polygon ray5 { position: (600, 292), origin: (0.5, 1), rotation: 24,  color: white, alpha: 0.16
+                 points: [(0, 0), (-26, -620), (26, -620)] }
+  polygon ray6 { position: (600, 292), origin: (0.5, 1), rotation: 48,  color: white, alpha: 0.16
+                 points: [(0, 0), (-26, -620), (26, -620)] }
+  polygon ray7 { position: (600, 292), origin: (0.5, 1), rotation: 72,  color: white, alpha: 0.16
+                 points: [(0, 0), (-26, -620), (26, -620)] }
+
+  // ── Sun ── Two translucent halos under a solid disc.
+  // Where the halos overlap, their alphas stack, so the glow
+  // is strongest next to the sun.
+  circle halo2 { position: (600, 292), radius: 128, color: #f26b45, alpha: 0.14 }
+  circle halo1 { position: (600, 292), radius: 94,  color: #f26b45, alpha: 0.24 }
+  circle sun   { position: (600, 292), radius: 64,  color: #e4553b }
+
+  // ── Gulls ── A gull is a line through five points: two
+  // wings meeting at the body. Rotation tilts each one.
+  line gull1 { position: (438, 176), rotation: -8, thickness: 2.5, color: #1d2c48
+               points: [(-15, -1), (-8, -7), (0, 0), (8, -7), (15, -1)] }
+  line gull2 { position: (486, 214), rotation: 12, thickness: 2, color: #1d2c48
+               points: [(-11, -1), (-6, -5), (0, 0), (6, -5), (11, -1)] }
+
+  // ── Far shore ── A headland on the horizon. The
+  // lighthouse has `origin: (0.5, 1)`, so its position is
+  // the foot of the tower, set on the headland's top edge.
+  polygon headland { position: (870, 318), color: #4f7f86
+                     points: [(-110, 12), (-70, -2), (-30, -10), (20, -12), (90, -6), (100, 12)] }
+  rectangle tower  { position: (884, 306), origin: (0.5, 1), size: (10, 34), color: #fbf3e4 }
+  rectangle band   { position: (884, 292), size: (10, 6), color: #e4553b }
+  rectangle lamp   { position: (884, 272), origin: (0.5, 1), size: (8, 6), color: #1d2c48 }
+
+  // ── Sea ── Five bands, lightest at the horizon. Written
+  // after the sun, they cover its lower part.
+  rectangle sea1 { position: (480, 345), size: (960, 30), color: #2f8a94 }
+  rectangle sea2 { position: (480, 380), size: (960, 40), color: #267584 }
+  rectangle sea3 { position: (480, 425), size: (960, 50), color: #1e6174 }
+  rectangle sea4 { position: (480, 475), size: (960, 50), color: #174d62 }
+  rectangle sea5 { position: (480, 520), size: (960, 40), color: #113b50 }
+
+  // The sun's reflection: short lines under it, fading out.
+  line glare1 { position: (600, 340), points: [(-46, 0), (46, 0)], thickness: 4, color: #f4a06c, alpha: 0.9 }
+  line glare2 { position: (604, 354), points: [(-34, 0), (34, 0)], thickness: 4, color: #f4a06c, alpha: 0.7 }
+  line glare3 { position: (596, 370), points: [(-24, 0), (24, 0)], thickness: 3, color: #f4a06c, alpha: 0.5 }
+  line glare4 { position: (602, 388), points: [(-16, 0), (16, 0)], thickness: 3, color: #f4a06c, alpha: 0.35 }
+  line glare5 { position: (598, 408), points: [(-9, 0), (9, 0)],   thickness: 2, color: #f4a06c, alpha: 0.25 }
+
+  // Wave marks: a shallow V, three points each.
+  line wave1  { position: (90, 372),  points: [(-12, 0), (0, 4), (12, 0)], thickness: 2, color: #8fd0cc, alpha: 0.5 }
+  line wave2  { position: (300, 362), points: [(-12, 0), (0, 4), (12, 0)], thickness: 2, color: #8fd0cc, alpha: 0.5 }
+  line wave3  { position: (780, 378), points: [(-12, 0), (0, 4), (12, 0)], thickness: 2, color: #8fd0cc, alpha: 0.5 }
+  line wave4  { position: (180, 418), points: [(-16, 0), (0, 5), (16, 0)], thickness: 2, color: #7cc0bf, alpha: 0.45 }
+  line wave5  { position: (690, 440), points: [(-16, 0), (0, 5), (16, 0)], thickness: 2, color: #7cc0bf, alpha: 0.45 }
+  line wave6  { position: (880, 420), points: [(-16, 0), (0, 5), (16, 0)], thickness: 2, color: #7cc0bf, alpha: 0.45 }
+  line wave7  { position: (60, 478),  points: [(-20, 0), (0, 6), (20, 0)], thickness: 2.5, color: #6aaeb0, alpha: 0.4 }
+  line wave8  { position: (420, 492), points: [(-20, 0), (0, 6), (20, 0)], thickness: 2.5, color: #6aaeb0, alpha: 0.4 }
+  line wave9  { position: (800, 500), points: [(-20, 0), (0, 6), (20, 0)], thickness: 2.5, color: #6aaeb0, alpha: 0.4 }
+  line wave10 { position: (250, 520), points: [(-24, 0), (0, 7), (24, 0)], thickness: 3, color: #5c9da2, alpha: 0.35 }
+  line wave11 { position: (600, 526), points: [(-24, 0), (0, 7), (24, 0)], thickness: 3, color: #5c9da2, alpha: 0.35 }
+
+  // ── The boat ── Seven parts. Each has the same animate:
+  // 220 px to the right over the whole 8 s, so they sail as
+  // one. The parts are placed from the foot of the mast,
+  // which starts at (250, 420).
+  //
+  // A dark, see-through copy of the hull is its shadow on
+  // the water.
+  polygon shadow { position: (250, 452), color: #0b2a3a, alpha: 0.35
+                   points: [(-64, -6), (64, -6), (48, 6), (-54, 6)]
+                   animate { property: position, to: (470, 452), duration: 8 } }
+  polygon hull   { position: (250, 432), color: #1d2c48
+                   points: [(-74, -12), (74, -12), (54, 12), (-60, 12)]
+                   animate { property: position, to: (470, 432), duration: 8 } }
+  polygon stripe { position: (250, 425), color: #e4553b
+                   points: [(-72, -3), (72, -3), (70, 2), (-70, 2)]
+                   animate { property: position, to: (470, 425), duration: 8 } }
+
+  // The mast stands on the deck: with `origin: (0.5, 1)`
+  // its position is its foot.
+  line mast { position: (250, 420), origin: (0.5, 1), thickness: 3, color: #1d2c48
+              points: [(0, 0), (0, -160)]
+              animate { property: position, to: (470, 420), duration: 8 } }
+
+  // The mainsail's corner at the foot of the mast is its
+  // bottom-left, so `origin: (0, 1)`. The jib's is its
+  // bottom-right, so `origin: (1, 1)`.
+  polygon mainsail { position: (254, 412), origin: (0, 1), color: #fbf3e4
+                     points: [(0, 0), (0, -144), (92, 0)]
+                     animate { property: position, to: (474, 412), duration: 8 } }
+  polygon jib      { position: (246, 412), origin: (1, 1), color: #efe0c4
+                     points: [(0, 0), (0, -126), (-70, 0)]
+                     animate { property: position, to: (466, 412), duration: 8 } }
+
+  // The pennant hangs from the top of the mast: its
+  // top-left, `origin: (0, 0)`, is the point it hangs from.
+  polygon pennant { position: (251, 260), origin: (0, 0), color: #e4553b
+                    points: [(0, 0), (26, 5), (0, 10)]
+                    animate { property: position, to: (471, 260), duration: 8 } }
+}

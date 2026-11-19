@@ -116,8 +116,14 @@ backwards into `renderer/clock.ts`, which now just re-exports both.
   `docs/specs/2026-11-12-marey-phase-9b-github-action-design.md`.
   `action/run.mjs` is plain ESM on Node built-ins with no build step, and the
   workflow runs the action against `examples/starter/` on every pull request.
+- **`site/` and `vite-plugins/site.ts`** (the documentation site: the course,
+  guides, gallery and rendered reference at `/learn/`, `/guides/`, `/gallery/`
+  and `/reference/`) — read `site.md`. `tools/visual-check/site-check.mjs` is
+  its browser check.
 - **`docs/` and `docs/LANGUAGE.md`** — read
-  `roadmap-and-process.md`.
+  `roadmap-and-process.md`. `docs/LANGUAGE.md` and `docs/determinism.md` are
+  also rendered on the site, so their fences follow the site's rules too
+  (`site.md`).
 
 When a change crosses boundaries, read all matching documents. These files are
 the only home for this guidance — there is no agent-specific copy. A

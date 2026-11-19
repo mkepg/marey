@@ -1,0 +1,253 @@
+// A picture postcard from the mountains: three peaks over a still
+// lake, their reflections, a shore of pines, and a caption.
+//
+// The landscape is laid out from a handful of named values at the
+// top, so changing one of them restyles the card: `night` swaps the
+// palette the landscape's colours come from, turns the sun into the
+// moon and rewrites the caption; `horizon` moves the sky bands, the
+// peaks, their reflections, the lake and the shore together;
+// `heights` reshapes the range. The details inside it, the stars,
+// the clouds, the sun's glow and rays, and where along the shore
+// each pine stands, are plain numbers that do not read `horizon`.
+// Each `if` chooses a value. None of them decides whether
+// a shape exists: the moon's craters and the stars are always
+// there, and by day their alpha is 0.
+//
+// The clouds drift there and back in 8 s, the lake shimmers on
+// periods of 2 and 4 s, and the sun's rays turn one eighth of a
+// circle, which looks the same as where they began. So the scene
+// loops without a seam.
+
+let night = false
+
+let W = 960
+let inset = 24  // the card's white border
+let bottom = 444  // where the picture ends and the caption starts
+let horizon = 300
+let shore = horizon + 96
+
+// Peak heights above the horizon, left to right. The peaks are
+// spaced evenly across the picture, however many there are.
+let heights = [150, 210, 130]
+let gap = (W - 2 * inset) / (length(heights) + 1)
+let half = 200  // half the width of a peak's base
+
+// One palette per time of day, in the same order, so `pal[i]`
+// means the same part of the picture in both: 0 to 2 the sky from
+// the top down, 3 the haze, 4 the far peak, 5 the side peaks, 6 the
+// snow, 7 and 8 the lake, 9 the shore, 10 the pines, 11 the sun or
+// the moon, 12 the clouds and 13 the shimmer.
+let dayPal = [#6fa8d8, #9cc6e4, #d6e7ee, #b7cddc, #7d97b0, #56718c,
+              #f6f8fb, #6a9ec0, #4b7fa3, #2f4434, #1f3226, #fff3cf,
+              #ffffff, #e4f1f8]
+let nightPal = [#0b1230, #172248, #2b3864, #34436e, #2f3c62, #1e2a4a,
+                #b8c3dd, #1b2a4f, #121d3b, #0c1320, #070d15, #eef1fa,
+                #3a4670, #9fb0d8]
+let pal = if night then nightPal else dayPal
+
+let paper = #f2e8d5
+let ink = #2e2b33
+let sunX = if night then 720 else 300
+let sunY = if night then 92 else 104
+
+// A peak's outline in units of its own size: x from -1 to 1 across
+// the base, y from -1 at the summit to 0 at the base. Each peak's
+// group scales it by (half, height). The snow cap follows the same
+// slopes down to 0.7 of the height, with a ragged lower edge.
+let rock = [(-1, 0), (-0.62, -0.38), (-0.42, -0.52), (-0.18, -0.86), (0, -1),
+            (0.22, -0.78), (0.4, -0.66), (0.7, -0.3), (1, 0)]
+let snow = [(-0.293, -0.7), (-0.18, -0.86), (0, -1), (0.22, -0.78), (0.34, -0.7),
+            (0.2, -0.75), (0.08, -0.66), (-0.06, -0.74), (-0.18, -0.68)]
+// The reflections: the same points with every y negated. A negative
+// `scale` is not allowed, so a mirror image is written, not flipped.
+let rockR = [(-1, 0), (-0.62, 0.38), (-0.42, 0.52), (-0.18, 0.86), (0, 1),
+             (0.22, 0.78), (0.4, 0.66), (0.7, 0.3), (1, 0)]
+let snowR = [(-0.293, 0.7), (-0.18, 0.86), (0, 1), (0.22, 0.78), (0.34, 0.7),
+             (0.2, 0.75), (0.08, 0.66), (-0.06, 0.74), (-0.18, 0.68)]
+let pine = [(0, -1), (0.32, -0.55), (0.18, -0.55), (0.5, 0), (-0.5, 0),
+            (-0.18, -0.55), (-0.32, -0.55)]
+
+scene {
+  size: (960, 540)
+  duration: 8
+  background: paper
+
+  // ── Sky ── Four bands, each an even share of the space above the
+  // horizon, so moving the horizon re-cuts all four.
+  rectangle sky0 { position: (480, inset), origin: (0.5, 0), size: (W, (horizon - inset) / 4 + 1), color: pal[0] }
+  rectangle sky1 { position: (480, inset + (horizon - inset) / 4), origin: (0.5, 0), size: (W, (horizon - inset) / 4 + 1), color: pal[1] }
+  rectangle sky2 { position: (480, inset + (horizon - inset) / 2), origin: (0.5, 0), size: (W, (horizon - inset) / 4 + 1), color: pal[2] }
+  rectangle sky3 { position: (480, inset + 3 * (horizon - inset) / 4), origin: (0.5, 0), size: (W, (horizon - inset) / 4), color: pal[3] }
+
+  // ── Stars ── In one group whose alpha is 1 at night and 0 by day.
+  // A group's alpha multiplies with its children's, so the stars
+  // twinkle either way and are only seen at night.
+  group stars {
+    alpha: if night then 1 else 0
+    circle st1 { position: (90, 60), radius: 1.4, color: pal[13] }
+    circle st2 { position: (170, 112), radius: 1, color: pal[13]
+                 animate { property: alpha, to: 0.2, duration: 1, loop: true, yoyo: true } }
+    circle st3 { position: (262, 48), radius: 1.6, color: pal[13] }
+    circle st4 { position: (384, 92), radius: 1.1, color: pal[13]
+                 animate { property: alpha, to: 0.2, duration: 2, loop: true, yoyo: true } }
+    circle st5 { position: (452, 40), radius: 1.3, color: pal[13] }
+    circle st6 { position: (540, 120), radius: 1, color: pal[13]
+                 animate { property: alpha, to: 0.2, duration: 1, loop: true, yoyo: true } }
+    circle st7 { position: (604, 58), radius: 1.5, color: pal[13] }
+    circle st8 { position: (838, 70), radius: 1.2, color: pal[13]
+                 animate { property: alpha, to: 0.2, duration: 2, loop: true, yoyo: true } }
+    circle st9 { position: (880, 150), radius: 1, color: pal[13] }
+  }
+
+  // ── Sun or moon ── One disc. `night` picks its place and colour.
+  // By day eight rays stand around it, each placed at its angle
+  // with `cos` and `sin`, and turned to face out from the centre.
+  // Their group turns 45 degrees in 8 s, one gap between rays, so
+  // the last frame looks like the first. At night their alpha is 0,
+  // and three see-through craters appear on the disc instead.
+  group sun {
+    position: (sunX, sunY)
+    circle glow2 { position: (0, 0), radius: 62, color: pal[11], alpha: 0.12 }
+    circle glow1 { position: (0, 0), radius: 44, color: pal[11], alpha: 0.2 }
+    group rays {
+      alpha: if night then 0 else 0.8
+      animate { property: rotation, to: 45, duration: 8, easing: linear, loop: true }
+      line ray0 { position: (54 * cos(0), 54 * sin(0)), rotation: 0, points: [(-8, 0), (8, 0)], thickness: 3, color: pal[11] }
+      line ray1 { position: (54 * cos(45), 54 * sin(45)), rotation: 45, points: [(-8, 0), (8, 0)], thickness: 3, color: pal[11] }
+      line ray2 { position: (54 * cos(90), 54 * sin(90)), rotation: 90, points: [(-8, 0), (8, 0)], thickness: 3, color: pal[11] }
+      line ray3 { position: (54 * cos(135), 54 * sin(135)), rotation: 135, points: [(-8, 0), (8, 0)], thickness: 3, color: pal[11] }
+      line ray4 { position: (54 * cos(180), 54 * sin(180)), rotation: 180, points: [(-8, 0), (8, 0)], thickness: 3, color: pal[11] }
+      line ray5 { position: (54 * cos(225), 54 * sin(225)), rotation: 225, points: [(-8, 0), (8, 0)], thickness: 3, color: pal[11] }
+      line ray6 { position: (54 * cos(270), 54 * sin(270)), rotation: 270, points: [(-8, 0), (8, 0)], thickness: 3, color: pal[11] }
+      line ray7 { position: (54 * cos(315), 54 * sin(315)), rotation: 315, points: [(-8, 0), (8, 0)], thickness: 3, color: pal[11] }
+    }
+    circle disc { position: (0, 0), radius: if night then 24 else 30, color: pal[11] }
+    circle crater1 { position: (-7, -5), radius: 6, color: black, alpha: if night then 0.1 else 0 }
+    circle crater2 { position: (8, 7), radius: 4, color: black, alpha: if night then 0.1 else 0 }
+    circle crater3 { position: (6, -12), radius: 3, color: black, alpha: if night then 0.08 else 0 }
+  }
+
+  // ── Clouds ── Each drifts 40 px and back, a yoyo of 4 s each way.
+  group cloudA {
+    position: (180, 150)
+    animate { property: position, to: (220, 150), duration: 4, loop: true, yoyo: true }
+    rectangle base { position: (-6, 8), size: (76, 14), color: pal[12], alpha: 0.85 }
+    circle endL { position: (-44, 8), radius: 7, color: pal[12], alpha: 0.85 }
+    circle endR { position: (32, 8), radius: 7, color: pal[12], alpha: 0.85 }
+    circle a { position: (-38, 2), radius: 14, color: pal[12], alpha: 0.85 }
+    circle b { position: (-8, -6), radius: 20, color: pal[12], alpha: 0.85 }
+    circle c { position: (26, 0), radius: 15, color: pal[12], alpha: 0.85 }
+  }
+  group cloudB {
+    position: (790, 196)
+    animate { property: position, to: (750, 196), duration: 4, loop: true, yoyo: true }
+    rectangle base { position: (0, 6), size: (60, 10), color: pal[12], alpha: 0.7 }
+    circle endL { position: (-30, 6), radius: 5, color: pal[12], alpha: 0.7 }
+    circle endR { position: (30, 6), radius: 5, color: pal[12], alpha: 0.7 }
+    circle a { position: (-26, 1), radius: 10, color: pal[12], alpha: 0.7 }
+    circle b { position: (2, -5), radius: 15, color: pal[12], alpha: 0.7 }
+    circle c { position: (26, 0), radius: 9, color: pal[12], alpha: 0.7 }
+  }
+
+  // ── Peaks ── Each peak is a group at its foot on the horizon,
+  // scaled by (half, its height), with the unit outlines inside.
+  // `origin: (0, 0)` with the outline's own top-left corner as
+  // `position` makes each list's points the group's coordinates,
+  // so the cap lands exactly on the rock's slopes. The tallest,
+  // in the middle, is written first and paler, so it stands back.
+  group peak2 {
+    position: (inset + 2 * gap, horizon)
+    scale: (half, heights[1])
+    polygon rock { position: (-1, -1), origin: (0, 0), points: rock, color: pal[4] }
+    polygon cap  { position: (-0.293, -1), origin: (0, 0), points: snow, color: pal[6] }
+  }
+  group peak1 {
+    position: (inset + gap, horizon)
+    scale: (half, heights[0])
+    polygon rock { position: (-1, -1), origin: (0, 0), points: rock, color: pal[5] }
+    polygon cap  { position: (-0.293, -1), origin: (0, 0), points: snow, color: pal[6] }
+  }
+  group peak3 {
+    position: (inset + 3 * gap, horizon)
+    scale: (half, heights[2])
+    polygon rock { position: (-1, -1), origin: (0, 0), points: rock, color: pal[5] }
+    polygon cap  { position: (-0.293, -1), origin: (0, 0), points: snow, color: pal[6] }
+  }
+
+  // ── Lake ── From the horizon down, a paler band over a deeper one.
+  rectangle lake { position: (480, horizon), origin: (0.5, 0), size: (W, bottom - horizon), color: pal[7] }
+  rectangle deep { position: (480, horizon + 40), origin: (0.5, 0), size: (W, bottom - horizon - 40), color: pal[8] }
+
+  // ── Reflections ── The same three groups below the horizon, with
+  // the mirrored outlines. Each group's alpha of 0.4 multiplies
+  // into its rock and its cap, so the whole peak dims together.
+  group mirror2 {
+    position: (inset + 2 * gap, horizon), alpha: 0.4
+    scale: (half, heights[1])
+    polygon rock { position: (-1, 0), origin: (0, 0), points: rockR, color: pal[4] }
+    polygon cap  { position: (-0.293, 0.66), origin: (0, 0), points: snowR, color: pal[6] }
+  }
+  group mirror1 {
+    position: (inset + gap, horizon), alpha: 0.4
+    scale: (half, heights[0])
+    polygon rock { position: (-1, 0), origin: (0, 0), points: rockR, color: pal[5] }
+    polygon cap  { position: (-0.293, 0.66), origin: (0, 0), points: snowR, color: pal[6] }
+  }
+  group mirror3 {
+    position: (inset + 3 * gap, horizon), alpha: 0.4
+    scale: (half, heights[2])
+    polygon rock { position: (-1, 0), origin: (0, 0), points: rockR, color: pal[5] }
+    polygon cap  { position: (-0.293, 0.66), origin: (0, 0), points: snowR, color: pal[6] }
+  }
+
+  // A pale line where the water meets the mountains, and strokes of
+  // light on the water that brighten and dim, spaced down from it.
+  line waterline { position: (480, horizon), points: [(-W / 2, 0), (W / 2, 0)], thickness: 2, color: pal[2], alpha: 0.6 }
+  line sh1 { position: (sunX - 10, horizon + 14), points: [(-40, 0), (40, 0)], thickness: 2, color: pal[13], alpha: 0.6
+             animate { property: alpha, to: 0.15, duration: 1, loop: true, yoyo: true } }
+  line sh2 { position: (sunX + 16, horizon + 30), points: [(-28, 0), (28, 0)], thickness: 2, color: pal[13], alpha: 0.5
+             animate { property: alpha, to: 0.1, duration: 2, loop: true, yoyo: true } }
+  line sh3 { position: (sunX - 4, horizon + 52), points: [(-54, 0), (54, 0)], thickness: 2, color: pal[13], alpha: 0.4
+             animate { property: alpha, to: 0.1, duration: 1, loop: true, yoyo: true } }
+  line sh4 { position: (sunX + 22, horizon + 80), points: [(-34, 0), (34, 0)], thickness: 2, color: pal[13], alpha: 0.35
+             animate { property: alpha, to: 0.05, duration: 2, loop: true, yoyo: true } }
+
+  // ── Shore ── Two dark banks that close the lake in at the bottom
+  // corners, each standing on `shore`, with pines along them. The
+  // pines are one unit outline scaled to each tree's height.
+  polygon bankL { position: (inset, shore - 20), origin: (0, 0), color: pal[9]
+                  points: [(inset, shore - 20), (110, shore - 14), (200, shore + 4), (290, shore + 30),
+                           (340, bottom), (inset, bottom)] }
+  polygon bankR { position: (620, shore - 6), origin: (0, 0), color: pal[9]
+                  points: [(620, bottom), (700, shore + 16), (800, shore - 2), (W - inset, shore - 6),
+                           (W - inset, bottom)] }
+  polygon pine1 { position: (60, shore - 18), origin: (0.5, 1), scale: (40, 70), points: pine, color: pal[10] }
+  polygon pine2 { position: (96, shore - 15), origin: (0.5, 1), scale: (34, 54), points: pine, color: pal[10] }
+  polygon pine3 { position: (140, shore - 8), origin: (0.5, 1), scale: (44, 82), points: pine, color: pal[10] }
+  polygon pine4 { position: (182, shore + 2), origin: (0.5, 1), scale: (30, 46), points: pine, color: pal[10] }
+  polygon pine5 { position: (836, shore - 3), origin: (0.5, 1), scale: (42, 76), points: pine, color: pal[10] }
+  polygon pine6 { position: (878, shore - 5), origin: (0.5, 1), scale: (34, 58), points: pine, color: pal[10] }
+  polygon pine7 { position: (912, shore - 6), origin: (0.5, 1), scale: (38, 66), points: pine, color: pal[10] }
+
+  // ── The card ── The border is drawn last, on top, so it trims
+  // everything that runs past the picture's edges. The caption is
+  // chosen by `night`.
+  rectangle edgeTop    { position: (480, inset / 2), size: (W, inset), color: paper }
+  rectangle edgeLeft   { position: (inset / 2, 270), size: (inset, 540), color: paper }
+  rectangle edgeRight  { position: (W - inset / 2, 270), size: (inset, 540), color: paper }
+  rectangle captionBar { position: (480, (bottom + 540) / 2), size: (W, 540 - bottom), color: paper }
+  polygon cornerTL { position: (inset, inset), origin: (0, 0), points: [(0, 0), (18, 0), (0, 18)], color: ink, alpha: 0.25 }
+  polygon cornerTR { position: (W - inset, inset), origin: (1, 0), points: [(0, 0), (18, 0), (18, 18)], color: ink, alpha: 0.25 }
+  polygon cornerBL { position: (inset, bottom), origin: (0, 1), points: [(0, 0), (0, 18), (18, 18)], color: ink, alpha: 0.25 }
+  polygon cornerBR { position: (W - inset, bottom), origin: (1, 1), points: [(18, 0), (18, 18), (0, 18)], color: ink, alpha: 0.25 }
+  text caption {
+    position: (480, (bottom + 540) / 2 - 6)
+    content: if night then "GOODNIGHT FROM THE LAKES" else "GREETINGS FROM THE LAKES"
+    fontSize: 26, color: ink
+  }
+  text sub {
+    position: (480, (bottom + 540) / 2 + 24)
+    content: "three peaks, one horizon, two palettes"
+    fontSize: 12, color: ink, alpha: 0.55
+  }
+}

@@ -1,0 +1,318 @@
+// Four runners race 640 px in the same 2 s, one easing each.
+// Every runner arrives on the same tick, so the race is a dead
+// heat; the only thing that differs is how each one spends the
+// time, and the scene is built to make that spacing visible.
+//
+// Each copy in a trail starts with its runner and has its easing
+// and duration, but a nearer `to`: where the runner is one eighth
+// of the way through the race, two eighths, and so on. An easing
+// maps a fraction of the time to a fraction of the distance, and
+// every copy uses the same fractions of time, so the trail is the
+// race shrunk to fit behind the runner while it runs, and a
+// full-size strobe picture of it at 2 s. Bunched copies mean the
+// runner was slow there; spread ones mean it was fast.
+
+scene {
+  size: (960, 540)
+  duration: 4
+  background: #0b0e17
+
+  // ── Stadium ── Each floodlight glow is six faint circles. Six
+  // small steps of alpha, not three big ones, so no edge shows
+  // and the light reads as falling off.
+  circle glowL6 { position: (130, -30), radius: 310, color: #ffe2a8, alpha: 0.024 }
+  circle glowL5 { position: (130, -30), radius: 265, color: #ffe2a8, alpha: 0.024 }
+  circle glowL4 { position: (130, -30), radius: 220, color: #ffe2a8, alpha: 0.024 }
+  circle glowL3 { position: (130, -30), radius: 175, color: #ffe2a8, alpha: 0.024 }
+  circle glowL2 { position: (130, -30), radius: 130, color: #ffe2a8, alpha: 0.024 }
+  circle glowL1 { position: (130, -30), radius: 85, color: #ffe2a8, alpha: 0.024 }
+  circle glowR6 { position: (830, -30), radius: 310, color: #ffe2a8, alpha: 0.024 }
+  circle glowR5 { position: (830, -30), radius: 265, color: #ffe2a8, alpha: 0.024 }
+  circle glowR4 { position: (830, -30), radius: 220, color: #ffe2a8, alpha: 0.024 }
+  circle glowR3 { position: (830, -30), radius: 175, color: #ffe2a8, alpha: 0.024 }
+  circle glowR2 { position: (830, -30), radius: 130, color: #ffe2a8, alpha: 0.024 }
+  circle glowR1 { position: (830, -30), radius: 85, color: #ffe2a8, alpha: 0.024 }
+
+  // The masts stand behind the stand, so they are written first
+  // and the stand cuts them off at its top edge.
+  rectangle mastL  { position: (130, 46), size: (6, 64), color: #1a2033 }
+  rectangle mastR  { position: (830, 46), size: (6, 64), color: #1a2033 }
+
+  // A lamp head is a dark frame with four bulbs. The bulbs are
+  // separate rectangles so the frame shows between them.
+  rectangle lampsL { position: (130, 14), size: (112, 22), color: #1d2234 }
+  rectangle bulbL1 { position: (91, 14), size: (20, 10), color: #fff6dc }
+  rectangle bulbL2 { position: (117, 14), size: (20, 10), color: #fff6dc }
+  rectangle bulbL3 { position: (143, 14), size: (20, 10), color: #fff6dc }
+  rectangle bulbL4 { position: (169, 14), size: (20, 10), color: #fff6dc }
+  rectangle lampsR { position: (830, 14), size: (112, 22), color: #1d2234 }
+  rectangle bulbR1 { position: (791, 14), size: (20, 10), color: #fff6dc }
+  rectangle bulbR2 { position: (817, 14), size: (20, 10), color: #fff6dc }
+  rectangle bulbR3 { position: (843, 14), size: (20, 10), color: #fff6dc }
+  rectangle bulbR4 { position: (869, 14), size: (20, 10), color: #fff6dc }
+
+  // Three tiers, each a shade lighter as it nears the track, with
+  // a dark line along each row of seats.
+  rectangle standTop { position: (480, 82),  size: (960, 28), color: #121726 }
+  rectangle standMid { position: (480, 104), size: (960, 16), color: #171d2f }
+  rectangle standLow { position: (480, 118), size: (960, 12), color: #1c2338 }
+  line row1 { position: (480, 75),  points: [(-480, 0), (480, 0)], thickness: 1.5, color: #0b0e17, alpha: 0.7 }
+  line row2 { position: (480, 84),  points: [(-480, 0), (480, 0)], thickness: 1.5, color: #0b0e17, alpha: 0.7 }
+  line row3 { position: (480, 92),  points: [(-480, 0), (480, 0)], thickness: 1.5, color: #0b0e17, alpha: 0.7 }
+  line row4 { position: (480, 103), points: [(-480, 0), (480, 0)], thickness: 1.5, color: #0b0e17, alpha: 0.6 }
+  line row5 { position: (480, 117), points: [(-480, 0), (480, 0)], thickness: 1.5, color: #0b0e17, alpha: 0.5 }
+
+  // ── Scoreboard ── The clock fills from its left end:
+  // `origin: (0, 0.5)` pins that end, and `scale` grows the bar
+  // from no width at an even, `linear` rate, so its length is the
+  // fraction of the race that has passed. The dark cuts split it
+  // into eighths, one for each copy in a trail.
+  rectangle boardEdge { position: (480, 52), size: (392, 86), color: #2b3350 }
+  rectangle board     { position: (480, 52), size: (384, 78), color: #0a0c12 }
+  text title  { position: (480, 32), content: "EASING RACE", fontSize: 24, color: #f3ead7 }
+  text clock0 { position: (314, 70), content: "0 s", fontSize: 12, color: #8d93ab }
+  text clock2 { position: (646, 70), content: "2 s", fontSize: 12, color: #8d93ab }
+  rectangle clockTrack { position: (480, 70), size: (300, 8), color: #23293d }
+  rectangle clockFill {
+    position: (330, 70), origin: (0, 0.5), size: (300, 8), color: #f3ead7
+    scale: (0, 1)
+    animate { property: scale, to: (1, 1), duration: 2, easing: linear }
+  }
+  rectangle cut1 { position: (367.5, 70), size: (2, 8), color: #0a0c12 }
+  rectangle cut2 { position: (405, 70), size: (2, 8), color: #0a0c12 }
+  rectangle cut3 { position: (442.5, 70), size: (2, 8), color: #0a0c12 }
+  rectangle cut4 { position: (480, 70), size: (2, 8), color: #0a0c12 }
+  rectangle cut5 { position: (517.5, 70), size: (2, 8), color: #0a0c12 }
+  rectangle cut6 { position: (555, 70), size: (2, 8), color: #0a0c12 }
+  rectangle cut7 { position: (592.5, 70), size: (2, 8), color: #0a0c12 }
+
+  // ── Lanes ── Each lane is written top to bottom, with its flag
+  // just before the next lane. That order is how the flags wait.
+  //
+  // A flag is a pole and a pennant sharing one pivot, the pole's
+  // foot, 72 px below the lane and so behind the next lane. The
+  // pennant's `origin: (0, 7)` puts that pivot 7 pennant-heights
+  // below its top. Both grow from flat, `scale: (1, 0)`, with
+  // easeIn over the 2 s race: slowly at first, so a pole clears
+  // its lane only after 1.5 s, then shooting up as the runners
+  // arrive.
+  //
+  // Beside each name is the easing's curve, drawn as a `line`
+  // through the same eighths the trail uses: across is time, up is
+  // distance. `origin: (0, 1)` pins the bottom-left corner of the
+  // curve's box to `position`, so each point is an offset from
+  // that corner: x is 3 px per eighth of the time, and y is 16 px
+  // times the fraction of the distance, upwards. The faint L under
+  // it is the two axes.
+
+  // Lane 1: linear.
+  rectangle lane1  { position: (480, 168), size: (960, 80), color: #b34a30 }
+  rectangle apron1 { position: (88, 168), size: (176, 80), color: #8c3622 }
+  text num1  { position: (22, 168), content: "1", fontSize: 28, color: #f3ead7, alpha: 0.35 }
+  text name1 { position: (40, 158), origin: (0, 0.5), content: "linear", fontSize: 18, color: #f3ead7 }
+  text note1 { position: (40, 184), origin: (0, 0.5), content: "steady", fontSize: 12, color: #f3ead7, alpha: 0.7 }
+  line axes1  { position: (150, 162), origin: (0, 1), thickness: 1, color: #f3ead7, alpha: 0.4
+                points: [(0, -16), (0, 0), (24, 0)] }
+  line curve1 { position: (150, 162), origin: (0, 1), thickness: 2, color: #f3ead7
+                points: [(0, 0), (3, -2), (6, -4), (9, -6), (12, -8), (15, -10), (18, -12), (21, -14), (24, -16)] }
+  rectangle pole1 { position: (900, 280), origin: (0.5, 1), size: (4, 126), color: #efe6d2, scale: (1, 0)
+                    animate { property: scale, to: (1, 1), duration: 2, easing: easeIn } }
+  polygon flag1   { position: (900, 280), origin: (0, 7), color: #f3ead7, scale: (1, 0)
+                    points: [(0, 0), (34, 9), (0, 18)]
+                    animate { property: scale, to: (1, 1), duration: 2, easing: easeIn } }
+
+  // Lane 2: easeIn, t squared. Its curve hugs the time axis and
+  // climbs late: 16 px times 1/64, 4/64, 9/64 and so on.
+  rectangle lane2  { position: (480, 248), size: (960, 80), color: #aa452c }
+  rectangle apron2 { position: (88, 248), size: (176, 80), color: #85331f }
+  text num2  { position: (22, 248), content: "2", fontSize: 28, color: #f3ead7, alpha: 0.35 }
+  text name2 { position: (40, 238), origin: (0, 0.5), content: "easeIn", fontSize: 18, color: #ffd36e }
+  text note2 { position: (40, 264), origin: (0, 0.5), content: "slow start", fontSize: 12, color: #f3ead7, alpha: 0.7 }
+  line axes2  { position: (150, 242), origin: (0, 1), thickness: 1, color: #f3ead7, alpha: 0.4
+                points: [(0, -16), (0, 0), (24, 0)] }
+  line curve2 { position: (150, 242), origin: (0, 1), thickness: 2, color: #ffd36e
+                points: [(0, 0), (3, -0.25), (6, -1), (9, -2.25), (12, -4), (15, -6.25), (18, -9), (21, -12.25), (24, -16)] }
+  rectangle pole2 { position: (900, 360), origin: (0.5, 1), size: (4, 126), color: #efe6d2, scale: (1, 0)
+                    animate { property: scale, to: (1, 1), duration: 2, easing: easeIn } }
+  polygon flag2   { position: (900, 360), origin: (0, 7), color: #ffd36e, scale: (1, 0)
+                    points: [(0, 0), (34, 9), (0, 18)]
+                    animate { property: scale, to: (1, 1), duration: 2, easing: easeIn } }
+
+  // Lane 3: easeOut, the mirror of easeIn: it climbs at once and
+  // levels off.
+  rectangle lane3  { position: (480, 328), size: (960, 80), color: #b34a30 }
+  rectangle apron3 { position: (88, 328), size: (176, 80), color: #8c3622 }
+  text num3  { position: (22, 328), content: "3", fontSize: 28, color: #f3ead7, alpha: 0.35 }
+  text name3 { position: (40, 318), origin: (0, 0.5), content: "easeOut", fontSize: 18, color: #7fe0cf }
+  text note3 { position: (40, 344), origin: (0, 0.5), content: "slow finish", fontSize: 12, color: #f3ead7, alpha: 0.7 }
+  line axes3  { position: (150, 322), origin: (0, 1), thickness: 1, color: #f3ead7, alpha: 0.4
+                points: [(0, -16), (0, 0), (24, 0)] }
+  line curve3 { position: (150, 322), origin: (0, 1), thickness: 2, color: #7fe0cf
+                points: [(0, 0), (3, -3.75), (6, -7), (9, -9.75), (12, -12), (15, -13.75), (18, -15), (21, -15.75), (24, -16)] }
+  rectangle pole3 { position: (900, 440), origin: (0.5, 1), size: (4, 126), color: #efe6d2, scale: (1, 0)
+                    animate { property: scale, to: (1, 1), duration: 2, easing: easeIn } }
+  polygon flag3   { position: (900, 440), origin: (0, 7), color: #7fe0cf, scale: (1, 0)
+                    points: [(0, 0), (34, 9), (0, 18)]
+                    animate { property: scale, to: (1, 1), duration: 2, easing: easeIn } }
+
+  // Lane 4: easeInOut, easeIn for the first half and easeOut for
+  // the second, so its curve is an S.
+  rectangle lane4  { position: (480, 408), size: (960, 80), color: #aa452c }
+  rectangle apron4 { position: (88, 408), size: (176, 80), color: #85331f }
+  text num4  { position: (22, 408), content: "4", fontSize: 28, color: #f3ead7, alpha: 0.35 }
+  text name4 { position: (40, 398), origin: (0, 0.5), content: "easeInOut", fontSize: 18, color: #b9c3ff }
+  text note4 { position: (40, 424), origin: (0, 0.5), content: "slow, fast, slow", fontSize: 12, color: #f3ead7, alpha: 0.7 }
+  line axes4  { position: (150, 402), origin: (0, 1), thickness: 1, color: #f3ead7, alpha: 0.4
+                points: [(0, -16), (0, 0), (24, 0)] }
+  line curve4 { position: (150, 402), origin: (0, 1), thickness: 2, color: #b9c3ff
+                points: [(0, 0), (3, -0.5), (6, -2), (9, -4.5), (12, -8), (15, -11.5), (18, -14), (21, -15.5), (24, -16)] }
+  rectangle pole4 { position: (900, 520), origin: (0.5, 1), size: (4, 126), color: #efe6d2, scale: (1, 0)
+                    animate { property: scale, to: (1, 1), duration: 2, easing: easeIn } }
+  polygon flag4   { position: (900, 520), origin: (0, 7), color: #b9c3ff, scale: (1, 0)
+                    points: [(0, 0), (34, 9), (0, 18)]
+                    animate { property: scale, to: (1, 1), duration: 2, easing: easeIn } }
+
+  // ── Infield ── Written after the last flag, to hide its foot.
+  // The mowing stripes are lighter rectangles every other 160 px.
+  rectangle infield { position: (480, 494), size: (960, 92), color: #1e4a39 }
+  rectangle mow1 { position: (80, 494),  size: (160, 92), color: #22533f }
+  rectangle mow2 { position: (400, 494), size: (160, 92), color: #22533f }
+  rectangle mow3 { position: (720, 494), size: (160, 92), color: #22533f }
+  text caption { position: (480, 496), content: "Every runner covers 640 px in 2 s. Only the easing differs."
+                 fontSize: 15, color: #d7e8dc, alpha: 0.85 }
+
+  // ── Markings ── Over the lanes, under the runners.
+  line kerbTop    { position: (480, 128), points: [(-480, 0), (480, 0)], thickness: 4, color: #e9e0cc }
+  line laneLine1  { position: (480, 208), points: [(-480, 0), (480, 0)], thickness: 2, color: #f3ead7, alpha: 0.7 }
+  line laneLine2  { position: (480, 288), points: [(-480, 0), (480, 0)], thickness: 2, color: #f3ead7, alpha: 0.7 }
+  line laneLine3  { position: (480, 368), points: [(-480, 0), (480, 0)], thickness: 2, color: #f3ead7, alpha: 0.7 }
+  line kerbBottom { position: (480, 448), points: [(-480, 0), (480, 0)], thickness: 4, color: #e9e0cc }
+
+  // A faint line every 80 px, one eighth of the distance. The
+  // linear copies land on them; every other trail leaves them,
+  // and how far it leaves them is the easing. The halfway line is
+  // a little brighter.
+  line eighth1 { position: (280, 288), points: [(0, -160), (0, 160)], thickness: 1.5, color: #f3ead7, alpha: 0.13 }
+  line eighth2 { position: (360, 288), points: [(0, -160), (0, 160)], thickness: 1.5, color: #f3ead7, alpha: 0.13 }
+  line eighth3 { position: (440, 288), points: [(0, -160), (0, 160)], thickness: 1.5, color: #f3ead7, alpha: 0.13 }
+  line eighth4 { position: (520, 288), points: [(0, -160), (0, 160)], thickness: 1.5, color: #f3ead7, alpha: 0.2 }
+  line eighth5 { position: (600, 288), points: [(0, -160), (0, 160)], thickness: 1.5, color: #f3ead7, alpha: 0.13 }
+  line eighth6 { position: (680, 288), points: [(0, -160), (0, 160)], thickness: 1.5, color: #f3ead7, alpha: 0.13 }
+  line eighth7 { position: (760, 288), points: [(0, -160), (0, 160)], thickness: 1.5, color: #f3ead7, alpha: 0.13 }
+  line start { position: (200, 288), points: [(0, -160), (0, 160)], thickness: 3, color: #f3ead7, alpha: 0.9 }
+
+  // The finish: dark squares on a cream strip, in two columns
+  // offset by one square, which is all a checker needs.
+  rectangle finish { position: (840, 288), size: (40, 320), color: #f3ead7 }
+  rectangle sq1 { position: (830, 138), size: (20, 20), color: #1a1614 }
+  rectangle sq2 { position: (850, 158), size: (20, 20), color: #1a1614 }
+  rectangle sq3 { position: (830, 178), size: (20, 20), color: #1a1614 }
+  rectangle sq4 { position: (850, 198), size: (20, 20), color: #1a1614 }
+  rectangle sq5 { position: (830, 218), size: (20, 20), color: #1a1614 }
+  rectangle sq6 { position: (850, 238), size: (20, 20), color: #1a1614 }
+  rectangle sq7 { position: (830, 258), size: (20, 20), color: #1a1614 }
+  rectangle sq8 { position: (850, 278), size: (20, 20), color: #1a1614 }
+  rectangle sq9 { position: (830, 298), size: (20, 20), color: #1a1614 }
+  rectangle sq10 { position: (850, 318), size: (20, 20), color: #1a1614 }
+  rectangle sq11 { position: (830, 338), size: (20, 20), color: #1a1614 }
+  rectangle sq12 { position: (850, 358), size: (20, 20), color: #1a1614 }
+  rectangle sq13 { position: (830, 378), size: (20, 20), color: #1a1614 }
+  rectangle sq14 { position: (850, 398), size: (20, 20), color: #1a1614 }
+  rectangle sq15 { position: (830, 418), size: (20, 20), color: #1a1614 }
+  rectangle sq16 { position: (850, 438), size: (20, 20), color: #1a1614 }
+
+  // ── Runners ── Each lane is written faintest first: the trail,
+  // whose alpha rises towards the runner so the newest copy is the
+  // brightest; then a soft glow in the runner's colour; then a dark
+  // rim that keeps the runner readable on the finish squares; then
+  // the runner. The glow and the rim have the runner's move, so
+  // the four travel as one.
+
+  // linear: the same distance every eighth, so the copies are evenly spaced.
+  circle l1 { position: (200, 168), radius: 12, color: #f3ead7, alpha: 0.16
+    animate { property: position, to: (280, 168), duration: 2, easing: linear } }
+  circle l2 { position: (200, 168), radius: 12, color: #f3ead7, alpha: 0.22
+    animate { property: position, to: (360, 168), duration: 2, easing: linear } }
+  circle l3 { position: (200, 168), radius: 12, color: #f3ead7, alpha: 0.27
+    animate { property: position, to: (440, 168), duration: 2, easing: linear } }
+  circle l4 { position: (200, 168), radius: 12, color: #f3ead7, alpha: 0.33
+    animate { property: position, to: (520, 168), duration: 2, easing: linear } }
+  circle l5 { position: (200, 168), radius: 12, color: #f3ead7, alpha: 0.39
+    animate { property: position, to: (600, 168), duration: 2, easing: linear } }
+  circle l6 { position: (200, 168), radius: 12, color: #f3ead7, alpha: 0.44
+    animate { property: position, to: (680, 168), duration: 2, easing: linear } }
+  circle l7 { position: (200, 168), radius: 12, color: #f3ead7, alpha: 0.5
+    animate { property: position, to: (760, 168), duration: 2, easing: linear } }
+  circle lGlow { position: (200, 168), radius: 28, color: #f3ead7, alpha: 0.18
+    animate { property: position, to: (840, 168), duration: 2, easing: linear } }
+  circle lRim { position: (200, 168), radius: 17, color: #2a120b, alpha: 0.75
+    animate { property: position, to: (840, 168), duration: 2, easing: linear } }
+  circle lRunner { position: (200, 168), radius: 14, color: #f3ead7
+    animate { property: position, to: (840, 168), duration: 2, easing: linear } }
+
+  // easeIn: tiny steps at the start, long ones at the end.
+  circle i1 { position: (200, 248), radius: 12, color: #ffd36e, alpha: 0.16
+    animate { property: position, to: (210, 248), duration: 2, easing: easeIn } }
+  circle i2 { position: (200, 248), radius: 12, color: #ffd36e, alpha: 0.22
+    animate { property: position, to: (240, 248), duration: 2, easing: easeIn } }
+  circle i3 { position: (200, 248), radius: 12, color: #ffd36e, alpha: 0.27
+    animate { property: position, to: (290, 248), duration: 2, easing: easeIn } }
+  circle i4 { position: (200, 248), radius: 12, color: #ffd36e, alpha: 0.33
+    animate { property: position, to: (360, 248), duration: 2, easing: easeIn } }
+  circle i5 { position: (200, 248), radius: 12, color: #ffd36e, alpha: 0.39
+    animate { property: position, to: (450, 248), duration: 2, easing: easeIn } }
+  circle i6 { position: (200, 248), radius: 12, color: #ffd36e, alpha: 0.44
+    animate { property: position, to: (560, 248), duration: 2, easing: easeIn } }
+  circle i7 { position: (200, 248), radius: 12, color: #ffd36e, alpha: 0.5
+    animate { property: position, to: (690, 248), duration: 2, easing: easeIn } }
+  circle iGlow { position: (200, 248), radius: 28, color: #ffd36e, alpha: 0.18
+    animate { property: position, to: (840, 248), duration: 2, easing: easeIn } }
+  circle iRim { position: (200, 248), radius: 17, color: #2a120b, alpha: 0.75
+    animate { property: position, to: (840, 248), duration: 2, easing: easeIn } }
+  circle iRunner { position: (200, 248), radius: 14, color: #ffd36e
+    animate { property: position, to: (840, 248), duration: 2, easing: easeIn } }
+
+  // easeOut: the reverse, long steps first and tiny ones last.
+  circle o1 { position: (200, 328), radius: 12, color: #7fe0cf, alpha: 0.16
+    animate { property: position, to: (350, 328), duration: 2, easing: easeOut } }
+  circle o2 { position: (200, 328), radius: 12, color: #7fe0cf, alpha: 0.22
+    animate { property: position, to: (480, 328), duration: 2, easing: easeOut } }
+  circle o3 { position: (200, 328), radius: 12, color: #7fe0cf, alpha: 0.27
+    animate { property: position, to: (590, 328), duration: 2, easing: easeOut } }
+  circle o4 { position: (200, 328), radius: 12, color: #7fe0cf, alpha: 0.33
+    animate { property: position, to: (680, 328), duration: 2, easing: easeOut } }
+  circle o5 { position: (200, 328), radius: 12, color: #7fe0cf, alpha: 0.39
+    animate { property: position, to: (750, 328), duration: 2, easing: easeOut } }
+  circle o6 { position: (200, 328), radius: 12, color: #7fe0cf, alpha: 0.44
+    animate { property: position, to: (800, 328), duration: 2, easing: easeOut } }
+  circle o7 { position: (200, 328), radius: 12, color: #7fe0cf, alpha: 0.5
+    animate { property: position, to: (830, 328), duration: 2, easing: easeOut } }
+  circle oGlow { position: (200, 328), radius: 28, color: #7fe0cf, alpha: 0.18
+    animate { property: position, to: (840, 328), duration: 2, easing: easeOut } }
+  circle oRim { position: (200, 328), radius: 17, color: #2a120b, alpha: 0.75
+    animate { property: position, to: (840, 328), duration: 2, easing: easeOut } }
+  circle oRunner { position: (200, 328), radius: 14, color: #7fe0cf
+    animate { property: position, to: (840, 328), duration: 2, easing: easeOut } }
+
+  // easeInOut, the default: bunched at both ends.
+  circle b1 { position: (200, 408), radius: 12, color: #b9c3ff, alpha: 0.16
+    animate { property: position, to: (220, 408), duration: 2, easing: easeInOut } }
+  circle b2 { position: (200, 408), radius: 12, color: #b9c3ff, alpha: 0.22
+    animate { property: position, to: (280, 408), duration: 2, easing: easeInOut } }
+  circle b3 { position: (200, 408), radius: 12, color: #b9c3ff, alpha: 0.27
+    animate { property: position, to: (380, 408), duration: 2, easing: easeInOut } }
+  circle b4 { position: (200, 408), radius: 12, color: #b9c3ff, alpha: 0.33
+    animate { property: position, to: (520, 408), duration: 2, easing: easeInOut } }
+  circle b5 { position: (200, 408), radius: 12, color: #b9c3ff, alpha: 0.39
+    animate { property: position, to: (660, 408), duration: 2, easing: easeInOut } }
+  circle b6 { position: (200, 408), radius: 12, color: #b9c3ff, alpha: 0.44
+    animate { property: position, to: (760, 408), duration: 2, easing: easeInOut } }
+  circle b7 { position: (200, 408), radius: 12, color: #b9c3ff, alpha: 0.5
+    animate { property: position, to: (820, 408), duration: 2, easing: easeInOut } }
+  circle bGlow { position: (200, 408), radius: 28, color: #b9c3ff, alpha: 0.18
+    animate { property: position, to: (840, 408), duration: 2, easing: easeInOut } }
+  circle bRim { position: (200, 408), radius: 17, color: #2a120b, alpha: 0.75
+    animate { property: position, to: (840, 408), duration: 2, easing: easeInOut } }
+  circle bRunner { position: (200, 408), radius: 14, color: #b9c3ff
+    animate { property: position, to: (840, 408), duration: 2, easing: easeInOut } }
+}

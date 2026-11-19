@@ -208,6 +208,14 @@ const SHORT_NAME: Readonly<Record<ExportKind, string>> = {
 // Generated at build time by vite-plugins/thirdPartyLicenses.ts.
 const LICENSES_HREF = `${import.meta.env.BASE_URL}third-party-licenses.txt`;
 
+// The documentation site, built beside the playground by vite-plugins/site.ts.
+// They open in a new tab, as the licences link does, so the scene in the
+// editor stays where it is.
+const SITE_LINKS = [
+  { href: `${import.meta.env.BASE_URL}learn/`, label: "Learn", title: "The Marey course" },
+  { href: `${import.meta.env.BASE_URL}gallery/`, label: "Gallery", title: "Finished scenes with their source" },
+] as const;
+
 interface TopBarProps {
   onRun: () => void;
 }
@@ -381,6 +389,24 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
     </a>
   );
 
+  const siteMenuItems = (onChoose: () => void) =>
+    SITE_LINKS.map((link) => (
+      <a
+        key={link.href}
+        className={`${styles.menuItem} ${styles.menuLink}`}
+        role="menuitem"
+        tabIndex={-1}
+        href={link.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={onChoose}
+        aria-label={`${link.label} (opens in a new tab)`}
+      >
+        <span className={styles.menuIconSpace} aria-hidden="true" />
+        <span className={styles.menuLabel}>{link.label}</span>
+      </a>
+    ));
+
   const runButton = (
     <button className={styles.btnRun} onClick={onRun} aria-label="Run (Ctrl+Enter)" title="Run (Ctrl+Enter)">
       <RunIcon />
@@ -392,10 +418,27 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
     <header className={`${styles.topBar}${narrow ? ` ${styles.narrow}` : ""}`} data-topbar>
       <div className={styles.left}>
         <span className={styles.logo}>Marey</span>
-        <div className={styles.status} role="status" title={narrow ? statusText : undefined}>
+        <div className={styles.status} role="status" title={statusText}>
           <span className={`${styles.statusDot} ${dotMod}`} aria-hidden="true" />
           <span className={narrow ? styles.visuallyHidden : styles.statusLabel}>{statusText}</span>
         </div>
+        {!narrow && (
+          <nav className={styles.siteLinks} aria-label="Marey site">
+            {SITE_LINKS.map((link) => (
+              <a
+                key={link.href}
+                className={`${styles.btn} ${styles.menuLink}`}
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={link.title}
+                aria-label={`${link.label} (opens in a new tab)`}
+              >
+                {link.label}
+              </a>
+            ))}
+          </nav>
+        )}
       </div>
 
       {narrow ? (
@@ -467,6 +510,9 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
                 <div className={styles.menuGroupLabel} aria-hidden="true">Export</div>
                 {exportItems}
                 {licensesItem(() => moreMenu.setOpen(false))}
+
+                <div className={styles.menuSeparator} role="separator" />
+                {siteMenuItems(() => moreMenu.setOpen(false))}
 
                 <div className={styles.menuSeparator} role="separator" />
                 <button

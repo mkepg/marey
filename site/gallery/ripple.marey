@@ -1,0 +1,162 @@
+// Ripple. A drop lands in the middle of a field of 336 lights,
+// and three rings run out from it, each fainter than the last,
+// until the water is still and the next drop falls.
+//
+// Every light is written once, inside two nested generates.
+// Each one waits for the wave to reach it, then pulses three
+// times, two seconds apart, and every light has finished by
+// 8.4 s. The drop falls from 9 s and is gone into the water at
+// 9.9 s, just before the splash that opens the scene, so the
+// last frame matches the first.
+
+let cols = 24
+let rows = 14
+let gap  = 36
+
+// The centre falls between the four middle lights,
+// at column 11.5 and row 6.5.
+let midC = (cols - 1) / 2
+let midR = (rows - 1) / 2
+
+// Seconds of wait per square cell of distance. There is no
+// square root, so the wait grows with the squared distance:
+// lights at the same distance still light together, and the
+// wave starts fast and slows as it spreads.
+let lag  = 0.02
+
+// One colour for each 0.44 s of the wave's arrival, from the
+// splash outwards.
+let palette = [#ffe7ad, #ffc777, #ff9f68, #f4766c, #d95b88, #a454a5, #6c58b6, #4467c2]
+
+let water = #070b16
+let spray = #fff4d6
+
+scene {
+  size: (960, 540)
+  background: water
+  duration: 10
+
+  // ── Depth ── Six wide discs at the same faint alpha. Each
+  // one lets less of the water through, so the middle of the
+  // field, covered by all six, is the lightest. Their group
+  // brightens as each ring leaves the middle, at 0, 2 and 4 s.
+  group depth {
+    position: (480, 270)
+    alpha: 0.5
+    generate r in [440, 370, 300, 235, 170, 110] {
+      circle haze { position: (0, 0), radius: r, color: #2a2350, alpha: 0.09 }
+    }
+    sequence {
+      animate { property: alpha, to: 1, duration: 0.15, easing: easeOut }
+      animate { property: alpha, to: 0.5, duration: 1.85 }
+      animate { property: alpha, to: 0.85, duration: 0.15, easing: easeOut }
+      animate { property: alpha, to: 0.5, duration: 1.85 }
+      animate { property: alpha, to: 0.7, duration: 0.15, easing: easeOut }
+      animate { property: alpha, to: 0.5, duration: 1.85 }
+    }
+  }
+
+  // ── The lights ── The outer generate makes the rows and the
+  // inner one the lights in each row, so the light in column 3
+  // of row 5 is named dot_3_5.
+  generate row in 0 to rows - 1 {
+    generate col in 0 to cols - 1 {
+      let dx = col - midC
+      let dy = row - midR
+
+      // The squared distance is a whole number plus a half, from
+      // 0.5 in the middle to 174.5 in the corners, so `step` is a
+      // whole number from 0 to 87, and `ring` counts it in elevens:
+      // a whole number from 0 to 7, the light's colour.
+      let d2   = dx * dx + dy * dy
+      let step = (d2 - 0.5) / 2
+      let ring = (step - step % 11) / 11
+      let wait = d2 * lag
+
+      // A light is a bright core inside two faint halos. At rest
+      // the group is small and dim, and the halos almost vanish.
+      // At the first pulse it grows to four times its resting
+      // size and brightens, and the wide halos swell into their
+      // neighbours', so the passing ring reads as one band of light.
+      group dot {
+        position: (480 + dx * gap, 270 + dy * gap)
+        alpha: 0.35
+        scale: 0.6
+        circle bloom { position: (0, 0), radius: 18, color: palette[ring], alpha: 0.06 }
+        circle halo  { position: (0, 0), radius: 9, color: palette[ring], alpha: 0.16 }
+        circle core  { position: (0, 0), radius: 4, color: palette[ring] }
+
+        // Three pulses, two seconds apart, each smaller than the
+        // last. A pulse rises in 0.15 s and dies away in 0.75 s,
+        // and the 1.1 s delay before the next brings it round to
+        // two seconds. Only the first step waits for the wave.
+        sequence {
+          parallel {
+            animate { property: scale, to: 2.4, duration: 0.15, delay: wait, easing: easeOut }
+            animate { property: alpha, to: 1, duration: 0.15, delay: wait, easing: easeOut }
+          }
+          parallel {
+            animate { property: scale, to: 0.6, duration: 0.75, easing: easeOut }
+            animate { property: alpha, to: 0.35, duration: 0.75, easing: easeOut }
+          }
+          parallel {
+            animate { property: scale, to: 2, duration: 0.15, delay: 1.1, easing: easeOut }
+            animate { property: alpha, to: 0.75, duration: 0.15, delay: 1.1, easing: easeOut }
+          }
+          parallel {
+            animate { property: scale, to: 0.6, duration: 0.75, easing: easeOut }
+            animate { property: alpha, to: 0.35, duration: 0.75, easing: easeOut }
+          }
+          parallel {
+            animate { property: scale, to: 1.6, duration: 0.15, delay: 1.1, easing: easeOut }
+            animate { property: alpha, to: 0.5, duration: 0.15, delay: 1.1, easing: easeOut }
+          }
+          parallel {
+            animate { property: scale, to: 0.6, duration: 0.75, easing: easeOut }
+            animate { property: alpha, to: 0.35, duration: 0.75, easing: easeOut }
+          }
+        }
+      }
+    }
+  }
+
+  // ── The splash ── Three discs of light on one centre, flashed
+  // once as the drop lands and spread as they fade.
+  group splash {
+    position: (480, 270)
+    alpha: 0
+    circle outer { position: (0, 0), radius: 30, color: spray, alpha: 0.12 }
+    circle inner { position: (0, 0), radius: 15, color: spray, alpha: 0.3 }
+    circle point { position: (0, 0), radius: 6, color: spray, alpha: 0.9 }
+    sequence {
+      animate { property: alpha, to: 1, duration: 0.08, easing: easeOut }
+      parallel {
+        animate { property: alpha, to: 0, duration: 0.9, easing: easeOut }
+        animate { property: scale, to: 2.5, duration: 0.9, easing: easeOut }
+      }
+      animate { property: scale, to: 1, duration: 0.02 }
+    }
+  }
+
+  // ── The drop ── Seen from above, a falling drop moves away
+  // from you, so it shrinks as it brightens. It holds unseen
+  // for nine seconds, falls, and at 9.9 s is gone into the
+  // water. The last step puts it back at its starting size
+  // while it cannot be seen, so it is ready to fall again.
+  group drop {
+    position: (480, 270)
+    alpha: 0
+    scale: 3
+    circle glint { position: (0, 0), radius: 12, color: spray, alpha: 0.2 }
+    circle bead  { position: (0, 0), radius: 4, color: spray }
+    sequence {
+      animate { property: alpha, to: 0, duration: 9 }
+      parallel {
+        animate { property: alpha, to: 1, duration: 0.85, easing: easeIn }
+        animate { property: scale, to: 0.8, duration: 0.85, easing: easeIn }
+      }
+      animate { property: alpha, to: 0, duration: 0.05 }
+      animate { property: scale, to: 3, duration: 0.05 }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "learn": [
+    { "slug": "first-scene", "vocabulary": ["scene", "size", "background", "duration", "circle", "rectangle", "position", "radius", "color", "animate", "property", "to"] },
+    { "slug": "shapes", "vocabulary": ["polygon", "line", "text", "points", "thickness", "content", "fontSize", "alpha", "rotation", "origin", "layer", "fit", "contain", "cover", "fill", "none"] },
+    { "slug": "animate", "vocabulary": ["easing", "linear", "easeIn", "easeOut", "easeInOut", "scale"] },
+    { "slug": "timing", "vocabulary": ["loop", "yoyo", "delay", "true", "false"] },
+    { "slug": "groups", "vocabulary": ["group"] },
+    { "slug": "sequence", "vocabulary": ["sequence", "parallel"] },
+    { "slug": "colour", "vocabulary": [] },
+    { "slug": "values", "vocabulary": ["let", "if", "then", "else", "and", "or", "not", "sin", "cos", "length"] },
+    { "slug": "generate", "vocabulary": ["generate", "in"] },
+    { "slug": "templates", "vocabulary": ["template", "use"] },
+    { "slug": "physics", "vocabulary": ["physics", "gravity", "velocity", "bounce", "airDrag", "collideBounds", "indefinitely"] },
+    { "slug": "world", "vocabulary": ["world", "bounds", "lockPosition", "lockRotation", "spin", "left", "right", "top", "bottom"] },
+    { "slug": "handoff", "vocabulary": ["handoff"] },
+    { "slug": "ship-it", "vocabulary": [] }
+  ],
+  "guides": ["install", "export", "embed", "ci", "lottie", "errors"],
+  "reference": ["language", "properties", "determinism"],
+  "gallery": ["lighthouse", "dusk-hills", "ledges", "fireworks", "aurora", "hourglass", "orrery", "forest", "day-to-night", "plinko", "domino-run", "ripple", "title-card", "toy-box", "metronome", "postcard", "easing-race", "set-sail", "sunrise", "logo-reveal", "bar-chart-reveal", "physics-pile"]
+}

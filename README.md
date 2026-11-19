@@ -17,7 +17,7 @@ claimed, and how each claim is checked.
 [![CI](https://github.com/mkepg/marey/actions/workflows/ci.yml/badge.svg)](https://github.com/mkepg/marey/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**[Try it in the browser](https://marey.pages.dev/)**
+**[Try it in the browser](https://marey.pages.dev/)** · **[Learn Marey](https://marey.pages.dev/learn/)**
 
 <img src="docs/media/bars-reveal.png" width="400" alt="Seven light-blue bars of different heights grow upward from a common baseline, one after another, on a dark navy background.">
 
@@ -205,10 +205,11 @@ CLI's default file name for its format.
 The action installs `marey-lang` at the `version` in `package.json` at the
 ref you use. Pin the action to a full commit SHA. The repository's old `v0.x`
 tags date from before the npm versions and do not match them, so there is no
-release tag to pin. Until `marey-lang@0.7.0` is published, a ref whose version
-is not on npm fails at the install step with a message saying so. Pin a commit
-from after the publish, or set `package`. The starter workflow uses `@main`,
-and `examples/starter/README.md` says the same about it.
+release tag to pin. The action needs `marey-lang` 0.7.0 or later, because it
+runs `check --reporter github`. A ref whose version npm does not have fails at
+the install step with a message saying so; pin a commit whose version is on
+npm, or set `package`. The starter workflow uses `@main`, which installs the
+version `main` names.
 
 `marey-lang` needs Node 22. When the runner's Node is older, the action sets
 up Node 22 with `actions/setup-node`, and that Node stays on `PATH` for the
@@ -387,7 +388,8 @@ is not in CI: it needs a real browser and a person to read the captures.
 
 ## Status
 
-Version 0.6.0 (the player first ships in this version). The CLI has two
+Version 0.7.0: `check --reporter github`, the GitHub Action and fitted Lottie
+keyframes need it. The player first shipped in 0.6.0. The CLI has two
 commands, `check` and `export`, and every
 format above is implemented. Below 1.0, a minor release may change the
 language and the Scene IR, and work past the roadmap's finish line may. Breaking

@@ -186,7 +186,7 @@ is that they are equal. Stop the server afterwards. Read
 **The CLI, run twice.** The commands from section 1 printed, on
 2026-09-30:
 
-```
+```text
 wrote .visual-check/determinism/run1  240 frames @ 30 fps  800x600  3289789 B  sha256 79f3f2947d9c4407e665ef3917264ddf742f44d3a50d71c1e9b561e4bdbe7b5d  frames 26cca4e9
 wrote .visual-check/determinism/run2  240 frames @ 30 fps  800x600  3289789 B  sha256 79f3f2947d9c4407e665ef3917264ddf742f44d3a50d71c1e9b561e4bdbe7b5d  frames 26cca4e9
 ```

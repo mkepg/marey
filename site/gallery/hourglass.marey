@@ -1,0 +1,434 @@
+// Hourglass. A wooden hourglass on a desk by candlelight. 150 grains
+// of sand pour from the top bulb through the neck and pile in the
+// bottom one; then the hourglass is lifted, turned over and set down,
+// and the sand pours again. It runs twice in the twelve seconds.
+//
+// The bulbs are 76 locked polygons, each a thin four-sided strip
+// along the glass: a collider is the convex hull of its points, so a
+// curved wall is built from many short straight ones. The colliders
+// are invisible; the glass you see is drawn with lines in a group
+// that turns. The colliders stay put while it turns, because the
+// hourglass looks the same upside down.
+//
+// A grain cannot ride in a group that turns, so for the turn the
+// grains fade out and a drawn copy of the sand turns with the glass.
+// Meanwhile the grains move, unseen, to their places in the top bulb.
+//
+// The last frame matches the first: the glass is back at 0 degrees,
+// the grains are packed against the top cap, and every looping motion
+// has a period that divides 12 s.
+
+let cx = 480
+let cy = 262                // the middle of the neck, and the centre of the turn
+
+// The glass's half-width every 10 px from the neck (index 0) to the
+// cap (index 19): 12 + 44 * sin(140 * d / 190) at a distance d,
+// rounded. The numbers are written out rather than computed: sin can
+// differ in its last digit from one JavaScript engine to another, and
+// the colliders should not.
+let prof = [12, 17.6, 23.2, 28.6, 33.6, 38.4, 42.7, 46.5, 49.7, 52.3,
+            54.2, 55.5, 56, 55.8, 54.8, 53.2, 50.9, 47.9, 44.4, 40.3]
+let T    = 12               // a collider's thickness, outward from the glass
+
+// One side of the glass, cap to cap, in the turning group's space.
+let edge = [(prof[19], -190), (prof[18], -180), (prof[17], -170), (prof[16], -160),
+            (prof[15], -150), (prof[14], -140), (prof[13], -130), (prof[12], -120),
+            (prof[11], -110), (prof[10], -100), (prof[9], -90), (prof[8], -80),
+            (prof[7], -70), (prof[6], -60), (prof[5], -50), (prof[4], -40),
+            (prof[3], -30), (prof[2], -20), (prof[1], -10), (prof[0], 0),
+            (prof[1], 10), (prof[2], 20), (prof[3], 30), (prof[4], 40),
+            (prof[5], 50), (prof[6], 60), (prof[7], 70), (prof[8], 80),
+            (prof[9], 90), (prof[10], 100), (prof[11], 110), (prof[12], 120),
+            (prof[13], 130), (prof[14], 140), (prof[15], 150), (prof[16], 160),
+            (prof[17], 170), (prof[18], 180), (prof[19], 190)]
+
+// The grains start packed against the top cap in a honeycomb whose
+// rows alternate odd and even counts. Its sites fall into three
+// interleaved sets, no two neighbours in the same set, and each set
+// has its own size, so the largest grain only ever sits beside the
+// two smaller ones: 4.4 + 3.6 is under the 8.1 px spacing.
+let rows  = [9, 10, 11, 10, 11, 12, 11, 12, 13, 12, 13, 12, 11, 2, 1]
+let a     = 8.1
+let rise  = 7.015           // 8.1 * sin(60), the honeycomb's row spacing
+let sizes = [4.4, 3.1, 3.6]
+let sand  = [#e9c27a, #d4a557, #f2d79c, #ddb267]
+let heap  = #ddb268         // the drawn sand: a shade darker than the grains' average
+
+let pour = 4                // each pour, and the settling after it
+let fade = 0.2
+
+// The sand as drawn: the heap it settles into at the bottom, and the
+// packed sand it becomes against the top cap, measured from where the
+// grains lie. Each is written about the centre of its own bounding
+// box, which sits heapAt below and packedAt above the neck. The heap
+// follows the glass's own profile; the packed sand is drawn as it
+// lies at the bottom end of the glass, and turned half a turn to sit
+// at the top.
+let heapAt   = 151.5
+let packedAt = 136.5
+let heapPts = [(-55.9, -23.5), (-44, -27.5), (-28, -33.5), (-12, -37.5), (0, -38.5),
+               (12, -37.5), (28, -33.5), (44, -27.5), (55.9, -23.5), (prof[14], -11.5),
+               (prof[15], -1.5), (prof[16], 8.5), (prof[17], 18.5), (prof[18], 28.5),
+               (prof[19], 38.5), (-prof[19], 38.5), (-prof[18], 28.5), (-prof[17], 18.5),
+               (-prof[16], 8.5), (-prof[15], -1.5), (-prof[14], -11.5)]
+let packedPts = [(-38, 53.5), (-41.5, 43.5), (-45, 33.5), (-47.5, 23.5), (-49.5, 13.5),
+                 (-51, 3.5), (-52.5, -6.5), (-52.5, -16.5), (-51, -26.5), (-47, -36.5),
+                 (-45, -39.5), (-9, -42.5), (-4.4, -49.5), (0, -53.5), (4.4, -49.5),
+                 (9, -42.5), (45, -39.5), (47, -36.5), (51, -26.5), (52.5, -16.5),
+                 (52.5, -6.5), (51, 3.5), (49.5, 13.5), (47.5, 23.5), (45, 33.5),
+                 (41.5, 43.5), (38, 53.5)]
+
+let wood  = #8a552c
+let woodD = #5a3218
+let woodL = #c08550
+let brass = #b58b45
+let glass = #dcecff
+let flame = #ffc35c
+
+// A turned post of the frame, the same from either end.
+template Post() {
+  rectangle rod { position: (0, 0), size: (7, 380), color: wood }
+  rectangle rodL { position: (-1, 0), size: (2, 380), color: woodL, alpha: 0.55 }
+  generate y in [-176, -118, -60, 0, 60, 118, 176] {
+    circle bead { position: (0, y), radius: if y == 0 then 8 else 6, color: wood }
+    circle beadL { position: (-1, y - 1), radius: if y == 0 then 3.5 else 2.5, color: woodL, alpha: 0.7 }
+  }
+}
+
+// A plate of the frame, its bun feet on the outside (b = 1 at the bottom).
+template Plate(b) {
+  generate s in [-1, 1] {
+    circle foot { position: (s * 76, b * 15), radius: 9, scale: (1.5, 0.75), color: woodD }
+  }
+  rectangle slab { position: (0, 0), size: (196, 18), color: wood }
+  circle endL { position: (-98, 0), radius: 9, color: wood }
+  circle endR { position: (98, 0), radius: 9, color: wood }
+  rectangle groove { position: (0, b * 3), size: (204, 2), color: woodD, alpha: 0.8 }
+  rectangle lip { position: (0, b * -4), size: (180, 2), color: woodL, alpha: 0.6 }
+  rectangle collar { position: (0, b * -11), size: (92, 5), color: brass }
+}
+
+// One side of the glass: a pale body, a bright outer edge and a faint
+// inner one. The left side is this one turned half a turn about the neck.
+template Pane() {
+  line body { position: (35.5, 0), points: edge, thickness: 4, color: glass, alpha: 0.16 }
+  line outer { position: (37, 0), points: edge, thickness: 1.5, color: glass, alpha: 0.6 }
+  line inner { position: (34, 0), points: edge, thickness: 1, color: #ffffff, alpha: 0.22 }
+}
+
+// Grains of a darker and a lighter tone, scattered over a drawn shape.
+template Specks() {
+  generate x, i in [-42, -26, -8, 12, 30, 44, -36, -16, 4, 22, 38, -24] {
+    let y = [12, -4, 18, -12, 4, 20, 30, 34, -26, 26, -8, -16][i]
+    circle speck { position: (x, y), radius: [1.6, 1.3, 1.9][i % 3],
+                   color: [#b58640, #f5dea8][i % 2], alpha: 0.7 }
+  }
+}
+
+// A soft light: twelve discs of one colour, each a little smaller and
+// faint on its own, brightest where they all overlap. It breathes on
+// a period of twice `beat`.
+template Glow(r, al, beat) {
+  group pulse {
+    animate { property: alpha, to: 0.7, duration: beat, loop: true, yoyo: true }
+    generate f in [1, 0.88, 0.77, 0.67, 0.58, 0.5, 0.42, 0.35, 0.28, 0.22, 0.16, 0.1] {
+      circle halo { position: (0, 0), radius: r * f, color: flame, alpha: al }
+    }
+  }
+}
+
+scene {
+  size: (960, 540)
+  duration: 12
+  background: #120c09
+  world { bounds: [] }
+
+  // ── The study ──
+  generate c, i in [#110b08, #140d09, #170f0b, #1a110c, #1d130d, #20150e, #23170f, #261a11] {
+    rectangle wall { position: (480, 30 + i * 60), size: (960, 60), color: c }
+  }
+  generate x in [60, 240, 420, 600, 780, 900] {
+    rectangle seam { position: (x, 240), size: (2, 480), color: #000000, alpha: 0.2 }
+  }
+  rectangle rail { position: (480, 316), size: (960, 6), color: #000000, alpha: 0.18 }
+
+  // A shelf in the dark at the top left.
+  rectangle shelf { position: (170, 172), size: (300, 8), color: #2e1a10 }
+  rectangle shelfLip { position: (170, 169), size: (300, 2), color: #4a2c19 }
+  generate w, i in [14, 18, 12, 16, 20, 13, 17, 15, 19] {
+    let h = [62, 74, 58, 70, 78, 60, 66, 72, 64][i]
+    let x = 52 + i * 17
+    rectangle spineUp { position: (x, 168 - h / 2), size: (w, h),
+                        color: [#3a1c1c, #24332a, #3d3220, #2a2433, #43261a][i % 5] }
+    rectangle spineBand { position: (x, 168 - h + 10), size: (w, 3), color: brass, alpha: 0.35 }
+  }
+  polygon leaning { position: (214, 137), rotation: 18, color: #33251a, points: [(-8, -34), (8, -34), (8, 34), (-8, 34)] }
+  use Glow(470, 0.015, 3) roomGlow { position: (760, 350) }
+
+  // The desk.
+  rectangle desk { position: (480, 512), size: (960, 60), color: #3a2114 }
+  rectangle deskTop { position: (480, 485), size: (960, 10), color: #6e4126 }
+  rectangle deskEdge { position: (480, 490), size: (960, 2), color: #94603a, alpha: 0.6 }
+  generate y, i in [501, 512, 522, 532] {
+    line woodGrain {
+      position: (480, y), points: [(-480, 0), (-260, 2), (-40, -1), (220, 2), (480, 0)]
+      thickness: 1, color: #24130b, alpha: 0.6
+    }
+  }
+  use Glow(150, 0.02, 3) deskGlow { position: (760, 486), scale: (1.6, 0.18) }
+
+  // Books, an inkwell and a quill on the left. A book is [x, y,
+  // width, height], with its pages and two bands on the spine.
+  generate p, i in [[170, 469, 172, 22], [178, 448, 150, 20], [166, 429, 134, 18]] {
+    rectangle book  { position: (p[0], p[1]), size: (p[2], p[3]), color: [#5b2a2a, #2f4a3c, #6b5530][i] }
+    rectangle pages { position: (p[0] + 6, p[1]), size: (p[2] - 12, 3), color: #e6dcc2, alpha: 0.3 }
+    rectangle band  { position: (p[0] - p[2] / 2 + 6, p[1]), size: (5, p[3]), color: brass, alpha: 0.75 }
+    rectangle band2 { position: (p[0] - p[2] / 2 + 16, p[1]), size: (3, p[3]), color: brass, alpha: 0.5 }
+  }
+  polygon inkwell { position: (300, 466), color: #1c2b33,
+                    points: [(-16, 14), (16, 14), (13, -8), (6, -14), (-6, -14), (-13, -8)] }
+  rectangle inkNeck { position: (300, 449), size: (12, 6), color: #26394a }
+  line inkShine { position: (292, 466), points: [(0, -8), (-2, 6)], thickness: 2, color: #ffffff, alpha: 0.25 }
+  line quill { position: (318, 405), points: [(-17, 42), (0, 0), (16, -42)], thickness: 1.5, color: #d9cfb8 }
+  polygon feather { position: (330, 384), color: #e8dfca, alpha: 0.9, rotation: 21,
+                    points: [(0, -34), (7, -18), (8, 4), (3, 24), (0, 30), (-4, 12), (-5, -12)] }
+
+  // The candle on the right, its flame flickering on periods of 0.5
+  // and 1.5 s.
+  circle dish { position: (760, 479), radius: 36, scale: (1, 0.24), color: brass }
+  circle dishTop { position: (760, 476), radius: 28, scale: (1, 0.2), color: #d0a95c }
+  rectangle candle { position: (760, 430), size: (30, 92), color: #efe3c6 }
+  rectangle candleS { position: (771, 430), size: (8, 92), color: #d4c4a0, alpha: 0.8 }
+  circle drip { position: (750, 389), radius: 4.5, color: #f8efd8 }
+  rectangle drip2 { position: (750, 396), size: (5, 14), color: #f8efd8 }
+  rectangle wick { position: (760, 379), size: (2, 9), color: #2a1a10 }
+  use Glow(110, 0.035, 0.75) flameGlow { position: (760, 358) }
+  group flicker {
+    position: (760, 380)
+    rotation: -4
+    animate { property: scale, to: (0.88, 1.14), duration: 0.25, loop: true, yoyo: true }
+    animate { property: rotation, to: 4, duration: 0.75, loop: true, yoyo: true }
+    polygon outerFlame { position: (0, -2), origin: (0.5, 1), color: flame,
+                         points: [(0, -30), (6, -14), (7, -4), (0, 2), (-7, -4), (-6, -14)] }
+    polygon core { position: (0, -2), origin: (0.5, 1), color: #fff4cf,
+                   points: [(0, -16), (3.5, -6), (0, 0), (-3.5, -6)] }
+  }
+
+  // The hourglass's shadow, which pales while it is lifted.
+  circle shadow {
+    position: (cx, 486), radius: 118, scale: (1, 0.07), color: #000000, alpha: 0.55
+    sequence {
+      animate { property: alpha, to: 0.55, duration: 4.2 }
+      animate { property: alpha, to: 0.15, duration: 0.3, easing: easeOut }
+      animate { property: alpha, to: 0.15, duration: 0.95 }
+      animate { property: alpha, to: 0.55, duration: 0.3, easing: easeIn }
+      animate { property: alpha, to: 0.55, duration: 4.45 }
+      animate { property: alpha, to: 0.15, duration: 0.3, easing: easeOut }
+      animate { property: alpha, to: 0.15, duration: 0.95 }
+      animate { property: alpha, to: 0.55, duration: 0.3, easing: easeIn }
+    }
+  }
+
+  // ── The colliders ── Each strip runs 10 px along the glass and
+  // reaches T px outward from it, written about its own centre. The
+  // upper bulb's strips shake, 1.5 px outward and 1.5 px up and back
+  // ten times a second: a locked body that an animation moves wakes
+  // whatever touches it, so no grain beside the glass falls asleep
+  // there and is left hanging when the sand below it drains away. The
+  // lower bulb's strips have nothing to shake by, so they hold still.
+  generate b in [-1, 1] {
+    generate s in [-1, 1] {
+      generate k in 0 to 18 {
+        let x1 = s * prof[k]
+        let x2 = s * prof[k + 1]
+        let mx = (x1 + x2) / 2 + s * T / 2
+        let my = b * (k + 0.5) * 10
+        let shake = if b < 0 then 1.5 else 0
+        polygon wall {
+          position: (cx + mx, cy + my), color: glass, alpha: 0
+          points: [(x1 - mx, b * k * 10 - my), (x2 - mx, b * (k + 1) * 10 - my),
+                   (x2 + s * T - mx, b * (k + 1) * 10 - my), (x1 + s * T - mx, b * k * 10 - my)]
+          physics { lockPosition: true, bounce: 0.1 }
+          animate { property: position, to: (cx + mx + s * shake, cy + my - shake), duration: 0.05,
+                    easing: linear, loop: true, yoyo: true }
+        }
+      }
+    }
+    rectangle cap { position: (cx, cy + b * 196), size: (180, 12), color: wood, alpha: 0,
+                    physics { lockPosition: true, bounce: 0.1 } }
+  }
+
+  // ── Sand behind the grains ── The heap fades in under the grains
+  // as the last of them settle, so the pile reads as one mass when
+  // they fade out. The packed shape is under the grains when they are
+  // back at the top; they fade in over it in 0.1 s, and it fades out
+  // behind them in the next 0.1 s, before they drop.
+  group underlay {
+    position: (cx, cy + heapAt), alpha: 0
+    polygon mass { position: (0, 0), color: heap, points: heapPts }
+    use Specks() specks { scale: (1, 0.8) }
+    sequence {
+      animate { property: alpha, to: 0, duration: 3.6 }
+      animate { property: alpha, to: 1, duration: 0.4 }
+      animate { property: alpha, to: 1, duration: 0.19 }
+      animate { property: alpha, to: 0, duration: 0.01 }
+      animate { property: alpha, to: 0, duration: 5.4 }
+      animate { property: alpha, to: 1, duration: 0.4 }
+      animate { property: alpha, to: 1, duration: 0.19 }
+      animate { property: alpha, to: 0, duration: 0.01 }
+    }
+  }
+  group topSand {
+    position: (cx, cy - packedAt), rotation: 180, alpha: 0
+    polygon mass { position: (0, 0), color: heap, points: packedPts }
+    use Specks() specks { scale: (1, 1.2) }
+    sequence {
+      animate { property: alpha, to: 0, duration: 5.79 }
+      animate { property: alpha, to: 1, duration: 0.01 }
+      animate { property: alpha, to: 1, duration: 0.1 }
+      animate { property: alpha, to: 0, duration: 0.1 }
+      animate { property: alpha, to: 0, duration: 5.77 }
+      animate { property: alpha, to: 1, duration: 0.01 }
+      animate { property: alpha, to: 1, duration: 0.1 }
+      animate { property: alpha, to: 0, duration: 0.1 }
+      animate { property: alpha, to: 0, duration: 1 }
+    }
+  }
+
+  // ── The grains ── Each runs one sequence: pour, fade out, move
+  // unseen to the mirror of its place in the top bulb (so the second
+  // pour differs from the first), fade in, pour again, then move home.
+  // Every grain starts its steps together, so all of them are held by
+  // an animation while any one passes through the glass. The last
+  // hold runs past the end of the scene.
+  generate n, j in rows {
+    generate c in 0 to n - 1 {
+      let m = c - (n - 1) / 2 - j / 2
+      let x = cx + (c - (n - 1) / 2) * a
+      let y = cy - 185.4 + j * rise
+      circle grain {
+        position: (x, y), radius: sizes[(m - j + 300) % 3], color: sand[(c * 3 + j) % 4]
+        sequence {
+          physics { bounce: 0.1, duration: pour }
+          animate { property: alpha, to: 0, duration: fade }
+          parallel {
+            animate { property: position, to: (2 * cx - x, y), duration: 1.6 }
+            animate { property: rotation, to: 0, duration: 1.6 }
+          }
+          parallel {
+            animate { property: alpha, to: 1, duration: 0.1 }
+            animate { property: position, to: (2 * cx - x, y), duration: fade }
+          }
+          physics { bounce: 0.1, duration: pour }
+          animate { property: alpha, to: 0, duration: fade }
+          parallel {
+            animate { property: position, to: (x, y), duration: 1.58 }
+            animate { property: rotation, to: 0, duration: 1.58 }
+          }
+          parallel {
+            animate { property: alpha, to: 1, duration: 0.1 }
+            animate { property: position, to: (x, y), duration: 0.4 }
+          }
+        }
+      }
+    }
+  }
+
+  // ── The hourglass ── Lifted 40 px, turned half a turn about the
+  // neck, and set down: from 4.2 s and again from 10.2 s.
+  group lift {
+    position: (cx, cy)
+    sequence {
+      animate { property: position, to: (cx, cy), duration: 4.2 }
+      animate { property: position, to: (cx, cy - 40), duration: 0.3, easing: easeOut }
+      animate { property: position, to: (cx, cy - 40), duration: 0.95 }
+      animate { property: position, to: (cx, cy), duration: 0.3, easing: easeIn }
+      animate { property: position, to: (cx, cy), duration: 4.45 }
+      animate { property: position, to: (cx, cy - 40), duration: 0.3, easing: easeOut }
+      animate { property: position, to: (cx, cy - 40), duration: 0.95 }
+      animate { property: position, to: (cx, cy), duration: 0.3, easing: easeIn }
+    }
+    group turn {
+      sequence {
+        animate { property: rotation, to: 0, duration: 4.45 }
+        animate { property: rotation, to: 180, duration: 1 }
+        animate { property: rotation, to: 180, duration: 5 }
+        animate { property: rotation, to: 0, duration: 1 }
+      }
+
+      // The sand while it turns: the heap takes over from the grains.
+      // Near the middle of the turn, while the glass moves fastest, the
+      // packed shape the grains will fill replaces it, at first squashed
+      // to the heap's depth, (1, 0.72), and then stretched to its own
+      // over 0.4 s as if the sand loosened. Its position moves with the
+      // scale, so its end at the cap stays put. One pair for each end.
+      generate b, i in [1, -1] {
+        let at = i * 6
+        group heapShape {
+          position: (0, b * heapAt), rotation: 90 - b * 90, alpha: 0
+          polygon mass { position: (0, 0), color: heap, points: heapPts }
+          use Specks() specks { scale: (1, 0.8) }
+          sequence {
+            animate { property: alpha, to: 0, duration: 4.19 + at }
+            animate { property: alpha, to: 1, duration: 0.01 }
+            animate { property: alpha, to: 1, duration: 0.66 }
+            animate { property: alpha, to: 0, duration: 0.1 }
+          }
+        }
+        group packed {
+          position: (0, b * heapAt), rotation: 90 - b * 90, scale: (1, 0.72), alpha: 0
+          polygon mass { position: (0, 0), color: heap, points: packedPts }
+          use Specks() specks { scale: (1, 1.2) }
+          sequence {
+            animate { property: alpha, to: 0, duration: 4.85 + at }
+            animate { property: alpha, to: 1, duration: 0.01 }
+            parallel {
+              animate { property: scale, to: (1, 1), duration: 0.4 }
+              animate { property: position, to: (0, b * packedAt), duration: 0.4 }
+            }
+            animate { property: alpha, to: 1, duration: 0.53 - i * 0.02 }
+            animate { property: alpha, to: 0, duration: 0.01 }
+          }
+        }
+      }
+
+      use Pane() right { }
+      use Pane() left { rotation: 180 }
+      generate s in [-1, 1] {
+        use Post() post { position: (s * 84, 0) }
+      }
+      use Plate(-1) top { position: (0, -199) }
+      use Plate(1) bottom { position: (0, 199) }
+    }
+  }
+
+  // Candlelight on the glass, from the right. It stays with the light,
+  // not the glass, so it fades out while the hourglass turns.
+  group shine {
+    sequence {
+      animate { property: alpha, to: 1, duration: 4.2 }
+      animate { property: alpha, to: 0, duration: 0.25 }
+      animate { property: alpha, to: 0, duration: 1 }
+      animate { property: alpha, to: 1, duration: 0.3 }
+      animate { property: alpha, to: 1, duration: 4.45 }
+      animate { property: alpha, to: 0, duration: 0.25 }
+      animate { property: alpha, to: 0, duration: 1 }
+      animate { property: alpha, to: 1, duration: 0.3 }
+    }
+    generate b in [-1, 1] {
+      line glint {
+        position: (cx + 40, cy + b * 112)
+        points: [(-7, -48), (0, -24), (2, 0), (0, 24), (-7, 48)]
+        thickness: 3, color: #fff6e0, alpha: 0.4
+      }
+      line glintL {
+        position: (cx - 44, cy + b * 118)
+        points: [(3, -36), (0, 0), (3, 36)]
+        thickness: 2, color: #ffffff, alpha: 0.1
+      }
+    }
+    generate s in [-1, 1] {
+      rectangle postShine { position: (cx + s * 84 + 2, cy), size: (1.5, 370), color: #ffd59a, alpha: 0.35 }
+    }
+  }
+}
