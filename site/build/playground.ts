@@ -109,7 +109,8 @@ function shareUrl(compressed: string): string {
  * Links already worked out, by source. A gallery scene's link is asked for by
  * the entry's check, by its page and by its lesson's showcase, and
  * compressing a long scene is the slow part, so each source is compressed
- * once per build.
+ * once for the life of the process: a dev server that rebuilds the site on
+ * every request reuses the links of sources that have not changed.
  */
 const links = new Map<string, PlaygroundLink>();
 

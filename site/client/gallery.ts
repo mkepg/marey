@@ -10,6 +10,7 @@
  * page holds at most 12 of them however long the grid grows.
  */
 import "../../src/player";
+import { trackPlaying } from "./controls";
 import { CardPlayback, countLabel, matchesTags } from "./gallery-cards";
 import { sharedPool } from "./pool";
 
@@ -23,6 +24,7 @@ function makePlayer(address: string, options: { controls: boolean; autoplay: boo
   player.controls = options.controls;
   player.autoplay = options.autoplay;
   player.loop = true;
+  if (options.controls) trackPlaying(player);
   player.addEventListener("ready", () => {
     player.classList.remove("is-failed");
     player.classList.add("is-ready");

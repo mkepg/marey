@@ -80,8 +80,8 @@ leaves the lower strips still: with a shake of 0, `to` is where the strip
 already is. The strips themselves are not drawn, and the grains they push
 barely move more than they would anyway. Measured in Chromium from 1 to 1.4
 seconds, a grain above the neck strays from its own 13-tick moving average by
-at most 0.59 px in 95 percent of ticks with the shake, and 0.58 px without
-it.
+at most 0.59 px in 95 percent of the samples, one per grain per tick, with
+the shake, and 0.58 px without it.
 
 With the shake, in Chromium, the top bulb empties in both pours: the first
 grains reach the neck within half a second, the top bulb is empty by 3

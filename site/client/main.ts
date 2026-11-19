@@ -1,4 +1,5 @@
 import "./site.css";
+import { trackPlaying } from "./controls";
 import { initNav } from "./nav";
 import { initFinishButtons, markFinished } from "./progress";
 import { initSearch } from "./search";
@@ -21,8 +22,10 @@ if (document.querySelector("figure.sample")) {
 }
 
 // A player written into the page itself, as a lesson's embedded scene is, needs only the element.
-if (document.querySelector(".lesson-embed > marey-player")) {
-  void import("../../src/player");
+const embeds = document.querySelectorAll<HTMLElementTagNameMap["marey-player"]>(".lesson-embed > marey-player");
+if (embeds.length > 0) {
+  // Once the module has run, the elements are upgraded and have `paused`.
+  void import("../../src/player").then(() => embeds.forEach((player) => trackPlaying(player)));
 }
 
 // The gallery's cards and scene pages, and the course's cards and hero, need the player; other pages do not load it.

@@ -869,6 +869,62 @@ retries it for up to 30 s, so scroll a player into view before asking. And
 `ready` and `error` do not bubble and fire once per load, so the pages attach
 their listeners in a classic script before the module defines the element.
 
+## Checking the documentation site
+
+`site-check.mjs` measures the documentation site (Phase 9C spec §6.4,
+`docs/architecture/site.md`) against a production build, not the dev server:
+
+```bash
+npm run build
+npx vite preview --port 5199 --strictPort    # leave this running
+node tools/visual-check/site-check.mjs --out .visual-check/site
+```
+
+It reads the page list from the build's `sitemap.xml`, adds `/404.html`, and
+refuses to run against a server that is not serving a production build. Each
+requirement is a named check:
+
+| Check | What it requires |
+|---|---|
+| `pages` | Every page loads with a 200 and no console error, page error, failed request or error status. The page is scrolled top to bottom with every solution opened and every Run pressed, and every player slot (a sample, card, stage, hero or lesson embed) must fire `ready`; slots the pool kept waiting are then scrolled to one by one. Any `error` event fails. No more than 12 pooled players may be connected at once. |
+| `editor` | On `/learn/animate/`, an edit that compiles gives the player a new `src` and reaches `ready`; an unknown property is listed as `line 2, col …` and dims the player; Reset restores the text and plays it again. |
+| `search` | `/` opens search, Escape closes it, Ctrl+K reopens it empty, a query lists grouped results with the first selected, the arrow keys move the selection, and Enter opens the first result. |
+| `mobile` | No page scrolls sideways at 390 px, and no lesson or guide at 360 px. |
+| `budget` | The JavaScript a page loads before any player mounts, gzipped, is under 90 kB. The renderer chunk is held unanswered, so nothing past it loads. |
+| `text` | A lesson sample with `text` reaches `ready`, and the scene font comes from `/assets/fonts/JetBrainsMono-Regular.ttf` with a 200 (spec C21). |
+| `pool` | `/gallery/` at 1280x2400, scrolled top to bottom and jumped up and down: never more than 12 players in the page (spec C20). |
+| `controls` | A playing player's bar is hidden with the pointer away and nothing focused, and shows on hover, with focus in it, while paused, and on a touch screen (`docs/architecture/site.md`). |
+| `nojs` | With JavaScript off, `/learn/`, a lesson and `/gallery/` render with their heading and navigation, and no search button. |
+| `shots` | A screenshot of every gallery scene and every lesson showcase at its poster time, with the control bar removed. |
+
+| Flag | Meaning |
+|---|---|
+| `--out <dir>` | Where `report.json` and the screenshots go (default `.visual-check/site`) |
+| `--url <origin>` | The preview's origin (default `http://localhost:5199`) |
+| `--only <list>` | A comma-separated subset of the checks above |
+| `--pages <list>` | Limit `pages` and `mobile` to these paths. In Git Bash, set `MSYS_NO_PATHCONV=1`, or the paths are rewritten to Windows paths |
+| `--gpu` | Launch Chromium without forcing SwiftShader, to see what a GPU-backed context logs (use with `--headed` on a machine with a GPU) |
+| `--headed` | Show the browser window |
+
+`report.json` holds every check's measurements: per page, the slots by kind,
+how many reached `ready`, the most players connected, every problem and every
+console warning; the JavaScript per page by file; the 390 and 360 px widths;
+the gallery's connected-player samples; and each screenshot's requested and
+shown time. Exit code is non-zero if any requirement failed.
+
+Look at every `gallery-*.png` and `showcase-*.png`: the check proves each
+scene reached `ready` and was seeked to its poster time, not that the frame
+is the one its brief describes. A screenshot is taken after an exact seek
+through `currentTime`, preceded by one throwaway seek, because the first
+capture after `ready` can come before the canvas has painted. `check.mjs`'s
+`--at` captures are timed from page load rather than seeked, so they land a
+little early and the first can be blank; use this check, or a seek of your
+own, for frames that must be exact.
+
+Headless Chromium under SwiftShader logs `GPU stall due to ReadPixels`
+performance warnings on pages with several players. They are warnings, not
+errors, and are counted in `report.json` apart from errors.
+
 ## Forcing a device-limit refusal
 
 `videoContract.ts`'s `deviceLimitDiagnostic` refuses a coded size larger than

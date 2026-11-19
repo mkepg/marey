@@ -12,6 +12,7 @@
 import "../../src/player";
 import { compileSource } from "../../src/compiler/compileSource";
 import { buildShareURLFor } from "../../src/lib/share";
+import { syncPlaying, trackPlaying } from "./controls";
 import { createEditor, errorLocations, type Editor } from "./editor";
 import { wireCopy } from "./nav";
 import { sharedPool } from "./pool";
@@ -99,6 +100,7 @@ function requestPlayer(
     player.controls = true;
     player.loop = true;
     player.autoplay = options.autoplay;
+    trackPlaying(player);
     player.addEventListener("ready", () => {
       player.classList.remove("is-failed");
       player.classList.add("is-ready");
@@ -278,7 +280,10 @@ function enhanceRun(figure: HTMLElement): void {
       run.textContent = "Restart";
       return;
     }
-    currentPlayer(stage)?.restart();
+    const player = currentPlayer(stage);
+    if (!player) return;
+    player.restart();
+    syncPlaying(player);
   });
   const bar = toolbar(run, copyButton(() => source, selectContents(pre)), playgroundLink(figure));
   pre.after(bar);

@@ -6,4 +6,9 @@ summary: Marey is a small language for 2D motion. A scene is text that names sha
 hero: lighthouse
 ---
 
-Each lesson introduces a few words of the language, and every example runs beside its source, where you can edit it. A lesson opens with a finished scene that uses only what the course has covered up to that point; by the end of the lesson you can read every line of it. Take the lessons in order, because each one builds on the ones before it.
+Each lesson introduces a few words of the language, and every example runs
+beside its source, where you can edit it. A lesson opens with a finished scene
+that uses only what the course has covered up to that point; by the end of the
+lesson you can read every line of it. Take the lessons in order, because each
+one builds on the ones before it. The last one takes a scene out of the
+browser, and the guides go further from there.

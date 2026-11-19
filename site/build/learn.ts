@@ -198,7 +198,7 @@ const COURSE: Heading = { depth: 2, text: "The course", id: "the-course" };
 const BEYOND: Heading = { depth: 2, text: "Beyond the course", id: "beyond-the-course" };
 
 const SECTION_CARDS = [
-  { href: "/guides/", title: "Guides", text: "Install the command line tool, export video and Lottie, embed the player and check scenes in CI." },
+  { href: "/guides/", title: "Guides", text: "Install and run the command line tool, export every format, embed the player, check scenes in CI, edit an export in a Lottie editor, and read the compiler's errors." },
   { href: "/gallery/", title: "Gallery", text: "Finished scenes to study, each with notes on how it is made and its full source." },
   { href: "/reference/", title: "Reference", text: "The formal language reference, every property of every object, and how determinism works." },
 ] as const;

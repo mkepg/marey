@@ -1472,6 +1472,22 @@ figure.lesson-embed > marey-player {
   width: 100%;
 }
 
+/*
+ * The player's control bar sits over the bottom of the scene. While a scene
+ * plays (controls.ts sets is-playing), the bar fades out unless the pointer
+ * is on the player or something in it has the keyboard focus. Screens that
+ * cannot hover keep it, and so does a paused scene.
+ */
+marey-player::part(controls) {
+  transition: opacity var(--site-ease);
+}
+
+@media (hover: hover) {
+  marey-player.is-playing:not(:hover):not(:focus-within)::part(controls) {
+    opacity: 0;
+  }
+}
+
 /* A lesson's showcase: the caption sits above the player it describes. */
 figure.lesson-embed > .showcase-caption,
 figure.sample > .showcase-caption {
@@ -2710,7 +2726,8 @@ details.solution[open] > figure.sample {
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
-  *::after {
+  *::after,
+  marey-player::part(controls) {
     transition: none !important;
     animation: none !important;
     scroll-behavior: auto !important;

@@ -15,7 +15,7 @@
     { "slug": "handoff", "vocabulary": ["handoff"] },
     { "slug": "ship-it", "vocabulary": [] }
   ],
-  "guides": [],
+  "guides": ["install", "export", "embed", "ci", "lottie", "errors"],
   "reference": ["language", "properties", "determinism"],
   "gallery": ["lighthouse", "dusk-hills", "ledges", "fireworks", "aurora", "hourglass", "orrery", "forest", "day-to-night", "plinko", "domino-run", "ripple", "title-card", "toy-box", "metronome", "postcard", "easing-race", "set-sail", "sunrise", "logo-reveal", "bar-chart-reveal", "physics-pile"]
 }

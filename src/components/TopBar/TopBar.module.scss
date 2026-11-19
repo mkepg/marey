@@ -77,6 +77,22 @@
   white-space: nowrap;
 }
 
+// Learn and Gallery: links to the documentation site, set apart from the
+// compile status by a rule.
+.siteLinks {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+
+  &::before {
+    content: "";
+    width: 1px;
+    height: 18px;
+    margin-right: 6px;
+    background: var(--border);
+  }
+}
+
 // Hidden from sight, still read out: the phone bar shows only the dot.
 .visuallyHidden {
   position: absolute;
@@ -530,4 +546,39 @@
 @keyframes progressSlide {
   from { transform: translateX(0) scaleX(0.3); }
   to   { transform: translateX(70%) scaleX(0.3); }
+}
+
+// ─── Narrow desktop ─────────────────────────────────────────────────────────
+
+// From the phone breakpoint up to 900 px the bar is short of room for the
+// Learn and Gallery links. The status word goes (the dot stays, and the word
+// is still read out, as on a phone) and the spacing tightens.
+@media (min-width: 760px) and (max-width: 899px) {
+  .statusLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .topBar {
+    gap: 8px;
+  }
+
+  .left {
+    gap: 10px;
+  }
+
+  .btn:not(.btnSquare) {
+    padding: 0 6px;
+  }
+
+  .siteLinks .btn {
+    padding: 0 5px;
+  }
+
+  .divider {
+    margin: 0 5px;
+  }
 }

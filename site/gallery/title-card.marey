@@ -6,8 +6,9 @@
 // Every part that enters and leaves has one `sequence`: wait,
 // enter, hold, leave. The frame, which opens at 0, has no wait.
 // A wait or a hold is an `animate` to the value the part already
-// has, which changes nothing for its `duration`. Each part's steps add up to the moment it should
-// move, so the parts never refer to each other. The timeline:
+// has, which changes nothing for its `duration`. Each part's steps
+// add up to the moment it should move, so the parts never refer
+// to each other. The timeline:
 //
 //   0.0  frame opens          4.4  subtitle leaves
 //   0.3  top bar wipes in     4.6  underline fades

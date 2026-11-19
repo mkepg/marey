@@ -304,8 +304,11 @@ and uploaded as a workflow artifact; if any scene fails, nothing is exported.
 You can now read every line of the scenes in [the gallery](/gallery/), and
 each one has notes on how it is made and links back to the lessons it uses.
 [The guides](/guides/) cover what this lesson has only touched: every option
-of the two commands, the player's events and its JavaScript methods, and all
-the action's inputs and outputs. [The language reference](/reference/language/)
+of [`marey check`](/guides/install/) and [`marey export`](/guides/export/),
+[the player's](/guides/embed/) events and its JavaScript methods, all
+[the action's](/guides/ci/) inputs and outputs, what is inside
+[a Lottie export](/guides/lottie/), and how to read
+[the compiler's errors](/guides/errors/). [The language reference](/reference/language/)
 states every rule formally, and
 [the property reference](/reference/properties/) lists every property of every
 object.
@@ -402,13 +405,14 @@ seconds, twice in the scene, and ends where it started, as
   ([Scene model](/reference/language/#scene-model))
 - `marey export` writes `png` frames, `apng`, `webm`, `mp4` or `lottie`, at
   `--fps` frames a second (30 unless given), for `--duration` seconds, to
-  `--out`. ([The guides](/guides/))
+  `--out`. ([Export](/guides/export/))
 - Each export prints a `sha256` of the file and a `frames` hash of the sampled
   motion; the same export run twice prints the same hashes.
   ([Determinism](/reference/determinism/))
 - `<marey-player>` plays a scene from `src` or from an inline
   `<script type="text/marey">`, with the `autoplay`, `loop` and `controls`
-  attributes. ([The guides](/guides/))
+  attributes. ([Embed a scene](/guides/embed/))
 - A workflow step running `npx --yes marey-lang@0.6.0 check` checks scenes on
   each push today. The GitHub Action, which needs 0.7.0, annotates each error on
-  its line and can export and upload the results. ([The guides](/guides/))
+  its line and can export and upload the results.
+  ([Check scenes in CI](/guides/ci/))
