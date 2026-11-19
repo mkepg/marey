@@ -1,6 +1,15 @@
-# Vite content-hashes every file under /assets/, so a changed file always has
-# a new name and the old one can be cached for good. Everything else (the page
-# itself, fonts, the link-preview image) keeps the host's default of
-# revalidating on each visit.
+# Vite content-hashes the files it bundles under /assets/, so a changed file
+# always has a new name and the old one can be cached for good.
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+
+# Except the player's scene font. The site's build emits it under a fixed name,
+# /assets/fonts/JetBrainsMono-Regular.ttf, because the player's renderer loads
+# it from that path, so a replaced font keeps the old name. A request matching
+# both rules gets both rules' headers, so this one detaches the header above
+# (it must come after it) and revalidates on each visit instead. Everything
+# else (the pages, the site's own fonts, the link-preview image) keeps the
+# host's default of revalidating on each visit.
+/assets/fonts/*
+  ! Cache-Control
+  Cache-Control: public, max-age=0, must-revalidate

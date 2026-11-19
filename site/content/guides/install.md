@@ -11,9 +11,9 @@ guide installs the package and covers `marey check` and the library.
 
 :::note
 This site documents the language and tools on Marey's `main` branch, which is
-version 0.7.0. The newest version on npm is **0.6.0**. Everything on this page
-works on 0.6.0 except `--reporter`, which arrived in 0.7.0; the section on it
-says so. The commands below install whatever version npm has.
+version 0.7.0. Everything on this page also works on 0.6.0, except
+`--reporter`, which needs 0.7.0 or later; the section on it says so. The
+commands below install the newest version npm has.
 :::
 
 ## Install
@@ -157,8 +157,7 @@ no `--duration`, so a scene without a `duration` always fails
 ## Annotations on GitHub
 
 :::warn
-`--reporter` needs `marey-lang` 0.7.0, which is not on npm yet. Version 0.6.0
-refuses it:
+`--reporter` needs `marey-lang` 0.7.0 or later. Version 0.6.0 refuses it:
 
 ```text
 Unrecognized option '--reporter'. Usage: marey check  [--export-ready] [--fps <n>] <file...>

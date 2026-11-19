@@ -17,12 +17,12 @@ From jsDelivr, with one script tag anywhere in the page:
 <script type="module" src="https://cdn.jsdelivr.net/npm/marey-lang@0.6.0/dist/player/marey-player.mjs"></script>
 ```
 
-The URL pins `marey-lang@0.6.0`, the newest version on npm and the first with
-the player. A pinned URL keeps serving the same file, so a later release cannot
-change your page under you. To move to a newer version, change the number:
+The URL pins `marey-lang@0.6.0`, the first version with the player. A pinned
+URL keeps serving the same file, so a later release cannot change your page
+under you. To move to a newer version, change the number:
 `npm view marey-lang version` prints the newest. The players on this site are
-built from Marey's `main` branch, version 0.7.0, which is not on npm yet; the
-attributes, events and methods below are the same in both versions.
+built from Marey's `main` branch, version 0.7.0; the attributes, events and
+methods below are the same in 0.6.0 and 0.7.0.
 
 In a project with a bundler, install the package:
 

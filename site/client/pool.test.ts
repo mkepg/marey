@@ -246,12 +246,35 @@ describe("PlayerPool", () => {
   });
 
   it("never removes a player on screen for another slot on screen", () => {
-    const { io, pool, request } = setup(2);
+    const { io, pool, made, request } = setup(2);
     const slots = [new FakeSlot(), new FakeSlot(), new FakeSlot()];
     for (const s of slots) request(s);
     for (const s of slots) io.move(s, 0);
     expect(slots.map((s) => s.children.length)).toEqual([1, 1, 0]);
     expect(pool.live).toBe(2);
+    // No player was removed and made again: two players made for two places.
+    expect(made).toHaveLength(2);
+  });
+
+  it("stops trading places when the distances it measures disagree from one call to the next", () => {
+    const io = new FakeObserver();
+    // Every measurement flips between on screen and 500 px away, which no
+    // real page does; the pool must still return, within its limit.
+    let calls = 0;
+    const flipping = (): number => (calls++ % 2 === 0 ? 0 : 500);
+    const pool = new PlayerPool(2, io, flipping);
+    let made = 0;
+    const slots = Array.from({ length: 6 }, () => new FakeSlot());
+    for (const s of slots) {
+      pool.request(s as unknown as Element, () => {
+        made++;
+        return new FakePlayer() as unknown as HTMLElement;
+      });
+    }
+    for (const s of slots) io.move(s, 0);
+    expect(pool.live).toBeLessThanOrEqual(2);
+    // At most one trade per slot on each of the six reports, beyond the first two players.
+    expect(made).toBeLessThanOrEqual(2 + 6 * 6);
   });
 
   it("does not take a place for a waiting slot that is near but not on screen", () => {

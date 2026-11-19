@@ -9,10 +9,10 @@ describes what is in that file, so you know what you are looking at when you
 open it, and what the measurements behind it do and do not show.
 
 :::note
-How keyframes are written changed between versions. **0.6.0**, the version on
-npm, writes one keyframe per frame for everything that moves. **0.7.0**, the
-version this site documents, fits a few keyframes with easing handles to each
-motion. 0.7.0 is not published yet. The layers and shapes are the same in both.
+How keyframes are written changed between versions. **0.6.0** writes one
+keyframe per frame for everything that moves. **0.7.0**, the version this site
+documents, fits a few keyframes with easing handles to each motion; fitted
+keyframes need 0.7.0 or later. The layers and shapes are the same in both.
 :::
 
 ## One layer per object

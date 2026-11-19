@@ -16,7 +16,7 @@ itself is taught in [the course](/learn/), and stated in full in
 - [Embed a scene](/guides/embed/): the `<marey-player>` element, its
   attributes, events, error codes and JavaScript API, styling, sizing and
   the WebGL context budget.
-- [Check scenes in CI](/guides/ci/): a workflow step for the version on npm,
+- [Check scenes in CI](/guides/ci/): a plain workflow step,
   and the Marey GitHub Action, its inputs and outputs, annotations, artifacts
   and pinning.
 - [Edit an export in a Lottie editor](/guides/lottie/): what a Marey Lottie

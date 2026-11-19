@@ -64,14 +64,25 @@ finite `duration`, a poster inside it, and passes
 **Tests.** The site's suite is `site/**/*.test.ts` and
 `vite-plugins/site.test.ts`, run by `npm test`.
 
-**Version references.** The site documents `main` (0.7.0) while npm has 0.6.0,
-so the guides, lesson 14 and the README pin 0.6.0 where a reader runs or loads
-the package, and mark what needs 0.7.0. Once 0.7.0 is published, the lines to
-revisit are the ones this prints:
+**Version references.** The site documents `main`, version 0.7.0. Every
+version statement in `site/content/` and the README is written to stay true
+before and after 0.7.0 reaches npm: it says what a feature needs ("needs
+`marey-lang` 0.7.0 or later") and what 0.6.0 does, and none says whether a
+version is published. This lists them:
 
 ```
 grep -rn "0\.6\.0\|0\.7\.0\|not published\|not on npm" site/content README.md
 ```
+
+What is left to change by hand is the embed snippet's pinned
+`marey-lang@0.6.0` URL (`embed.md`, `ship-it.md`, the README), which stays
+valid because a pinned CDN URL keeps serving the same file, and can move to a
+newer version whenever one should be taught. The other hits stay
+version-specific on purpose: the workflow steps pinned to 0.6.0, which run the
+same with a later version; the comparisons of 0.6.0 and 0.7.0 output; the
+`--reporter github` step pinned to 0.7.0; the action's own message, quoted
+with `<version>`; and the lines that name `main` as 0.7.0 (`embed.md`,
+`install.md`, the README's status), which change when `main` moves on.
 
 ## 2. The browser check
 
@@ -113,7 +124,7 @@ brings a lesson to 39.7 kB.
 
 | Item | Result |
 |---|---|
-| Control bar (`docs/architecture/site.md`), on a gallery scene (`/gallery/lighthouse/`), a lesson sample (`/learn/animate/`) and lesson 14's embed | On each of the three, every step waiting up to 5 s for the opacity it expects: playing with the pointer away and nothing focused, the bar's computed opacity 0; pointer on the player, 1; paused by a mouse click, pointer away, 1; played by a mouse click, pointer away, 0, with nothing in the player focused (the site blurs a control after a pointer click); played with Enter on the focused play button, pointer away, 1, the button keeping the focus; focus moved out, 0; focus on the seek bar, 1; focus gone, 0. On a touch device (`hover: none` matched), playing: 1. 25 steps, all passed. The shipped player is unchanged: the site styles `marey-player::part(controls)`, sets an `is-playing` class from `paused`, and reaches the clicked control through the player's open shadow root. |
+| Control bar (`docs/architecture/site.md`), on a gallery scene (`/gallery/lighthouse/`), a lesson sample (`/learn/animate/`) and lesson 14's embed | On each of the three, every step waiting up to 5 s for the opacity it expects, and every step that expects the bar to stay up then sampling it every 50 ms for 700 ms (five times the 140 ms fade) and requiring every sample to read 1: playing with the pointer away and nothing focused, the bar's computed opacity 0; pointer on the player, 1; paused by a mouse click, pointer away, 1; played by a mouse click, pointer away, 0, with nothing in the player focused (the site blurs a control after a pointer click); played with Enter on the focused play button, pointer away, 1, the button keeping the focus; focus moved out, 0; focus on the seek bar, 1; focus gone, 0. On a touch device (`hover: none` matched), playing: 1. 25 steps, all passed. The shipped player is unchanged: the site styles `marey-player::part(controls)`, sets an `is-playing` class from `paused`, and reaches the clicked control through the player's open shadow root. |
 | Search closed with Escape, reopened, typed into | Passed (the Search row above). |
 | No-JavaScript pages, against the preview | `/learn/`, `/learn/animate/` and `/gallery/` render their heading, the top navigation (11, 28 and 10 links) and no search button; the lesson shows its 18 code blocks. Screenshots read. |
 | Console output | No console warning of any kind in the 51-page run under SwiftShader; the `GPU stall due to ReadPixels` performance warnings seen in headless Chromium earlier in the phase did not appear. A headed run on the machine's GPU (`--gpu --headed --only pages,controls --pages /learn/animate/,/learn/physics/,/gallery/hourglass/,/learn/`, renderer `ANGLE (Intel, Intel(R) Iris(R) Xe Graphics ... Direct3D11 ...)`) had every player ready, no console error and no warning, and its control-bar steps passed (run on the earlier version of the check, before the pool and control-bar changes). |

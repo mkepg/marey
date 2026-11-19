@@ -191,7 +191,10 @@ player whose slot is farthest off screen gives up its place, so nothing the
 reader is looking at stays empty while a player they cannot see holds one; a
 player on screen is never removed for another, so with more than 12 slots on
 screen at once the extra ones wait. Observers at the viewport's edge, at
-400 px and at 1,200 px wake the pool. A lesson's `embed` scene is written into the page as a bare player,
+400 px and at 1,200 px wake the pool. The trading loop is bounded by
+construction: each round must give its freed place to a different slot on
+screen, and there are at most as many rounds as slots, so a page whose
+measurements disagree with themselves cannot make it spin. A lesson's `embed` scene is written into the page as a bare player,
 outside the pool, because that is what the embed guide shows a reader doing;
 a page has at most one.
 
@@ -214,7 +217,9 @@ The shipped player is not changed for any of this.
 font at `assets/fonts/JetBrainsMono-Regular.ttf` in the build and serves it at
 `/src/player/fonts/JetBrainsMono-Regular.ttf` in development. Without it, a
 scene with `text` fails with `PLAYER_FONT_UNAVAILABLE`, because the request
-falls through to an HTML page.
+falls through to an HTML page. Because that name carries no content hash,
+`public/_headers` exempts `/assets/fonts/*` from the year-long immutable cache
+the hashed files under `/assets/` get, and has it revalidated instead.
 
 ## The checks
 

@@ -39,7 +39,8 @@
  *             nothing in it focused, and after a mouse click on its buttons;
  *             it shows on hover, while paused and while a control has the
  *             keyboard focus; and always on a screen that cannot hover. Each
- *             step waits for the opacity it expects.
+ *             step waits for the opacity it expects, and a step that expects
+ *             the bar to stay up watches it for 700 ms, past the fade.
  *   nojs      with JavaScript off, the course, a lesson and the gallery still
  *             render, with navigation and no search field.
  *   shots     a screenshot of every gallery scene and every lesson showcase
@@ -768,6 +769,42 @@ async function waitForBar(page, selector, want, timeout = 5000) {
   return { reached, ...(await page.evaluate(barStateOf, selector)) };
 }
 
+/**
+ * The bar's fade (`--site-ease` in site.css) lasts 140 ms. A step that expects
+ * the bar to stay up watches it for several times that, so a fade that began
+ * as the step started is seen, not passed at its first frame.
+ */
+const HOLD_MS = 700;
+
+/**
+ * For a step that expects the bar to show and to keep showing: waits for
+ * opacity "1", then samples it every 50 ms for HOLD_MS and requires every
+ * sample, the last included, to be "1". Returns the state at the end, with
+ * whether it got there (`reached`), whether it held (`held`), and the lowest
+ * opacity seen while holding.
+ */
+async function holdBar(page, selector) {
+  const first = await waitForBar(page, selector, "1");
+  if (!first.reached) return { ...first, held: false, lowest: first.opacity };
+  const samples = await page.evaluate(
+    async ({ sel, ms }) => {
+      const out = [];
+      const end = performance.now() + ms;
+      while (performance.now() < end) {
+        const bar = document.querySelector(sel)?.shadowRoot?.querySelector("[part=controls]");
+        out.push(bar ? getComputedStyle(bar).opacity : null);
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      const bar = document.querySelector(sel)?.shadowRoot?.querySelector("[part=controls]");
+      out.push(bar ? getComputedStyle(bar).opacity : null);
+      return out;
+    },
+    { sel: selector, ms: HOLD_MS },
+  );
+  const lowest = samples.reduce((m, o) => Math.min(m, Number(o ?? 0)), 1);
+  return { reached: true, held: samples.every((o) => o === "1"), lowest: String(lowest), samples: samples.length, ...(await page.evaluate(barStateOf, selector)) };
+}
+
 async function controlsOn(target, out) {
   const step = (name, ok, detail) => {
     out.steps.push({ target: target.name, name, ok, ...detail });
@@ -798,16 +835,16 @@ async function controlsOn(target, out) {
     step("playing, pointer away: the bar is hidden", s.reached && s.playing === true, s);
 
     await page.mouse.move(centre.x, centre.y);
-    s = await waitForBar(page, sel, "1");
-    step("pointer on the player: the bar shows", s.reached, s);
+    s = await holdBar(page, sel);
+    step("pointer on the player: the bar shows and stays", s.held, s);
     if (target.name === "gallery scene") await player.screenshot({ path: join(outDir, "controls-hover.png") });
 
     // A mouse click: pause, then play. The site takes the focus off the
     // clicked button, so with the pointer away the bar fades once playing.
     await player.locator("[part=play]").click();
     await away();
-    s = await waitForBar(page, sel, "1");
-    step("paused by a mouse click, pointer away: the bar stays", s.reached && s.playing === false && s.cls === false, s);
+    s = await holdBar(page, sel);
+    step("paused by a mouse click, pointer away: the bar stays", s.held && s.playing === false && s.cls === false, s);
     await page.mouse.move(centre.x, centre.y);
     await player.locator("[part=play]").click();
     await away();
@@ -824,15 +861,15 @@ async function controlsOn(target, out) {
     await page.evaluate((sel) => document.querySelector(sel)?.shadowRoot?.querySelector("[part=play]")?.focus(), sel);
     await page.keyboard.press("Enter");
     await page.keyboard.press("Enter");
-    s = await waitForBar(page, sel, "1");
-    step("playing after Enter on the focused button, pointer away: the bar stays", s.reached && s.playing === true && s.focused === "play", s);
+    s = await holdBar(page, sel);
+    step("playing after Enter on the focused button, pointer away: the bar stays", s.held && s.playing === true && s.focused === "play", s);
     await page.evaluate(moveFocusOut);
     s = await waitForBar(page, sel, "0");
     step("focus moves out of the player: the bar fades", s.reached && s.focusWithin === false, s);
 
     await page.evaluate((sel) => document.querySelector(sel)?.shadowRoot?.querySelector("[part=seek]")?.focus(), sel);
-    s = await waitForBar(page, sel, "1");
-    step("focus on the seek bar, pointer away: the bar shows", s.reached && s.focusWithin === true, s);
+    s = await holdBar(page, sel);
+    step("focus on the seek bar, pointer away: the bar shows and stays", s.held && s.focusWithin === true, s);
     await page.evaluate(moveFocusOut);
     s = await waitForBar(page, sel, "0");
     step("focus gone: the bar fades again", s.reached, s);
@@ -854,10 +891,9 @@ async function checkControls() {
   try {
     await touch.page.goto(ORIGIN + target.path, { waitUntil: "load" });
     await touch.page.waitForFunction(() => !!document.querySelector(".gallery-stage .sample-stage")?.dataset.checkReady, null, { timeout: READY_TIMEOUT });
-    await touch.page.waitForTimeout(1000);
     const hoverNone = await touch.page.evaluate(() => matchMedia("(hover: none)").matches);
-    const s = await touch.page.evaluate(barStateOf, target.selector);
-    const ok = hoverNone && s.playing === true && s.opacity === "1";
+    const s = await holdBar(touch.page, target.selector);
+    const ok = hoverNone && s.held && s.playing === true;
     out.steps.push({ target: target.name, name: "a screen that cannot hover: the bar shows while playing", ok, hoverNone, ...s });
     if (!ok) fail("controls", `touch: ${JSON.stringify({ hoverNone, ...s })}`);
   } catch (e) {

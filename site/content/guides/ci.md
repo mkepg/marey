@@ -5,15 +5,16 @@ description: Check every Marey scene in a repository on each push with GitHub Ac
 
 A check on every push keeps a broken scene out of the main branch. There are
 two ways to run one on GitHub Actions: a workflow step that runs `marey check`
-itself, which works with the version on npm today, and the Marey action, which
-annotates each error on its line and can export every scene, and needs a
-version that is not published yet.
+itself, which works with `marey-lang` 0.6.0 and later, and the Marey action,
+which annotates each error on its line and can export every scene, and needs
+`marey-lang` 0.7.0 or later.
 
-## With the published version
+## A workflow step
 
-`marey-lang` 0.6.0 is on npm. This workflow, saved as
-`.github/workflows/marey.yml` in your repository, sets up Node 22 and checks
-every scene in a `scenes` folder on each push and pull request:
+This workflow, saved as `.github/workflows/marey.yml` in your repository, sets
+up Node 22 and checks every scene in a `scenes` folder on each push and pull
+request. It pins `marey-lang` 0.6.0, and runs the same with any later version
+in its place:
 
 ```yaml
 name: Marey
@@ -34,15 +35,15 @@ error with its file, line and column, and exits with 1 when any file fails,
 which fails the step and the run. Add `--export-ready` to also fail a scene
 that cannot be exported ([Install and check](/guides/install/#ready-to-export)).
 
-With 0.7.0, the same step can print each error as a GitHub annotation, which
-shows on its line in the pull request's diff:
+With 0.7.0 or later, the same step can print each error as a GitHub
+annotation, which shows on its line in the pull request's diff:
 
 ```yaml
       - run: npx --yes marey-lang@0.7.0 check --reporter github scenes/*.marey
 ```
 
-0.6.0 has no `--reporter` and stops with `Unrecognized option '--reporter'`, so
-use this form only once 0.7.0 is on npm.
+`--reporter` needs `marey-lang` 0.7.0 or later: 0.6.0 has no `--reporter` and
+stops with `Unrecognized option '--reporter'`.
 
 ## The Marey action
 
@@ -53,16 +54,18 @@ workflow artifact.
 
 :::warn
 The action runs `check --reporter github`, which 0.6.0 does not have, so it
-needs **`marey-lang` 0.7.0 or later**, and 0.7.0 is not published yet. Until it
-is, the action stops at its install step with:
+needs **`marey-lang` 0.7.0 or later**. It installs the version named in the
+`package.json` of the commit you pin, and when npm does not have that version
+it stops at its install step with this message, naming the version:
 
 ```text
-marey-lang@0.7.0 is not published to npm yet. Pin this action to a commit whose version is published, or set the 'package' input.
+marey-lang@<version> is not published to npm yet. Pin this action to a commit whose version is published, or set the 'package' input.
 ```
 :::
 
-Once 0.7.0 is on npm, this workflow checks every `.marey` file in the
-repository and exports each one as an animated PNG and as Lottie:
+Pinned to a commit whose version is 0.7.0 or later and on npm, this workflow
+checks every `.marey` file in the repository and exports each one as an
+animated PNG and as Lottie:
 
 ```yaml
 name: Marey
@@ -86,8 +89,8 @@ so the commit decides the version. A full hash cannot be moved to other code
 later, as a branch can. There are no release tags to pin instead: the
 repository's old `v0.x` tags predate the npm versions and do not match them.
 
-`@main` works too, once `main`'s version is published, and follows every
-change to it.
+`@main` works too, whenever the version `main` names is on npm, and follows
+every change to it.
 
 ### Inputs
 
@@ -177,8 +180,9 @@ cp -r examples/starter/. my-scenes/
 
 `cp -r examples/starter/. <dir>` copies the hidden directory too;
 `cp examples/starter/* <dir>` leaves it behind. The starter's workflow uses
-`mkepg/marey@main`, which fails at the install step until 0.7.0 is on npm;
-pin a commit from after the publish instead. When the check passes, the run
+`mkepg/marey@main`, which installs the version `main` names, and stops at the
+install step when npm does not have it; pin a full commit SHA instead for a
+reproducible build. When the check passes, the run
 uploads `hello.png`, an animated PNG, and `hello.json`, a Lottie file. Commit
 the PNG and it plays in your README with no script.
 

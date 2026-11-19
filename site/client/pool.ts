@@ -104,46 +104,57 @@ export class PlayerPool {
     this.liveCount--;
   }
 
-  /** Fills the free places, then trades off-screen players for on-screen slots until none is left waiting. */
+  /**
+   * Fills the free places, then trades off-screen players for on-screen slots
+   * until none is left waiting. The loop is bounded twice over, so it cannot
+   * spin however the distances are measured: each round must give its freed
+   * place to a slot on screen other than the one it took it from, and there
+   * are at most as many rounds as slots.
+   */
   private fill(): void {
-    for (;;) {
-      this.fillFreePlaces();
-      if (!this.evictForOnScreen()) return;
+    this.fillFreePlaces();
+    for (let round = 0; round < this.entries.size; round++) {
+      const freed = this.evictForOnScreen();
+      if (!freed) return;
+      const filled = this.fillFreePlaces();
+      if (!filled.some((slot) => slot !== freed && this.distanceOf(slot) === 0)) return;
     }
   }
 
   /**
    * When every place is taken and a slot on screen is still waiting, removes
    * the player whose slot is farthest from the viewport, if that slot is off
-   * screen. Returns whether a place was freed. A player whose slot is on
-   * screen is never removed for another, so when more slots are on screen
-   * than there are places, the extra ones wait.
+   * screen. Returns the slot whose player was removed, or null. A player whose
+   * slot is on screen is never removed for another, so when more slots are on
+   * screen than there are places, the extra ones wait.
    */
-  private evictForOnScreen(): boolean {
-    if (this.liveCount < this.limit) return false;
+  private evictForOnScreen(): Element | null {
+    if (this.liveCount < this.limit) return null;
     let waitingOnScreen = false;
-    let farthest: { entry: Entry; distance: number } | null = null;
+    let farthest: { slot: Element; entry: Entry; distance: number } | null = null;
     for (const [slot, entry] of this.entries) {
       if (!slot.isConnected) continue;
       if (entry.player) {
         const distance = this.distanceOf(slot);
-        if (!farthest || distance > farthest.distance) farthest = { entry, distance };
+        if (!farthest || distance > farthest.distance) farthest = { slot, entry, distance };
       } else if (entry.distance !== Number.POSITIVE_INFINITY && this.distanceOf(slot) === 0) {
         waitingOnScreen = true;
       }
     }
-    if (!waitingOnScreen || !farthest || farthest.distance === 0) return false;
+    if (!waitingOnScreen || !farthest || farthest.distance === 0) return null;
     this.drop(farthest.entry);
-    return true;
+    return farthest.slot;
   }
 
   /**
    * Gives each free place to the nearest slot that wants one. Distances are
    * measured here, not taken from the last report: a report is a snapshot from
    * when a margin was crossed, and a slot that drifted away since would
-   * otherwise tie with one that has just scrolled in.
+   * otherwise tie with one that has just scrolled in. Returns the slots it
+   * gave a player.
    */
-  private fillFreePlaces(): void {
+  private fillFreePlaces(): Element[] {
+    const filled: Element[] = [];
     while (this.liveCount < this.limit) {
       let best: { slot: Element; entry: Entry; distance: number } | null = null;
       for (const [slot, entry] of [...this.entries]) {
@@ -160,13 +171,14 @@ export class PlayerPool {
           best = { slot, entry, distance };
         }
       }
-      if (!best) return;
+      if (!best) return filled;
       const { slot, entry } = best;
       try {
         const player = entry.create();
         slot.append(player);
         entry.player = player;
         this.liveCount++;
+        filled.push(slot);
       } catch (e) {
         // A sample whose player cannot be made is given up on; the others still get their turn.
         console.error("The sample's player could not be made", e);
@@ -174,6 +186,7 @@ export class PlayerPool {
         this.entries.delete(slot);
       }
     }
+    return filled;
   }
 }
 

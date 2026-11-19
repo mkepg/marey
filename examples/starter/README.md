@@ -6,9 +6,11 @@ A new repository that checks and exports a Marey scene on every push.
    the root of a new repository and push it. `cp -r examples/starter/. <repo>`
    copies it too; `cp examples/starter/* <repo>` leaves it behind.
 
-   The workflow uses `mkepg/marey@main`. Until `marey-lang@0.7.0` is on npm,
-   that fails at the install step with "marey-lang@0.7.0 is not published to
-   npm yet". Pin a full commit SHA from after the publish instead of `main`.
+   The workflow uses `mkepg/marey@main`, which installs the `marey-lang`
+   version `main` names; the action needs 0.7.0 or later. When npm does not
+   have that version, the run stops at the install step with
+   "marey-lang@<version> is not published to npm yet". Pin a full commit SHA
+   whose version is on npm for a reproducible build.
 
 2. Every push and pull request checks `hello.marey`. A mistake in the scene
    shows up as an error annotation on its line.

@@ -439,10 +439,13 @@ scene {
 ```
 
 The roll is about 100 pixels long. At 0.6 seconds its average speed is about
-167 pixels a second, so `easeIn` releases the marble at about 334; at 0.35
-seconds the average is about 287 and the release about 573. The first domino
-starts to fall at 0.40 seconds instead of 0.65, and the last one at 1.5
-seconds instead of 2. The run still works because every domino's hold ends
+167 pixels a second, and `easeIn` releases the marble at about 332, its last
+tick's distance times 120; at 0.35 seconds the average is about 286 and the
+release about 566. Both are a little under the table's twice the average:
+the last tick covers a little less than the curve's slope at its very end,
+and the quicker the roll, the more that shows. The first domino starts to
+fall at 0.40 seconds instead of 0.65, and the last one at 1.5 seconds
+instead of 2. The run still works because every domino's hold ends
 before the run reaches it. At 0.2 seconds the roll is too quick: the marble
 reaches the first domino before its hold ends, strikes it while it is still
 pinned, and no domino falls at all.

@@ -10,7 +10,7 @@ covers both, and what the hashes an export prints can prove.
 
 The commands below need the package installed, as
 [Install and check](/guides/install/) shows. Every option on this page is the
-same in 0.6.0, the version on npm, and in 0.7.0. The one difference between
+same in 0.6.0 and in 0.7.0. The one difference between
 the two is inside the Lottie file, which
 [the Lottie guide](/guides/lottie/) describes.
 

@@ -174,9 +174,8 @@ npx marey export lighthouse.marey --format lottie
 wrote lighthouse.json  360 frames @ 30 fps  960x540  243532 B  sha256 d10f271d2b2a0fac24eb12e459ba41aae0711858f664115c455621df604fcb01  frames 679a454e
 ```
 
-That line comes from 0.7.0, the version this site documents, which is not on
-npm yet. Version 0.6.0 writes the same scene as a different Lottie file, from
-an older encoder:
+That line comes from 0.7.0, the version this site documents. Version 0.6.0
+writes the same scene as a different Lottie file, from an older encoder:
 
 ```text
 wrote lighthouse.json  360 frames @ 30 fps  960x540  1304303 B  sha256 bd81f6c23bfa32c046a7708db8849626c0e937d05bc625496e7d3cdfddb61241  frames 679a454e
@@ -249,9 +248,10 @@ language as this course teaches it.
 ## Check scenes on every push
 
 A workflow that runs `marey check` on each push stops a broken scene before it
-is merged. With the published version, 0.6.0, write the step yourself. This one,
-at `.github/workflows/marey.yml` in your repository, sets up Node 22 and
-checks every scene in a `scenes` folder:
+is merged. You can write the step yourself. This one, at
+`.github/workflows/marey.yml` in your repository, sets up Node 22 and checks
+every scene in a `scenes` folder with `marey-lang` 0.6.0; any later version
+works the same in its place:
 
 ```yaml
 name: Marey
@@ -274,10 +274,10 @@ and with it the run.
 The Marey repository is also a GitHub Action, which does more: it puts each
 error on its line in the pull request's diff, and can export every scene. It
 runs `check` with an option 0.6.0 does not have, so **the action needs
-`marey-lang` 0.7.0 or later**, which is not published yet. It installs the
-version named in the `package.json` of the commit you pin, and stops with a
-message saying so when npm does not have that version. Once 0.7.0 is on npm,
-this workflow uses it:
+`marey-lang` 0.7.0 or later**. It installs the version named in the
+`package.json` of the commit you pin, and stops with a message saying so when
+npm does not have that version. Pinned to a commit whose version is 0.7.0 or
+later and on npm, this workflow uses it:
 
 ```yaml
 name: Marey
@@ -293,7 +293,7 @@ jobs:
 ```
 
 Replace `<commit-sha>` with the full hash of a commit whose `package.json`
-names a published version. The action checks every tracked file that matches
+names a published version, 0.7.0 or later. The action checks every tracked file that matches
 its `files` input, `*.marey` unless you give one. Each diagnostic becomes an
 annotation on its file and line, in the run and in the pull request's diff.
 When every scene passes, each is exported in each format listed in `export`
@@ -413,6 +413,6 @@ seconds, twice in the scene, and ends where it started, as
   `<script type="text/marey">`, with the `autoplay`, `loop` and `controls`
   attributes. ([Embed a scene](/guides/embed/))
 - A workflow step running `npx --yes marey-lang@0.6.0 check` checks scenes on
-  each push today. The GitHub Action, which needs 0.7.0, annotates each error on
-  its line and can export and upload the results.
+  each push. The GitHub Action, which needs 0.7.0 or later, annotates each
+  error on its line and can export and upload the results.
   ([Check scenes in CI](/guides/ci/))
