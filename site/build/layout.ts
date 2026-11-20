@@ -62,6 +62,19 @@ const NOT_FOUND_URL = "/404.html";
 const FRONT_URL = "/learn/";
 
 /**
+ * When the browser skips a cross-document view transition, the transition's
+ * `ready` promise rejects with an AbortError ("Transition was skipped"). On
+ * the page it reaches, Chromium can reject it before `pagereveal` hands the
+ * page the transition, so there is no promise to attach a handler to; the
+ * rejection would be an uncaught error in the reader's console. This marks
+ * that one rejection as handled and lets every other one through. The
+ * playground's index.html runs the same text.
+ */
+export const VIEW_TRANSITION_SCRIPT =
+  `addEventListener("unhandledrejection",function(e){var r=e.reason;` +
+  `r&&r.name==="AbortError"&&/transition/i.test(r.message)&&e.preventDefault()});`;
+
+/**
  * Runs before any stylesheet, so a stored theme never flashes the other one.
  * It also marks the document as scripted: the drawer and the menu button take
  * over from the plain layout only when the script that drives them will run.
@@ -69,7 +82,16 @@ const FRONT_URL = "/learn/";
 const THEME_SCRIPT =
   `document.documentElement.classList.add("js");` +
   `try{var t=localStorage.getItem("marey_theme");` +
-  `if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}`;
+  `if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}` +
+  VIEW_TRANSITION_SCRIPT;
+
+/**
+ * The brand mark: the favicon itself, drawn at 24 px beside the wordmark, as
+ * the playground's top bar draws it. As an image the SVG sizes its own
+ * details (its small-size rule applies at this size), which an inline copy
+ * could not do.
+ */
+const MARK = '<img class="wordmark-mark" src="/favicon.svg" width="24" height="24" alt="" />';
 
 const ICON = 'viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"';
 const STROKE = 'fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"';
@@ -98,10 +120,10 @@ function topNav(section: Section): string {
   const links = (Object.keys(SECTION_LABELS) as Array<keyof typeof SECTION_LABELS>)
     .map((key) => {
       const current = key === section ? ' aria-current="true"' : "";
-      return `<a href="/${key}/"${current}>${SECTION_LABELS[key]}</a>`;
+      return `<a href="/${key}/" data-label="${SECTION_LABELS[key]}"${current}>${SECTION_LABELS[key]}</a>`;
     })
     .join("");
-  return `<nav class="site-nav" id="site-nav" aria-label="Sections">${links}<a class="nav-playground" href="/">Playground</a></nav>`;
+  return `<nav class="site-nav" id="site-nav" aria-label="Sections">${links}<a class="nav-playground" href="/" data-label="Playground">Playground</a></nav>`;
 }
 
 /** The last path segment of a lesson's address, which the client keys finished lessons by. */
@@ -219,7 +241,7 @@ ${indexed ? `    <link rel="canonical" href="${esc(canonical)}" />\n` : `    <me
     <a class="skip-link" href="#main">Skip to main content</a>
     <header class="site-header">
       <div class="header-inner">
-        <a class="wordmark" href="/learn/">Marey</a>
+        <a class="wordmark" href="/learn/">${MARK}Marey</a>
         <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" hidden>${ICONS.menu}<span>Menu</span></button>
         ${topNav(input.section)}
         <div class="header-tools">
@@ -245,7 +267,7 @@ ${input.bodyHtml}
     </div>
     <footer class="site-footer">
       <div class="footer-inner">
-        <p class="footer-mark"><span class="wordmark">Marey</span> <span>A language for deterministic 2D motion.</span></p>
+        <p class="footer-mark"><span class="wordmark">${MARK}Marey</span> <span>A language for deterministic 2D motion.</span></p>
         <nav aria-label="Project">
           <a href="/">Playground</a>
           <a href="${REPO}">GitHub</a>

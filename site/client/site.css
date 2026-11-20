@@ -91,7 +91,7 @@
 
   --site-font-ui: "Bricolage Grotesque", system-ui, sans-serif;
   --site-font-mono: "JetBrains Mono", ui-monospace, monospace;
-  --site-header-h: 60px;
+  --site-header-h: 56px; /* the playground's top bar height (App.module.scss --bar-h) */
   --site-measure: 68ch;
   --site-column: 47rem;
   --site-radius: 10px;
@@ -285,6 +285,20 @@ main:focus-visible {
   display: none !important;
 }
 
+/*
+ * The header's controls are hidden in the HTML, so that with JavaScript off
+ * no button sits there doing nothing. Once the head script has marked the
+ * page as scripted they take their places from the first paint, instead of
+ * appearing when the module runs and shifting the header as they do.
+ */
+.js .site-header .search-button {
+  display: flex !important;
+}
+
+.js .site-header .theme-toggle {
+  display: inline-flex !important;
+}
+
 .visually-hidden {
   position: absolute !important;
   width: 1px;
@@ -317,7 +331,32 @@ main:focus-visible {
 
 /* ---------------------------------------------------------------- header */
 
+/*
+ * Moving between the playground and the documentation site is a same-origin
+ * navigation, so the browser can carry it as a view transition: the header,
+ * named the same on both sides, stays where it is while the page beneath it
+ * crossfades. Browsers without cross-document view transitions navigate as
+ * before.
+ */
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-group(root) {
+  animation-duration: 160ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
 .site-header {
+  /* Named as the playground's top bar is (TopBar.module.scss). */
+  view-transition-name: marey-header;
   position: sticky;
   top: 0;
   z-index: 50;
@@ -327,22 +366,27 @@ main:focus-visible {
   border-bottom: 1px solid var(--site-border);
 }
 
+/*
+ * The header spans the window, as the playground's top bar does, and its left
+ * side is laid out to the pixel as the playground's is (TopBar.module.scss):
+ * a 20 px inset, the 24 px mark, the wordmark, a 28 px gap, the section links.
+ * Crossing between the two then moves nothing that both pages show.
+ */
 .header-inner {
   display: flex;
   align-items: center;
   gap: 28px;
-  max-width: 1440px;
-  height: var(--site-header-h);
-  margin: 0 auto;
-  padding: 0 24px;
+  /* The bottom border is the header's last pixel, as the top bar's is. */
+  height: calc(var(--site-header-h) - 1px);
+  padding: 0 12px 0 20px;
 }
 
 .wordmark {
   font-family: var(--site-font-ui);
   font-weight: 700;
-  font-size: 1.3125rem;
+  font-size: 20px;
   line-height: 1;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
   color: var(--site-text);
   text-decoration: none;
   padding-bottom: 1px;
@@ -354,16 +398,11 @@ main:focus-visible {
   gap: 9px;
 }
 
-/* A dot with two fading echoes: one shape, three moments. */
-.site-header .wordmark::before {
-  content: "";
-  width: 22px;
-  height: 10px;
+.wordmark-mark {
+  display: block;
+  width: 24px;
+  height: 24px;
   flex-shrink: 0;
-  background:
-    radial-gradient(circle at 17px 5px, var(--site-accent) 4.5px, transparent 5px),
-    radial-gradient(circle at 10px 5px, color-mix(in srgb, var(--site-accent) 45%, transparent) 4px, transparent 4.5px),
-    radial-gradient(circle at 4px 5px, color-mix(in srgb, var(--site-accent) 20%, transparent) 3.5px, transparent 4px);
 }
 
 .site-nav {
@@ -376,12 +415,23 @@ main:focus-visible {
 .site-nav a {
   position: relative;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  justify-content: center;
   padding: 0 10px;
   font-size: 0.9375rem;
   color: var(--site-text-2);
   text-decoration: none;
   transition: color var(--site-ease);
+}
+
+/* An invisible bold copy of the label holds each link at its bold width, so
+   which section is current never moves the others. */
+.site-nav a::before {
+  content: attr(data-label);
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  font-weight: 700;
 }
 
 .site-nav a:hover {
@@ -408,15 +458,26 @@ main:focus-visible {
   margin-left: 6px;
 }
 
-.site-nav .nav-playground::before {
-  content: "";
-  position: absolute;
-  left: -4px;
-  top: 50%;
-  width: 1px;
-  height: 18px;
-  transform: translateY(-50%);
-  background: var(--site-border-strong);
+/* Drawn as a background, since the link's pseudo-elements are both taken. */
+.site-nav .nav-playground {
+  background: linear-gradient(var(--site-border-strong), var(--site-border-strong)) left -4px center / 1px 18px no-repeat;
+}
+
+/* Below 1280 px the links close up, as the playground's top bar's do
+   (TopBar.module.scss), so the two still line up. */
+@media (max-width: 1279.98px) {
+  .header-inner {
+    gap: 20px;
+  }
+
+  .site-nav a {
+    padding: 0 7px;
+  }
+
+  .site-nav a[aria-current]::after {
+    left: 7px;
+    right: 7px;
+  }
 }
 
 .header-tools {
@@ -487,9 +548,14 @@ main:focus-visible {
   display: none;
 }
 
-.theme-toggle[data-choice="system"] .icon-system,
-.theme-toggle[data-choice="light"] .icon-light,
-.theme-toggle[data-choice="dark"] .icon-dark {
+/*
+ * The icon follows the theme the head script has already applied (a stored
+ * light or dark choice sets data-theme; the system choice leaves it unset), so
+ * it is right from the first paint, before the toggle's script runs.
+ */
+html:not([data-theme]) .theme-toggle .icon-system,
+html[data-theme="light"] .theme-toggle .icon-light,
+html[data-theme="dark"] .theme-toggle .icon-dark {
   display: block;
 }
 
@@ -1822,7 +1888,15 @@ details.solution[open] > figure.sample {
 }
 
 .footer-mark .wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 1.125rem;
+}
+
+.footer-mark .wordmark-mark {
+  width: 20px;
+  height: 20px;
 }
 
 .site-footer nav {
@@ -2521,7 +2595,7 @@ details.solution[open] > figure.sample {
   }
 
   .js .sidebar-toggle {
-    display: inline-flex;
+    display: inline-flex !important;
     align-items: center;
     gap: 9px;
     min-height: 38px;
@@ -2559,6 +2633,14 @@ details.solution[open] > figure.sample {
   }
 }
 
+/* From 760 px the playground's top bar keeps its desktop layout and its 20 px
+   inset, so the wordmark keeps its place there too while the links fold. */
+@media (min-width: 760px) and (max-width: 859.98px) {
+  .header-inner {
+    padding-left: 20px !important;
+  }
+}
+
 /* Below 860 px the section links fold into a Menu button. */
 @media (max-width: 859.98px) {
   .header-inner {
@@ -2567,7 +2649,7 @@ details.solution[open] > figure.sample {
   }
 
   .js .menu-toggle {
-    display: inline-flex;
+    display: inline-flex !important;
     order: 3;
   }
 
@@ -2613,13 +2695,8 @@ details.solution[open] > figure.sample {
     margin: 6px 0 0;
   }
 
-  .js .site-nav .nav-playground::before {
-    left: 12px;
-    right: 12px;
-    top: -3px;
-    width: auto;
-    height: 1px;
-    transform: none;
+  .js .site-nav .nav-playground {
+    background: linear-gradient(var(--site-border-strong), var(--site-border-strong)) center top / calc(100% - 24px) 1px no-repeat;
   }
 
   /* With no script, the links stay visible on a scrolling row. */
