@@ -10,6 +10,8 @@ import { defineThemes } from "./themes";
 import { registerLanguage } from "./language";
 import styles from "./MonacoEditor.module.scss";
 
+const LINE_BREAK = /\r?\n/;
+
 interface MonacoEditorProps {
   onReady: (editor: MonacoEditorNS.IStandaloneCodeEditor) => void;
 }
@@ -166,13 +168,24 @@ export const MonacoEditor: FunctionComponent<MonacoEditorProps> = ({ onReady }) 
 
   if (monacoState.status === "failed") return <FallbackEditor />;
 
-  // Until Monaco has loaded and created the editor, the source shows as plain
-  // text in the editor's place, so the pane is never empty while the preview
-  // already plays.
+  // Until Monaco has loaded and created the editor, the source shows in the
+  // editor's place, drawn as Monaco first draws it: the line numbers in its
+  // gutter, the first line highlighted, the text in the same column. The pane
+  // is never empty while the preview already plays, and when Monaco takes over
+  // only the syntax colours change.
   return (
     <div className={styles.wrap}>
       <div ref={containerRef} className={styles.host} />
-      {!isReady && <pre className={styles.placeholder} aria-busy="true">{code}</pre>}
+      {!isReady && (
+        <div className={styles.placeholder} aria-busy="true">
+          <div className={styles.placeholderGutter} aria-hidden="true">
+            {code.split(LINE_BREAK).map((_, i) => (
+              <div key={i}>{i + 1}</div>
+            ))}
+          </div>
+          <pre className={styles.placeholderText}>{code}</pre>
+        </div>
+      )}
     </div>
   );
 };

@@ -9,7 +9,11 @@
 }
 
 .topBar {
+  // On a layer of its own, as the site's sticky header is on a scrolling
+  // page: the browser then sets the bar's text with the same smoothing as the
+  // site's, so the shared header is the same image on both.
   position: relative;
+  will-change: transform;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -17,12 +21,19 @@
   height: var(--bar-h);
   min-height: var(--bar-h);
   padding: 0 12px 0 20px;
-  background: var(--bg-bar);
-  border-bottom: 1px solid var(--border);
+  // The site header's ground, rule and backdrop (site.css .site-header),
+  // which also sets its text the same way.
+  background: color-mix(in srgb, var(--bg-bar) 92%, transparent);
+  backdrop-filter: saturate(1.4) blur(10px);
+  -webkit-backdrop-filter: saturate(1.4) blur(10px);
+  border-bottom: 1px solid var(--bar-border);
   z-index: 100;
   user-select: none;
   flex-shrink: 0;
   font-family: var(--font-ui);
+  // The documentation site's header has the same name (site.css), so a
+  // navigation between the two keeps the bar in place.
+  view-transition-name: marey-header;
 }
 
 // Phones: the bar stays on screen while the stacked panes scroll under it.
@@ -30,14 +41,39 @@
   position: sticky;
   top: 0;
   gap: 8px;
-  padding: 0 10px 0 14px;
+  // The site's phone header insets its wordmark by the same 16 px (site.css).
+  padding: 0 10px 0 16px;
 }
 
+// The left side is the documentation site's header, measure for measure
+// (site/client/site.css, "header"): the same 24 px mark, wordmark, 28 px gap
+// and section links, so crossing between the playground and the site moves
+// nothing that both pages show.
 .left {
   display: flex;
   align-items: center;
-  gap: 14px;
+  align-self: stretch;
+  gap: 28px;
   min-width: 0;
+}
+
+.brand {
+  @extend %focus-ring;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  text-decoration: none;
+  border-radius: var(--radius);
+  flex-shrink: 0;
+  // Optical: the wordmark's cap height sits a hair low, so the mark and the
+  // word ride up together, as the site's wordmark link does.
+  padding-bottom: 1px;
+}
+
+.brandMark {
+  display: block;
+  width: 24px;
+  height: 24px;
 }
 
 .logo {
@@ -46,9 +82,7 @@
   font-size: 20px;
   line-height: 1;
   letter-spacing: -0.02em;
-  color: var(--text-primary);
-  // Optical: the wordmark's cap height sits a hair low against the dot.
-  padding-bottom: 1px;
+  color: var(--bar-ink);
 }
 
 .status {
@@ -77,20 +111,70 @@
   white-space: nowrap;
 }
 
-// Learn and Gallery: links to the documentation site, set apart from the
-// compile status by a rule.
+// The documentation site's sections, then Playground, marked as the page the
+// reader is on, after a rule. Type, spacing and the current-page underline
+// copy the site's header.
 .siteLinks {
   display: flex;
-  align-items: center;
-  gap: 2px;
+  align-items: stretch;
+  align-self: stretch;
+  gap: 4px;
+}
 
+.siteLink {
+  @extend %focus-ring;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 10px;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  // The site sets its links in its body's leading and kerning, which place
+  // the text a fraction of a pixel differently from the bar's defaults.
+  line-height: 1.65;
+  font-kerning: normal;
+  color: var(--bar-link);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color var(--transition);
+
+  // An invisible bold copy of the label holds the link at its bold width,
+  // so which link is current never moves the others.
   &::before {
-    content: "";
-    width: 1px;
-    height: 18px;
-    margin-right: 6px;
-    background: var(--border);
+    content: attr(data-label);
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+    font-weight: 700;
   }
+
+  &:hover {
+    color: var(--bar-ink);
+  }
+
+  &[aria-current] {
+    color: var(--bar-ink);
+    font-weight: 700;
+  }
+
+  &[aria-current]::after {
+    content: "";
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: -1px;
+    height: 2px;
+    border-radius: 2px 2px 0 0;
+    background: var(--accent);
+  }
+}
+
+.playgroundLink {
+  margin-left: 6px;
+  // The rule before Playground is a background drawn just left of the link,
+  // since both of its pseudo-elements are taken.
+  background: linear-gradient(var(--bar-rule), var(--bar-rule)) left -4px center / 1px 18px no-repeat;
 }
 
 // Hidden from sight, still read out: the phone bar shows only the dot.
@@ -548,12 +632,13 @@
   to   { transform: translateX(70%) scaleX(0.3); }
 }
 
-// ─── Narrow desktop ─────────────────────────────────────────────────────────
+// ─── Narrower desktops ──────────────────────────────────────────────────────
 
-// From the phone breakpoint up to 900 px the bar is short of room for the
-// Learn and Gallery links. The status word goes (the dot stays, and the word
-// is still read out, as on a phone) and the spacing tightens.
-@media (min-width: 760px) and (max-width: 899px) {
+// Below 1280 px the documentation site's header tightens the same way
+// (site.css), so its links and these still line up. The status word goes (the
+// dot stays, and the word is still read out, as on a phone) and the tools
+// close up.
+@media (min-width: 760px) and (max-width: 1279.98px) {
   .statusLabel {
     position: absolute;
     width: 1px;
@@ -567,18 +652,56 @@
   }
 
   .left {
-    gap: 10px;
+    gap: 20px;
+  }
+
+  .siteLink {
+    padding: 0 7px;
+
+    &[aria-current]::after {
+      left: 7px;
+      right: 7px;
+    }
   }
 
   .btn:not(.btnSquare) {
     padding: 0 6px;
   }
 
-  .siteLinks .btn {
-    padding: 0 5px;
-  }
-
   .divider {
     margin: 0 5px;
+  }
+}
+
+// Short of room for every link, the bar drops them from the end, so the ones
+// it keeps sit where the site's header has them. The site's own links are a
+// click away on Learn. The widths leave room for New's wider "Clear editor?"
+// confirmation (measured in Chromium).
+@media (min-width: 760px) and (max-width: 1119.98px) {
+  .siteLink[data-section="reference"],
+  .siteLink[data-section="playground"] {
+    display: none;
+  }
+}
+
+@media (min-width: 760px) and (max-width: 959.98px) {
+  .siteLink[data-section="gallery"] {
+    display: none;
+  }
+}
+
+// Below 900 px the tools need the row; the site's header folds its links
+// into a menu at about the same width. The brand still leads to the course.
+@media (min-width: 760px) and (max-width: 899.98px) {
+  .siteLinks {
+    display: none;
+  }
+}
+
+// On the narrowest phones the mark stands for the wordmark, which is still
+// the link's name.
+@media (max-width: 359.98px) {
+  .logo {
+    display: none;
   }
 }

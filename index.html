@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Before any stylesheet: the theme the reader chose on this page or on
+         the documentation site (one shared key), or the system's, so the
+         first frame is already in it. The app's store resolves it the same
+         way (src/store/index.ts). -->
+    <script>try{var t=localStorage.getItem("marey_theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: light)").matches?"light":"dark";document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+    <!-- A skipped view transition rejects its `ready` promise, sometimes
+         before the page can reach it; marked handled here, as on the
+         documentation site (site/build/layout.ts), it stays out of the
+         console. -->
+    <script>addEventListener("unhandledrejection",function(e){var r=e.reason;r&&r.name==="AbortError"&&/transition/i.test(r.message)&&e.preventDefault()});</script>
     <title>Marey</title>
     <meta
       name="description"
