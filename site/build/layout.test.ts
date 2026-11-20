@@ -1,6 +1,7 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { THEME_KEY } from "../client/theme";
-import { renderLayout, type LayoutInput } from "./layout";
+import { renderLayout, VIEW_TRANSITION_SCRIPT, type LayoutInput } from "./layout";
 
 const base: LayoutInput = {
   section: "learn",
@@ -39,7 +40,16 @@ describe("renderLayout", () => {
       next: { href: bad, title: bad },
       headings: [{ depth: 2, text: bad, id: bad }],
     });
-    expect(html).not.toContain("<img");
+    // The only images are the brand mark's own two, in the header and footer.
+    expect(html).not.toContain("<img src=x");
+    expect(html.match(/<img\b/g)).toHaveLength(2);
+    expect(html.match(/<img class="wordmark-mark" src="\/favicon\.svg"/g)).toHaveLength(2);
+  });
+
+  it("draws the brand mark, the favicon, beside the wordmark in the header and the footer", () => {
+    const html = renderLayout(base);
+    expect(html).toContain('<a class="wordmark" href="/learn/"><img class="wordmark-mark" src="/favicon.svg" width="24" height="24" alt="" />Marey</a>');
+    expect(html).toContain('<span class="wordmark"><img class="wordmark-mark" src="/favicon.svg" width="24" height="24" alt="" />Marey</span>');
   });
 
   it("leaves the h1 to the page when the page supplies its own", () => {
@@ -98,6 +108,27 @@ describe("renderLayout", () => {
 
   it("reads the theme from the key the client's toggle writes", () => {
     expect(renderLayout(base)).toContain(`localStorage.getItem(${JSON.stringify(THEME_KEY)})`);
+  });
+
+  it("marks only a skipped view transition's rejection as handled, as the playground's page does", () => {
+    const html = renderLayout(base);
+    const handled = (reason: unknown) => {
+      let listener: ((e: { reason: unknown; preventDefault(): void }) => void) | undefined;
+      new Function("addEventListener", VIEW_TRANSITION_SCRIPT)((type: string, fn: typeof listener) => {
+        if (type === "unhandledrejection") listener = fn;
+      });
+      let prevented = false;
+      listener!({ reason, preventDefault: () => (prevented = true) });
+      return prevented;
+    };
+    expect(handled(Object.assign(new Error("Transition was skipped"), { name: "AbortError" }))).toBe(true);
+    expect(handled(Object.assign(new Error("The user aborted a request."), { name: "AbortError" }))).toBe(false);
+    expect(handled(new Error("Transition was skipped"))).toBe(false);
+    expect(handled(undefined)).toBe(false);
+    expect(html.indexOf(VIEW_TRANSITION_SCRIPT)).toBeGreaterThan(-1);
+    expect(html.indexOf(VIEW_TRANSITION_SCRIPT)).toBeLessThan(html.indexOf("<title>"));
+    const playground = readFileSync(new URL("../../index.html", import.meta.url), "utf8");
+    expect(playground).toContain(`<script>${VIEW_TRANSITION_SCRIPT}</script>`);
   });
 
   it("marks the document as scripted before any stylesheet, so the drawer only replaces the plain layout when it can open", () => {

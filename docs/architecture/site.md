@@ -177,6 +177,55 @@ It checks words, not usage. Animating `color` before lesson 7 uses only words
 lesson 1 introduced, so whether a showcase uses an idea before its lesson
 teaches it is for review to judge, by reading.
 
+## One header with the playground
+
+A reader crosses between the playground and the site often, so the two share
+one header, and crossing it moves nothing that both pages show. The site's
+header (`layout.ts`, `site.css`) and the playground's top bar
+(`src/components/TopBar/`) are separate code held to one layout:
+
+- **Brand:** the favicon, drawn at 24 px as an `<img>` beside the wordmark,
+  20 px from the left edge. The SVG then sizes its own details: its small-size
+  rule applies at 24 px, which an inline copy could not do.
+- **Size:** both are 56 px tall, counting the 1 px rule.
+- **Links:** both list the site's sections and then Playground, in the order
+  `SECTION_LABELS` gives. `src/components/TopBar/siteLinks.test.ts` fails if
+  the two lists drift apart. Every link opens in the same tab: the playground
+  saves its text as it changes, so leaving it loses nothing.
+- **Type and spacing:** both use the same 15 px type, leading, kerning and
+  colours. The playground's `--bar-*` tokens copy the site's header colours.
+  An invisible bold copy of each label holds every link at its bold width, so
+  the current page never moves the others.
+- **Narrower windows:** below 1280 px both close up in the same way. On the
+  playground the tools then need room, so it drops links from the end:
+  Reference and Playground below 1120 px, Gallery below 960 px, and all of
+  them below 900 px. The links that remain stay where the site has them, and
+  these widths leave room for New's wider "Clear editor?" confirmation.
+- **Theme:** both cycle system, light, dark under the one `marey_theme` key.
+  Each page applies the stored choice from an inline script in its head, so
+  the first frame is already in the right theme.
+- **Rendering:** the playground's bar sits on its own compositing layer, as
+  the site's sticky header does. Text is then smoothed the same way on both,
+  so the shared part of the header is the same image, pixel for pixel, at
+  1440 and 1279 px in both themes (measured in Chromium).
+
+Both pages opt in to cross-document view transitions, and both headers carry
+`view-transition-name: marey-header`. Where the browser runs the transition,
+the header holds still while the page under it crossfades. Chromium does not
+run it on every navigation: in our measurements it skipped some even in a
+GPU-backed window, without a logged reason. A skipped transition rejects its
+`ready` promise with an AbortError, and on the arriving page Chromium can do
+so before `pagereveal` hands the page the transition, leaving no promise to
+handle. Each page's head script therefore marks that one rejection as handled
+from `unhandledrejection` and lets every other rejection through
+(`VIEW_TRANSITION_SCRIPT` in `layout.ts`, with the same text in
+`index.html`); otherwise it would appear as an uncaught error in the reader's
+console. When it skips, the browser keeps
+showing the old page until the new one paints, so the new page's first frame
+has to be complete. That is why the header controls show from the first paint
+on the site, and why the playground's editor placeholder draws Monaco's line
+numbers, first-line highlight and text column (`MonacoEditor.module.scss`).
+
 ## Players: the pool and the font
 
 Each player owns a WebGL context, and Chromium drops the oldest context past

@@ -58,6 +58,16 @@ export const App: FunctionComponent = () => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
+  // With the "system" choice, the playground follows the operating system's
+  // setting as it changes, as the documentation site's CSS does.
+  useEffect(() => {
+    const media = window.matchMedia?.("(prefers-color-scheme: light)");
+    if (!media) return;
+    const sync = (): void => useAppStore.getState().syncSystemTheme();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+
   // The log is open on desktop and folded on phones until someone opens it.
   // Each layout keeps its own choice, so resizing across the breakpoint does
   // not carry one into the other.

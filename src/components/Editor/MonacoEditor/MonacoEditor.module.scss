@@ -9,21 +9,63 @@
   height: 100%;
 }
 
-// Matches the editor's font, line height and top padding, and starts the text
-// where Monaco's first column will be, so the swap does not shift the code.
+// Drawn as Monaco first draws the editor (constants.ts: 13 px type on 22 px
+// lines, 14 px top padding, `lineNumbersMinChars: 3`; themes.ts for colour),
+// measured in Chromium: the numbers right-aligned in a 23 px gutter, the text
+// from x = 33, the first line, where the cursor starts, on the highlight band.
+// The swap to Monaco then moves nothing.
 .placeholder {
   position: absolute;
   inset: 0;
-  margin: 0;
   overflow: hidden;
-  // 33px is where Monaco draws column 1 with `lineNumbersMinChars: 3`,
-  // measured in Chromium; the placeholder has no line numbers to fill it.
-  padding: 14px 0 0 33px;
   background: var(--bg-editor);
-  color: var(--text-primary);
   font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
   font-size: 13px;
   line-height: 22px;
+  --line-number: #80858f;
+  --line-number-active: #d9dbe1;
+  --line-highlight: #1b1c20;
+
+  [data-theme="light"] & {
+    --line-number: #646d82;
+    --line-number-active: #1d2a44;
+    --line-highlight: #eef2f5;
+  }
+
+  // The first line's highlight, behind the gutter and the text.
+  &::before {
+    content: "";
+    position: absolute;
+    top: 14px;
+    left: 0;
+    right: 0;
+    height: 22px;
+    background: var(--line-highlight);
+  }
+}
+
+.placeholderGutter {
+  position: absolute;
+  top: 14px;
+  left: 0;
+  width: 23px;
+  text-align: right;
+  color: var(--line-number);
+  white-space: pre;
+
+  > :first-child {
+    color: var(--line-number-active);
+  }
+}
+
+.placeholderText {
+  position: absolute;
+  top: 14px;
+  left: 33px;
+  right: 0;
+  margin: 0;
+  color: var(--text-primary);
+  font: inherit;
   white-space: pre;
   tab-size: 2;
 }

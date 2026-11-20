@@ -64,6 +64,15 @@
   --dot-error:          #f87171;
   --dot-idle:           #5d626d;
 
+  // The top bar's rule, wordmark and section links take the documentation
+  // site's header colours (site.css --site-border, --site-text,
+  // --site-text-2, --site-border-strong), so the shared header is one colour
+  // on both.
+  --bar-border:         #2a2c33;
+  --bar-ink:            #e1e3e8;
+  --bar-link:           #a3a9b4;
+  --bar-rule:           #3a3d46;
+
   // Non-colour tokens come last: the contrast test reads colours up to the
   // first closing brace, and the interpolations below contain one.
   --font-mono: #{$font-mono};
@@ -91,9 +100,11 @@
   --text-error:         #b4322a;
   --text-info:          #2b4fa8;
 
-  --accent:             #1d2a44;
-  --accent-dim:         #dfe5ee;
-  --accent-text:        #fbfcfa;
+  // The brand purple in both themes, as on the documentation site
+  // (site.css --site-accent, --site-accent-soft, --site-on-accent).
+  --accent:             #6b58f0;
+  --accent-dim:         #efedfd;
+  --accent-text:        #ffffff;
 
   --surface-grid-minor: #e6ebf1;
   --surface-grid-major: #cdd8e4;
@@ -103,6 +114,11 @@
   --dot-ok:             #2f7a4a;
   --dot-error:          #b4322a;
   --dot-idle:           #8a93a6;
+
+  --bar-border:         #e1e4e8;
+  --bar-ink:            #1d2a44;
+  --bar-link:           #4f5a70;
+  --bar-rule:           #cdd3db;
 }
 
 html,
@@ -117,6 +133,27 @@ body {
 
 #app {
   height: 100%;
+}
+
+// Moving between the playground and the documentation site is a same-origin
+// navigation, so the browser can carry it as a view transition: the header,
+// named the same on both sides, stays where it is while the page beneath it
+// crossfades. Browsers without cross-document view transitions navigate as
+// before.
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-group(root) {
+  animation-duration: 160ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
 }
 
 ::-webkit-scrollbar {

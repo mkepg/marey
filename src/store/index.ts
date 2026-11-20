@@ -12,6 +12,8 @@ import { EXAMPLES, DEFAULT_EXAMPLE, type ExampleId } from "../examples";
 const DEFAULT_CODE: string = DEFAULT_EXAMPLE.source;
 
 export type Theme = "dark" | "light";
+/** What the reader chose; "system" follows the operating system's setting. */
+export type ThemeChoice = "system" | Theme;
 export type CompileStatus = "idle" | "ok" | "error";
 
 export interface ToastState {
@@ -33,6 +35,7 @@ export interface SceneInfo {
 export interface AppState {
   code: string;
   theme: Theme;
+  themeChoice: ThemeChoice;
   logs: LogEntry[];
   errors: CompilerError[];
   compileStatus: CompileStatus;
@@ -48,7 +51,10 @@ export interface AppState {
   /** Goes up by one per scene entrance to play; the preview plays one on each change. */
   entrance: number;
   setCode: (code: string) => void;
-  toggleTheme: () => void;
+  /** System, then light, then dark, then system again: the same cycle as the documentation site's toggle. */
+  cycleTheme: () => void;
+  /** Re-reads the system setting while the choice is "system". */
+  syncSystemTheme: () => void;
   setLogs: (logs: LogEntry[]) => void;
   setErrors: (errors: CompilerError[]) => void;
   setCompileStatus: (status: CompileStatus) => void;
@@ -65,19 +71,31 @@ export interface AppState {
   playEntrance: () => void;
 }
 
+/** Shared with the documentation site, so a choice made on either holds on both. */
 const THEME_STORAGE_KEY = "marey_theme";
+const THEME_ORDER: readonly ThemeChoice[] = ["system", "light", "dark"];
 
-function getInitialTheme(): Theme {
-  try {
-    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (stored === "dark" || stored === "light") return stored;
-  } catch {
-  }
+function systemTheme(): Theme {
   if (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {
     return "light";
   }
   return "dark";
 }
+
+function getInitialThemeChoice(): ThemeChoice {
+  try {
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (stored === "dark" || stored === "light") return stored;
+  } catch {
+  }
+  return "system";
+}
+
+export function resolveTheme(choice: ThemeChoice): Theme {
+  return choice === "system" ? systemTheme() : choice;
+}
+
+const initialThemeChoice = getInitialThemeChoice();
 
 const { code: initialCode } = resolveInitialCode(DEFAULT_CODE);
 
@@ -89,7 +107,8 @@ let toastIdCounter = 0;
 
 export const useAppStore = create<AppState>((set) => ({
   code: initialCode,
-  theme: getInitialTheme(),
+  theme: resolveTheme(initialThemeChoice),
+  themeChoice: initialThemeChoice,
   logs: [],
   errors: [],
   compileStatus: "idle",
@@ -105,15 +124,17 @@ export const useAppStore = create<AppState>((set) => ({
   entrance: 0,
   setCode: (code) =>
     set({ code, isTooLargeToShare: computeIsTooLarge(code) }),
-  toggleTheme: () =>
+  cycleTheme: () =>
     set((s) => {
-      const nextTheme = s.theme === "dark" ? "light" : "dark";
+      const themeChoice = THEME_ORDER[(THEME_ORDER.indexOf(s.themeChoice) + 1) % THEME_ORDER.length]!;
       try {
-        window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+        window.localStorage.setItem(THEME_STORAGE_KEY, themeChoice);
       } catch {
       }
-      return { theme: nextTheme };
+      return { themeChoice, theme: resolveTheme(themeChoice) };
     }),
+  syncSystemTheme: () =>
+    set((s) => (s.themeChoice === "system" ? { theme: systemTheme() } : {})),
   setLogs:          (logs)          => set({ logs }),
   setErrors:        (errors)        => set({ errors }),
   setCompileStatus: (compileStatus) => set({ compileStatus }),

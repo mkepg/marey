@@ -8,26 +8,35 @@ import { exportLabelFor } from "./exportLabel";
 import { menuKey } from "./menuKeys";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
 import styles from "./TopBar.module.scss";
+import { SITE_LINKS } from "./siteLinks";
+
+// The theme icons are the documentation site's (site/build/layout.ts), so the
+// one control looks the same on every page.
+const THEME_STROKE = { fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round" } as const;
+
+const SystemIcon: FunctionComponent = () => (
+  <svg width="16" height="16" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+    <circle cx="10" cy="10" r="6.75" {...THEME_STROKE} />
+    <path d="M10 3.25a6.75 6.75 0 0 1 0 13.5Z" fill="currentColor" />
+  </svg>
+);
 
 const SunIcon: FunctionComponent = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="12" cy="12" r="5" />
-    <line x1="12" y1="1"  x2="12" y2="3"  />
-    <line x1="12" y1="21" x2="12" y2="23" />
-    <line x1="4.22"  y1="4.22"  x2="5.64"  y2="5.64"  />
-    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-    <line x1="1"  y1="12" x2="3"  y2="12" />
-    <line x1="21" y1="12" x2="23" y2="12" />
-    <line x1="4.22"  y1="19.78" x2="5.64"  y2="18.36" />
-    <line x1="18.36" y1="5.64"  x2="19.78" y2="4.22"  />
+  <svg width="16" height="16" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+    <circle cx="10" cy="10" r="3.6" {...THEME_STROKE} />
+    <path d="M10 1.75v2.1M10 16.15v2.1M1.75 10h2.1M16.15 10h2.1M4.17 4.17l1.48 1.48M14.35 14.35l1.48 1.48M4.17 15.83l1.48-1.48M14.35 5.65l1.48-1.48" {...THEME_STROKE} />
   </svg>
 );
 
 const MoonIcon: FunctionComponent = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+  <svg width="16" height="16" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+    <path d="M16.5 12.6A7 7 0 0 1 7.4 3.5a7 7 0 1 0 9.1 9.1Z" {...THEME_STROKE} />
   </svg>
 );
+
+const THEME_ICON = { system: SystemIcon, light: SunIcon, dark: MoonIcon } as const;
+const THEME_LABEL = { system: "Theme: system", light: "Theme: light", dark: "Theme: dark" } as const;
+const NEXT_THEME = { system: "light", light: "dark", dark: "system" } as const;
 
 const RunIcon: FunctionComponent = () => (
   <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
@@ -208,31 +217,25 @@ const SHORT_NAME: Readonly<Record<ExportKind, string>> = {
 // Generated at build time by vite-plugins/thirdPartyLicenses.ts.
 const LICENSES_HREF = `${import.meta.env.BASE_URL}third-party-licenses.txt`;
 
-// The documentation site, built beside the playground by vite-plugins/site.ts.
-// They open in a new tab, as the licences link does, so the scene in the
-// editor stays where it is.
-const SITE_LINKS = [
-  { href: `${import.meta.env.BASE_URL}learn/`, label: "Learn", title: "The Marey course" },
-  { href: `${import.meta.env.BASE_URL}gallery/`, label: "Gallery", title: "Finished scenes with their source" },
-] as const;
-
 interface TopBarProps {
   onRun: () => void;
 }
 
 /**
- * The top bar (spec 6B §4). On desktop: the wordmark and the compile status
- * on the left; auto-run, Examples, New, Share, Export, the theme toggle and
- * Run on the right. On phones it keeps the wordmark, the status dot,
+ * The top bar (spec 6B §4). On desktop: the brand and the documentation
+ * site's section links on the left, laid out as the site's own header lays
+ * them out so nothing moves when a reader crosses between the two; the
+ * compile status, auto-run, Examples, New, Share, Export, the theme toggle
+ * and Run on the right. On phones it keeps the brand, the status dot,
  * Examples and Run, and folds everything else into the ⋯ (More) menu.
  */
 export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
   const narrow      = useIsNarrow();
-  const theme       = useAppStore((s) => s.theme);
+  const themeChoice = useAppStore((s) => s.themeChoice);
   const status      = useAppStore((s) => s.compileStatus);
   const autoRun     = useAppStore((s) => s.autoRun);
   const isTooLarge  = useAppStore((s) => s.isTooLargeToShare);
-  const toggleTheme = useAppStore((s) => s.toggleTheme);
+  const cycleTheme  = useAppStore((s) => s.cycleTheme);
   const newFile     = useAppStore((s) => s.newFile);
   const loadExample = useAppStore((s) => s.loadExample);
   const setAutoRun  = useAppStore((s) => s.setAutoRun);
@@ -397,15 +400,14 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
         role="menuitem"
         tabIndex={-1}
         href={link.href}
-        target="_blank"
-        rel="noopener noreferrer"
         onClick={onChoose}
-        aria-label={`${link.label} (opens in a new tab)`}
       >
         <span className={styles.menuIconSpace} aria-hidden="true" />
         <span className={styles.menuLabel}>{link.label}</span>
       </a>
     ));
+
+  const ThemeIcon = THEME_ICON[themeChoice];
 
   const runButton = (
     <button className={styles.btnRun} onClick={onRun} aria-label="Run (Ctrl+Enter)" title="Run (Ctrl+Enter)">
@@ -417,32 +419,31 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
   return (
     <header className={`${styles.topBar}${narrow ? ` ${styles.narrow}` : ""}`} data-topbar>
       <div className={styles.left}>
-        <span className={styles.logo}>Marey</span>
-        <div className={styles.status} role="status" title={statusText}>
-          <span className={`${styles.statusDot} ${dotMod}`} aria-hidden="true" />
-          <span className={narrow ? styles.visuallyHidden : styles.statusLabel}>{statusText}</span>
-        </div>
+        <a className={styles.brand} href={`${import.meta.env.BASE_URL}learn/`} aria-label="Marey: the course">
+          <img className={styles.brandMark} src={`${import.meta.env.BASE_URL}favicon.svg`} width={24} height={24} alt="" />
+          <span className={styles.logo}>Marey</span>
+        </a>
         {!narrow && (
-          <nav className={styles.siteLinks} aria-label="Marey site">
+          <nav className={styles.siteLinks} aria-label="Sections">
             {SITE_LINKS.map((link) => (
-              <a
-                key={link.href}
-                className={`${styles.btn} ${styles.menuLink}`}
-                href={link.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={link.title}
-                aria-label={`${link.label} (opens in a new tab)`}
-              >
+              <a key={link.href} className={styles.siteLink} href={link.href} data-label={link.label} data-section={link.label.toLowerCase()}>
                 {link.label}
               </a>
             ))}
+            <a className={`${styles.siteLink} ${styles.playgroundLink}`} href={import.meta.env.BASE_URL} aria-current="page" data-label="Playground" data-section="playground">
+              Playground
+            </a>
           </nav>
         )}
       </div>
 
       {narrow ? (
         <div className={styles.right}>
+          <div className={styles.status} role="status" title={statusText}>
+            <span className={`${styles.statusDot} ${dotMod}`} aria-hidden="true" />
+            <span className={narrow ? styles.visuallyHidden : styles.statusLabel}>{statusText}</span>
+          </div>
+
           {exampleMenuEl}
 
           <div className={styles.menuWrap} ref={moreMenu.wrapRef}>
@@ -519,10 +520,10 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
                   className={styles.menuItem}
                   role="menuitem"
                   tabIndex={-1}
-                  onClick={toggleTheme}
+                  onClick={cycleTheme}
                 >
-                  {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-                  <span className={styles.menuLabel}>{theme === "dark" ? "Light theme" : "Dark theme"}</span>
+                  <ThemeIcon />
+                  <span className={styles.menuLabel}>{THEME_LABEL[themeChoice]}</span>
                 </button>
               </div>
             )}
@@ -540,6 +541,13 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
         </div>
       ) : (
         <div className={styles.right}>
+          <div className={styles.status} role="status" title={statusText}>
+            <span className={`${styles.statusDot} ${dotMod}`} aria-hidden="true" />
+            <span className={narrow ? styles.visuallyHidden : styles.statusLabel}>{statusText}</span>
+          </div>
+
+          <div className={styles.divider} />
+
           <button
             className={styles.autoRun}
             onClick={() => setAutoRun(!autoRun)}
@@ -620,11 +628,11 @@ export const TopBar: FunctionComponent<TopBarProps> = ({ onRun }) => {
 
           <button
             className={`${styles.btn} ${styles.btnSquare}`}
-            onClick={toggleTheme}
-            aria-label={theme === "dark" ? "Switch to the light theme" : "Switch to the dark theme"}
-            title={theme === "dark" ? "Light theme" : "Dark theme"}
+            onClick={cycleTheme}
+            aria-label={`${THEME_LABEL[themeChoice]}. Switch to ${NEXT_THEME[themeChoice]}.`}
+            title={THEME_LABEL[themeChoice]}
           >
-            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+            <ThemeIcon />
           </button>
 
           {runButton}
