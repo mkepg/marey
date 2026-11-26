@@ -100,7 +100,7 @@ does not show", and in the open follow-ups of `roadmap-and-process.md`:
 ```marey
 circle dot {
   position: (200, 300)
-  animate { property: opacity, from: 0, to: 1, duration: 0.6, delay: 0.2 }
+  animate { property: alpha, from: 0, to: 1, duration: 0.6, delay: 0.2 }
 }
 ```
 
