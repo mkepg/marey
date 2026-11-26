@@ -256,8 +256,10 @@ block for its object.
 - Every repository rule in `AGENTS.md`. Branch `phase-10a`, merged to `main`
   with a merge commit, pushed, branch deleted.
 - The determinism snapshot (`determinism.test.ts`) gains exactly the new
-  defaulted IR fields (`from: null`, `bounce: 0.25`) and nothing else. The
-  diff is checked line by line.
+  defaulted IR fields (`from: null`, `bounce: 0.25`). Its trig case may also
+  move folded `sin`/`cos` literals in their last digits when `detMath` lands
+  (§3.3). Nothing else changes. Each diff is checked line by line, and every
+  moved literal is listed in the evidence.
 - `docs/LANGUAGE.md` documents `from`, `spring`, `bounce` and the new
   diagnostics. Its examples compile under `languageDocs.test.ts`. The site
   reference regenerates from it.
