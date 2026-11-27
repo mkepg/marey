@@ -6,6 +6,9 @@
 > **Outcome, 2026-11-27:** Stage 1 ran. All 36 scenes passed every clause, so
 > §2.4 builds nothing and Stage 2 is not built. §3 stays as the design that
 > was pre-registered. Evidence: `eval/RESULTS-PHASE-10B-MEASUREMENT.md`.
+>
+> **Erratum:** §2.3 names the checker's test `eval/layout/check.test.ts`; the
+> file is `eval/layoutCheck.test.ts`.
 
 **Roadmap:** `2026-09-09-marey-engineering-roadmap-design.md` §13, amended
 2026-11-27 (Phase 10). R10 (measure semantic compression) and R11 (investigate

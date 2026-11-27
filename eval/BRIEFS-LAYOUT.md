@@ -55,8 +55,11 @@ With `<AUTHOR>` set to A, B, C or D:
 The prompt above was not the one used: it points authors at this file, which
 also holds the checker's predicates. The authors were given this text instead,
 with `<REPO>` the repository path and `<AUTHOR>` set to A, B, C or D.
-The convention paragraph ("Centred in the scene", "Gap")
-was part of it.
+Its convention sentences go beyond the paragraph above the briefs table,
+whose only spacing word is "Gap": they also define "apart", the word L1, L2,
+L4, L6 and L7 use for their spacing, as edge to edge, and make an exception
+for a brief that says centres (L5). `eval/RESULTS-PHASE-10B-MEASUREMENT.md` §1 records what that
+changed.
 
 > You are writing scenes in Marey, a small language for 2D motion graphics. You have no prior knowledge of it. The repository is at <REPO>. You may read only:
 > - src/examples/dusk-hills.marey
