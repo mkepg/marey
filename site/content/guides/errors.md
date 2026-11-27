@@ -644,7 +644,7 @@ scene {
 ```
 
 `TYPE_ONE_PHYSICS` already refuses two physics blocks on one object. A
-`parallel` is the same mistake inside a sequence: both blocks would drive the
+`parallel` is the same mistake inside a sequence: each block would drive the
 one body, and only the last block's settings would apply. Merge them into one
 block:
 
@@ -688,10 +688,11 @@ scene {
 }
 ```
 
-A spring overshoots its target, and a collider that swings through a size of
-zero is the hazard `TYPE_ZERO_SCALE_PHYSICS` already guards against, so a
-spring on `scale` is refused for any object that takes part in physics. Use
-`easeOut` for scale there:
+A spring can overshoot its target, so on `scale` it would resize the body's
+collider past the size you wrote. Toward a small target it can reach zero,
+the hazard `TYPE_ZERO_SCALE_PHYSICS` already guards against. So a spring on
+`scale` is refused for any object that takes part in physics, whatever its
+target. Use `easeOut` for scale there:
 
 ```marey
 scene {

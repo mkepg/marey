@@ -132,7 +132,7 @@ describe("Phase 8 diagnostics", () => {
   });
   describe("TYPE_PARALLEL_ONE_PHYSICS", () => {
     const MSG = (n: number) =>
-      `[TYPE_PARALLEL_ONE_PHYSICS] A 'parallel' can run only one 'physics' block for its object. Found ${n}. Both would drive the same body, and only the last one's settings would apply. Merge them into one block.`;
+      `[TYPE_PARALLEL_ONE_PHYSICS] A 'parallel' can run only one 'physics' block for its object. Found ${n}. Each would drive the same body, and only the last one's settings would apply. Merge them into one block.`;
     const box = (body: string) =>
       scene(`  rectangle r {
     position: (200, 200)

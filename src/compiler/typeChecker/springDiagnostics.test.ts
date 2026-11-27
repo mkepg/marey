@@ -91,7 +91,7 @@ describe("spring diagnostics", () => {
 
   describe("TYPE_SPRING_SCALE_PHYSICS", () => {
     const SPRING_SCALE_PHYSICS =
-      "[TYPE_SPRING_SCALE_PHYSICS] The 'animate' block: a spring on 'scale' overshoots its target, which can swing a physics body's collider through zero. Use 'easing: easeOut' for scale on an object that takes part in physics.";
+      "[TYPE_SPRING_SCALE_PHYSICS] The 'animate' block: a spring on 'scale' can overshoot its target, which would resize a physics body's collider past the scale you wrote. Use 'easing: easeOut' for scale on an object that takes part in physics.";
 
     it("fires on an object that declares physics, at the easing value", () => {
       const src = withAnimate("easing: spring", "    physics { duration: 1 }");

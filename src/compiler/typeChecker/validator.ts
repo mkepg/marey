@@ -197,6 +197,32 @@ function zeroScalePhysicsError(
 }
 
 /**
+ * TYPE_ANIM_COLOR_TARGET for an `animate { property: color }` block whose
+ * object is a group, or null. A group has no colour of its own to blend. The
+ * owner is the renderable the block belongs to, which a `sequence`/`parallel`
+ * may sit in front of, so it is looked up the same way the zero-scale rule
+ * does rather than taken from the parent node.
+ *
+ * One per block, at `property: color`, where it has always pointed. It used
+ * to run once per value, so a block with both `to` and `from` reported the
+ * same message twice.
+ */
+function colourTargetError(
+  prop: AstValue & { kind: "animProperty" },
+  ancestors: readonly ObjectNode[],
+): CompilerError | null {
+  if (prop.value !== "color") return null;
+  const ownerIdx = ownerIndex(ancestors);
+  const owner = ownerIdx >= 0 ? ancestors[ownerIdx] : undefined;
+  if (!owner || owner.type !== "group") return null;
+  return {
+    phase: "TYPE",
+    message: `[TYPE_ANIM_COLOR_TARGET] 'property: color' can only animate a shape with a 'color' (circle, rectangle, polygon, line or text); '${owner.name}' is a group.`,
+    ...errPosOf(prop),
+  };
+}
+
+/**
  * Every rule an `animate` block's `to` or `from` value has to satisfy, in one
  * place, so the two slots cannot drift apart (engineering-lessons §5). Both
  * reach the same runtime state: `to` is where the animation ends, `from`
@@ -231,25 +257,9 @@ function animateValueErrors(
     errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property 'color' expects a colour for '${slot}' (e.g., ${slot}: #ff8800).`, ...at });
   }
 
-  // A group has no colour of its own to blend. The owner is the renderable
-  // the block belongs to, which a `sequence`/`parallel` may sit in front of,
-  // so it is looked up the same way the zero-scale rule below does rather
-  // than taken from the parent node.
-  //
-  // The `to` diagnostic has always pointed at `property: color`. A `from` on
-  // the same block points at its own value instead, so an author who wrote
-  // both sees two marks rather than one diagnostic printed twice.
-  if (p === "color") {
-    const colourOwnerIdx = ownerIndex(ancestors);
-    const colourOwner = colourOwnerIdx >= 0 ? ancestors[colourOwnerIdx] : undefined;
-    if (colourOwner && colourOwner.type === "group") {
-      errors.push({
-        phase: "TYPE",
-        message: `[TYPE_ANIM_COLOR_TARGET] 'property: color' can only animate a shape with a 'color' (circle, rectangle, polygon, line or text); '${colourOwner.name}' is a group.`,
-        ...errPosOf(slot === "to" ? prop : value),
-      });
-    }
-  }
+  // A colour animation on a group (TYPE_ANIM_COLOR_TARGET) is not checked
+  // here: it is wrong whatever the values are, so it is a rule about the
+  // block, reported once per block by `colourTargetError`.
 
   // A `to` or a `from` reaches exactly the same runtime state a declared
   // `scale` does, so both scale rules apply to it (design §5.3). Until Phase
@@ -562,7 +572,7 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         for (const extra of parallelPhysics.slice(1)) {
           errors.push({
             phase: "TYPE",
-            message: `[TYPE_PARALLEL_ONE_PHYSICS] A 'parallel' can run only one 'physics' block for its object. Found ${parallelPhysics.length}. Both would drive the same body, and only the last one's settings would apply. Merge them into one block.`,
+            message: `[TYPE_PARALLEL_ONE_PHYSICS] A 'parallel' can run only one 'physics' block for its object. Found ${parallelPhysics.length}. Each would drive the same body, and only the last one's settings would apply. Merge them into one block.`,
             line: extra.line, col: extra.col, endLine: extra.endLine, endCol: extra.endCol,
           });
         }
@@ -752,6 +762,10 @@ export function collectErrors(ast: AstNode): CompilerError[] {
       if (propVal && fromVal && propVal.kind === "animProperty") {
         errors.push(...animateValueErrors("from", fromVal, propVal, label, ancestors));
       }
+      if (propVal?.kind === "animProperty" && (toVal || fromVal)) {
+        const colourTarget = colourTargetError(propVal, ancestors);
+        if (colourTarget) errors.push(colourTarget);
+      }
 
       // The easing in effect: the one written, else the contract default. An
       // easing value of the wrong kind is already a mismatch error, and naming
@@ -770,17 +784,19 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         });
       }
 
-      // A spring overshoots its target, and the runtime clamp keeps scale
-      // from going below zero, so a spring toward a small scale can sit a
-      // body's collider at zero, the hazard TYPE_ZERO_SCALE_PHYSICS exists
-      // for. It uses the same participation test as that rule.
+      // A spring can overshoot its target, which resizes a body's collider
+      // past the authored scale; the runtime clamp keeps scale from going
+      // below zero, so a spring toward a small scale can sit the collider at
+      // zero, the hazard TYPE_ZERO_SCALE_PHYSICS exists for. It fires for
+      // every target and `bounce`, and uses the same participation test as
+      // that rule.
       if (easing === "spring" && propVal?.kind === "animProperty" && propVal.value === "scale") {
         const springOwnerIdx = ownerIndex(ancestors);
         if (springOwnerIdx >= 0
             && physicsParticipationReason(ancestors[springOwnerIdx], ancestors.slice(0, springOwnerIdx)) !== null) {
           errors.push({
             phase: "TYPE",
-            message: `[TYPE_SPRING_SCALE_PHYSICS] ${label}: a spring on 'scale' overshoots its target, which can swing a physics body's collider through zero. Use 'easing: easeOut' for scale on an object that takes part in physics.`,
+            message: `[TYPE_SPRING_SCALE_PHYSICS] ${label}: a spring on 'scale' can overshoot its target, which would resize a physics body's collider past the scale you wrote. Use 'easing: easeOut' for scale on an object that takes part in physics.`,
             ...errPosOf(easingVal ?? propVal),
           });
         }

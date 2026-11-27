@@ -86,27 +86,35 @@ describe("animate { from }", () => {
     ]);
   });
 
-  it("rejects a colour 'from' on a group's colour animation with TYPE_ANIM_COLOR_TARGET at the 'from' value", () => {
+  const groupError =
+    "[TYPE_ANIM_COLOR_TARGET] 'property: color' can only animate a shape with a 'color' (circle, rectangle, polygon, line or text); 'g' is a group.";
+
+  it("rejects a group's colour animation with both 'to' and 'from' once, at 'property: color'", () => {
     const source = scene(`
   group g { position: (100, 100)
     circle c { position: (0, 0), radius: 10, color: red }
     animate { property: color, to: blue, from: #ff0000, duration: 1 } }`);
     const { errors } = check(source);
-    const groupError =
-      "[TYPE_ANIM_COLOR_TARGET] 'property: color' can only animate a shape with a 'color' (circle, rectangle, polygon, line or text); 'g' is a group.";
-    const colourTargets = errors.filter((e) => e.message === groupError);
-    // One for 'to', which has always pointed at 'property: color', and one for
-    // 'from', which points at its own value so the two are not one diagnostic
-    // printed twice.
-    expect(colourTargets).toHaveLength(2);
+    // The rule is about the block, not either value, so writing both values
+    // must not print the same message twice.
+    expect(messages(errors)).toEqual([groupError]);
     const lines = source.split("\n");
-    const fromLine = lines.findIndex((l) => l.includes("from: #ff0000")) + 1;
-    const fromCol = lines[fromLine - 1].indexOf("#ff0000") + 1;
-    const propCol = lines[fromLine - 1].indexOf("color,") + 1;
-    expect(colourTargets.map((e) => [e.line, e.col])).toEqual([
-      [fromLine, propCol],
-      [fromLine, fromCol],
-    ]);
+    const line = lines.findIndex((l) => l.includes("from: #ff0000")) + 1;
+    const propCol = lines[line - 1].indexOf("color,") + 1;
+    expect([errors[0].line, errors[0].col]).toEqual([line, propCol]);
+  });
+
+  it("rejects a group's colour animation with only 'from' once, at 'property: color'", () => {
+    const source = scene(`
+  group g { position: (100, 100)
+    circle c { position: (0, 0), radius: 10, color: red }
+    animate { property: color, from: #ff0000, duration: 1 } }`);
+    const { errors } = check(source);
+    const colourTargets = errors.filter((e) => e.message === groupError);
+    expect(colourTargets).toHaveLength(1);
+    const lines = source.split("\n");
+    const line = lines.findIndex((l) => l.includes("from: #ff0000")) + 1;
+    expect([colourTargets[0].line, colourTargets[0].col]).toEqual([line, lines[line - 1].indexOf("color,") + 1]);
   });
 });
 
