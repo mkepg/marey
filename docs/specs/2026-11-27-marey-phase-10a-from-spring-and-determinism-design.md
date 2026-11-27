@@ -182,9 +182,11 @@ animate { property: scale, from: 0.4, to: 1, duration: 0.8, easing: spring, boun
   1.73. So a scale spring toward a small target can go negative, and
   `alpha` can leave `[0, 1]`. The validator only sees the authored
   endpoints. **(call)**
-  - **Clamp at runtime.** The runner's value is clamped: `scale` to `≥ 0`
-    on each component, and `alpha` to `[0, 1]`. Every other easing stays
-    within its endpoints, so the clamp changes no existing output.
+  - **Clamp at runtime, for spring only.** A spring runner's value is
+    clamped: `scale` to `≥ 0` on each component, and `alpha` to `[0, 1]`.
+    The clamp is limited to spring because `animate` does not range-check
+    alpha endpoints, so `to: 1.5` compiles. Clamping every easing would
+    change such a scene's output. That range check is filed separately.
     Overshoot toward a near-zero target is lost, which is acceptable for a
     property the language already forbids below zero.
   - **New diagnostic `TYPE_SPRING_SCALE_PHYSICS`.** It fires for
@@ -294,7 +296,9 @@ block for its object.
      recorded.
    - The player's frame hash equals `marey export`'s (the 9A harness).
 2. Spring end-exactness: for `bounce` in {0, 0.25, 0.5, 0.9}, the value at the
-   last tick equals `to` exactly. The largest step at `t = 1` is at most `ε` of
+   last tick equals what every other easing ends on. That is the same lerp at
+   progress 1, `from + (to − from)`, which can differ from `to` in its last
+   bit, as it does today for every easing. The largest step at `t = 1` is at most `ε` of
    the travel.
 3. `detMath` accuracy: the sweep's maximum ulp error for each function, with
    the reference named.
