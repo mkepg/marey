@@ -1,0 +1,12 @@
+mixed-row: no sum over a list, so the left edges (226, 282, 418, 514) are hand-computed literals; unsure they are right if widths change.
+spread-dots: gap of 92.5 and centres (110, 242.5, 385, 537.5, 685) computed by hand; unsure whether fractional pixels are acceptable.
+left-stack: unsure whether origin (0, 0.5) with position x = 120 puts the left edge exactly on 120 (assumed yes per origin docs).
+badge-row: unsure a template with zero parameters (`template Badge()`) and `use Badge() badge {...}` is accepted (assumed, from the Sun() example).
+badge-row: unsure the row's centring should use badge centres (symmetric badges, so identical to the bounding box).
+card-grid: unsure of a numeric-fraction position expression like (row - 1.5) * rowStep; assumed fine.
+stack-columns: "80 px apart" read as edge-to-edge gap between columns (centre step 120); unsure it was not meant as centres.
+stack-columns: unsure a generate inside a group inside a generate gives unique names (assumed column_0.. with cell_r names inside).
+ring-12: assumed circle of radius 200 is traced by circle centres, and clockwise equals increasing angle because y points down.
+clock-ticks: unsure whether radius 220 means tick centre or tick inner/outer end; I used tick centre.
+clock-ticks: unsure rotation k * 6 (not k * 6 - 180) is right for a 4x16 rectangle; long side lies on the radius either way, being symmetric.
+clock-ticks: unsure `size: (4, if ... )` accepts an if inside a point coordinate (the clock lesson does it, so assumed yes).

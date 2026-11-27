@@ -1,0 +1,14 @@
+- mixed-row: no running sum or accumulation exists, so left edges (226, 282, 418, 514) are computed by hand and listed; unsure whether that counts as acceptable layout authoring.
+- mixed-row: unsure whether `origin: (0, 1)` at y = 400 puts the bottom edge exactly on 400 (assumed yes per the origin docs).
+- spread-dots: centres (110, 242.5, 385, 537.5, 685) computed by hand from the 92.5 gap; unsure there is any way to derive them in-language without a prefix sum.
+- left-stack: tops (225, 285, 345) hard-coded for lack of a cumulative sum; widths come from a list.
+- badge-row: unsure whether `template Badge()` with empty parentheses is legal (the dusk-hills `Sun()` suggests yes).
+- badge-row: unsure whether the "20x20 square centred on it" should be drawn on top of the circle (source order) or needs a `layer`; assumed source order is enough.
+- badge-row: "100 between neighbouring centres, row centred" read as centring on the circles' bounding box, which coincides with centring the centres since all radii are equal.
+- stack-columns: "80 px apart" read as edge-to-edge (column pitch 120); if it meant centre-to-centre the pitch would be 80 and the squares would overlap, so edge-to-edge assumed.
+- clock-ticks: "on a circle of radius 220" read as the tick's centre at radius 220 (not its inner or outer end); the 4x32 ticks therefore extend further inward and outward than the 4x16 ones.
+- clock-ticks: rotation is k * 6 (not k * 6 - 90) because a 4x16 rectangle's long side is vertical at rotation 0; unsure whether rotation is applied about the centre (assumed yes, default origin).
+- clock-ticks: `size: (4, if k % 5 == 0 then 32 else 16)` assumes an `if` expression is allowed as a single component inside a point, as in the clock example in the generate lesson.
+- ring-12, clock-ticks: cos/sin of non-multiples of 90 give float values; unsure of the tolerance the checker applies.
+- all: `(count - 1) / 2` yields .5 values for even counts; assumed division is real-valued, not integer.
+- all: negative loop-centred offsets like `(col - (cols - 1) / 2)` assume unary/binary minus mixes freely with parenthesised division, as in the generate lesson's grid example.
