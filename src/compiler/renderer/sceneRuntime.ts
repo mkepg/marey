@@ -580,14 +580,34 @@ export class SceneRuntime {
     if (anim.property !== "color") unpinBody(container, this.world, "FROZEN");
     if (isPos) pinBody(container, this.world, "POS_ANIM");
 
-    // With `from`, the runner starts there rather than at the object's current
-    // value, so a loop restarts at it and a yoyo returns to it.
+    const ra = this.newRunner(container, anim);
+    this.runningAnims.push(ra);
+    localList.push(ra);
+
+    // A `from` is written the moment the animation is scheduled, which is now:
+    // tick 0 for a top-level animation, the start of its step for one in a
+    // sequence. Left to the first tick, a delayed fade-in would show its
+    // resting value until then, and a body bound at its declared position
+    // would sit there although the drawing never does. Only with `from`:
+    // without it the start value is already what the object holds, and
+    // writing it again would add a world call to scenes that never asked for
+    // one.
+    if (anim.from !== null) this.writeFrom(ra);
+  }
+
+  /**
+   * A runner for `anim` on `container`, not yet registered anywhere.
+   *
+   * With `from`, the runner starts there rather than at the object's current
+   * value, so a loop restarts at it and a yoyo returns to it.
+   */
+  private newRunner(container: Container, anim: IRAnimation): RunningAnim {
     const sVal = anim.from === null
       ? getCurrentVal(container, anim.property)
       : runnerValue(anim.property, anim.from);
     const tVal = runnerValue(anim.property, anim.to);
 
-    const ra: RunningAnim = {
+    return {
       container, anim,
       startVal: sVal,
       targetVal: tVal,
@@ -605,29 +625,67 @@ export class SceneRuntime {
         prevElapsedTicks: 0,
         wrappedThisTick: false,
       },
-      isPosAnim: isPos,
+      isPosAnim: anim.property === "position",
       completedThisTick: false,
       hasTicked: false,
       paintedShort: false,
       paintP: 0,
       stillMoving: false,
     };
-    this.runningAnims.push(ra);
-    localList.push(ra);
+  }
 
-    // A `from` is written the moment the animation is scheduled, which is now:
-    // tick 0 for a top-level animation, the start of its step for one in a
-    // sequence. Left to the first tick, a delayed fade-in would show its
-    // resting value until then, and a body bound at its declared position
-    // would sit there although the drawing never does. Progress is 0 here,
-    // delayed or not, so this is the runner's own start value, and the push
-    // runs the same path every later tick does. Only with `from`: without
-    // it the start value is already what the object holds, and writing it
-    // again would add a world call to scenes that never asked for one.
-    if (anim.from !== null) {
-      applyAnim(ra, 0);
-      if (anim.property !== "color") this.pushAnimToWorld(ra, false);
+  /**
+   * Write a runner's `from` to the object and to its body. Progress is 0
+   * here, delayed or not, so this is the runner's own start value, and the
+   * push runs the same path every later tick does. A colour is display-only
+   * and never reaches the world.
+   */
+  private writeFrom(ra: RunningAnim): void {
+    applyAnim(ra, 0);
+    if (ra.anim.property !== "color") this.pushAnimToWorld(ra, false);
+  }
+
+  /**
+   * Show a sequence's first step's `from` values at tick 0 (Phase 10A spec
+   * §3.1, amended 2026-11-27).
+   *
+   * The step itself is still scheduled at the end of the first tick, as
+   * every sequence's first step is, so its motion starts when it always did;
+   * only the first frame's value changes. Without this, frame 0 of every
+   * export and the paused player showed the resting value of a sequence that
+   * opens on `alpha` `from: 0`.
+   *
+   * Only when nothing precedes the first step. With top-level animations or
+   * physics on the same object (`basePeers`), the sequence waits for them,
+   * so its first step is a later step like any other and its `from` has no
+   * effect until it is scheduled.
+   *
+   * Every animation in the step is registered while the `from` values are
+   * written, in step order, then removed again, so the writes see exactly the
+   * runners `startSequenceStep` will have registered at the same point: the
+   * owner of a scale correction and a live position runner come out the same.
+   * The step's own spawn later writes the same values again.
+   */
+  private writeFirstStepFrom(sr: SequenceRunner): void {
+    const step = sr.sequence.steps[0];
+    if (!step) return;
+    const anims: IRAnimation[] = [];
+    if ("type" in step && step.type === "parallel") {
+      for (const sub of (step as IRParallelStep).steps) {
+        if ("property" in sub) anims.push(sub as IRAnimation);
+      }
+    } else if ("property" in step) {
+      anims.push(step as IRAnimation);
     }
+    if (!anims.some((a) => a.from !== null)) return;
+
+    const registered = this.runningAnims.length;
+    for (const anim of anims) {
+      const ra = this.newRunner(sr.container, anim);
+      this.runningAnims.push(ra);
+      if (anim.from !== null) this.writeFrom(ra);
+    }
+    this.runningAnims.length = registered;
   }
 
   private spawnPhysics(container: Container, phIR: IRPhysics, localList: AnimOrPhysics[]): void {
@@ -714,14 +772,16 @@ export class SceneRuntime {
 
     if (container.__sequences && container.__sequences.length > 0) {
       const seq = container.__sequences[0];
-      this.sequenceRunners.push({
+      const sr: SequenceRunner = {
         container,
         sequence: seq,
         stepIndex: 0,
         state: "WAITING",
         basePeers: [...nodeAnims, ...nodePhysics],
         activeStepRunners: [],
-      });
+      };
+      this.sequenceRunners.push(sr);
+      if (sr.basePeers.length === 0) this.writeFirstStepFrom(sr);
     }
 
     for (const child of container.children) {

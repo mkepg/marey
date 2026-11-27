@@ -129,7 +129,7 @@ describe("from: position under a physics block", () => {
     expect(world.readState(id, 1)!.y).toBeCloseTo(100, 9);
   });
 
-  it("moves the body to from when a sequence step schedules it, not one tick later", () => {
+  it("moves the body to a first step's from at tick 0, and holds it there until the step runs", () => {
     const { world, runtime, obj } = build(`scene {
   size: (400, 300)
   circle c {
@@ -142,15 +142,126 @@ describe("from: position under a physics block", () => {
   }
 }`);
     const id = bodyOf(obj);
-    // Before the step is scheduled, from has no effect.
-    expect(world.readState(id, 1)).toMatchObject({ x: 300, y: 200 });
-    // The sequence schedules its first step at the end of tick 1.
-    step(runtime);
+    // Tick 0, before any tick or paint: nothing precedes the first step, so
+    // its from is already on the body and the drawing.
     expect(world.readState(id, 1)).toMatchObject({ x: 100, y: 100 });
-    for (let tick = 2; tick <= 61; tick++) {
+    expect(layoutPos(obj)).toEqual({ x: 100, y: 100 });
+    // The sequence schedules its first step at the end of tick 1; the delay
+    // of 60 ticks then holds from through tick 61.
+    for (let tick = 1; tick <= 61; tick++) {
       step(runtime);
       expect(world.readState(id, 1), `body at tick ${tick}`).toMatchObject({ x: 100, y: 100 });
+      expect(layoutPos(obj), `drawing at tick ${tick}`).toEqual({ x: 100, y: 100 });
     }
+    step(runtime);
+    expect(world.readState(id, 1)!.x).toBeCloseTo(100 + 100 / 60, 9);
+  });
+});
+
+describe("from: on a sequence's first step", () => {
+  // The first step is scheduled at the end of tick 1 and runs ticks 2..61.
+  const FIRST = `scene {
+  size: (200, 200)
+  circle c {
+    position: (100, 100)
+    radius: 10
+    alpha: 1
+    sequence {
+      animate { property: alpha, from: 0, to: 1, duration: 0.5, easing: linear }
+    }
+  }
+}`;
+
+  it("shows from at tick 0, and the motion still starts one tick later", () => {
+    const trace = alphaTrace(FIRST, 61);
+    expect(trace[0]).toBe(0);
+    expect(trace[1]).toBe(0);
+    expect(trace[2]).toBeCloseTo(1 / 60, 12);
+    expect(trace[31]).toBeCloseTo(0.5, 12);
+    expect(trace[61]).toBe(1);
+  });
+
+  it("changes nothing after tick 0: every later tick matches a scene whose resting value is from", () => {
+    // The same sequence on an object that already rests at 0 is the
+    // reference: tick 0 was the only frame that differed.
+    const reference = alphaTrace(FIRST.replace("alpha: 1\n", "alpha: 0\n"), 61);
+    expect(alphaTrace(FIRST, 61)).toEqual(reference);
+  });
+
+  it("shows every from in a first parallel step at tick 0, and leaves an animation without from alone", () => {
+    const { obj } = build(`scene {
+  size: (200, 200)
+  circle c {
+    position: (100, 100)
+    radius: 10
+    alpha: 1
+    sequence {
+      parallel {
+        animate { property: alpha, from: 0, to: 1, duration: 0.5 }
+        animate { property: scale, from: 0.25, to: 1, duration: 0.5, easing: spring, bounce: 0.5 }
+        animate { property: rotation, to: 90, duration: 0.5 }
+      }
+    }
+  }
+}`);
+    expect(obj.alpha).toBe(0);
+    expect(obj.__mareyLayout!.currentScale).toEqual({ x: 0.25, y: 0.25 });
+    expect(obj.rotation).toBe(0);
+  });
+
+  it("places a scaled body at tick 0 exactly where the step's own spawn places it", () => {
+    // A bottom origin puts the pivot off the body's centre, so a scale from
+    // must also move the body; the tick-0 write has to make the same
+    // correction the step makes when it is scheduled at the end of tick 1.
+    const { world, runtime, obj } = build(`scene {
+  size: (400, 300)
+  rectangle r {
+    position: (200, 200)
+    size: (40, 40)
+    origin: (0.5, 1)
+    sequence {
+      animate { property: scale, from: 0.5, to: 1, duration: 0.5, delay: 0.5, easing: linear }
+      physics { duration: 1 }
+    }
+  }
+}`);
+    const id = bodyOf(obj);
+    const atZero = world.readState(id, 1)!;
+    step(runtime);
+    const atOne = world.readState(id, 1)!;
+    expect(atZero.x).toBe(atOne.x);
+    expect(atZero.y).toBe(atOne.y);
+    // And it is not the declared placement: the half-size body sits lower.
+    expect(atZero.y).toBeCloseTo(190, 9);
+  });
+
+  it("holds a delayed first step at from from tick 0 through the delay", () => {
+    // delay 0.5 s is 60 ticks after the step is scheduled at the end of tick 1.
+    const trace = alphaTrace(FIRST.replace("easing: linear", "easing: linear, delay: 0.5"), 122);
+    for (let tick = 0; tick <= 61; tick++) expect(trace[tick], `tick ${tick}`).toBe(0);
+    expect(trace[62]).toBeCloseTo(1 / 60, 12);
+    expect(trace[121]).toBe(1);
+  });
+
+  it("does not show a first step's from at tick 0 when a top-level animation runs before the sequence", () => {
+    // The sequence waits for the top-level animation, so its first step is
+    // scheduled after it like any later step: at the end of tick 60, the
+    // tick the rotation completes on.
+    const trace = alphaTrace(`scene {
+  size: (200, 200)
+  circle c {
+    position: (100, 100)
+    radius: 10
+    alpha: 1
+    animate { property: rotation, to: 90, duration: 0.5 }
+    sequence {
+      animate { property: alpha, from: 0, to: 1, duration: 0.5, easing: linear }
+    }
+  }
+}`, 62);
+    for (let tick = 0; tick <= 59; tick++) expect(trace[tick], `tick ${tick}`).toBe(1);
+    expect(trace[60]).toBe(0);
+    expect(trace[61]).toBeCloseTo(1 / 60, 12);
   });
 });
 
