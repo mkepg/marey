@@ -192,3 +192,32 @@ describe("from: loop and yoyo", () => {
     expect(trace[300]).toBe(0);
   });
 });
+
+describe("from: converted the way 'to' is", () => {
+  // `from` reaches the runner through `runnerValue`, as `to` does. Without the
+  // conversion a rotation would start at 90 radians and a colour at a string.
+  it("starts a rotation at from in radians at tick 0", () => {
+    const { obj } = build(`scene {
+  size: (200, 200)
+  circle c {
+    position: (100, 100)
+    radius: 10
+    animate { property: rotation, from: 90, to: 180, duration: 1 }
+  }
+}`);
+    expect(obj.rotation).toBe(Math.PI / 2);
+  });
+
+  it("starts a colour at from as an integer at tick 0", () => {
+    const { obj } = build(`scene {
+  size: (200, 200)
+  circle c {
+    position: (100, 100)
+    radius: 10
+    color: blue
+    animate { property: color, from: #ff0000, to: blue, duration: 1 }
+  }
+}`);
+    expect(obj.__mareyLayout!.currentColor).toBe(0xff0000);
+  });
+});

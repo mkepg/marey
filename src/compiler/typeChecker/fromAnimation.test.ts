@@ -109,3 +109,23 @@ describe("animate { from }", () => {
     ]);
   });
 });
+
+describe("animate { to } mismatch wordings", () => {
+  // The 'to' twin of the four-wordings test above. animateValueErrors builds
+  // both slots' messages from one template, and the 'to' messages must read
+  // exactly as they did before 'from' existed.
+  it("words every kind mismatch on 'to' exactly as before 'from' existed", () => {
+    const { errors } = check(scene(`
+  circle c { position: (100, 100), radius: 10, color: red
+    animate { property: position, to: 3, duration: 1 }
+    animate { property: scale, to: red, duration: 1 }
+    animate { property: rotation, to: (1, 1), duration: 1 }
+    animate { property: color, to: 0.5, duration: 1 } }`));
+    expect(messages(errors)).toEqual([
+      "[TYPE_ANIM_MISMATCH] Property 'position' expects a point for 'to' (e.g., to: (100, 100)).",
+      "[TYPE_ANIM_MISMATCH] Property 'scale' expects a number or point for 'to'.",
+      "[TYPE_ANIM_MISMATCH] Property 'rotation' expects a number for 'to'.",
+      "[TYPE_ANIM_MISMATCH] Property 'color' expects a colour for 'to' (e.g., to: #ff8800).",
+    ]);
+  });
+});
