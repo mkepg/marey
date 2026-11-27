@@ -431,25 +431,19 @@ describe("lockRotation", () => {
     for (const a of locked.angles) expect(a).toBe(locked.angles[0]);
   });
 
-  it("a lock that lands on a free, turning body stops the turning: spin in one step, lock in the next", () => {
-    // The spin step ends and the body is free and still turning when the next
-    // step's lockRotation arrives. The lock makes the inertia infinite, so
-    // without zeroing the angular velocity the body kept turning for good.
+  it("a lock step after a move step lands on a released body and holds the angle", () => {
+    // The move step's animation releases the body, so the lock step's params
+    // reach setParams on a dynamic body (every other lock test meets a pinned
+    // one). The spin step before it has ended with the body at rest, so this
+    // does not exercise the angular-velocity zeroing in applyRotationLock,
+    // which no legal source reaches (see the comment there).
     const locked = dropCrate(
-      "sequence { physics { spin: 360, duration: 0.5 } physics { lockRotation: true, duration: 5 } }"
+      "sequence { physics { spin: 360, duration: 0.5 } animate { property: position, to: (400, 200), duration: 0.5 } physics { lockRotation: true, duration: 5 } }"
     );
-    expect(locked.fell).toBeGreaterThan(50);
-    const turned = locked.angles[10];
-    expect(Math.abs(turned - START)).toBeGreaterThan(0.1);
-    for (const a of locked.angles.slice(60)) expect(a).toBe(locked.angles[60]);
-  });
-
-  it("a lock that lands on a free body with a plain sibling block holds too", () => {
-    const locked = dropCrate(
-      "physics { duration: 0.5 } sequence { physics { lockRotation: true, duration: 5 } }"
-    );
-    expect(locked.fell).toBeGreaterThan(50);
-    for (const a of locked.angles.slice(60)) expect(a).toBe(locked.angles[60]);
+    const lockedAt = locked.angles.findIndex((a, i) => i > 90 && a === locked.angles[i + 1]);
+    expect(lockedAt).toBeGreaterThan(0);
+    expect(Math.abs(locked.angles[lockedAt] - START)).toBeGreaterThan(0.1);
+    for (const a of locked.angles.slice(lockedAt)) expect(a).toBe(locked.angles[lockedAt]);
   });
 
   it.each([
