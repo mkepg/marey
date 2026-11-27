@@ -20,7 +20,7 @@ speed of a motion, and what happens when one shape has more than one `animate`.
 ## An animation starts where the shape is
 
 An `animate` block names the property to change, the value to end at and how
-many seconds to take. It has no starting value of its own. Watch where the card
+many seconds to take. It takes its starting value from the shape unless you name one. Watch where the card
 comes from:
 
 ```marey
