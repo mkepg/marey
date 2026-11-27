@@ -294,10 +294,12 @@ describe("sinDeg and cosDeg", () => {
   });
 
   it("give exactly 1/2 at 30 degrees and its reflections", () => {
-    // sin(30) = 1/2 is the case the exact degree-to-radian product exists
-    // for: with one rounded multiply by pi/180 the argument lands below
-    // pi/6 and the result is 0.49999999999999994. 150 folds to 30 by
-    // 180 - a, and cos(60) folds to sin(30) by 90 - a, both exactly.
+    // One rounded multiply, 30 * DEG_TO_RAD, gives the double below the one
+    // nearest pi/6, and sin(30) = 0.49999999999999994. The pi/180 tail, or
+    // the exact product's low part passed to the kernel, each fix it on
+    // their own (see firstOctant in detMath.ts), so this test pins the
+    // corrected product as a whole, not either term alone. 150 folds to 30
+    // by 180 - a, and cos(60) folds to sin(30) by 90 - a, both exactly.
     expect(sinDeg(30)).toBe(0.5);
     expect(sinDeg(150)).toBe(0.5);
     expect(cosDeg(60)).toBe(0.5);
@@ -308,12 +310,15 @@ describe("sinDeg and cosDeg", () => {
   });
 
   it("give the correctly rounded sqrt(1/2) at 45 degrees, from both kernels", () => {
-    // 45 is the octant boundary: sinDeg and cosDeg both take the a <= 45
-    // branch, so the same exact radian argument goes through the two
-    // different polynomials. Each lands on the double nearest sqrt(1/2)
-    // (Math.SQRT1_2 is a constant, not a computed call), so sin and cos agree
-    // there bit for bit, which a once-rounded argument did not give
-    // (sinDeg(45) was 0.7071067811865475, an ulp low).
+    // 45 is the octant boundary, so sinDeg and cosDeg both take the a <= 45
+    // branch and send one argument, hi + lo, to the two different kernels.
+    // Here hi is 45 * DEG_TO_RAD rounded once, so the result rests on lo,
+    // which carries the pi/180 tail. Without the tail the argument is
+    // exactly 45 * DEG_TO_RAD = pi/4 - 1.33e-17, whose true sine lies 0.020
+    // ulp below the rounding midpoint, so a correct kernel gives
+    // 0.7071067811865475. sin(pi/4) lies 0.065 ulp above the midpoint, so
+    // the double nearest it is 0.7071067811865476 (Math.SQRT1_2, a constant
+    // rather than a computed call). This test pins both the tail and lo.
     const nearest = 0.7071067811865476;
     expect(nearest).toBe(Math.SQRT1_2);
     expect(sinDeg(45)).toBe(nearest);
@@ -373,15 +378,23 @@ describe("sinDeg and cosDeg", () => {
     return { maxSin, maxCos, zeroMisses, symmetryMisses };
   }
 
-  it("are within 1 ulp every 0.01 degrees on [-720, 720]", () => {
-    // The requirement is 2 ulp (spec section 3.3, global constraints). The
-    // measured maximum is 0.8163 ulp, so 1 ulp is asserted: the results are
-    // the same bits on every engine, so the margin cannot flake. The tighter
-    // bound is what pins three correction terms: the cos kernel's recovered
-    // rounding error (1.2687 ulp without it), its `- x * y` tail (1.0212) and
-    // the product's `dl * DEG_TO_RAD_LO` partial (1.1429).
+  it("are below 0.72 ulp every 0.01 degrees on [-720, 720]", () => {
+    // The requirement is 2 ulp (spec section 3.3, global constraints).
+    // Results are the same bits on every engine, so a bound near the
+    // measured maximum cannot flake, and the bounds below are what pin the
+    // correction terms. Measured sweep maxima with each one removed:
+    //   cos kernel's recovered rounding error (1 - w - hz)   1.2274
+    //   cos kernel's - x * y tail                            1.0202
+    //   product partial dl * DEG_TO_RAD_LO                   1.0663
+    //   the pi/180 tail d * DEG_TO_RAD_TAIL                  0.7923
+    //   sin kernel's 0.5 * y (the -y x^2/2 term)             0.7416
+    // The 1-ulp bound catches the first three. The measured maximum is
+    // 0.7000 ulp, and the 0.72 bound catches the last two. (The tail is also
+    // pinned by the 45-degree test above.)
     expect(sweep().maxSin).toBeLessThanOrEqual(1);
     expect(sweep().maxCos).toBeLessThanOrEqual(1);
+    expect(sweep().maxSin).toBeLessThan(0.72);
+    expect(sweep().maxCos).toBeLessThan(0.72);
   });
 
   it("return exactly +0 wherever the true value is zero on the sweep", () => {

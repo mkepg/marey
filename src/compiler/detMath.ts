@@ -32,20 +32,16 @@
 export const RAD_TO_DEG = 57.29577951308232;
 
 /**
- * Radians per degree: DEG_TO_RAD is the double nearest pi/180, and
- * DEG_TO_RAD_HI + DEG_TO_RAD_LO is the same value split (Veltkamp) into
+ * pi/180 in three parts. DEG_TO_RAD is the double nearest pi/180.
+ * DEG_TO_RAD_HI + DEG_TO_RAD_LO is the same double split (Veltkamp) into
  * halves of at most 26 significant bits, so that each half times a half of
- * the angle is an exact product.
- *
- * pi/180 - DEG_TO_RAD is 2.9486522708701687e-19 (0x3C15C1D8_BECDD291), and
- * it is deliberately not added. Measured, adding `d * 2.9486522708701687e-19`
- * to the product's error term moves the sweep maximum in detMath.test.ts from
- * 0.8163 to 0.7416 ulp, within the asserted 1-ulp bound, and changes no
- * exact value the tests check, so no test could keep it in place.
+ * the angle is an exact product. DEG_TO_RAD_TAIL is the rounding error the
+ * double leaves, pi/180 - DEG_TO_RAD, itself rounded to a double.
  */
-const DEG_TO_RAD = 0.017453292519943295; //      0x3F91DF46_A2529D39
-const DEG_TO_RAD_HI = 0.01745329238474369; //    0x3F91DF46_A0000000
-const DEG_TO_RAD_LO = 1.3519960498364902e-10; // 0x3DE294E9_C8000000
+const DEG_TO_RAD = 0.017453292519943295; //        0x3F91DF46_A2529D39
+const DEG_TO_RAD_HI = 0.01745329238474369; //      0x3F91DF46_A0000000
+const DEG_TO_RAD_LO = 1.3519960498364902e-10; //   0x3DE294E9_C8000000
+const DEG_TO_RAD_TAIL = 2.9486522708701687e-19; // 0x3C15C1D8_BECDD291
 
 /** Veltkamp's splitting constant, 2^27 + 1. */
 const SPLIT = 134217729;
@@ -68,17 +64,16 @@ const C6 = -1.13596475577881948265e-11; // 0xBDA8FAE9_BE8838D4
 
 /**
  * sin(x + y) for x in [0, pi/4] radians, where y is a tail below half an
- * ulp of x (fdlibm's `__kernel_sin`, less one term).
+ * ulp of x (fdlibm's `__kernel_sin` with `iy = 1`).
  */
 function sinKernel(x: number, y: number): number {
   const z = x * x;
   const v = z * x;
   const r = S2 + z * (S3 + z * (S4 + z * (S5 + z * S6)));
-  // sin(x + y) ~ sin(x) + y cos(x) = x + S1 x^3 + ... + y (1 - x^2/2).
-  // fdlibm also carries the -y x^2/2 term. It is left out because, measured
-  // here, it makes things worse: with it sinDeg(45) is 0.7071067811865475,
-  // an ulp below the double nearest sqrt(1/2), which detMath.test.ts pins.
-  return x + ((z * (v * r) + y) + v * S1);
+  // sin(x + y) ~ sin(x) + y cos(x) = x + S1 x^3 + ... + y (1 - x^2/2):
+  // `- y` carries the tail's first-order term and `0.5 * y` times z its
+  // -y x^2/2 correction.
+  return x - ((z * (0.5 * y - v * r) - y) - v * S1);
 }
 
 /**
@@ -99,23 +94,39 @@ function cosKernel(x: number, y: number): number {
 /**
  * sin (or cos) of d degrees for d in [0, 45].
  *
- * The radian angle d * DEG_TO_RAD is formed exactly, as hi + lo, rather
- * than rounded once: Dekker's product gives it as p + e with no error, and
- * the kernels take the low part as their tail argument. A single rounded
- * multiply leaves up to half an ulp of error in the argument before the
- * polynomial starts, and is why sin(30) would come out as
- * 0.49999999999999994; with the exact product it is 0.5.
+ * The radian angle is formed as hi + lo, close to d * pi/180 itself rather
+ * than rounded once. Dekker's product gives d * DEG_TO_RAD exactly as p + e,
+ * d * DEG_TO_RAD_TAIL adds what DEG_TO_RAD leaves out of pi/180, and the
+ * kernels take the low part as their tail argument. Two exact results in
+ * detMath.test.ts depend on this, for different reasons. Measured in ulps
+ * of p = d * DEG_TO_RAD rounded once:
  *
- * Every step is a correctly rounded + - *, and the splitting relies on there
- * being no fused multiply-add (see the header).
+ * - sin(30) = 0.5. pi/6 lies 0.517 ulp above p, so the double nearest it is
+ *   the one above p. 30 * DEG_TO_RAD lies only 0.4375 ulp above p, so one
+ *   rounded multiply gives p and sin(30) = 0.49999999999999994. Either
+ *   correction alone fixes it: the tail moves hi up to the double nearest
+ *   pi/6, or, without the tail, lo hands the kernel the missing 0.4375 ulp.
+ * - sin(45) = cos(45) = 0.7071067811865476, the double nearest sqrt(1/2).
+ *   pi/4 and 45 * DEG_TO_RAD both lie within p's rounding interval (0.276
+ *   and 0.156 ulp above p), so hi = p and the result rests on lo, and on
+ *   the tail inside it. Without the tail the argument is
+ *   45 * DEG_TO_RAD = pi/4 - 1.33e-17, whose true sine lies 0.020 ulp below
+ *   the rounding midpoint, and a correct kernel rounds it to
+ *   0.7071067811865475. sin(pi/4) lies 0.065 ulp above the midpoint.
+ *
+ * Every step is a correctly rounded + - *, and the exactness of the product
+ * relies on there being no fused multiply-add (see the header).
  */
 function firstOctant(d: number, sine: boolean): number {
   const c = SPLIT * d;
   const dh = c - (c - d);
   const dl = d - dh;
   const p = d * DEG_TO_RAD;
-  // Each partial product is exact, and so is each sum, so e = d * DEG_TO_RAD - p.
-  const e = dh * DEG_TO_RAD_HI - p + dh * DEG_TO_RAD_LO + dl * DEG_TO_RAD_HI + dl * DEG_TO_RAD_LO;
+  // The four partial products and their running sum are exact, so before
+  // the last term e is exactly d * DEG_TO_RAD - p. The last term is the
+  // pi/180 tail, rounded once.
+  const e =
+    dh * DEG_TO_RAD_HI - p + dh * DEG_TO_RAD_LO + dl * DEG_TO_RAD_HI + dl * DEG_TO_RAD_LO + d * DEG_TO_RAD_TAIL;
   const hi = p + e;
   const lo = e - (hi - p);
   return sine ? sinKernel(hi, lo) : cosKernel(hi, lo);
