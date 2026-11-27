@@ -177,6 +177,21 @@ animate { property: scale, from: 0.4, to: 1, duration: 0.8, easing: spring, boun
     overshoot.
 - **Where it lives.** In `easing.ts`, beside the other curves, through
   `detMath`. `easing.ts` must still import nothing from `pixi.js`.
+- **Overshoot and the protected ranges (amended 2026-11-27, Task 6 review).**
+  A spring's value goes past `to`. At `bounce: 0.9`, `y` reaches about
+  1.73. So a scale spring toward a small target can go negative, and
+  `alpha` can leave `[0, 1]`. The validator only sees the authored
+  endpoints. **(call)**
+  - **Clamp at runtime.** The runner's value is clamped: `scale` to `≥ 0`
+    on each component, and `alpha` to `[0, 1]`. Every other easing stays
+    within its endpoints, so the clamp changes no existing output.
+    Overshoot toward a near-zero target is lost, which is acceptable for a
+    property the language already forbids below zero.
+  - **New diagnostic `TYPE_SPRING_SCALE_PHYSICS`.** It fires for
+    `easing: spring` on `property: scale` on an object that takes part in
+    physics, using the same participation test as `TYPE_ZERO_SCALE_PHYSICS`.
+    A collider swinging through zero is the hazard that rule already
+    guards against.
 - **Yoyo.** The return leg plays the same curve on reversed progress, as every
   easing already does. The oscillation then sits at the far end of the return
   leg. That is consistent, if odd-looking, and the language reference says so
