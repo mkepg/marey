@@ -1,0 +1,17 @@
+// The middle circle is 2 px right, so two gaps differ by 4.
+let xs = [110, 242.5, 387, 537.5, 685]
+let ys = [300, 300, 300, 300, 300]
+let rs = [10, 30, 20, 40, 15]
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate x, i in xs {
+    circle dot {
+      position: (x, ys[i])
+      radius: rs[i]
+      color: orange
+    }
+  }
+}

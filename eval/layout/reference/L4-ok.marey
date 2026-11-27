@@ -1,0 +1,18 @@
+// Three bars 30 apart, left edges on x = 120, stack centred on y = 300.
+let xs = [270, 210, 240]
+let ys = [240, 300, 360]
+let ws = [300, 180, 240]
+let hs = [30, 30, 30]
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate x, i in xs {
+    rectangle shape {
+      position: (x, ys[i])
+      size: (ws[i], hs[i])
+      color: green
+    }
+  }
+}

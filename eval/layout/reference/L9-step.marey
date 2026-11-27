@@ -1,0 +1,18 @@
+// Tick 7 is 1.5 degrees off its place.
+let ring = 220
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate i in 0 to 59 {
+    let a = (i * 6 + if i == 7 then 1.5 else 0)
+    let h = if i % 5 == 0 then 32 else 16
+    rectangle tick {
+      position: (400 + (220) * sin(a), 300 - (220) * cos(a))
+      size: (4, h)
+      rotation: i * 6
+      color: white
+    }
+  }
+}

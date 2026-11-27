@@ -1,0 +1,16 @@
+// The third column is 2 px right, so the gap is 26.
+let xs = [256, 400, 546, 256, 400, 546, 256, 400, 546, 256, 400, 546]
+let ys = [144, 144, 144, 248, 248, 248, 352, 352, 352, 456, 456, 456]
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate x, i in xs {
+    rectangle cell {
+      position: (x, ys[i])
+      size: (120, 80)
+      color: magenta
+    }
+  }
+}

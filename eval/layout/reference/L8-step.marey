@@ -1,0 +1,17 @@
+// Circle 6 is 2 degrees off its place.
+let n = 12
+let ring = 200
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate i in 0 to n - 1 {
+    let a = (i * 30 + if i == 6 then 2 else 0)
+    circle dot {
+      position: (400 + ring * sin(a), 300 - ring * cos(a))
+      radius: 10
+      color: orange
+    }
+  }
+}

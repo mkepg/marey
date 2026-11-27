@@ -1,0 +1,18 @@
+// Four bars 50 tall, 16 apart, row centred, bottoms on y = 400.
+let xs = [246, 342, 458, 544]
+let ys = [375, 375, 375, 375]
+let ws = [40, 120, 80, 60]
+let hs = [50, 50, 50, 50]
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate x, i in xs {
+    rectangle shape {
+      position: (x, ys[i])
+      size: (ws[i], hs[i])
+      color: cyan
+    }
+  }
+}

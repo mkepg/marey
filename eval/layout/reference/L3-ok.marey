@@ -1,0 +1,17 @@
+// Five circles from x = 100 to x = 700, gaps 92.5 each.
+let xs = [110, 242.5, 385, 537.5, 685]
+let ys = [300, 300, 300, 300, 300]
+let rs = [10, 30, 20, 40, 15]
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate x, i in xs {
+    circle dot {
+      position: (x, ys[i])
+      radius: rs[i]
+      color: orange
+    }
+  }
+}
