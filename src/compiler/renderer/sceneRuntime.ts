@@ -83,33 +83,36 @@ function lerp(a: number, b: number, t: number): number {
 }
 
 /**
- * A scale runner's value at eased progress `e`, each component clamped to
- * `>= 0` (Phase 10A spec §3.2, "Overshoot and the protected ranges"). A
- * spring goes past `to`, so a spring toward a small target would otherwise
- * swing negative, which the language forbids for scale. Every scale value a
- * runner produces comes from here: the paint (`applyAnim`), this tick's
- * scale (`scaleOf`) and the world push (`pushAnimToWorld`).
+ * A scale runner's value at eased progress `e`. Every scale value a runner
+ * produces comes from here: the paint (`applyAnim`), this tick's scale
+ * (`scaleOf`) and the world push (`pushAnimToWorld`).
  *
- * The validator keeps both endpoints `>= 0`, and every other easing stays in
- * [0, 1], so for them the lerp is already `>= 0` and the clamp returns it
- * unchanged. It is written `v < 0 ? 0 : v`, not `Math.max(0, v)`, so a `-0`
- * passes through as `-0` and no existing value changes by a bit.
+ * A spring's value is clamped to `>= 0` on each component (Phase 10A spec
+ * §3.2, "Clamp at runtime, for spring only"): it goes past `to`, so a spring
+ * toward a small target would otherwise swing negative, which the language
+ * forbids for scale. Every other easing is returned as lerped, so no existing
+ * output changes. For them the guard is not observable today, because the
+ * validator keeps both endpoints `>= 0` and their curves stay in [0, 1]; it
+ * is there so scale follows the same rule as alpha, where it is.
  */
 function scaleAt(ra: RunningAnim, e: number): IRPoint {
   const s = ra.startVal as IRPoint;
   const t = ra.targetVal as IRPoint;
   const x = lerp(s.x, t.x, e);
   const y = lerp(s.y, t.y, e);
+  if (ra.anim.easing !== "spring") return { x, y };
   return { x: x < 0 ? 0 : x, y: y < 0 ? 0 : y };
 }
 
 /**
- * An alpha runner's value at eased progress `e`, clamped to [0, 1] for the
- * same reason as `scaleAt`. With endpoints in [0, 1] and any easing but a
- * spring, the lerp already lies in [0, 1] and is returned unchanged.
+ * An alpha runner's value at eased progress `e`, clamped to [0, 1] for a
+ * spring, for the same reason as `scaleAt`. Only for a spring: `animate`
+ * does not range-check alpha endpoints, so `to: 1.5` compiles, and clamping
+ * every easing would change what such a scene has always shown.
  */
 function alphaAt(ra: RunningAnim, e: number): number {
   const a = lerp(ra.startVal as number, ra.targetVal as number, e);
+  if (ra.anim.easing !== "spring") return a;
   return a < 0 ? 0 : a > 1 ? 1 : a;
 }
 

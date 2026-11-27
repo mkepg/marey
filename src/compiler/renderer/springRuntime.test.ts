@@ -151,4 +151,19 @@ describe("spring overshoot is clamped to the ranges scale and alpha allow", () =
     expect(down.filter((a) => a === 0).length).toBeGreaterThan(1);
     expect(down[119]).toBe(0);
   });
+
+  it("leaves every other easing unclamped, so an authored alpha above 1 still reads as written", () => {
+    // 'animate' does not range-check alpha endpoints, so this compiles, and
+    // it has always ended on 1.5. The clamp is for a spring's overshoot only.
+    const { runtime, obj } = build(`scene {
+  size: (400, 300)
+  circle c {
+    position: (200, 150)
+    radius: 20
+    animate { property: alpha, from: 0, to: 1.5, duration: 1, easing: easeOut }
+  }
+}`);
+    for (let tick = 1; tick <= 120; tick++) step(runtime);
+    expect(obj.alpha).toBe(1.5);
+  });
 });
