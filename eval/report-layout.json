@@ -1,1210 +1,1533 @@
-[
-  {
-    "scene": "A-badge-row.marey",
-    "author": "A",
-    "brief": "L5",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "pairing",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "spacing",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "centreline",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "row",
-        "pass": true
+{
+  "scenes": [
+    {
+      "scene": "A-badge-row.marey",
+      "author": "A",
+      "brief": "L5",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "pairing",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "spacing",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "centreline",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "row",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 87,
+        "layoutTokens": 67,
+        "share": 0.7701149425287356
       }
-    ]
-  },
-  {
-    "scene": "A-card-grid.marey",
-    "author": "A",
-    "brief": "L6",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "lattice",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "hgap",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "vgap",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "grid",
-        "pass": true
+    },
+    {
+      "scene": "A-card-grid.marey",
+      "author": "A",
+      "brief": "L6",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "lattice",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "hgap",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "vgap",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "grid",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 90,
+        "layoutTokens": 61,
+        "share": 0.6777777777777778
       }
-    ]
-  },
-  {
-    "scene": "A-clock-ticks.marey",
-    "author": "A",
-    "brief": "L9",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "longcount",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "distance",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "step",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "orient",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "fifth",
-        "tag": "radial",
-        "pass": true
+    },
+    {
+      "scene": "A-clock-ticks.marey",
+      "author": "A",
+      "brief": "L9",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "longcount",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "distance",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "step",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "orient",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "fifth",
+          "tag": "radial",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 82,
+        "layoutTokens": 40,
+        "share": 0.4878048780487805
       }
-    ]
-  },
-  {
-    "scene": "A-left-stack.marey",
-    "author": "A",
-    "brief": "L4",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "order",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "left",
-        "tag": "align",
-        "pass": true
-      },
-      {
-        "clause": "gaps",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "row",
-        "pass": true
+    },
+    {
+      "scene": "A-left-stack.marey",
+      "author": "A",
+      "brief": "L4",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "order",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "left",
+          "tag": "align",
+          "pass": true
+        },
+        {
+          "clause": "gaps",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "row",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 63,
+        "layoutTokens": 28,
+        "share": 0.4444444444444444
       }
-    ]
-  },
-  {
-    "scene": "A-mixed-row.marey",
-    "author": "A",
-    "brief": "L2",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "order",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "gaps",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "bottom",
-        "tag": "align",
-        "pass": true
+    },
+    {
+      "scene": "A-mixed-row.marey",
+      "author": "A",
+      "brief": "L2",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "order",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "gaps",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "bottom",
+          "tag": "align",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 76,
+        "layoutTokens": 41,
+        "share": 0.5394736842105263
       }
-    ]
-  },
-  {
-    "scene": "A-ring-12.marey",
-    "author": "A",
-    "brief": "L8",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "distance",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "start",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "step",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "direction",
-        "tag": "radial",
-        "pass": true
+    },
+    {
+      "scene": "A-ring-12.marey",
+      "author": "A",
+      "brief": "L8",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "distance",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "start",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "step",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "direction",
+          "tag": "radial",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 64,
+        "layoutTokens": 40,
+        "share": 0.625
       }
-    ]
-  },
-  {
-    "scene": "A-spread-dots.marey",
-    "author": "A",
-    "brief": "L3",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "order",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "centreline",
-        "tag": "distribute",
-        "pass": true
-      },
-      {
-        "clause": "left-edge",
-        "tag": "distribute",
-        "pass": true
-      },
-      {
-        "clause": "right-edge",
-        "tag": "distribute",
-        "pass": true
-      },
-      {
-        "clause": "equal-gaps",
-        "tag": "distribute",
-        "pass": true
+    },
+    {
+      "scene": "A-spread-dots.marey",
+      "author": "A",
+      "brief": "L3",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "order",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "centreline",
+          "tag": "distribute",
+          "pass": true
+        },
+        {
+          "clause": "left-edge",
+          "tag": "distribute",
+          "pass": true
+        },
+        {
+          "clause": "right-edge",
+          "tag": "distribute",
+          "pass": true
+        },
+        {
+          "clause": "equal-gaps",
+          "tag": "distribute",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 69,
+        "layoutTokens": 45,
+        "share": 0.6521739130434783
       }
-    ]
-  },
-  {
-    "scene": "A-stack-columns.marey",
-    "author": "A",
-    "brief": "L7",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "columns",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "vgap",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "hgap",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "grid",
-        "pass": true
+    },
+    {
+      "scene": "A-stack-columns.marey",
+      "author": "A",
+      "brief": "L7",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "columns",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "vgap",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "hgap",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "grid",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 75,
+        "layoutTokens": 42,
+        "share": 0.56
       }
-    ]
-  },
-  {
-    "scene": "A-toolbar-row.marey",
-    "author": "A",
-    "brief": "L1",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "centreline",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "gaps",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "row",
-        "pass": true
+    },
+    {
+      "scene": "A-toolbar-row.marey",
+      "author": "A",
+      "brief": "L1",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "centreline",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "gaps",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "row",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 80,
+        "layoutTokens": 52,
+        "share": 0.65
       }
-    ]
-  },
-  {
-    "scene": "B-badge-row.marey",
-    "author": "B",
-    "brief": "L5",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "pairing",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "spacing",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "centreline",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "row",
-        "pass": true
+    },
+    {
+      "scene": "B-badge-row.marey",
+      "author": "B",
+      "brief": "L5",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "pairing",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "spacing",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "centreline",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "row",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 103,
+        "layoutTokens": 59,
+        "share": 0.5728155339805825
       }
-    ]
-  },
-  {
-    "scene": "B-card-grid.marey",
-    "author": "B",
-    "brief": "L6",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "lattice",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "hgap",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "vgap",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "grid",
-        "pass": true
+    },
+    {
+      "scene": "B-card-grid.marey",
+      "author": "B",
+      "brief": "L6",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "lattice",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "hgap",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "vgap",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "grid",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 123,
+        "layoutTokens": 81,
+        "share": 0.6585365853658537
       }
-    ]
-  },
-  {
-    "scene": "B-clock-ticks.marey",
-    "author": "B",
-    "brief": "L9",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "longcount",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "distance",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "step",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "orient",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "fifth",
-        "tag": "radial",
-        "pass": true
+    },
+    {
+      "scene": "B-clock-ticks.marey",
+      "author": "B",
+      "brief": "L9",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "longcount",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "distance",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "step",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "orient",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "fifth",
+          "tag": "radial",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 101,
+        "layoutTokens": 56,
+        "share": 0.5544554455445545
       }
-    ]
-  },
-  {
-    "scene": "B-left-stack.marey",
-    "author": "B",
-    "brief": "L4",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "order",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "left",
-        "tag": "align",
-        "pass": true
-      },
-      {
-        "clause": "gaps",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "row",
-        "pass": true
+    },
+    {
+      "scene": "B-left-stack.marey",
+      "author": "B",
+      "brief": "L4",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "order",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "left",
+          "tag": "align",
+          "pass": true
+        },
+        {
+          "clause": "gaps",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "row",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 96,
+        "layoutTokens": 68,
+        "share": 0.7083333333333334
       }
-    ]
-  },
-  {
-    "scene": "B-mixed-row.marey",
-    "author": "B",
-    "brief": "L2",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "order",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "gaps",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "bottom",
-        "tag": "align",
-        "pass": true
+    },
+    {
+      "scene": "B-mixed-row.marey",
+      "author": "B",
+      "brief": "L2",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "order",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "gaps",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "bottom",
+          "tag": "align",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 142,
+        "layoutTokens": 107,
+        "share": 0.7535211267605634
       }
-    ]
-  },
-  {
-    "scene": "B-ring-12.marey",
-    "author": "B",
-    "brief": "L8",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "distance",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "start",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "step",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "direction",
-        "tag": "radial",
-        "pass": true
+    },
+    {
+      "scene": "B-ring-12.marey",
+      "author": "B",
+      "brief": "L8",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "distance",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "start",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "step",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "direction",
+          "tag": "radial",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 72,
+        "layoutTokens": 48,
+        "share": 0.6666666666666666
       }
-    ]
-  },
-  {
-    "scene": "B-spread-dots.marey",
-    "author": "B",
-    "brief": "L3",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "order",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "centreline",
-        "tag": "distribute",
-        "pass": true
-      },
-      {
-        "clause": "left-edge",
-        "tag": "distribute",
-        "pass": true
-      },
-      {
-        "clause": "right-edge",
-        "tag": "distribute",
-        "pass": true
-      },
-      {
-        "clause": "equal-gaps",
-        "tag": "distribute",
-        "pass": true
+    },
+    {
+      "scene": "B-spread-dots.marey",
+      "author": "B",
+      "brief": "L3",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "order",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "centreline",
+          "tag": "distribute",
+          "pass": true
+        },
+        {
+          "clause": "left-edge",
+          "tag": "distribute",
+          "pass": true
+        },
+        {
+          "clause": "right-edge",
+          "tag": "distribute",
+          "pass": true
+        },
+        {
+          "clause": "equal-gaps",
+          "tag": "distribute",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 187,
+        "layoutTokens": 163,
+        "share": 0.8716577540106952
       }
-    ]
-  },
-  {
-    "scene": "B-stack-columns.marey",
-    "author": "B",
-    "brief": "L7",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "columns",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "vgap",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "hgap",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "grid",
-        "pass": true
+    },
+    {
+      "scene": "B-stack-columns.marey",
+      "author": "B",
+      "brief": "L7",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "columns",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "vgap",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "hgap",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "grid",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 128,
+        "layoutTokens": 93,
+        "share": 0.7265625
       }
-    ]
-  },
-  {
-    "scene": "B-toolbar-row.marey",
-    "author": "B",
-    "brief": "L1",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "centreline",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "gaps",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "row",
-        "pass": true
+    },
+    {
+      "scene": "B-toolbar-row.marey",
+      "author": "B",
+      "brief": "L1",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "centreline",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "gaps",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "row",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 90,
+        "layoutTokens": 62,
+        "share": 0.6888888888888889
       }
-    ]
-  },
-  {
-    "scene": "C-badge-row.marey",
-    "author": "C",
-    "brief": "L5",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "pairing",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "spacing",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "centreline",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "row",
-        "pass": true
+    },
+    {
+      "scene": "C-badge-row.marey",
+      "author": "C",
+      "brief": "L5",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "pairing",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "spacing",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "centreline",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "row",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 107,
+        "layoutTokens": 87,
+        "share": 0.8130841121495327
       }
-    ]
-  },
-  {
-    "scene": "C-card-grid.marey",
-    "author": "C",
-    "brief": "L6",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "lattice",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "hgap",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "vgap",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "grid",
-        "pass": true
+    },
+    {
+      "scene": "C-card-grid.marey",
+      "author": "C",
+      "brief": "L6",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "lattice",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "hgap",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "vgap",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "grid",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 110,
+        "layoutTokens": 81,
+        "share": 0.7363636363636363
       }
-    ]
-  },
-  {
-    "scene": "C-clock-ticks.marey",
-    "author": "C",
-    "brief": "L9",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "longcount",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "distance",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "step",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "orient",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "fifth",
-        "tag": "radial",
-        "pass": true
+    },
+    {
+      "scene": "C-clock-ticks.marey",
+      "author": "C",
+      "brief": "L9",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "longcount",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "distance",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "step",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "orient",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "fifth",
+          "tag": "radial",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 88,
+        "layoutTokens": 46,
+        "share": 0.5227272727272727
       }
-    ]
-  },
-  {
-    "scene": "C-left-stack.marey",
-    "author": "C",
-    "brief": "L4",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "order",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "left",
-        "tag": "align",
-        "pass": true
-      },
-      {
-        "clause": "gaps",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "row",
-        "pass": true
+    },
+    {
+      "scene": "C-left-stack.marey",
+      "author": "C",
+      "brief": "L4",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "order",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "left",
+          "tag": "align",
+          "pass": true
+        },
+        {
+          "clause": "gaps",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "row",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 72,
+        "layoutTokens": 37,
+        "share": 0.5138888888888888
       }
-    ]
-  },
-  {
-    "scene": "C-mixed-row.marey",
-    "author": "C",
-    "brief": "L2",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "order",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "gaps",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "bottom",
-        "tag": "align",
-        "pass": true
+    },
+    {
+      "scene": "C-mixed-row.marey",
+      "author": "C",
+      "brief": "L2",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "order",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "gaps",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "bottom",
+          "tag": "align",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 76,
+        "layoutTokens": 41,
+        "share": 0.5394736842105263
       }
-    ]
-  },
-  {
-    "scene": "C-ring-12.marey",
-    "author": "C",
-    "brief": "L8",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "distance",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "start",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "step",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "direction",
-        "tag": "radial",
-        "pass": true
+    },
+    {
+      "scene": "C-ring-12.marey",
+      "author": "C",
+      "brief": "L8",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "distance",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "start",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "step",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "direction",
+          "tag": "radial",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 72,
+        "layoutTokens": 48,
+        "share": 0.6666666666666666
       }
-    ]
-  },
-  {
-    "scene": "C-spread-dots.marey",
-    "author": "C",
-    "brief": "L3",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "order",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "centreline",
-        "tag": "distribute",
-        "pass": true
-      },
-      {
-        "clause": "left-edge",
-        "tag": "distribute",
-        "pass": true
-      },
-      {
-        "clause": "right-edge",
-        "tag": "distribute",
-        "pass": true
-      },
-      {
-        "clause": "equal-gaps",
-        "tag": "distribute",
-        "pass": true
+    },
+    {
+      "scene": "C-spread-dots.marey",
+      "author": "C",
+      "brief": "L3",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "order",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "centreline",
+          "tag": "distribute",
+          "pass": true
+        },
+        {
+          "clause": "left-edge",
+          "tag": "distribute",
+          "pass": true
+        },
+        {
+          "clause": "right-edge",
+          "tag": "distribute",
+          "pass": true
+        },
+        {
+          "clause": "equal-gaps",
+          "tag": "distribute",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 69,
+        "layoutTokens": 45,
+        "share": 0.6521739130434783
       }
-    ]
-  },
-  {
-    "scene": "C-stack-columns.marey",
-    "author": "C",
-    "brief": "L7",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "columns",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "vgap",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "hgap",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "grid",
-        "pass": true
+    },
+    {
+      "scene": "C-stack-columns.marey",
+      "author": "C",
+      "brief": "L7",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "columns",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "vgap",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "hgap",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "grid",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 110,
+        "layoutTokens": 81,
+        "share": 0.7363636363636363
       }
-    ]
-  },
-  {
-    "scene": "C-toolbar-row.marey",
-    "author": "C",
-    "brief": "L1",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "centreline",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "gaps",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "row",
-        "pass": true
+    },
+    {
+      "scene": "C-toolbar-row.marey",
+      "author": "C",
+      "brief": "L1",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "centreline",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "gaps",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "row",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 82,
+        "layoutTokens": 54,
+        "share": 0.6585365853658537
       }
-    ]
-  },
-  {
-    "scene": "D-badge-row.marey",
-    "author": "D",
-    "brief": "L5",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "pairing",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "spacing",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "centreline",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "row",
-        "pass": true
+    },
+    {
+      "scene": "D-badge-row.marey",
+      "author": "D",
+      "brief": "L5",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "pairing",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "spacing",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "centreline",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "row",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 83,
+        "layoutTokens": 39,
+        "share": 0.46987951807228917
       }
-    ]
-  },
-  {
-    "scene": "D-card-grid.marey",
-    "author": "D",
-    "brief": "L6",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "lattice",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "hgap",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "vgap",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "grid",
-        "pass": true
+    },
+    {
+      "scene": "D-card-grid.marey",
+      "author": "D",
+      "brief": "L6",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "lattice",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "hgap",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "vgap",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "grid",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 58,
+        "layoutTokens": 29,
+        "share": 0.5
       }
-    ]
-  },
-  {
-    "scene": "D-clock-ticks.marey",
-    "author": "D",
-    "brief": "L9",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "longcount",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "distance",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "step",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "orient",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "fifth",
-        "tag": "radial",
-        "pass": true
+    },
+    {
+      "scene": "D-clock-ticks.marey",
+      "author": "D",
+      "brief": "L9",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "longcount",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "distance",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "step",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "orient",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "fifth",
+          "tag": "radial",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 82,
+        "layoutTokens": 40,
+        "share": 0.4878048780487805
       }
-    ]
-  },
-  {
-    "scene": "D-left-stack.marey",
-    "author": "D",
-    "brief": "L4",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "order",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "left",
-        "tag": "align",
-        "pass": true
-      },
-      {
-        "clause": "gaps",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "row",
-        "pass": true
+    },
+    {
+      "scene": "D-left-stack.marey",
+      "author": "D",
+      "brief": "L4",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "order",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "left",
+          "tag": "align",
+          "pass": true
+        },
+        {
+          "clause": "gaps",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "row",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 60,
+        "layoutTokens": 32,
+        "share": 0.5333333333333333
       }
-    ]
-  },
-  {
-    "scene": "D-mixed-row.marey",
-    "author": "D",
-    "brief": "L2",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "order",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "gaps",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "row",
-        "pass": true
-      },
-      {
-        "clause": "bottom",
-        "tag": "align",
-        "pass": true
+    },
+    {
+      "scene": "D-mixed-row.marey",
+      "author": "D",
+      "brief": "L2",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "order",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "gaps",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "bottom",
+          "tag": "align",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 73,
+        "layoutTokens": 45,
+        "share": 0.6164383561643836
       }
-    ]
-  },
-  {
-    "scene": "D-ring-12.marey",
-    "author": "D",
-    "brief": "L8",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "distance",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "start",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "step",
-        "tag": "radial",
-        "pass": true
-      },
-      {
-        "clause": "direction",
-        "tag": "radial",
-        "pass": true
+    },
+    {
+      "scene": "D-ring-12.marey",
+      "author": "D",
+      "brief": "L8",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "distance",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "start",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "step",
+          "tag": "radial",
+          "pass": true
+        },
+        {
+          "clause": "direction",
+          "tag": "radial",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 64,
+        "layoutTokens": 40,
+        "share": 0.625
       }
-    ]
-  },
-  {
-    "scene": "D-spread-dots.marey",
-    "author": "D",
-    "brief": "L3",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "order",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "centreline",
-        "tag": "distribute",
-        "pass": true
-      },
-      {
-        "clause": "left-edge",
-        "tag": "distribute",
-        "pass": true
-      },
-      {
-        "clause": "right-edge",
-        "tag": "distribute",
-        "pass": true
-      },
-      {
-        "clause": "equal-gaps",
-        "tag": "distribute",
-        "pass": true
+    },
+    {
+      "scene": "D-spread-dots.marey",
+      "author": "D",
+      "brief": "L3",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "order",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "centreline",
+          "tag": "distribute",
+          "pass": true
+        },
+        {
+          "clause": "left-edge",
+          "tag": "distribute",
+          "pass": true
+        },
+        {
+          "clause": "right-edge",
+          "tag": "distribute",
+          "pass": true
+        },
+        {
+          "clause": "equal-gaps",
+          "tag": "distribute",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 69,
+        "layoutTokens": 45,
+        "share": 0.6521739130434783
       }
-    ]
-  },
-  {
-    "scene": "D-stack-columns.marey",
-    "author": "D",
-    "brief": "L7",
-    "compiled": true,
-    "clauses": [
-      {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
-      },
-      {
-        "clause": "columns",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "vgap",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "hgap",
-        "tag": "grid",
-        "pass": true
-      },
-      {
-        "clause": "centred",
-        "tag": "grid",
-        "pass": true
+    },
+    {
+      "scene": "D-stack-columns.marey",
+      "author": "D",
+      "brief": "L7",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "columns",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "vgap",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "hgap",
+          "tag": "grid",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "grid",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 79,
+        "layoutTokens": 44,
+        "share": 0.5569620253164557
       }
-    ]
-  },
-  {
-    "scene": "D-toolbar-row.marey",
-    "author": "D",
-    "brief": "L1",
-    "compiled": true,
-    "clauses": [
+    },
+    {
+      "scene": "D-toolbar-row.marey",
+      "author": "D",
+      "brief": "L1",
+      "compiled": true,
+      "clauses": [
+        {
+          "clause": "count",
+          "tag": "brief",
+          "pass": true
+        },
+        {
+          "clause": "centreline",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "gaps",
+          "tag": "row",
+          "pass": true
+        },
+        {
+          "clause": "centred",
+          "tag": "row",
+          "pass": true
+        }
+      ],
+      "tokenShare": {
+        "tokens": 46,
+        "layoutTokens": 18,
+        "share": 0.391304347826087
+      }
+    }
+  ],
+  "mutationSweep": {
+    "mutation": "one numeric literal raised by 2; the scene's own size is not mutated",
+    "excludedSceneSizeLiterals": 72,
+    "mutants": 456,
+    "killed": 438,
+    "briefOnly": 8,
+    "notCompiling": 2,
+    "survived": 8,
+    "survivors": [
       {
-        "clause": "count",
-        "tag": "brief",
-        "pass": true
+        "scene": "A-clock-ticks.marey",
+        "line": 14,
+        "column": 29,
+        "from": "0",
+        "to": "2"
       },
       {
-        "clause": "centreline",
-        "tag": "row",
-        "pass": true
+        "scene": "B-card-grid.marey",
+        "line": 16,
+        "column": 33,
+        "from": "2",
+        "to": "4"
       },
       {
-        "clause": "gaps",
-        "tag": "row",
-        "pass": true
+        "scene": "B-card-grid.marey",
+        "line": 16,
+        "column": 38,
+        "from": "0",
+        "to": "2"
       },
       {
-        "clause": "centred",
-        "tag": "row",
-        "pass": true
+        "scene": "B-clock-ticks.marey",
+        "line": 10,
+        "column": 26,
+        "from": "0",
+        "to": "2"
+      },
+      {
+        "scene": "B-ring-12.marey",
+        "line": 10,
+        "column": 21,
+        "from": "360",
+        "to": "362"
+      },
+      {
+        "scene": "C-clock-ticks.marey",
+        "line": 15,
+        "column": 29,
+        "from": "0",
+        "to": "2"
+      },
+      {
+        "scene": "C-ring-12.marey",
+        "line": 12,
+        "column": 21,
+        "from": "360",
+        "to": "362"
+      },
+      {
+        "scene": "D-clock-ticks.marey",
+        "line": 15,
+        "column": 29,
+        "from": "0",
+        "to": "2"
+      }
+    ],
+    "briefOnlyMutants": [
+      {
+        "scene": "A-badge-row.marey",
+        "line": 3,
+        "column": 30,
+        "from": "0",
+        "to": "2"
+      },
+      {
+        "scene": "A-badge-row.marey",
+        "line": 3,
+        "column": 33,
+        "from": "0",
+        "to": "2"
+      },
+      {
+        "scene": "B-badge-row.marey",
+        "line": 12,
+        "column": 16,
+        "from": "0",
+        "to": "2"
+      },
+      {
+        "scene": "B-badge-row.marey",
+        "line": 12,
+        "column": 19,
+        "from": "0",
+        "to": "2"
+      },
+      {
+        "scene": "C-badge-row.marey",
+        "line": 5,
+        "column": 30,
+        "from": "0",
+        "to": "2"
+      },
+      {
+        "scene": "C-badge-row.marey",
+        "line": 5,
+        "column": 33,
+        "from": "0",
+        "to": "2"
+      },
+      {
+        "scene": "D-badge-row.marey",
+        "line": 10,
+        "column": 16,
+        "from": "0",
+        "to": "2"
+      },
+      {
+        "scene": "D-badge-row.marey",
+        "line": 10,
+        "column": 19,
+        "from": "0",
+        "to": "2"
+      }
+    ],
+    "notCompilingMutants": [
+      {
+        "scene": "B-mixed-row.marey",
+        "line": 10,
+        "column": 50,
+        "from": "2",
+        "to": "4"
+      },
+      {
+        "scene": "B-spread-dots.marey",
+        "line": 12,
+        "column": 77,
+        "from": "3",
+        "to": "5"
       }
     ]
   }
-]
+}

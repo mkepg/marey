@@ -3,12 +3,13 @@
  * show it discriminates: each brief has one correct scene that passes every
  * clause and one wrong scene per non-`brief` clause that fails that clause.
  */
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { compileSource } from "../src/compiler/compileSource";
 import { worldBoxes, type WorldShape } from "./layout/geometry";
 import { BRIEFS, checkScene, type BriefId } from "./layout/predicates";
+import { tokenize, tokenShare, type TokenShare } from "./layout/tokenShare";
 
 const REF_DIR = "eval/layout/reference";
 
@@ -156,12 +157,35 @@ describe("reference scenes", () => {
   });
 });
 
+describe("tokenShare", () => {
+  it("counts let lines with their continuations, generate headers and position lines, and drops comments", () => {
+    const source = [
+      "let xs = [1,", //           let, xs, =, [, 1, ,            6 layout
+      "  2]", //                   continuation: 2, ]             2 layout
+      "scene {", //                scene, {                       2
+      "  background: #0a0e1a", //  background, :, #0a0e1a        3 (the colour is one token)
+      "  // a comment, 0 tokens",
+      "  generate x in xs {", //   generate, x, in, xs, {         5 layout
+      "    circle c { position: (x, 0), radius: 5 }", // 15 tokens, a position line: 15 layout
+      "  }", //                    }                              1
+      "}", //                      }                              1
+    ].join("\n");
+    expect(tokenize(source).map((t) => t.text).slice(0, 8)).toEqual(["let", "xs", "=", "[", "1", ",", "2", "]"]);
+    expect(tokenShare(source)).toEqual({ tokens: 35, layoutTokens: 28, share: 28 / 35 });
+  });
+
+  it("a let whose brackets close on its own line does not continue", () => {
+    expect(tokenShare("let a = (1 + 2)\nscene {\n}\n")).toEqual({ tokens: 11, layoutTokens: 8, share: 8 / 11 });
+  });
+});
+
 /**
  * The blind corpus: every `<author>-<brief>.marey` in eval/scenes-layout is
- * checked against its brief and written to eval/report-layout.json. This
+ * checked against its brief and written to eval/report-layout.json, with its
+ * layout-token share and a mutation sweep over the whole corpus. This
  * reports; it does not fail on a geometric failure, because a wrong layout is
- * the measurement, not a defect. It fails only if a file cannot be mapped to
- * a brief.
+ * the measurement, not a defect, and it does not fail on a surviving mutant.
+ * It fails only if a file cannot be mapped to a brief.
  */
 const CORPUS_DIR = "eval/scenes-layout";
 const BRIEF_BY_FILE: Record<string, BriefId> = {
@@ -176,18 +200,130 @@ const BRIEF_BY_FILE: Record<string, BriefId> = {
   "clock-ticks": "L9",
 };
 
+interface SceneEntry {
+  scene: string;
+  author: string;
+  brief: BriefId;
+  compiled: boolean;
+  clauses: { clause: string; tag: string; pass: boolean }[];
+  tokenShare: TokenShare;
+}
+
+type MutantOutcome = "killed" | "briefOnly" | "notCompiling" | "survived";
+/** Where a mutant was made: its scene, 1-based line and column, and the literal before and after. */
+interface MutantSite {
+  scene: string;
+  line: number;
+  column: number;
+  from: string;
+  to: string;
+}
+
+/**
+ * Every numeric literal in `source` except the scene's own `size:` (the
+ * brief fixes the 800×600 frame, and no clause reads it), as offsets.
+ */
+function mutableLiterals(source: string): { offset: number; text: string; line: number; column: number }[] {
+  const tokens = tokenize(source);
+  const out: { offset: number; text: string; line: number; column: number }[] = [];
+  let braces = 0;
+  let parens = 0;
+  let inScene = false; // inside the top-level `scene { }` block
+  let skipBelow = -1; // while >= 0: inside the scene's size value, which closes when parens returns to it
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i].text;
+    if (t === "scene" && tokens[i + 1]?.text === "{" && braces === 0) inScene = true;
+    if (t === "{") braces++;
+    else if (t === "}") {
+      braces--;
+      if (braces === 0) inScene = false;
+    } else if (t === "(") parens++;
+    else if (t === ")") {
+      parens--;
+      if (parens === skipBelow) skipBelow = -1;
+    }
+    if (inScene && braces === 1 && t === "size" && tokens[i + 1]?.text === ":") skipBelow = parens;
+    if (/^\d/.test(t) && skipBelow === -1) {
+      const { offset, line } = tokens[i];
+      out.push({ offset, text: t, line: line + 1, column: offset - source.lastIndexOf("\n", offset - 1) });
+    }
+  }
+  return out;
+}
+
 describe.runIf(existsSync(CORPUS_DIR))("the blind layout corpus", () => {
-  it("checks every scene against its brief and writes eval/report-layout.json", () => {
-    const files = readdirSync(CORPUS_DIR).filter((f) => f.endsWith(".marey")).sort();
-    const report = files.map((f) => {
-      const m = /^([A-Z])-(.+)\.marey$/.exec(f);
-      expect(m, f).not.toBeNull();
-      const brief = BRIEF_BY_FILE[m![2]];
-      expect(brief, f).toBeDefined();
-      const r = checkScene(brief, readFileSync(join(CORPUS_DIR, f), "utf8"));
-      return { scene: f, author: m![1], brief, compiled: r.compiled, clauses: r.results };
+  const files = readdirSync(CORPUS_DIR).filter((f) => f.endsWith(".marey")).sort();
+  const briefOf = (f: string): BriefId => {
+    const m = /^([A-Z])-(.+)\.marey$/.exec(f);
+    expect(m, f).not.toBeNull();
+    const brief = BRIEF_BY_FILE[m![2]];
+    expect(brief, f).toBeDefined();
+    return brief;
+  };
+  let scenes: SceneEntry[] | undefined;
+  let mutationSweep: Record<string, unknown> | undefined;
+
+  afterAll(() => {
+    if (scenes && mutationSweep) {
+      writeFileSync("eval/report-layout.json", JSON.stringify({ scenes, mutationSweep }, null, 2) + "\n");
+    }
+  });
+
+  it("checks every scene against its brief and records its layout-token share", () => {
+    scenes = files.map((f) => {
+      const source = readFileSync(join(CORPUS_DIR, f), "utf8");
+      const brief = briefOf(f);
+      const r = checkScene(brief, source);
+      return { scene: f, author: f[0], brief, compiled: r.compiled, clauses: r.results, tokenShare: tokenShare(source) };
     });
-    writeFileSync("eval/report-layout.json", JSON.stringify(report, null, 2) + "\n");
-    expect(report.length).toBe(files.length);
+    expect(scenes.length).toBe(files.length);
+  });
+
+  // For every scene, each numeric literal in turn is raised by 2, in memory,
+  // and the scene re-checked against its brief. A mutant is killed when a
+  // non-`brief` clause fails, brief-only when only `brief` clauses fail, and
+  // survives when every clause still passes. Survivors are listed so each
+  // can be read as an equivalent mutant or a blind spot of the checker.
+  it("records a +2 mutation sweep over every numeric literal of the corpus", () => {
+    const counts: Record<MutantOutcome, number> = { killed: 0, briefOnly: 0, notCompiling: 0, survived: 0 };
+    const survivors: MutantSite[] = [];
+    const briefOnly: MutantSite[] = [];
+    const notCompiling: MutantSite[] = [];
+    let excludedSceneSize = 0;
+    for (const f of files) {
+      const source = readFileSync(join(CORPUS_DIR, f), "utf8");
+      const brief = briefOf(f);
+      const literals = mutableLiterals(source);
+      excludedSceneSize += tokenize(source).filter((t) => /^\d/.test(t.text)).length - literals.length;
+      for (const lit of literals) {
+        const to = String(Number(lit.text) + 2);
+        const mutated = source.slice(0, lit.offset) + to + source.slice(lit.offset + lit.text.length);
+        const r = checkScene(brief, mutated);
+        const failed = r.results.filter((c) => !c.pass);
+        const outcome: MutantOutcome = !r.compiled
+          ? "notCompiling"
+          : failed.some((c) => c.tag !== "brief")
+            ? "killed"
+            : failed.length > 0
+              ? "briefOnly"
+              : "survived";
+        counts[outcome]++;
+        const where: MutantSite = { scene: f, line: lit.line, column: lit.column, from: lit.text, to };
+        if (outcome === "survived") survivors.push(where);
+        if (outcome === "briefOnly") briefOnly.push(where);
+        if (outcome === "notCompiling") notCompiling.push(where);
+      }
+    }
+    const mutants = counts.killed + counts.briefOnly + counts.notCompiling + counts.survived;
+    mutationSweep = {
+      mutation: "one numeric literal raised by 2; the scene's own size is not mutated",
+      excludedSceneSizeLiterals: excludedSceneSize,
+      mutants,
+      ...counts,
+      survivors,
+      briefOnlyMutants: briefOnly,
+      notCompilingMutants: notCompiling,
+    };
+    expect(mutants).toBeGreaterThan(0);
   });
 });
