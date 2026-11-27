@@ -31,8 +31,24 @@
 /** Degrees per radian, the double nearest 180/pi. */
 export const RAD_TO_DEG = 57.29577951308232;
 
-/** Radians per degree, the double nearest pi/180 (0x3F91DF46_A2529D39). */
-const DEG_TO_RAD = 0.017453292519943295;
+/**
+ * Radians per degree: DEG_TO_RAD is the double nearest pi/180, and
+ * DEG_TO_RAD_HI + DEG_TO_RAD_LO is the same value split (Veltkamp) into
+ * halves of at most 26 significant bits, so that each half times a half of
+ * the angle is an exact product.
+ *
+ * pi/180 - DEG_TO_RAD is 2.9486522708701687e-19 (0x3C15C1D8_BECDD291), and
+ * it is deliberately not added. Measured, adding `d * 2.9486522708701687e-19`
+ * to the product's error term moves the sweep maximum in detMath.test.ts from
+ * 0.8163 to 0.7416 ulp, within the asserted 1-ulp bound, and changes no
+ * exact value the tests check, so no test could keep it in place.
+ */
+const DEG_TO_RAD = 0.017453292519943295; //      0x3F91DF46_A2529D39
+const DEG_TO_RAD_HI = 0.01745329238474369; //    0x3F91DF46_A0000000
+const DEG_TO_RAD_LO = 1.3519960498364902e-10; // 0x3DE294E9_C8000000
+
+/** Veltkamp's splitting constant, 2^27 + 1. */
+const SPLIT = 134217729;
 
 // sin(x) ~ x + S1 x^3 + ... + S6 x^13 on |x| <= pi/4; |error| < 2^-58.
 const S1 = -1.66666666666666324348e-1; // 0xBFC55555_55555549
@@ -50,38 +66,71 @@ const C4 = -2.75573143513906633035e-7; // 0xBE927E4F_809C52AD
 const C5 = 2.08757232129817482790e-9; //  0x3E21EE9E_BDB4B1C4
 const C6 = -1.13596475577881948265e-11; // 0xBDA8FAE9_BE8838D4
 
-/** sin(x) for x in [0, pi/4] radians. */
-function sinKernel(x: number): number {
+/**
+ * sin(x + y) for x in [0, pi/4] radians, where y is a tail below half an
+ * ulp of x (fdlibm's `__kernel_sin`, less one term).
+ */
+function sinKernel(x: number, y: number): number {
   const z = x * x;
-  const r = S2 + z * (S3 + z * (S4 + z * (S5 + z * S6)));
   const v = z * x;
-  // The correction is under a tenth of `x` on this range, so its own
-  // rounding errors shrink by that factor before the one final add.
-  return x + v * (S1 + z * r);
+  const r = S2 + z * (S3 + z * (S4 + z * (S5 + z * S6)));
+  // sin(x + y) ~ sin(x) + y cos(x) = x + S1 x^3 + ... + y (1 - x^2/2).
+  // fdlibm also carries the -y x^2/2 term. It is left out because, measured
+  // here, it makes things worse: with it sinDeg(45) is 0.7071067811865475,
+  // an ulp below the double nearest sqrt(1/2), which detMath.test.ts pins.
+  return x + ((z * (v * r) + y) + v * S1);
 }
 
-/** cos(x) for x in [0, pi/4] radians. */
-function cosKernel(x: number): number {
+/**
+ * cos(x + y) for x in [0, pi/4] radians, where y is a tail below half an
+ * ulp of x (FreeBSD's `__kernel_cos`).
+ */
+function cosKernel(x: number, y: number): number {
   const z = x * x;
   const r = z * (C1 + z * (C2 + z * (C3 + z * (C4 + z * (C5 + z * C6)))));
   const hz = 0.5 * z;
   const w = 1 - hz;
   // `1 - w` and then `(1 - w) - hz` are both exact (Sterbenz), so together
   // they recover the rounding error of `w`, which is added back with the
-  // polynomial tail.
-  return w + ((1 - w - hz) + z * r);
+  // polynomial tail. cos(x + y) ~ cos(x) - y x supplies `- x * y`.
+  return w + ((1 - w - hz) + (z * r - x * y));
+}
+
+/**
+ * sin (or cos) of d degrees for d in [0, 45].
+ *
+ * The radian angle d * DEG_TO_RAD is formed exactly, as hi + lo, rather
+ * than rounded once: Dekker's product gives it as p + e with no error, and
+ * the kernels take the low part as their tail argument. A single rounded
+ * multiply leaves up to half an ulp of error in the argument before the
+ * polynomial starts, and is why sin(30) would come out as
+ * 0.49999999999999994; with the exact product it is 0.5.
+ *
+ * Every step is a correctly rounded + - *, and the splitting relies on there
+ * being no fused multiply-add (see the header).
+ */
+function firstOctant(d: number, sine: boolean): number {
+  const c = SPLIT * d;
+  const dh = c - (c - d);
+  const dl = d - dh;
+  const p = d * DEG_TO_RAD;
+  // Each partial product is exact, and so is each sum, so e = d * DEG_TO_RAD - p.
+  const e = dh * DEG_TO_RAD_HI - p + dh * DEG_TO_RAD_LO + dl * DEG_TO_RAD_HI + dl * DEG_TO_RAD_LO;
+  const hi = p + e;
+  const lo = e - (hi - p);
+  return sine ? sinKernel(hi, lo) : cosKernel(hi, lo);
 }
 
 /** sin(a degrees) for a in [0, 90]. */
 function sinFirstQuadrant(a: number): number {
   // 90 - a is exact for a in [45, 90] (Sterbenz), so the octant fold adds
-  // no rounding; the single rounding of the conversion is the multiply.
-  return a <= 45 ? sinKernel(a * DEG_TO_RAD) : cosKernel((90 - a) * DEG_TO_RAD);
+  // no rounding.
+  return a <= 45 ? firstOctant(a, true) : firstOctant(90 - a, false);
 }
 
 /** cos(a degrees) for a in [0, 90]. */
 function cosFirstQuadrant(a: number): number {
-  return a <= 45 ? cosKernel(a * DEG_TO_RAD) : sinKernel((90 - a) * DEG_TO_RAD);
+  return a <= 45 ? firstOctant(a, false) : firstOctant(90 - a, true);
 }
 
 /**

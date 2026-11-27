@@ -293,6 +293,36 @@ describe("sinDeg and cosDeg", () => {
     expect(cosDeg(-(360e12 + 180))).toBe(-1);
   });
 
+  it("give exactly 1/2 at 30 degrees and its reflections", () => {
+    // sin(30) = 1/2 is the case the exact degree-to-radian product exists
+    // for: with one rounded multiply by pi/180 the argument lands below
+    // pi/6 and the result is 0.49999999999999994. 150 folds to 30 by
+    // 180 - a, and cos(60) folds to sin(30) by 90 - a, both exactly.
+    expect(sinDeg(30)).toBe(0.5);
+    expect(sinDeg(150)).toBe(0.5);
+    expect(cosDeg(60)).toBe(0.5);
+    expect(sinDeg(-30)).toBe(-0.5);
+    expect(sinDeg(210)).toBe(-0.5);
+    expect(cosDeg(120)).toBe(-0.5);
+    expect(cosDeg(-300)).toBe(0.5);
+  });
+
+  it("give the correctly rounded sqrt(1/2) at 45 degrees, from both kernels", () => {
+    // 45 is the octant boundary: sinDeg and cosDeg both take the a <= 45
+    // branch, so the same exact radian argument goes through the two
+    // different polynomials. Each lands on the double nearest sqrt(1/2)
+    // (Math.SQRT1_2 is a constant, not a computed call), so sin and cos agree
+    // there bit for bit, which a once-rounded argument did not give
+    // (sinDeg(45) was 0.7071067811865475, an ulp low).
+    const nearest = 0.7071067811865476;
+    expect(nearest).toBe(Math.SQRT1_2);
+    expect(sinDeg(45)).toBe(nearest);
+    expect(cosDeg(45)).toBe(nearest);
+    expect(sinDeg(135)).toBe(nearest);
+    expect(cosDeg(135)).toBe(-nearest);
+    expect(cosDeg(-45)).toBe(nearest);
+  });
+
   it("return +0, never -0, for an exact zero", () => {
     // `toBe` compares with Object.is, so each of these fails on -0.
     for (const deg of [0, -0, 180, -180, 360, -360, 540]) expect(sinDeg(deg)).toBe(0);
@@ -343,19 +373,15 @@ describe("sinDeg and cosDeg", () => {
     return { maxSin, maxCos, zeroMisses, symmetryMisses };
   }
 
-  it("are within 2 ulp every 0.01 degrees on [-720, 720]", () => {
-    expect(sweep().maxSin).toBeLessThanOrEqual(2);
-    expect(sweep().maxCos).toBeLessThanOrEqual(2);
-  });
-
-  it("keep the measured 1.4826 ulp maximum on that sweep", () => {
-    // 2 ulp is the requirement; this pins the cos kernel's compensation
-    // (`(1 - w - hz)`, the rounding error of `1 - z/2`, added back). Without
-    // it the same sweep measures 1.5472 ulp, which the 2-ulp bound cannot
-    // tell apart. The results are the same bits on every engine, so the
-    // margin cannot flake.
-    expect(sweep().maxSin).toBeLessThan(1.5);
-    expect(sweep().maxCos).toBeLessThan(1.5);
+  it("are within 1 ulp every 0.01 degrees on [-720, 720]", () => {
+    // The requirement is 2 ulp (spec section 3.3, global constraints). The
+    // measured maximum is 0.8163 ulp, so 1 ulp is asserted: the results are
+    // the same bits on every engine, so the margin cannot flake. The tighter
+    // bound is what pins three correction terms: the cos kernel's recovered
+    // rounding error (1.2687 ulp without it), its `- x * y` tail (1.0212) and
+    // the product's `dl * DEG_TO_RAD_LO` partial (1.1429).
+    expect(sweep().maxSin).toBeLessThanOrEqual(1);
+    expect(sweep().maxCos).toBeLessThanOrEqual(1);
   });
 
   it("return exactly +0 wherever the true value is zero on the sweep", () => {
@@ -369,7 +395,7 @@ describe("sinDeg and cosDeg", () => {
     expect(sweep().symmetryMisses).toEqual([]);
   });
 
-  it("are within 2 ulp at large and tiny magnitudes", () => {
+  it("are within 1 ulp at large and tiny magnitudes", () => {
     let maxErr = 0;
     let arg = 0;
     // 1.37 * 2^p for p in [-30, 1020], both signs, and a few awkward values.
@@ -397,14 +423,14 @@ describe("sinDeg and cosDeg", () => {
       }
     }
     console.log(`detMath wide magnitudes: max ${maxErr.toFixed(4)} ulp at ${arg}`);
-    expect(maxErr).toBeLessThanOrEqual(2);
+    expect(maxErr).toBeLessThanOrEqual(1);
 
     // Below 2^-30 degrees sin(x) = x * pi/180 to well under an ulp, so the
     // exact product is the reference.
     for (const x of [2 ** -31, 1e-12, 1e-100, 1e-300]) {
       const { m, e } = decompose(x);
-      expect(ulpError(sinDeg(x), m * PI_OVER_180, e - P)).toBeLessThanOrEqual(2);
-      expect(ulpError(sinDeg(-x), -m * PI_OVER_180, e - P)).toBeLessThanOrEqual(2);
+      expect(ulpError(sinDeg(x), m * PI_OVER_180, e - P)).toBeLessThanOrEqual(1);
+      expect(ulpError(sinDeg(-x), -m * PI_OVER_180, e - P)).toBeLessThanOrEqual(1);
     }
   });
 
