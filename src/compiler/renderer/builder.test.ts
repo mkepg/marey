@@ -401,7 +401,7 @@ describe("origin", () => {
 // ---------------------------------------------------------------------------
 
 const TO_BLUE = {
-  property: "color", to: "#0000ff", from: null, duration: 1, delay: 0, easing: "linear",
+  property: "color", to: "#0000ff", from: null, duration: 1, delay: 0, easing: "linear", bounce: 0.25,
   loop: false, yoyo: false, handoff: false,
 } as const;
 

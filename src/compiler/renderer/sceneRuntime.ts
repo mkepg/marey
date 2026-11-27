@@ -87,13 +87,18 @@ function lerp(a: number, b: number, t: number): number {
  * displacement of that tick times `TICK_HZ` (Phase 6C spec §2.1). A
  * non-looping yoyo's final tick is the last of its return leg, from progress
  * 1/N back to 0, so its direction needs no special case.
+ *
+ * Only a handoff reaches this, and the validator rejects a handoff with
+ * `easing: spring` (TYPE_HANDOFF_SPRING), so `bounce` changes nothing here
+ * today. It is passed anyway, so that the call matches the others and a
+ * later spring handoff would get its own curve.
  */
 function finalTickVelocity(ra: RunningAnim): IRPoint {
   const n = Math.max(ra.time.durationTicks, 1);
   const release = releaseEndOf(ra.anim);
   const [pPrev, pEnd] = release === "start" ? [1 / n, 0] : [(n - 1) / n, 1];
-  const ePrev = evaluateEasing(pPrev, ra.anim.easing, release);
-  const eEnd = evaluateEasing(pEnd, ra.anim.easing, release);
+  const ePrev = evaluateEasing(pPrev, ra.anim.easing, release, ra.anim.bounce);
+  const eEnd = evaluateEasing(pEnd, ra.anim.easing, release, ra.anim.bounce);
   const s = ra.startVal as IRPoint;
   const t = ra.targetVal as IRPoint;
   return {
@@ -110,7 +115,7 @@ function finalTickVelocity(ra: RunningAnim): IRPoint {
  * class purely because it never touches the world.
  */
 function applyAnim(ra: RunningAnim, p: number): void {
-  const e = evaluateEasing(p, ra.anim.easing, releaseEndOf(ra.anim));
+  const e = evaluateEasing(p, ra.anim.easing, releaseEndOf(ra.anim), ra.anim.bounce);
 
   if (ra.anim.property === "alpha") {
     ra.container.alpha = lerp(ra.startVal as number, ra.targetVal as number, e);
@@ -344,7 +349,7 @@ export class SceneRuntime {
 
   /** A scale runner's own value for this tick, evaluated at `alpha = 0`. */
   private scaleOf(ra: RunningAnim): { x: number; y: number } {
-    const e = evaluateEasing(animProgress(ra.time, 0), ra.anim.easing, releaseEndOf(ra.anim));
+    const e = evaluateEasing(animProgress(ra.time, 0), ra.anim.easing, releaseEndOf(ra.anim), ra.anim.bounce);
     const s = ra.startVal as IRPoint;
     const t = ra.targetVal as IRPoint;
     return { x: lerp(s.x, t.x, e), y: lerp(s.y, t.y, e) };
@@ -386,7 +391,7 @@ export class SceneRuntime {
     const id = ra.container.__body;
     if (!id) return;
 
-    const e = evaluateEasing(animProgress(ra.time, 0), ra.anim.easing, releaseEndOf(ra.anim));
+    const e = evaluateEasing(animProgress(ra.time, 0), ra.anim.easing, releaseEndOf(ra.anim), ra.anim.bounce);
 
     const layout = ra.container.__mareyLayout;
     // `(0, 0)` at the default origin, which is every scene written before

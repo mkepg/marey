@@ -23,7 +23,7 @@ describe("language contract", () => {
     expect(PROP_TYPES.animate).toEqual({
       property: "animProperty", to: ["number", "point", "color"], from: ["number", "point", "color"],
       duration: "number", delay: "number",
-      easing: "easing", loop: "boolean", yoyo: "boolean", handoff: "boolean",
+      easing: "easing", bounce: "number", loop: "boolean", yoyo: "boolean", handoff: "boolean",
     });
     expect(Object.keys(LANGUAGE_CONTRACT.scene.properties)).toEqual([
       "background", "size", "fit", "duration",

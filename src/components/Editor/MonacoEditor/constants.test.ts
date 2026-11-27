@@ -6,10 +6,18 @@ import { analyzeContext } from "./scanner";
 
 describe("Marey editor guidance", () => {
   it("describes bounce as shared-world collision behavior", () => {
-    const hover = propertyHoverMarkdown("bounce")!;
+    // `bounce` is a property of both `physics` and `animate`, so the hover
+    // names its block, as the editor's hover provider does.
+    const hover = propertyHoverMarkdown("bounce", "physics")!;
     expect(hover).toContain("other objects");
     expect(hover).toContain("scene boundaries");
     expect(hover).toContain("higher");
+  });
+
+  it("describes an animate block's bounce as the spring's overshoot", () => {
+    const hover = propertyHoverMarkdown("bounce", "animate")!;
+    expect(hover).toContain("How far a spring easing overshoots before it settles");
+    expect(hover).not.toContain("scene boundaries");
   });
 
   it("uses light drag in physics snippets", () => {

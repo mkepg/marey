@@ -18,6 +18,7 @@ import {
   ownsPhysics,
 } from "./physicsCost";
 import { resolveHandoffTarget, yoyoIsTrue } from "./handoff";
+import { contractStringDefault } from "./resolvers";
 // `secondsToTicks` lives in `../sceneIR.ts`, the pipeline-neutral module both
 // the typeChecker and the renderer already import — not `renderer/clock.ts`,
 // which would make the type-check stage reach into the render stage (Fix 4,
@@ -752,6 +753,23 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         errors.push(...animateValueErrors("from", fromVal, propVal, label, ancestors));
       }
 
+      // The easing in effect: the one written, else the contract default. An
+      // easing value of the wrong kind is already a mismatch error, and naming
+      // any easing for it would mislead, so it yields null.
+      const easingVal = node.props["easing"];
+      const easing = easingVal === undefined
+        ? contractStringDefault("animate", "easing")
+        : easingVal.kind === "easing" ? (easingVal.value as string) : null;
+
+      const bounceVal = node.props["bounce"];
+      if (bounceVal !== undefined && easing !== null && easing !== "spring") {
+        errors.push({
+          phase: "TYPE",
+          message: `[TYPE_BOUNCE_WITHOUT_SPRING] 'bounce' only shapes 'easing: spring', but this animation's easing is '${easing}'. Remove 'bounce' or set 'easing: spring'.`,
+          ...errPosOf(bounceVal),
+        });
+      }
+
       const handoffVal = node.props["handoff"];
       if (handoffVal?.kind === "boolean" && handoffVal.value === true) {
         if (propVal?.kind === "animProperty" && propVal.value !== "position") {
@@ -760,6 +778,11 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         const loopVal = node.props["loop"];
         if (loopVal?.kind === "boolean" && loopVal.value === true) {
           errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_LOOP] 'loop: true' and 'handoff: true' cannot coexist. A looping animation never ends.`, line: handoffVal.line, col: handoffVal.col, endLine: handoffVal.endLine, endCol: handoffVal.endCol });
+        }
+        // A handoff swaps a curve that arrives at rest for one that still moves
+        // (Phase 6C), and an oscillating curve has no such replacement.
+        if (easing === "spring") {
+          errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_SPRING] 'easing: spring' settles at rest, so it has no momentum to hand over with 'handoff: true'. Use 'easing: easeOut', which still moves at its end.`, line: handoffVal.line, col: handoffVal.col, endLine: handoffVal.endLine, endCol: handoffVal.endCol });
         }
 
         const target = resolveHandoffTarget(node as ObjectNode, parentNode, ancestors);

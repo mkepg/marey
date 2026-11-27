@@ -358,6 +358,7 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
             "alpha": 1,
             "animations": [
               {
+                "bounce": 0.25,
                 "delay": 0,
                 "duration": 1,
                 "easing": "easeInOut",
@@ -483,6 +484,7 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
             "alpha": 1,
             "animations": [
               {
+                "bounce": 0.25,
                 "delay": 0,
                 "duration": 1,
                 "easing": "easeInOut",
@@ -584,6 +586,7 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
           {
             "steps": [
               {
+                "bounce": 0.25,
                 "delay": 0,
                 "duration": 0.25,
                 "easing": "easeInOut",
@@ -597,6 +600,7 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
               {
                 "steps": [
                   {
+                    "bounce": 0.25,
                     "delay": 0,
                     "duration": 0.5,
                     "easing": "easeInOut",
@@ -730,6 +734,7 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
           {
             "steps": [
               {
+                "bounce": 0.25,
                 "delay": 0,
                 "duration": 0.25,
                 "easing": "easeInOut",
@@ -743,6 +748,7 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
               {
                 "steps": [
                   {
+                    "bounce": 0.25,
                     "delay": 0,
                     "duration": 0.5,
                     "easing": "easeInOut",
@@ -808,6 +814,7 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
             "alpha": 1,
             "animations": [
               {
+                "bounce": 0.25,
                 "delay": 0,
                 "duration": 1,
                 "easing": "easeInOut",
@@ -888,6 +895,7 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
         "alpha": 1,
         "animations": [
           {
+            "bounce": 0.25,
             "delay": 0,
             "duration": 1,
             "easing": "easeInOut",
@@ -948,6 +956,7 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
             "alpha": 1,
             "animations": [
               {
+                "bounce": 0.25,
                 "delay": 0,
                 "duration": 1,
                 "easing": "easeInOut",
@@ -1028,6 +1037,7 @@ exports[`compiler determinism > keeps macro, sequence, parallel, and physics IR 
         "alpha": 1,
         "animations": [
           {
+            "bounce": 0.25,
             "delay": 0,
             "duration": 1,
             "easing": "easeInOut",

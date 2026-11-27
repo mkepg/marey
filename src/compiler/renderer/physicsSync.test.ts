@@ -307,6 +307,7 @@ const ANIMATION: IRAnimation = {
   duration: 1,
   delay: 0,
   easing: "linear",
+  bounce: 0.25,
   loop: false,
   yoyo: false,
   handoff: false,
