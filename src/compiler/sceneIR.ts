@@ -51,7 +51,7 @@ export interface IRPoint {
 export type IRPointList = ReadonlyArray<IRPoint>;
 
 export type IRFit = "contain" | "cover" | "fill" | "none";
-export type IREasing = "linear" | "easeIn" | "easeOut" | "easeInOut";
+export type IREasing = "linear" | "easeIn" | "easeOut" | "easeInOut" | "spring";
 
 export interface IRTransform {
   readonly position: IRPoint;
@@ -62,10 +62,22 @@ export interface IRTransform {
 export interface IRAnimation {
   readonly property: string;
   readonly to: number | IRPoint | IRColor;
+  /**
+   * The start value, or `null` to start from the object's current value. The
+   * renderer writes it when the animation is scheduled and holds it through
+   * `delay`.
+   */
+  readonly from: number | IRPoint | IRColor | null;
   readonly duration: number;
   /** Seconds to wait before this animation begins. */
   readonly delay: number;
   readonly easing: IREasing;
+  /**
+   * How far `easing: spring` overshoots, in [0, 0.9]; the damping ratio is
+   * `1 - bounce`. Always present, at its default 0.25 when unwritten, and
+   * read only by the spring curve.
+   */
+  readonly bounce: number;
   readonly loop: boolean;
   readonly yoyo: boolean;
   readonly handoff: boolean;

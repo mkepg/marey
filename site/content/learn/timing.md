@@ -210,6 +210,37 @@ Different durations would not do this. Each dot would then have its own
 period, and the dots would drift further apart with every bounce instead of
 keeping their places in the wave.
 
+### Waiting at a `from`
+
+[The last lesson](/learn/animate/) gave `animate` a `from`. A delay holds the
+shape at that value, not at the one it was declared with. That is what makes a
+staggered reveal work: each dot below is declared in full view, and `from: 0`
+hides it for as long as its `delay` lasts:
+
+```marey
+scene {
+  size: (960, 540)
+  background: #1d2c48
+  duration: 3
+
+  circle a { position: (300, 270), radius: 30, color: #ffc46b
+             animate { property: alpha, from: 0, to: 1, duration: 0.5 } }
+  circle b { position: (420, 270), radius: 30, color: #ffc46b
+             animate { property: alpha, from: 0, to: 1, duration: 0.5, delay: 0.4 } }
+  circle c { position: (540, 270), radius: 30, color: #ffc46b
+             animate { property: alpha, from: 0, to: 1, duration: 0.5, delay: 0.8 } }
+  circle d { position: (660, 270), radius: 30, color: #ffc46b
+             animate { property: alpha, from: 0, to: 1, duration: 0.5, delay: 1.2 } }
+}
+```
+
+None of the dots shows before its turn, and none flashes at full opacity
+first: `from` takes hold in the first frame, not when the delay ends.
+
+:::note
+`from` needs `marey-lang` 0.8.0 or later. Version 0.7.0 does not have it.
+:::
+
 ## Loops without a seam
 
 The players on this site start a scene again when it ends. A scene **loops

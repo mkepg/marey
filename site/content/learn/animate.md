@@ -1,12 +1,13 @@
 ---
 title: Animate
 summary: Move, turn, grow and fade a shape with animate, shape each motion with an easing, and run several animations on one shape at once.
-description: Lesson 3 of the Marey course. The animate block in full, the five properties it can change, the four easings, and several animations running at once.
+description: Lesson 3 of the Marey course. The animate block in full, the five properties it can change, choosing a starting value with from, the five easings including spring, and several animations running at once.
 minutes: 20
 learn:
 - Animate position, rotation, scale and alpha, starting from the value a shape already has
 - Scale a shape by one number or by a separate amount in each direction
-- Choose how a motion speeds up and slows down with easing
+- Name a starting value with from instead of declaring it on the shape
+- Choose how a motion speeds up and slows down with easing, including a spring that overshoots
 - Run several animations on one shape at the same time
 showcase: easing-race
 ---
@@ -19,7 +20,7 @@ speed of a motion, and what happens when one shape has more than one `animate`.
 ## An animation starts where the shape is
 
 An `animate` block names the property to change, the value to end at and how
-many seconds to take. It has no starting value of its own. Watch where the card
+many seconds to take. It takes its starting value from the shape unless you name one. Watch where the card
 comes from:
 
 ```marey
@@ -40,24 +41,52 @@ scene {
 
 The card slides in from outside the frame. Its `position`, `(-100, 270)`, is
 where the animation starts, and `to` is where it ends. To choose a starting
-point you set the property itself; there is no `from`, and the compiler
-rejects one:
+point you can set the property itself, or name the start in the animation with
+`from`, which the next section covers.
 
-```marey error
+An `animate` block accepts more properties than these three. Four of them,
+`delay`, `loop`, `yoyo` and `handoff`, come in later lessons.
+
+## Choosing the start: from
+
+Setting `position: (-100, 270)` makes the card's resting place the place it
+begins. Often you want the opposite: the shape declared where it ends up, and
+the animation saying where it comes from. `from` does that. It takes the same
+kind of value as `to`.
+
+```marey
 scene {
   size: (960, 540)
+  background: #1d2c48
   duration: 3
 
+  // The card is declared where it rests. `from` is where it comes in.
   rectangle card {
-    position: (-100, 270)
+    position: (480, 270)
     size: (160, 100)
+    color: #e4553b
     animate { property: position, from: (-100, 270), to: (480, 270), duration: 2 }
+  }
+
+  // A fade-in without declaring the shape invisible.
+  circle moon {
+    position: (800, 120)
+    radius: 40
+    color: #f3ead7
+    animate { property: alpha, from: 0, to: 1, duration: 2 }
   }
 }
 ```
 
-The message lists every property an `animate` block accepts. Four of them,
-`delay`, `loop`, `yoyo` and `handoff`, come in later lessons.
+The card and the moon read as they look in the last frame, and `from` is the
+only thing that makes them start somewhere else. Everything that checks `to`
+checks `from` the same way: a `from` of the wrong kind, or a negative `scale`,
+is an error.
+
+:::note
+`from` needs `marey-lang` 0.8.0 or later. Version 0.7.0, the one the rest of
+this site documents, does not have it and rejects the property.
+:::
 
 ## Five properties
 
@@ -230,8 +259,8 @@ still in the scene, only invisible.
 
 So far every animation has started slowly and slowed down again before it
 stopped. That is the default **easing**: the rule for how the animation's speed
-changes between its start and its end. There are four, written as words, not
-strings:
+changes between its start and its end. There are five, written as words, not
+strings. The first four are these:
 
 - `linear`: the same speed from start to end.
 - `easeIn`: starts slowly and speeds up, so it arrives at speed.
@@ -291,6 +320,50 @@ scene {
   }
 }
 ```
+
+### A spring
+
+The fifth easing, `spring`, is the one that does not simply arrive. It goes
+past `to`, swings back, and settles on it exactly when the `duration` ends. The
+`bounce` property says how far it overshoots: `0` settles with no overshoot,
+`0.9` swings the longest, and `0.25` is the default.
+
+Both circles below grow from `0.4` to full size in the same 0.8 seconds. The
+left one eases out, and the right one is a spring:
+
+```marey
+scene {
+  size: (960, 540)
+  background: #1d2c48
+  duration: 2
+
+  circle plain {
+    position: (300, 270)
+    radius: 80
+    color: #7fe0cf
+    animate { property: scale, from: 0.4, to: 1, duration: 0.8, easing: easeOut }
+  }
+
+  circle springy {
+    position: (660, 270)
+    radius: 80
+    color: #ffd36e
+    animate { property: scale, from: 0.4, to: 1, duration: 0.8, easing: spring, bounce: 0.35 }
+  }
+}
+```
+
+The spring circle swells past full size and rocks back to it, and both have
+stopped by the same tick. A spring is a curve over the `duration`, not a
+simulation, so it never runs late. The cost of the overshoot is that a spring
+cannot ease a `scale` to a value near zero, since the circle would be asked to
+go below nothing: the renderer holds a scale spring at zero or more and an
+`alpha` spring between `0` and `1`.
+
+:::note
+`easing: spring` and `bounce` need `marey-lang` 0.8.0 or later. Version 0.7.0
+does not have them and rejects both.
+:::
 
 ## Several at once
 
@@ -553,15 +626,18 @@ lane while the square still crosses at its own pace.
 ## Recap
 
 - An `animate` block needs `property`, `to` and `duration`. It starts from the
-  value the shape already has; there is no `from`.
-  ([Animation](/reference/language/#animation))
+  value the shape already has, unless `from` names another one.
+  ([Animation](/reference/language/#animation),
+  [from](/reference/language/#from))
 - Five properties can be animated: `position`, `rotation`, `scale`, `alpha` and
   `color`, and `to` must suit the property.
   ([Animation](/reference/language/#animation))
 - `scale` takes a number for both directions or a point for each. It acts about
   the pivot, zero is allowed and a negative value is not.
   ([Scene model](/reference/language/#scene-model))
-- `easing` is `linear`, `easeIn`, `easeOut` or `easeInOut`, written as a word;
-  `easeInOut` is the default. ([Animation](/reference/language/#animation))
+- `easing` is `linear`, `easeIn`, `easeOut`, `easeInOut` or `spring`, written
+  as a word; `easeInOut` is the default. `bounce` tunes a spring, and writing
+  it with any other easing is an error (`TYPE_BOUNCE_WITHOUT_SPRING`). ([Animation](/reference/language/#animation),
+  [spring](/reference/language/#spring))
 - Every `animate` block on a shape starts when the scene starts, and they run
   at the same time. ([Animation](/reference/language/#animation))

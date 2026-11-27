@@ -190,6 +190,16 @@ for a **complete, provable engineering artifact with a declarable finish
 line**, and acquisition work moved past that line. Read its §1 before
 proposing anything the old roadmap justified by adoption.
 
+**10A — `from`, spring easing and portable trigonometry is merged into `main`
+(`MERGE_SHA`); evidence in `eval/RESULTS-PHASE-10A.md`.** It is the first of
+four sub-phases, 10A–10D, that build the rest of roadmap §13. It adds `from`
+on `animate`, `easing: spring` with `bounce`, `src/compiler/detMath.ts` and four
+diagnostics (`TYPE_PARALLEL_ONE_PHYSICS`, `TYPE_BOUNCE_WITHOUT_SPRING`,
+`TYPE_HANDOFF_SPRING`, `TYPE_SPRING_SCALE_PHYSICS`). Design:
+`docs/specs/2026-11-27-marey-phase-10a-from-spring-and-determinism-design.md`;
+plan: `docs/plans/2026-11-27-phase-10a-from-spring-and-determinism.md`.
+`roadmap-and-process.md`'s Phase 10A bullet carries the same status.
+
 **9A — the embeddable player is merged into `main`** (fast-forward,
 2026-11-06). It adds `<marey-player>`, a custom element
 shipped as `marey-lang/player`: it plays a `.marey` scene from a `src` or an
@@ -299,7 +309,7 @@ found three Important defects and twenty Minor findings — consistent with
 every phase that has had one so far — a single fix wave addressed all of them,
 and the scoped re-review of that wave passed with no finding left open.
 Its execution notes record two of the plan's own claims
-that execution measured false, the ten fixture defects implementers found by
+that execution measured false, the ten fixture defects found during execution by
 verifying its code blocks rather than pasting them, and the deferred findings
 Phase 5A inherited — the first of which was that `compiler.worker.ts` had
 no automated test and was rewritten wholesale in that phase. **Phase 5A closed

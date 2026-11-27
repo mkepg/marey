@@ -121,9 +121,11 @@ const NPX_CLI = resolveNpmCli("npx");
 /**
  * The tarball's file count. It must change whenever `files` in package.json or
  * a build's outputs change (a new chunk, a new asset): it is the tarball's own
- * list from `npm pack --json`, measured and not predicted.
+ * list from `npm pack --json`, measured and not predicted. 127 through 0.7.0;
+ * 129 from Phase 10A, which adds `detMath.d.ts` to `dist/lib/types` and
+ * `dist/player/types`.
  */
-const EXPECTED_FILE_COUNT = 127;
+const EXPECTED_FILE_COUNT = 129;
 
 /**
  * Chromium flags for headless WebGL. A literal copy of `EXPORT_LAUNCH_ARGS`

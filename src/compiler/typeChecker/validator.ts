@@ -18,6 +18,7 @@ import {
   ownsPhysics,
 } from "./physicsCost";
 import { resolveHandoffTarget, yoyoIsTrue } from "./handoff";
+import { contractStringDefault } from "./resolvers";
 // `secondsToTicks` lives in `../sceneIR.ts`, the pipeline-neutral module both
 // the typeChecker and the renderer already import — not `renderer/clock.ts`,
 // which would make the type-check stage reach into the render stage (Fix 4,
@@ -75,9 +76,9 @@ function scaleHasZeroComponent(val: AstValue): boolean {
  * The sign half of the scale rule, in one place.
  *
  * Two call sites reach it: the `nonNegativeScale` contract arm below, for a
- * declared `scale` property, and `collectErrors`'s `animate` branch, for a
- * `property: scale` block's `to`. Before Phase 3C only the first existed, so
- * `to: (-3, 1)` compiled with zero errors while `scale: (-3, 1)` one line
+ * declared `scale` property, and `animateValueErrors`, for a
+ * `property: scale` block's `to` and `from`. Before Phase 3C only the first
+ * existed, so `to: (-3, 1)` compiled with zero errors while `scale: (-3, 1)` one line
  * above did not (design §2.2) — a rule enforced on the declaration site and
  * not on the property whose entire purpose is to change that value over time.
  * Bringing `to` under it is a narrowing, with the regression test §5.4
@@ -193,6 +194,101 @@ function zeroScalePhysicsError(
     message: `[TYPE_ZERO_SCALE_PHYSICS] ${label}: ${subject} ${clause} on an object that participates in physics, but got ${scaleValueText(val)}. ${reason}`,
     ...errPosOf(val),
   };
+}
+
+/**
+ * TYPE_ANIM_COLOR_TARGET for an `animate { property: color }` block whose
+ * object is a group, or null. A group has no colour of its own to blend. The
+ * owner is the renderable the block belongs to, which a `sequence`/`parallel`
+ * may sit in front of, so it is looked up the same way the zero-scale rule
+ * does rather than taken from the parent node.
+ *
+ * One per block, at `property: color`, where it has always pointed. It used
+ * to run once per value, so a block with both `to` and `from` reported the
+ * same message twice.
+ */
+function colourTargetError(
+  prop: AstValue & { kind: "animProperty" },
+  ancestors: readonly ObjectNode[],
+): CompilerError | null {
+  if (prop.value !== "color") return null;
+  const ownerIdx = ownerIndex(ancestors);
+  const owner = ownerIdx >= 0 ? ancestors[ownerIdx] : undefined;
+  if (!owner || owner.type !== "group") return null;
+  return {
+    phase: "TYPE",
+    message: `[TYPE_ANIM_COLOR_TARGET] 'property: color' can only animate a shape with a 'color' (circle, rectangle, polygon, line or text); '${owner.name}' is a group.`,
+    ...errPosOf(prop),
+  };
+}
+
+/**
+ * Every rule an `animate` block's `to` or `from` value has to satisfy, in one
+ * place, so the two slots cannot drift apart (engineering-lessons §5). Both
+ * reach the same runtime state: `to` is where the animation ends, `from`
+ * where it starts. So each rule that applies to one applies to the other,
+ * under the same code.
+ *
+ * `prop` is the block's `property` value. The messages for `to` are worded
+ * exactly as they were before `from` existed; a `from` message says `'from'`
+ * where its `to` twin says `'to'`.
+ */
+function animateValueErrors(
+  slot: "to" | "from",
+  value: AstValue,
+  prop: AstValue & { kind: "animProperty" },
+  label: string,
+  ancestors: readonly ObjectNode[],
+): CompilerError[] {
+  const errors: CompilerError[] = [];
+  const p = prop.value as string;
+  const at = errPosOf(value);
+
+  if (p === "position" && value.kind !== "point") {
+    errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property 'position' expects a point for '${slot}' (e.g., ${slot}: (100, 100)).`, ...at });
+  }
+  if (p === "scale" && value.kind !== "point" && value.kind !== "number") {
+    errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property 'scale' expects a number or point for '${slot}'.`, ...at });
+  }
+  if ((p === "rotation" || p === "alpha") && value.kind !== "number") {
+    errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property '${p}' expects a number for '${slot}'.`, ...at });
+  }
+  if (p === "color" && value.kind !== "color") {
+    errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property 'color' expects a colour for '${slot}' (e.g., ${slot}: #ff8800).`, ...at });
+  }
+
+  // A colour animation on a group (TYPE_ANIM_COLOR_TARGET) is not checked
+  // here: it is wrong whatever the values are, so it is a rule about the
+  // block, reported once per block by `colourTargetError`.
+
+  // A `to` or a `from` reaches exactly the same runtime state a declared
+  // `scale` does, so both scale rules apply to it (design §5.3). Until Phase
+  // 3C this block validated `to` by *kind* alone, which is why the ban on the
+  // declaration site was never an invariant: `to: (-3, 1)` and `to: (1, 0)`
+  // both compiled.
+  if (p === "scale") {
+    const subject = slot === "to" ? "the scale target 'to'" : "the scale start 'from'";
+    const signError = negativeScaleError(label, subject, value);
+    if (signError) errors.push(signError);
+
+    // Zero is a question about the *object*, not the animate block, so it
+    // needs the renderable this block belongs to — which is not necessarily
+    // the parent node, because a `sequence`/`parallel` may sit between them
+    // (D13).
+    const ownerIdx = ownerIndex(ancestors);
+    if (ownerIdx >= 0) {
+      const zeroError = zeroScalePhysicsError(
+        label,
+        subject,
+        value,
+        ancestors[ownerIdx],
+        ancestors.slice(0, ownerIdx),
+      );
+      if (zeroError) errors.push(zeroError);
+    }
+  }
+
+  return errors;
 }
 
 /**
@@ -421,8 +517,9 @@ export function collectErrors(ast: AstNode): CompilerError[] {
     // sequence's own "must be inside a renderable" check already do elsewhere).
     // Sequences and parallels are excluded: a timeline step's physics children are
     // built by buildSequencesFromChildren (typeChecker/builder.ts) with a plain
-    // loop, not `.find`, so two sequential (or two parallel) physics phases build
-    // correctly today and are not the defect this rule guards against.
+    // loop, not `.find`, so two sequential physics phases build correctly. Two
+    // physics blocks in one parallel build too, but run against the same body, so
+    // they are rejected by TYPE_PARALLEL_ONE_PHYSICS below.
     if (typeName !== "sequence" && typeName !== "parallel") {
       const directPhysics = node.children.filter((c) => c.type === "physics");
       if (directPhysics.length > 1) {
@@ -464,6 +561,23 @@ export function collectErrors(ast: AstNode): CompilerError[] {
       }
 
       const blockChildren = (node as ObjectNode).children;
+
+      // Only the parallel's own direct physics children count: a physics block in
+      // a nested step is a separate phase, not a concurrent sibling. Concurrent
+      // blocks drive one body and the runtime keeps the last block's settings
+      // (see spawnPhysics), so this also covers 'spin' and 'lockRotation' split
+      // across sibling blocks. One diagnostic per block after the first.
+      if (isParallel) {
+        const parallelPhysics = blockChildren.filter((c) => c.type === "physics");
+        for (const extra of parallelPhysics.slice(1)) {
+          errors.push({
+            phase: "TYPE",
+            message: `[TYPE_PARALLEL_ONE_PHYSICS] A 'parallel' can run only one 'physics' block for its object. Found ${parallelPhysics.length}. Each would drive the same body, and only the last one's settings would apply. Merge them into one block.`,
+            line: extra.line, col: extra.col, endLine: extra.endLine, endCol: extra.endCol,
+          });
+        }
+      }
+
       const validTarget = isParallel ? "animate' or 'physics" : "animate', 'physics', or 'parallel";
       
       const hasValidChild = blockChildren.some(c => 
@@ -634,62 +748,57 @@ export function collectErrors(ast: AstNode): CompilerError[] {
 
       const propVal = node.props["property"];
       const toVal = node.props["to"];
+      const fromVal = node.props["from"];
 
       if (propVal && toVal && propVal.kind === "animProperty") {
         const p = propVal.value as string;
         if (!(ANIMATABLE_PROPERTIES as readonly string[]).includes(p)) {
           errors.push({ phase: "TYPE", message: `[TYPE_ANIM_PROP] Cannot animate property '${p}'. Supported properties are: ${ANIMATABLE_PROPERTIES.join(", ")}.`, line: propVal.line, col: propVal.col, endLine: propVal.endLine, endCol: propVal.endCol });
         }
-        if (p === "position" && toVal.kind !== "point") {
-          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property 'position' expects a point for 'to' (e.g., to: (100, 100)).`, line: toVal.line, col: toVal.col, endLine: toVal.endLine, endCol: toVal.endCol });
-        }
-        if (p === "scale" && toVal.kind !== "point" && toVal.kind !== "number") {
-          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property 'scale' expects a number or point for 'to'.`, line: toVal.line, col: toVal.col, endLine: toVal.endLine, endCol: toVal.endCol });
-        }
-        if ((p === "rotation" || p === "alpha") && toVal.kind !== "number") {
-          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property '${p}' expects a number for 'to'.`, line: toVal.line, col: toVal.col, endLine: toVal.endLine, endCol: toVal.endCol });
-        }
+        errors.push(...animateValueErrors("to", toVal, propVal, label, ancestors));
+      }
+      // `from` is optional, so it is checked whether or not `to` was written;
+      // a missing `to` is already the required-property error.
+      if (propVal && fromVal && propVal.kind === "animProperty") {
+        errors.push(...animateValueErrors("from", fromVal, propVal, label, ancestors));
+      }
+      if (propVal?.kind === "animProperty" && (toVal || fromVal)) {
+        const colourTarget = colourTargetError(propVal, ancestors);
+        if (colourTarget) errors.push(colourTarget);
+      }
 
-        if (p === "color" && toVal.kind !== "color") {
-          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property 'color' expects a colour for 'to' (e.g., to: #ff8800).`, line: toVal.line, col: toVal.col, endLine: toVal.endLine, endCol: toVal.endCol });
-        }
+      // The easing in effect: the one written, else the contract default. An
+      // easing value of the wrong kind is already a mismatch error, and naming
+      // any easing for it would mislead, so it yields null.
+      const easingVal = node.props["easing"];
+      const easing = easingVal === undefined
+        ? contractStringDefault("animate", "easing")
+        : easingVal.kind === "easing" ? (easingVal.value as string) : null;
 
-        // A group has no colour of its own to blend. The owner is the
-        // renderable the block belongs to, which a `sequence`/`parallel` may
-        // sit in front of, so it is looked up the same way the zero-scale
-        // rule below does rather than taken from `parentNode`.
-        if (p === "color") {
-          const colourOwnerIdx = ownerIndex(ancestors);
-          const colourOwner = colourOwnerIdx >= 0 ? ancestors[colourOwnerIdx] : undefined;
-          if (colourOwner && colourOwner.type === "group") {
-            errors.push({ phase: "TYPE", message: `[TYPE_ANIM_COLOR_TARGET] 'property: color' can only animate a shape with a 'color' (circle, rectangle, polygon, line or text); '${colourOwner.name}' is a group.`, line: propVal.line, col: propVal.col, endLine: propVal.endLine, endCol: propVal.endCol });
-          }
-        }
+      const bounceVal = node.props["bounce"];
+      if (bounceVal !== undefined && easing !== null && easing !== "spring") {
+        errors.push({
+          phase: "TYPE",
+          message: `[TYPE_BOUNCE_WITHOUT_SPRING] 'bounce' only shapes 'easing: spring', but this animation's easing is '${easing}'. Remove 'bounce' or set 'easing: spring'.`,
+          ...errPosOf(bounceVal),
+        });
+      }
 
-        // A `to` reaches exactly the same runtime state a declared `scale`
-        // does, so both scale rules apply to it (design §5.3). Until Phase 3C
-        // this block validated `to` by *kind* alone, which is why the ban on
-        // the declaration site was never an invariant: `to: (-3, 1)` and
-        // `to: (1, 0)` both compiled.
-        if (p === "scale") {
-          const signError = negativeScaleError(label, "the scale target 'to'", toVal);
-          if (signError) errors.push(signError);
-
-          // Zero is a question about the *object*, not the animate block, so
-          // it needs the renderable this block belongs to — which is not
-          // necessarily `parentNode`, because a `sequence`/`parallel` may sit
-          // between them (D13).
-          const ownerIdx = ownerIndex(ancestors);
-          if (ownerIdx >= 0) {
-            const zeroError = zeroScalePhysicsError(
-              label,
-              "the scale target 'to'",
-              toVal,
-              ancestors[ownerIdx],
-              ancestors.slice(0, ownerIdx),
-            );
-            if (zeroError) errors.push(zeroError);
-          }
+      // A spring can overshoot its target, which resizes a body's collider
+      // past the authored scale; the runtime clamp keeps scale from going
+      // below zero, so a spring toward a small scale can sit the collider at
+      // zero, the hazard TYPE_ZERO_SCALE_PHYSICS exists for. It fires for
+      // every target and `bounce`, and uses the same participation test as
+      // that rule.
+      if (easing === "spring" && propVal?.kind === "animProperty" && propVal.value === "scale") {
+        const springOwnerIdx = ownerIndex(ancestors);
+        if (springOwnerIdx >= 0
+            && physicsParticipationReason(ancestors[springOwnerIdx], ancestors.slice(0, springOwnerIdx)) !== null) {
+          errors.push({
+            phase: "TYPE",
+            message: `[TYPE_SPRING_SCALE_PHYSICS] ${label}: a spring on 'scale' can overshoot its target, which would resize a physics body's collider past the scale you wrote. Use 'easing: easeOut' for scale on an object that takes part in physics.`,
+            ...errPosOf(easingVal ?? propVal),
+          });
         }
       }
 
@@ -701,6 +810,11 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         const loopVal = node.props["loop"];
         if (loopVal?.kind === "boolean" && loopVal.value === true) {
           errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_LOOP] 'loop: true' and 'handoff: true' cannot coexist. A looping animation never ends.`, line: handoffVal.line, col: handoffVal.col, endLine: handoffVal.endLine, endCol: handoffVal.endCol });
+        }
+        // A handoff swaps a curve that arrives at rest for one that still moves
+        // (Phase 6C), and an oscillating curve has no such replacement.
+        if (easing === "spring") {
+          errors.push({ phase: "TYPE", message: `[TYPE_HANDOFF_SPRING] 'easing: spring' settles at rest, so it has no momentum to hand over with 'handoff: true'. Use 'easing: easeOut', which still moves at its end.`, line: handoffVal.line, col: handoffVal.col, endLine: handoffVal.endLine, endCol: handoffVal.endCol });
         }
 
         const target = resolveHandoffTarget(node as ObjectNode, parentNode, ancestors);

@@ -130,4 +130,62 @@ describe("Phase 8 diagnostics", () => {
 }`;
     expect(errorsOf(src)).toEqual([]);
   });
+  describe("TYPE_PARALLEL_ONE_PHYSICS", () => {
+    const MSG = (n: number) =>
+      `[TYPE_PARALLEL_ONE_PHYSICS] A 'parallel' can run only one 'physics' block for its object. Found ${n}. Each would drive the same body, and only the last one's settings would apply. Merge them into one block.`;
+    const box = (body: string) =>
+      scene(`  rectangle r {
+    position: (200, 200)
+    size: (50, 50)
+    ${body}
+  }`);
+
+    it("rejects a second physics block in one parallel", () => {
+      const src = box(
+        `sequence {
+      parallel {
+        physics { duration: 1 }
+        physics { duration: 2 }
+      }
+    }`,
+      );
+      const r = compileSource(src);
+      expect(r.errors.map((e) => e.message)).toEqual([MSG(2)]);
+      expect(r.errors[0].line).toBe(src.split("\n").findIndex((l) => l.includes("duration: 2")) + 1);
+    });
+
+    it("reports one diagnostic per extra block when there are three", () => {
+      const src = box(
+        `sequence {
+      parallel {
+        physics { duration: 1 }
+        physics { duration: 2 }
+        physics { duration: 3 }
+      }
+    }`,
+      );
+      expect(errorsOf(src)).toEqual([MSG(3), MSG(3)]);
+    });
+
+    it("rejects the split spin and lockRotation case", () => {
+      const src = box(
+        `sequence {
+      parallel {
+        animate { property: position, to: (300, 200), duration: 2 }
+        physics { spin: 90, duration: 1 }
+        physics { lockRotation: true, duration: 2 }
+      }
+    }`,
+      );
+      expect(errorsOf(src)).toEqual([MSG(2)]);
+    });
+
+    it("allows physics blocks in separate sequence steps", () => {
+      const src = box(`sequence {
+      physics { duration: 1 }
+      physics { duration: 2 }
+    }`);
+      expect(errorsOf(src)).toEqual([]);
+    });
+  });
 });

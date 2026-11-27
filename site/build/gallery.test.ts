@@ -83,7 +83,7 @@ describe("the gallery in the repository", () => {
     expect(gallery.entries.map((e) => e.id)).toEqual(config.gallery);
   });
 
-  it("lists the twenty-two scenes in the gallery's order", () => {
+  it("lists the twenty-three scenes in the gallery's order", () => {
     expect(config.gallery).toEqual([
       "lighthouse",
       "dusk-hills",
@@ -107,6 +107,7 @@ describe("the gallery in the repository", () => {
       "logo-reveal",
       "bar-chart-reveal",
       "physics-pile",
+      "spring-cards",
     ]);
   });
 

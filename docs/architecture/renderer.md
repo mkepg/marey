@@ -674,9 +674,16 @@ rasterizes (R45).
 
 **What runs in the page.** Everything that produces output. `window.__mareyCliExport`
 compiles the source again, inside Chromium, so the IR is the one the export
-button computes in the same engine. That matters because `sin`/`cos` fold to
-literals at compile time and Node's V8 and Chromium's disagree in the last bit
-(`eval/RESULTS-GATE-B.md`). The page then calls the button's own pipeline for
+button computes in the same engine. The reason recorded for that was that
+`sin`/`cos` fold to literals at compile time and Node's V8 and Chromium's
+disagreed in the last bit of `Math.sin` (`eval/RESULTS-GATE-B.md`). Since
+Phase 10A the fold goes through `detMath` and no longer calls `Math.sin`, and
+the measured trig scenes hash the same in both engines
+(`eval/RESULTS-PHASE-10A.md`, section 4), so that reason no longer holds.
+Physics scenes do not bring it back: Matter.js's own `Math.sin`/`Math.cos`
+run when the scene plays, which is in the page whichever engine compiled the
+IR. The second compile is still there; nothing measured now depends on it.
+The page then calls the button's own pipeline for
 the format (`runPngExport`, `runApngExport`, `runVideoExport`,
 `runLottieExport`), so the encoders are the button's encoders. The page's
 only addition is an `onSampled` observer that hashes the sampled frames.

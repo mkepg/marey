@@ -42,25 +42,33 @@ Section 4 shows the output.
 
 ## 2. What is not claimed
 
-- **Identical output across JavaScript engines.** `sin` and `cos` in a scene
-  are folded to numbers when the source compiles, and `Math.sin` is not
-  required to be correctly rounded. Node's V8 and Chromium's V8 disagree by
-  about one unit in the last place at 240°:
+- **Identical output across JavaScript engines, in general.** What has been
+  measured is narrower:
+  - *Marey's own trigonometry is portable.* `sin` and `cos` in a scene are
+    folded to numbers when the source compiles, and a spring's curve calls
+    `exp` and `cos` at run time. All three go through
+    `src/compiler/detMath.ts`, which uses only operations IEEE 754 and
+    ECMAScript specify to the last bit, never `Math.sin`, `Math.cos` or
+    `Math.exp`, which ECMAScript lets each engine approximate. Before Phase
+    10A the fold called `Math.sin`, and Node's V8 and Chromium's V8 disagree
+    on it by about one unit in the last place at 240°:
 
-  ```bash
-  node -e "console.log(Math.sin(240*Math.PI/180).toPrecision(20))"
-  # -0.86602540378443848557   (Node 22.13.1)
-  ```
+    ```bash
+    node -e "console.log(Math.sin(240*Math.PI/180).toPrecision(20))"
+    # -0.86602540378443848557   (Node 22.13.1)
+    ```
 
-  The same expression evaluated in a Chromium page gives
-  `-0.86602540378443837454`; the command and the versions are in
-  `eval/RESULTS-GATE-B.md`.
-
-  So `radial-dots.marey` hashes differently when compiled in Node and in
-  Chromium, while `compound-logo.marey`, which has no trig, matches
-  (`eval/RESULTS-GATE-B.md`). This is why `marey export` compiles the source
-  again inside the browser: the file comes from the same engine the export
-  button uses.
+    The same expression in a Chromium page gives
+    `-0.86602540378443837454` (`eval/RESULTS-GATE-B.md`), and
+    `eval/scenes-3b/radial-dots.marey` hashed `07dcbbd7` in Node and
+    `22cc9337` in Chromium. Through `detMath` both engines give `16109237`,
+    and every measured scene with no physics and no text hashes the same in
+    Node and in Chromium (`eval/RESULTS-PHASE-10A.md`, section 4).
+  - *Physics is still engine-dependent.* Matter.js rotates bodies with its
+    own `Math.sin` and `Math.cos`, so a physics scene's trajectory can differ
+    between engines. Nothing in Marey changes that.
+  - *Only two V8 builds were compared.* SpiderMonkey (Firefox) and
+    JavaScriptCore (Safari) have not been measured.
 - **Identical output across machines.** Exports rasterize on SwiftShader, a
   CPU renderer, forced by `EXPORT_LAUNCH_ARGS` in `src/cli/exportDriver.ts`.
   That makes cross-machine identity plausible. It is untested, because the

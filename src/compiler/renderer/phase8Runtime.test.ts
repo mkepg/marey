@@ -395,11 +395,13 @@ describe("lockRotation", () => {
     const crate = root.children[1] as Container;
     const startY = posOf(world, crate).y;
     const angles: number[] = [];
+    const ys: number[] = [];
     for (let i = 0; i < 600; i++) {
       advance(runtime, 1);
       angles.push(world.readState(bodyOf(crate), 1)!.angle);
+      ys.push(posOf(world, crate).y);
     }
-    return { angles, fell: posOf(world, crate).y - startY, rotation: crate.rotation };
+    return { angles, ys, fell: posOf(world, crate).y - startY, rotation: crate.rotation };
   }
 
   const START = (30 * Math.PI) / 180;
@@ -431,26 +433,43 @@ describe("lockRotation", () => {
     for (const a of locked.angles) expect(a).toBe(locked.angles[0]);
   });
 
-  it("a lock that reaches a body already free holds too: the second of two physics blocks in one parallel step", () => {
-    // The first block's spawn releases the body's pin, so the second block's
-    // params land on a dynamic body and no unpin follows them.
+  it("a lock step after a move step lands on a released body and holds the angle", () => {
+    // The move step's animation releases the body, so the lock step's params
+    // reach setParams on a dynamic body (every other lock test meets a pinned
+    // one). The spin step before it has ended with the body at rest, so this
+    // does not exercise the angular-velocity zeroing in applyRotationLock,
+    // which no legal source reaches (see the comment there).
     const locked = dropCrate(
-      "sequence { parallel { physics { duration: 5 } physics { lockRotation: true, duration: 5 } } }"
+      "sequence { physics { spin: 360, duration: 0.5 } animate { property: position, to: (400, 200), duration: 0.5 } physics { lockRotation: true, duration: 5 } }"
     );
-    expect(locked.fell).toBeGreaterThan(50);
-    for (const a of locked.angles) expect(a).toBe(locked.angles[0]);
+    const lockedAt = locked.angles.findIndex((a, i) => i > 90 && a === locked.angles[i + 1]);
+    expect(lockedAt).toBeGreaterThan(0);
+    expect(Math.abs(locked.angles[lockedAt] - START)).toBeGreaterThan(0.1);
+    for (const a of locked.angles.slice(lockedAt)) expect(a).toBe(locked.angles[lockedAt]);
+    // A body that was never released would hold its angle too. This one
+    // falls after the lock lands, so the lock is holding a free body.
+    expect(locked.ys.at(-1)! - locked.ys[lockedAt]).toBeGreaterThan(50);
   });
 
-  it("a lock that arrives after a sibling block's spin has been flushed stops the turning", () => {
-    // The first block's spawn flushes its spin into the free body; the second
-    // block then makes the inertia infinite. Without zeroing the angular
-    // velocity the body kept turning at 360 degrees a second, and contacts
-    // could not stop it.
-    const locked = dropCrate(
-      "sequence { parallel { physics { spin: 360, duration: 5 } physics { lockRotation: true, duration: 5 } } }"
-    );
-    expect(locked.fell).toBeGreaterThan(50);
-    for (const a of locked.angles) expect(a).toBe(locked.angles[0]);
+  it.each([
+    ["a lock in the second of two physics blocks", "physics { duration: 5 } physics { lockRotation: true, duration: 5 }"],
+    ["a lock beside a sibling block's spin", "physics { spin: 360, duration: 5 } physics { lockRotation: true, duration: 5 }"],
+  ])("%s in one parallel step is rejected at compile time, so the runtime never sees it", (_label, blocks) => {
+    // These shapes used to compile and reach the runtime, which had to cope with
+    // a lock landing on an already free body. TYPE_PARALLEL_ONE_PHYSICS now
+    // stops them at the type checker.
+    const out = compileSource(`scene {
+  size: (800, 600)
+  rectangle crate {
+    position: (400, 200)
+    size: (50, 50)
+    sequence { parallel { ${blocks} } }
+  }
+}`);
+    expect(out.ir).toBeNull();
+    expect(out.errors.map((e) => e.message)).toEqual([
+      expect.stringContaining("[TYPE_PARALLEL_ONE_PHYSICS]"),
+    ]);
   });
 });
 

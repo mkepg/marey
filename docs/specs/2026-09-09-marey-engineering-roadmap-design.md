@@ -415,6 +415,15 @@ See `docs/research/2026-09-09-marey-adjacent-gaps.md` §§1–3.
 **Other runtimes** — embedded or microcontroller targets, which would require a
 second non-browser backend.
 
+> **Amended 2026-11-27:** the owner started the rest of this section as
+> **Phase 10**, in four sub-phases: 10A, `from` on `animate`, spring easing,
+> portable trigonometry and the Phase 8 follow-ups; 10B, layout primitives,
+> after measuring whether the corpora justify them (R11); 10C, derived
+> artifacts; 10D, a second, non-browser runtime. 10A goes first because 10C and
+> 10D both consume the easing set. Design:
+> `2026-11-27-marey-phase-10a-from-spring-and-determinism-design.md` §0. The
+> finish line (§12) stands. This is work past it.
+
 ---
 
 ## 14. Success criteria

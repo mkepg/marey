@@ -46,8 +46,8 @@ scene {
 
 The ball crosses to the right in the first second and a half, and only then
 sets off downwards, arriving at three seconds. The second step starts from
-where the first left the ball, because every animation starts from the value
-the shape holds when it starts. That is why a sequence needs no starting
+where the first left the ball, because an animation starts from the value
+the shape holds when it starts, unless it names a `from`. That is why a sequence needs no starting
 values either.
 
 A `sequence` must belong to a shape or a group. It cannot sit directly in the
@@ -669,7 +669,7 @@ parts change.
 
 - A `sequence` belongs to a shape or a group. Its steps run in order, each
   starting when the one before has finished, and each starts from the value
-  the last one left. ([Sequencing](/reference/language/#sequencing))
+  the last one left, unless it names a `from`. ([Sequencing](/reference/language/#sequencing))
 - A `parallel` goes directly inside a `sequence`. Its animations start
   together, and the step ends when the last of them ends.
   ([Sequencing](/reference/language/#sequencing))

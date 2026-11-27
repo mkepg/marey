@@ -47,9 +47,11 @@ function buildAnimationFromNode(an: ObjectNode): IRAnimation {
   return {
     property: getReqAnimProperty(an.props, "property"),
     to:       resolveAnimToValue(an.props, "to"),
+    from:     an.props["from"] === undefined ? null : resolveAnimToValue(an.props, "from"),
     duration: getReqNumber(an.props, "duration"),
     delay:    resolveNumber(an.props, "delay", contractNumberDefault("animate", "delay")),
     easing:   resolveEasing(an.props, "easing", contractStringDefault("animate", "easing")),
+    bounce:   resolveNumber(an.props, "bounce", contractNumberDefault("animate", "bounce")),
     loop:     resolveBoolean(an.props, "loop", contractBooleanDefault("animate", "loop")),
     yoyo:     resolveBoolean(an.props, "yoyo", contractBooleanDefault("animate", "yoyo")),
     handoff:  resolveBoolean(an.props, "handoff", contractBooleanDefault("animate", "handoff")),

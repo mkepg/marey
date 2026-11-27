@@ -1,15 +1,32 @@
 import { describe, expect, it } from "vitest";
-import { KEYWORD_DOCS, propertyHoverMarkdown, physicsSnippet, TOKENIZER_KEYWORDS, worldSnippet } from "./constants";
-import { PROP_TYPES } from "../../../compiler/languageContract";
+import { KEYWORD_DOCS, propertyHoverMarkdown, physicsSnippet, TOKENIZER_KEYWORDS, VALUE_DOCS, worldSnippet } from "./constants";
+import { EASING_VALUES, PROP_TYPES } from "../../../compiler/languageContract";
 import { sequenceSnippet } from "./language";
 import { analyzeContext } from "./scanner";
 
 describe("Marey editor guidance", () => {
   it("describes bounce as shared-world collision behavior", () => {
-    const hover = propertyHoverMarkdown("bounce")!;
+    // `bounce` is a property of both `physics` and `animate`, so the hover
+    // names its block, as the editor's hover provider does.
+    const hover = propertyHoverMarkdown("bounce", "physics")!;
     expect(hover).toContain("other objects");
     expect(hover).toContain("scene boundaries");
     expect(hover).toContain("higher");
+  });
+
+  it("describes an animate block's bounce as the spring's overshoot", () => {
+    const hover = propertyHoverMarkdown("bounce", "animate")!;
+    expect(hover).toContain("How far a spring easing overshoots before it settles");
+    expect(hover).not.toContain("scene boundaries");
+  });
+
+  it("has a hover for every easing in the contract, and describes spring's overshoot", () => {
+    for (const easing of EASING_VALUES) expect(VALUE_DOCS[easing], easing).toContain(`easing: ${easing}`);
+    expect(VALUE_DOCS["spring"]).toContain("settles on it exactly");
+  });
+
+  it("describes from as held through the delay", () => {
+    expect(propertyHoverMarkdown("from", "animate")).toContain("through its 'delay'");
   });
 
   it("uses light drag in physics snippets", () => {

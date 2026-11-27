@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { languages } from "monaco-editor";
+import { EASING_VALUES } from "../../../compiler/languageContract";
 import { registerLanguage } from "./language";
 
 type Provider = languages.CompletionItemProvider;
@@ -64,5 +65,18 @@ describe("value completion for 'world { bounds }'", () => {
 
   it("offers no edge lists for a property that is not an edge list", () => {
     expect(labelsAt("world {\n  gravity: ")).not.toContain("[left, right, bottom]");
+  });
+});
+
+describe("completion for the animate block", () => {
+  it("offers every easing in the contract, spring included, after 'easing:'", () => {
+    const labels = labelsAt("scene {\n  circle c {\n    animate {\n      easing: ");
+    for (const easing of EASING_VALUES) expect(labels).toContain(easing);
+  });
+
+  it("offers from and bounce as animate properties", () => {
+    const labels = labelsAt("scene {\n  circle c {\n    animate {\n      ");
+    expect(labels).toContain("from");
+    expect(labels).toContain("bounce");
   });
 });

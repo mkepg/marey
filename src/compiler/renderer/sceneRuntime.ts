@@ -83,17 +83,56 @@ function lerp(a: number, b: number, t: number): number {
 }
 
 /**
+ * A scale runner's value at eased progress `e`. Every scale value a runner
+ * produces comes from here: the paint (`applyAnim`), this tick's scale
+ * (`scaleOf`) and the world push (`pushAnimToWorld`).
+ *
+ * A spring's value is clamped to `>= 0` on each component (Phase 10A spec
+ * §3.2, "Clamp at runtime, for spring only"): it goes past `to`, so a spring
+ * toward a small target would otherwise swing negative, which the language
+ * forbids for scale. Every other easing is returned as lerped, so no existing
+ * output changes. For them the guard is not observable today, because the
+ * validator keeps both endpoints `>= 0` and their curves stay in [0, 1]; it
+ * is there so scale follows the same rule as alpha, where it is.
+ */
+function scaleAt(ra: RunningAnim, e: number): IRPoint {
+  const s = ra.startVal as IRPoint;
+  const t = ra.targetVal as IRPoint;
+  const x = lerp(s.x, t.x, e);
+  const y = lerp(s.y, t.y, e);
+  if (ra.anim.easing !== "spring") return { x, y };
+  return { x: x < 0 ? 0 : x, y: y < 0 ? 0 : y };
+}
+
+/**
+ * An alpha runner's value at eased progress `e`, clamped to [0, 1] for a
+ * spring, for the same reason as `scaleAt`. Only for a spring: `animate`
+ * does not range-check alpha endpoints, so `to: 1.5` compiles, and clamping
+ * every easing would change what such a scene has always shown.
+ */
+function alphaAt(ra: RunningAnim, e: number): number {
+  const a = lerp(ra.startVal as number, ra.targetVal as number, e);
+  if (ra.anim.easing !== "spring") return a;
+  return a < 0 ? 0 : a > 1 ? 1 : a;
+}
+
+/**
  * The velocity an animation had over its final tick, in px/s: the
  * displacement of that tick times `TICK_HZ` (Phase 6C spec §2.1). A
  * non-looping yoyo's final tick is the last of its return leg, from progress
  * 1/N back to 0, so its direction needs no special case.
+ *
+ * Only a handoff reaches this, and the validator rejects a handoff with
+ * `easing: spring` (TYPE_HANDOFF_SPRING), so `bounce` changes nothing here
+ * today. It is passed anyway, so that the call matches the others and a
+ * later spring handoff would get its own curve.
  */
 function finalTickVelocity(ra: RunningAnim): IRPoint {
   const n = Math.max(ra.time.durationTicks, 1);
   const release = releaseEndOf(ra.anim);
   const [pPrev, pEnd] = release === "start" ? [1 / n, 0] : [(n - 1) / n, 1];
-  const ePrev = evaluateEasing(pPrev, ra.anim.easing, release);
-  const eEnd = evaluateEasing(pEnd, ra.anim.easing, release);
+  const ePrev = evaluateEasing(pPrev, ra.anim.easing, release, ra.anim.bounce);
+  const eEnd = evaluateEasing(pEnd, ra.anim.easing, release, ra.anim.bounce);
   const s = ra.startVal as IRPoint;
   const t = ra.targetVal as IRPoint;
   return {
@@ -110,10 +149,10 @@ function finalTickVelocity(ra: RunningAnim): IRPoint {
  * class purely because it never touches the world.
  */
 function applyAnim(ra: RunningAnim, p: number): void {
-  const e = evaluateEasing(p, ra.anim.easing, releaseEndOf(ra.anim));
+  const e = evaluateEasing(p, ra.anim.easing, releaseEndOf(ra.anim), ra.anim.bounce);
 
   if (ra.anim.property === "alpha") {
-    ra.container.alpha = lerp(ra.startVal as number, ra.targetVal as number, e);
+    ra.container.alpha = alphaAt(ra, e);
   } else if (ra.anim.property === "rotation") {
     ra.container.rotation = lerp(ra.startVal as number, ra.targetVal as number, e);
   } else if (ra.anim.property === "position" && ra.container.__mareyLayout) {
@@ -127,10 +166,9 @@ function applyAnim(ra: RunningAnim, p: number): void {
     ra.container.__updateLayout?.();
   } else if (ra.anim.property === "scale" && ra.container.__mareyLayout) {
     const layout = ra.container.__mareyLayout;
-    const startPt = ra.startVal as IRPoint;
-    const targetPt = ra.targetVal as IRPoint;
-    layout.currentScale.x = lerp(startPt.x, targetPt.x, e);
-    layout.currentScale.y = lerp(startPt.y, targetPt.y, e);
+    const scale = scaleAt(ra, e);
+    layout.currentScale.x = scale.x;
+    layout.currentScale.y = scale.y;
     ra.container.__updateLayout?.();
   } else if (ra.anim.property === "color" && ra.container.__mareyLayout) {
     ra.container.__mareyLayout.currentColor = lerpColor(ra.startVal as number, ra.targetVal as number, e);
@@ -146,6 +184,20 @@ function applyAnim(ra: RunningAnim, p: number): void {
 /** Whether two runners write the same property of the same container. */
 function sameTarget(a: RunningAnim, b: RunningAnim): boolean {
   return a.container === b.container && a.anim.property === b.anim.property;
+}
+
+/**
+ * An authored `to` or `from` as the runner holds it: a number scale or
+ * position broadcast to both axes, a colour as `0xRRGGBB`, and a rotation in
+ * radians, since it is authored in degrees (see getCurrentVal).
+ */
+function runnerValue(prop: string, value: number | IRPoint | IRColor): number | IRPoint {
+  if ((prop === "position" || prop === "scale") && typeof value === "number") {
+    return { x: value, y: value };
+  }
+  if (prop === "color") return colorToInt(value as IRColor);
+  if (prop === "rotation") return (value as number) * (Math.PI / 180);
+  return value as number | IRPoint;
 }
 
 function getCurrentVal(container: Container, prop: string): number | IRPoint {
@@ -330,10 +382,8 @@ export class SceneRuntime {
 
   /** A scale runner's own value for this tick, evaluated at `alpha = 0`. */
   private scaleOf(ra: RunningAnim): { x: number; y: number } {
-    const e = evaluateEasing(animProgress(ra.time, 0), ra.anim.easing, releaseEndOf(ra.anim));
-    const s = ra.startVal as IRPoint;
-    const t = ra.targetVal as IRPoint;
-    return { x: lerp(s.x, t.x, e), y: lerp(s.y, t.y, e) };
+    const e = evaluateEasing(animProgress(ra.time, 0), ra.anim.easing, releaseEndOf(ra.anim), ra.anim.bounce);
+    return scaleAt(ra, e);
   }
 
   /**
@@ -372,7 +422,7 @@ export class SceneRuntime {
     const id = ra.container.__body;
     if (!id) return;
 
-    const e = evaluateEasing(animProgress(ra.time, 0), ra.anim.easing, releaseEndOf(ra.anim));
+    const e = evaluateEasing(animProgress(ra.time, 0), ra.anim.easing, releaseEndOf(ra.anim), ra.anim.bounce);
 
     const layout = ra.container.__mareyLayout;
     // `(0, 0)` at the default origin, which is every scene written before
@@ -422,11 +472,8 @@ export class SceneRuntime {
       const rad = lerp(ra.startVal as number, ra.targetVal as number, e);
       this.world.overrideAngle(id, bodyTransformOf(ra.container).rot + rad);
     } else if (ra.anim.property === "scale") {
-      const startPt = ra.startVal as IRPoint;
-      const targetPt = ra.targetVal as IRPoint;
       const t = bodyTransformOf(ra.container);
-      const sx = lerp(startPt.x, targetPt.x, e);
-      const sy = lerp(startPt.y, targetPt.y, e);
+      const { x: sx, y: sy } = scaleAt(ra, e);
 
       // Exactly one runner corrects the centre per container per tick, and it
       // is the one whose `setScale` the body ends up carrying. Every scale
@@ -533,19 +580,37 @@ export class SceneRuntime {
     if (anim.property !== "color") unpinBody(container, this.world, "FROZEN");
     if (isPos) pinBody(container, this.world, "POS_ANIM");
 
-    const sVal = getCurrentVal(container, anim.property);
-    let tVal = anim.to;
-    if ((anim.property === "position" || anim.property === "scale") && typeof tVal === "number") {
-      tVal = { x: tVal, y: tVal };
-    }
-    if (anim.property === "color") tVal = colorToInt(anim.to as IRColor);
-    // `to` is authored in degrees; the runner holds radians (see getCurrentVal).
-    if (anim.property === "rotation") tVal = (anim.to as number) * (Math.PI / 180);
+    const ra = this.newRunner(container, anim);
+    this.runningAnims.push(ra);
+    localList.push(ra);
 
-    const ra: RunningAnim = {
+    // A `from` is written the moment the animation is scheduled, which is now:
+    // tick 0 for a top-level animation, the start of its step for one in a
+    // sequence. Left to the first tick, a delayed fade-in would show its
+    // resting value until then, and a body bound at its declared position
+    // would sit there although the drawing never does. Only with `from`:
+    // without it the start value is already what the object holds, and
+    // writing it again would add a world call to scenes that never asked for
+    // one.
+    if (anim.from !== null) this.writeFrom(ra);
+  }
+
+  /**
+   * A runner for `anim` on `container`, not yet registered anywhere.
+   *
+   * With `from`, the runner starts there rather than at the object's current
+   * value, so a loop restarts at it and a yoyo returns to it.
+   */
+  private newRunner(container: Container, anim: IRAnimation): RunningAnim {
+    const sVal = anim.from === null
+      ? getCurrentVal(container, anim.property)
+      : runnerValue(anim.property, anim.from);
+    const tVal = runnerValue(anim.property, anim.to);
+
+    return {
       container, anim,
       startVal: sVal,
-      targetVal: tVal as number | IRPoint,
+      targetVal: tVal,
       time: {
         elapsedTicks: 0,
         durationTicks: secondsToTicks(anim.duration),
@@ -560,15 +625,67 @@ export class SceneRuntime {
         prevElapsedTicks: 0,
         wrappedThisTick: false,
       },
-      isPosAnim: isPos,
+      isPosAnim: anim.property === "position",
       completedThisTick: false,
       hasTicked: false,
       paintedShort: false,
       paintP: 0,
       stillMoving: false,
     };
-    this.runningAnims.push(ra);
-    localList.push(ra);
+  }
+
+  /**
+   * Write a runner's `from` to the object and to its body. Progress is 0
+   * here, delayed or not, so this is the runner's own start value, and the
+   * push runs the same path every later tick does. A colour is display-only
+   * and never reaches the world.
+   */
+  private writeFrom(ra: RunningAnim): void {
+    applyAnim(ra, 0);
+    if (ra.anim.property !== "color") this.pushAnimToWorld(ra, false);
+  }
+
+  /**
+   * Show a sequence's first step's `from` values at tick 0 (Phase 10A spec
+   * §3.1, amended 2026-11-27).
+   *
+   * The step itself is still scheduled at the end of the first tick, as
+   * every sequence's first step is, so its motion starts when it always did;
+   * only the first frame's value changes. Without this, frame 0 of every
+   * export and the paused player showed the resting value of a sequence that
+   * opens on `alpha` `from: 0`.
+   *
+   * Only when nothing precedes the first step. With top-level animations or
+   * physics on the same object (`basePeers`), the sequence waits for them,
+   * so its first step is a later step like any other and its `from` has no
+   * effect until it is scheduled.
+   *
+   * Every animation in the step is registered while the `from` values are
+   * written, in step order, then removed again, so the writes see exactly the
+   * runners `startSequenceStep` will have registered at the same point: the
+   * owner of a scale correction and a live position runner come out the same.
+   * The step's own spawn later writes the same values again.
+   */
+  private writeFirstStepFrom(sr: SequenceRunner): void {
+    const step = sr.sequence.steps[0];
+    if (!step) return;
+    const anims: IRAnimation[] = [];
+    if ("type" in step && step.type === "parallel") {
+      for (const sub of (step as IRParallelStep).steps) {
+        if ("property" in sub) anims.push(sub as IRAnimation);
+      }
+    } else if ("property" in step) {
+      anims.push(step as IRAnimation);
+    }
+    if (!anims.some((a) => a.from !== null)) return;
+
+    const registered = this.runningAnims.length;
+    for (const anim of anims) {
+      const ra = this.newRunner(sr.container, anim);
+      this.runningAnims.push(ra);
+      if (anim.from !== null) this.writeFrom(ra);
+    }
+    this.runningAnims.length = registered;
   }
 
   private spawnPhysics(container: Container, phIR: IRPhysics, localList: AnimOrPhysics[]): void {
@@ -589,8 +706,8 @@ export class SceneRuntime {
       // of 0 parks nothing, so it makes no world call at all.
       // Unlike the velocity above, which keeps the earlier block's value
       // (`??`), a later spin overwrites. That is acceptable: the two only meet
-      // when one `parallel` holds two physics blocks, and that already follows
-      // last-block-wins.
+      // when one `parallel` holds two physics blocks, which the type checker
+      // rejects (TYPE_PARALLEL_ONE_PHYSICS), so this path never sees it.
       container.__pendingSpin = phIR.spin !== 0 ? (phIR.spin * Math.PI) / 180 : undefined;
 
       // Unpin before flushing: setStatic(false) collapses the body back to rest,
@@ -655,14 +772,16 @@ export class SceneRuntime {
 
     if (container.__sequences && container.__sequences.length > 0) {
       const seq = container.__sequences[0];
-      this.sequenceRunners.push({
+      const sr: SequenceRunner = {
         container,
         sequence: seq,
         stepIndex: 0,
         state: "WAITING",
         basePeers: [...nodeAnims, ...nodePhysics],
         activeStepRunners: [],
-      });
+      };
+      this.sequenceRunners.push(sr);
+      if (sr.basePeers.length === 0) this.writeFirstStepFrom(sr);
     }
 
     for (const child of container.children) {

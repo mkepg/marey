@@ -57,12 +57,15 @@ export type DerivedDefaultStrategy = "polygonMinPoint";
  * `gravity` (itself defaulting to (0, 980)), so a world-level number would
  * override blocks that never asked for one.
  *
+ * `animate.from` is the third: absent, the animation starts from whatever
+ * value the object holds when it is scheduled, which no literal can name.
+ *
  * Declared here rather than left implicit so `languageContract.test.ts`'s gap
  * check keeps enumerating structurally: every optional property still has a
  * documented fallback, and this is a third kind of one rather than an
  * exception to the rule.
  */
-export type AbsentMeaning = "indefinite" | "physicsGravity";
+export type AbsentMeaning = "indefinite" | "physicsGravity" | "currentValue";
 
 export interface PropertySpec {
   readonly kinds: ValueKind | readonly ValueKind[];
@@ -82,7 +85,7 @@ export interface BlockContract {
 
 export const FIT_VALUES = ["contain", "cover", "fill", "none"] as const;
 export const BOOLEAN_VALUES = ["true", "false"] as const;
-export const EASING_VALUES = ["linear", "easeIn", "easeOut", "easeInOut"] as const;
+export const EASING_VALUES = ["linear", "easeIn", "easeOut", "easeInOut", "spring"] as const;
 export const DURATION_VALUES = ["indefinitely"] as const;
 /** The scene edges `world { bounds }` can wall off, in canonical order. */
 export const EDGE_VALUES = ["left", "right", "top", "bottom"] as const;
@@ -316,6 +319,13 @@ const animateProperties = Object.freeze({
     "(0, 0)",
     { required: true },
   ),
+  from: property(
+    ["number", "point", "color"],
+    "Optional start value. Held from the moment the animation is scheduled, through its 'delay'.",
+    "from: 0",
+    "0",
+    { absentMeans: "currentValue" },
+  ),
   duration: property(
     "number",
     "How long the animation runs in seconds.",
@@ -336,6 +346,13 @@ const animateProperties = Object.freeze({
     "easing: easeInOut",
     "easeInOut",
     { default: "easeInOut" },
+  ),
+  bounce: property(
+    "number",
+    "How far a spring easing overshoots before it settles: 0 settles without overshoot, 0.9 swings longest. Only with 'easing: spring'.",
+    "bounce: 0.25",
+    "0.25",
+    { default: 0.25, constraint: { kind: "range", min: 0, max: 0.9 } },
   ),
   loop: property(
     "boolean",

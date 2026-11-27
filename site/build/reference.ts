@@ -95,6 +95,9 @@ function describeNeed(spec: PropertySpec): string {
   if (spec.absentMeans === "physicsGravity") {
     return cell("none: omit it and each physics block keeps its own gravity");
   }
+  if (spec.absentMeans === "currentValue") {
+    return cell("none: omit it and the animation starts from the object's current value");
+  }
   return "none";
 }
 

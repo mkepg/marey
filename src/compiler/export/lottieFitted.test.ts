@@ -143,45 +143,53 @@ const CEILINGS: Record<string, number> = {
   "dusk-hills": 3941,
 };
 
+/**
+ * Reads every property of every layer back through the player-faithful
+ * evaluator and compares it with the value the encoder computed from the
+ * snapshots, each within its `LOTTIE_FIT_TOLERANCE`.
+ */
+function expectRoundTrip(name: string, run: Run): void {
+  const { layers, frames } = run;
+  const byId = new Map(layers.map((l) => [l.id, l]));
+  const snaps = snapshotIndex(frames);
+  const lottie = lottieLayers(run);
+  const EPS = 1e-9;
+  const near = (got: ReadonlyArray<number>, want: ReadonlyArray<number>, tol: number, what: string) => {
+    expect(got.length, what).toBe(want.length);
+    for (let i = 0; i < want.length; i++) {
+      expect(Math.abs(got[i] - want[i]), `${what}[${i}]: ${got[i]} vs ${want[i]}`).toBeLessThanOrEqual(tol + EPS);
+    }
+  };
+  const opacityOf = (id: string, f: number): number => {
+    let product = 1;
+    for (let cur: LayerSpec | undefined = byId.get(id); cur; cur = cur.parentId === null ? undefined : byId.get(cur.parentId)) {
+      const s = snaps[f].get(cur.id)!;
+      product *= s.visible ? s.alpha : 0;
+    }
+    return product * 100;
+  };
+  for (const spec of layers) {
+    const layer = lottie.get(spec.id)!;
+    for (let f = 0; f < frames.length; f++) {
+      const snap = snaps[f].get(spec.id)!;
+      const at = `${name} ${spec.id} frame ${f}`;
+      near(evaluateProperty(layer.ks.p, f), [snap.x, snap.y], LOTTIE_FIT_TOLERANCE.position, `${at} p`);
+      near(evaluateProperty(layer.ks.s, f), [snap.scaleX * 100, snap.scaleY * 100], LOTTIE_FIT_TOLERANCE.scale, `${at} s`);
+      near(evaluateProperty(layer.ks.r, f), [(snap.rotation * 180) / Math.PI], LOTTIE_FIT_TOLERANCE.rotation, `${at} r`);
+      near(evaluateProperty(layer.ks.o, f), [opacityOf(spec.id, f)], LOTTIE_FIT_TOLERANCE.opacity, `${at} o`);
+      if (spec.color !== null) {
+        const want = [...rgb01OfInt(snap.color!)];
+        for (const c of colorProperties(layer)) near(evaluateProperty(c, f), want, LOTTIE_FIT_TOLERANCE.color, `${at} colour`);
+      }
+    }
+  }
+}
+
 describe("lottieFitted · canonical scenes", () => {
   for (const name of SCENE_NAMES) {
     describe(name, () => {
       it("every sampled frame round-trips within tolerance", { timeout: 30_000 }, () => {
-        const run = runOf(name);
-        const { layers, frames } = run;
-        const byId = new Map(layers.map((l) => [l.id, l]));
-        const snaps = snapshotIndex(frames);
-        const lottie = lottieLayers(run);
-        const EPS = 1e-9;
-        const near = (got: ReadonlyArray<number>, want: ReadonlyArray<number>, tol: number, what: string) => {
-          expect(got.length, what).toBe(want.length);
-          for (let i = 0; i < want.length; i++) {
-            expect(Math.abs(got[i] - want[i]), `${what}[${i}]: ${got[i]} vs ${want[i]}`).toBeLessThanOrEqual(tol + EPS);
-          }
-        };
-        const opacityOf = (id: string, f: number): number => {
-          let product = 1;
-          for (let cur: LayerSpec | undefined = byId.get(id); cur; cur = cur.parentId === null ? undefined : byId.get(cur.parentId)) {
-            const s = snaps[f].get(cur.id)!;
-            product *= s.visible ? s.alpha : 0;
-          }
-          return product * 100;
-        };
-        for (const spec of layers) {
-          const layer = lottie.get(spec.id)!;
-          for (let f = 0; f < frames.length; f++) {
-            const snap = snaps[f].get(spec.id)!;
-            const at = `${name} ${spec.id} frame ${f}`;
-            near(evaluateProperty(layer.ks.p, f), [snap.x, snap.y], LOTTIE_FIT_TOLERANCE.position, `${at} p`);
-            near(evaluateProperty(layer.ks.s, f), [snap.scaleX * 100, snap.scaleY * 100], LOTTIE_FIT_TOLERANCE.scale, `${at} s`);
-            near(evaluateProperty(layer.ks.r, f), [(snap.rotation * 180) / Math.PI], LOTTIE_FIT_TOLERANCE.rotation, `${at} r`);
-            near(evaluateProperty(layer.ks.o, f), [opacityOf(spec.id, f)], LOTTIE_FIT_TOLERANCE.opacity, `${at} o`);
-            if (spec.color !== null) {
-              const want = [...rgb01OfInt(snap.color!)];
-              for (const c of colorProperties(layer)) near(evaluateProperty(c, f), want, LOTTIE_FIT_TOLERANCE.color, `${at} colour`);
-            }
-          }
-        }
+        expectRoundTrip(name, runOf(name));
       });
 
       it("no two distinct easings resolve to one cached curve in either player", { timeout: 30_000 }, () => {
@@ -223,6 +231,39 @@ describe("lottieFitted · canonical scenes", () => {
       });
     });
   }
+});
+
+const SPRING_KEYFRAME_CEILING = 16;
+
+describe("lottieFitted · spring easing", () => {
+  it("fits a spring track within tolerance", { timeout: 30_000 }, () => {
+    // A spring becomes keyframes like any sampled track (spec §3.2): the same
+    // round-trip assertion as the canonical scenes, on a scale spring with
+    // bounce 0.5 over 1 s.
+    const run = runSource("spring-scale", `scene {
+  size: (400, 300)
+  duration: 1.5
+  circle c {
+    position: (200, 150)
+    radius: 40
+    color: #38bdf8
+    animate { property: scale, from: 0.4, to: 1, duration: 1, easing: spring, bounce: 0.5 }
+  }
+}`, 30);
+    // Not vacuous: the sampled scale overshoots its target, so the fitted
+    // track carries the oscillation rather than a plain ease.
+    const scales = run.frames.map((f) => f.objects[0].scaleX);
+    expect(Math.max(...scales)).toBeGreaterThan(1);
+    expect(scales[scales.length - 1]).toBe(1);
+    expectRoundTrip("spring-scale", run);
+    const keyframes = countKeyframes(run.doc);
+    console.log(`lottieFitted: spring-scale, ${run.frames.length} frames at 30 fps, ${keyframes} keyframes`);
+    // Same rule as CEILINGS: the fitter is deterministic, so the ceiling is the
+    // measured count (45 frames fit to 16 keyframes). It rises only if the fit
+    // gets worse, or if the spring curve itself changes.
+    expect(keyframes).toBeGreaterThan(0);
+    expect(keyframes).toBeLessThanOrEqual(SPRING_KEYFRAME_CEILING);
+  });
 });
 
 describe("lottieFitted · colour as lottie-web draws it", () => {
