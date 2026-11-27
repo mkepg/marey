@@ -74,7 +74,7 @@ exports[`compiler determinism > keeps list, indexed generate, modulo, comparison
         "physics": undefined,
         "position": {
           "x": 290,
-          "y": 490.52558883257655,
+          "y": 490.5255888325765,
         },
         "radius": 20,
         "rotation": 0,
@@ -127,8 +127,8 @@ exports[`compiler determinism > keeps list, indexed generate, modulo, comparison
         },
         "physics": undefined,
         "position": {
-          "x": 289.9999999999999,
-          "y": 109.47441116742354,
+          "x": 290,
+          "y": 109.47441116742351,
         },
         "radius": 20,
         "rotation": 0,
@@ -242,7 +242,7 @@ exports[`compiler determinism > keeps list, indexed generate, modulo, comparison
         "physics": undefined,
         "position": {
           "x": 290,
-          "y": 490.52558883257655,
+          "y": 490.5255888325765,
         },
         "radius": 20,
         "rotation": 0,
@@ -295,8 +295,8 @@ exports[`compiler determinism > keeps list, indexed generate, modulo, comparison
         },
         "physics": undefined,
         "position": {
-          "x": 289.9999999999999,
-          "y": 109.47441116742354,
+          "x": 290,
+          "y": 109.47441116742351,
         },
         "radius": 20,
         "rotation": 0,

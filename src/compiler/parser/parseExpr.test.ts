@@ -1136,6 +1136,14 @@ describe("trigonometry", () => {
     expect(foldOf(expr)).toMatchObject({ kind: "number", value: expected });
   });
 
+  // The old radian conversion gave 0.49999999999999994 and 0.5000000000000001
+  // here; the portable fold gives the exact half.
+  it.each([
+    ["sin(30)", 0.5], ["sin(150)", 0.5], ["cos(60)", 0.5], ["sin(-30)", -0.5],
+  ])("folds %s to the exact value", (expr, expected) => {
+    expect(foldOf(expr)).toMatchObject({ kind: "number", value: expected });
+  });
+
   /**
    * The brief's own two rows here (`sin(-90)`, `cos(720)`) do not actually
    * discriminate the `+ 360` correction this test claims to pin. Worked out

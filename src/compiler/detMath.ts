@@ -13,6 +13,13 @@
  * - `Math.floor`, `Math.abs` and `Math.trunc`, which are exact;
  * - comparisons, and writing exponent bits into a double through a DataView.
  *
+ * Degrees, not radians: the only other angle in the language, `rotation`,
+ * is degrees, and Marey ships no pi constant. `Math.sin(Math.PI)` is
+ * `1.2246e-16`, not `0`, so a plain radian conversion would put every dot of
+ * a radial layout a fraction of a pixel off its true position and leave float
+ * noise in committed IR goldens. The angle is reduced exactly instead, so
+ * `sin(180)` is `0` and `cos(90)` is `0`, as an author writing them expects.
+ *
  * `detMath.test.ts` measures every function against a 160-bit fixed-point
  * reference and rejects any other `Math` function in this file.
  *

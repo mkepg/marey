@@ -1,6 +1,7 @@
 import type { AstValue, FitMode, Token } from "../types";
 import { NAMED_COLORS, type ExpressionWord } from "../lexer";
 import { ParserState, describeToken } from "./state";
+import { sinDeg, cosDeg } from "../detMath";
 import {
   carryPredicateDerivedCardinality,
   markPredicateDerivedCardinality,
@@ -663,46 +664,6 @@ function parseParenOrPoint(state: ParserState, ctx: ExprCtx): AstValue {
   return carryPredicateDerivedCardinality({ ...inner, line: openTok.line, col: openTok.col, endLine: closeTok.line, endCol: closeTok.endCol }, inner);
 }
 
-/**
- * sin/cos in degrees, exact at multiples of 90.
- *
- * Degrees, not radians — the only other angle in the language, `rotation`
- * (`languageContract.ts:111-117`), is degrees, and design section 11
- * deviation 1 is explicit that Marey ships no pi constant. `Math.sin`
- * takes radians, so the conversion happens here rather than being pushed
- * onto every call site.
- *
- * `Math.sin(Math.PI)` is `1.2246e-16`, not `0`, so a plain radian conversion
- * puts every dot in a radial layout a fraction of a pixel off its true
- * position and makes committed IR goldens (Task 15) carry float noise.
- * Reducing the angle modulo 360 and returning the exact value at the four
- * cardinal angles avoids that, and matches what an author writing
- * `cos(180)` expects to see.
- *
- * The modulo is written twice so a negative input lands in [0, 360): plain
- * `-90 % 360` is `-90` in JavaScript, which would miss the `270` arm.
- *
- * The reduction is not free off the cardinal angles: `sinDegrees(-30)` is
- * `-0.5000000000000004`, a few ULP off `Math.sin(-30 * Math.PI / 180)`
- * (`-0.49999999999999994`), since the two feed a different `d` into the same
- * `Math.sin`. Harmless for a scene DSL, but worth recording — this helper
- * exists to reason about float noise, and this is the one place it adds a
- * little rather than removing it.
- */
-function sinDegrees(deg: number): number {
-  const d = ((deg % 360) + 360) % 360;
-  if (d === 0) return 0;
-  if (d === 90) return 1;
-  if (d === 180) return 0;
-  if (d === 270) return -1;
-  return Math.sin((d * Math.PI) / 180);
-}
-
-/** cos(d) = sin(d + 90); the reduction inside `sinDegrees` handles the wrap. */
-function cosDegrees(deg: number): number {
-  return sinDegrees(deg + 90);
-}
-
 function parsePrimary(state: ParserState, ctx: ExprCtx): AstValue {
   checkNesting(state, ctx);
 
@@ -772,7 +733,7 @@ function parsePrimary(state: ParserState, ctx: ExprCtx): AstValue {
     if (!Number.isFinite(arg.value)) {
       state.throwError(`In ${state.currentContext}: '${fn}' requires a finite number of degrees, but got ${arg.value}.`, nameTok);
     }
-    return carryPredicateDerivedCardinality({ kind: "number", value: fn === "sin" ? sinDegrees(arg.value) : cosDegrees(arg.value), line: nameTok.line, col: nameTok.col, endLine: closeTok.line, endCol: closeTok.endCol }, arg);
+    return carryPredicateDerivedCardinality({ kind: "number", value: fn === "sin" ? sinDeg(arg.value) : cosDeg(arg.value), line: nameTok.line, col: nameTok.col, endLine: closeTok.line, endCol: closeTok.endCol }, arg);
   }
 
   if (t.type === "MINUS") {
