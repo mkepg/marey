@@ -1,12 +1,12 @@
 ---
 title: Reading errors
-description: How the Marey compiler's diagnostics read, where they appear, and twelve common mistakes, each with the compiler's own message and the fix.
+description: How the Marey compiler's diagnostics read, where they appear, and sixteen common mistakes, each with the compiler's own message and the fix.
 ---
 
 Marey is strict: a scene that is wrong in a way the compiler can see does not
 run at all, rather than running and doing something you did not ask for. That
 makes the error messages part of the language. This guide shows how to read
-them, then walks through twelve common mistakes. Every message on this page is
+them, then walks through sixteen common mistakes. Every message on this page is
 the compiler's own, produced when this page was built, and every fix runs.
 
 ## How a diagnostic reads
@@ -256,6 +256,87 @@ scene {
 ```
 
 ([Sequencing](/reference/language/#sequencing))
+
+### A `bounce` with no spring
+
+```marey error=TYPE_BOUNCE_WITHOUT_SPRING
+scene {
+  size: (960, 540)
+  background: #101433
+  duration: 3
+
+  circle ball {
+    position: (200, 270)
+    radius: 30
+    color: #38bdf8
+    animate { property: position, to: (760, 270), duration: 2, bounce: 0.4 }
+  }
+}
+```
+
+An `animate` block's `bounce` sets how far a spring overshoots, and it means
+nothing to any other easing. The message names the easing the animation is
+using, here the default, `easeInOut`, because that is the one you did not
+choose. Either remove `bounce` or ask for the spring:
+
+```marey
+scene {
+  size: (960, 540)
+  background: #101433
+  duration: 3
+
+  circle ball {
+    position: (200, 270)
+    radius: 30
+    color: #38bdf8
+    animate { property: position, to: (760, 270), duration: 2, easing: spring, bounce: 0.4 }
+  }
+}
+```
+
+This `bounce` is not the one in a `physics` block, which sets how much energy
+a collision keeps. The two sit in different blocks and are unrelated.
+([spring](/reference/language/#spring))
+
+### A spring that hands off
+
+```marey error=TYPE_HANDOFF_SPRING
+scene {
+  size: (960, 540)
+  background: #101433
+  duration: 4
+
+  circle ball {
+    position: (130, 400)
+    radius: 14
+    color: #ffd84d
+    animate { property: position, to: (350, 220), duration: 1.1, easing: spring, handoff: true }
+    physics { gravity: (0, 900), bounce: 0.55, collideBounds: true, duration: indefinitely }
+  }
+}
+```
+
+`handoff: true` carries an animation's exit speed into physics. A spring
+settles at rest, so it has no speed to carry. Use an easing that is still
+moving when it ends, such as `easeOut`:
+
+```marey
+scene {
+  size: (960, 540)
+  background: #101433
+  duration: 4
+
+  circle ball {
+    position: (130, 400)
+    radius: 14
+    color: #ffd84d
+    animate { property: position, to: (350, 220), duration: 1.1, easing: easeOut, handoff: true }
+    physics { gravity: (0, 900), bounce: 0.55, collideBounds: true, duration: indefinitely }
+  }
+}
+```
+
+([handoff](/reference/language/#handoff))
 
 ## Shapes and the scene
 
@@ -538,6 +619,97 @@ scene {
 ```
 
 ([Properties](/reference/language/#properties))
+
+### Two physics blocks in one `parallel`
+
+```marey error=TYPE_PARALLEL_ONE_PHYSICS
+scene {
+  size: (960, 540)
+  background: #101433
+  duration: 4
+
+  circle ball {
+    position: (480, 100)
+    radius: 30
+    color: #38bdf8
+    sequence {
+      animate { property: position, to: (480, 150), duration: 1 }
+      parallel {
+        physics { bounce: 0.6, duration: 2.5 }
+        physics { velocity: (200, 0), duration: 2.5 }
+      }
+    }
+  }
+}
+```
+
+`TYPE_ONE_PHYSICS` already refuses two physics blocks on one object. A
+`parallel` is the same mistake inside a sequence: both blocks would drive the
+one body, and only the last block's settings would apply. Merge them into one
+block:
+
+```marey
+scene {
+  size: (960, 540)
+  background: #101433
+  duration: 4
+
+  circle ball {
+    position: (480, 100)
+    radius: 30
+    color: #38bdf8
+    sequence {
+      animate { property: position, to: (480, 150), duration: 1 }
+      parallel {
+        physics { bounce: 0.6, velocity: (200, 0), duration: 2.5 }
+      }
+    }
+  }
+}
+```
+
+([Sequencing](/reference/language/#sequencing))
+
+### A spring on the scale of a physics body
+
+```marey error=TYPE_SPRING_SCALE_PHYSICS
+scene {
+  size: (960, 540)
+  background: #101433
+  duration: 3
+
+  circle ball {
+    position: (480, 100)
+    radius: 30
+    color: #38bdf8
+    physics { bounce: 0.5, duration: 3 }
+    animate { property: scale, to: 1.5, duration: 1, easing: spring }
+  }
+}
+```
+
+A spring overshoots its target, and a collider that swings through a size of
+zero is the hazard `TYPE_ZERO_SCALE_PHYSICS` already guards against, so a
+spring on `scale` is refused for any object that takes part in physics. Use
+`easeOut` for scale there:
+
+```marey
+scene {
+  size: (960, 540)
+  background: #101433
+  duration: 3
+
+  circle ball {
+    position: (480, 100)
+    radius: 30
+    color: #38bdf8
+    physics { bounce: 0.5, duration: 3 }
+    animate { property: scale, to: 1.5, duration: 1, easing: easeOut }
+  }
+}
+```
+
+([spring](/reference/language/#spring))
 
 ## Messages with no code
 

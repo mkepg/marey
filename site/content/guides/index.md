@@ -23,7 +23,7 @@ itself is taught in [the course](/learn/), and stated in full in
   file holds, its fitted keyframes, what is baked into it, and how to retime a
   motion.
 - [Reading errors](/guides/errors/): how the compiler's messages read, and
-  twelve common mistakes with their fixes.
+  sixteen common mistakes with their fixes.
 
 [Lesson 14](/learn/ship-it/) is a shorter tour of the first four, with one
 example of each.

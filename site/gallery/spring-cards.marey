@@ -1,0 +1,59 @@
+// Five cards pop in with a spring, each with more bounce than the
+// one before. Every card is declared at its full size and in full
+// view, and `from` is the only thing that shrinks and hides it:
+// `from` is held through the card's `delay`, so a card waiting for
+// its turn is already small and invisible on the first frame
+// instead of flashing at full size and then jumping.
+//
+// The same spring ends every card on its `to` exactly when its
+// `duration` ends, so all five land together in time; what differs
+// is how far each one swings past full size on the way.
+
+let bounces = [0, 0.2, 0.4, 0.6, 0.9]
+let labels  = ["0", "0.2", "0.4", "0.6", "0.9"]
+let palette = [#7fe0cf, #b9c3ff, #ffd36e, #f1ae79, #e4553b]
+
+scene {
+  size: (960, 540)
+  duration: 3
+  background: #14182b
+
+  // The title drops in from above with a spring of its own, and
+  // fades in over the first third of a second.
+  text title {
+    position: (480, 92)
+    content: "easing: spring"
+    fontSize: 34
+    color: #f3ead7
+    animate { property: position, from: (480, 40), to: (480, 92), duration: 0.9, easing: spring }
+    animate { property: alpha, from: 0, to: 1, duration: 0.3, easing: easeOut }
+  }
+  text caption {
+    position: (480, 140)
+    content: "bounce sets how far each card swings past its size"
+    fontSize: 16
+    color: #aeb6d6
+    animate { property: alpha, from: 0, to: 1, duration: 0.4, delay: 0.3, easing: easeOut }
+  }
+
+  // Each card waits 0.15 s longer than the one before. Its scale
+  // grows from 0.2 with a spring whose `bounce` is the card's own,
+  // and its alpha comes up in the first fifth of a second, so the
+  // card is not drawn at all before its delay is over.
+  generate b, i in bounces {
+    rectangle card {
+      position: (160 + i * 160, 290)
+      size: (116, 160)
+      color: palette[i]
+      animate { property: scale, from: 0.2, to: 1, duration: 1.2, delay: 0.5 + i * 0.15, easing: spring, bounce: b }
+      animate { property: alpha, from: 0, to: 1, duration: 0.2, delay: 0.5 + i * 0.15, easing: easeOut }
+    }
+    text tag {
+      position: (160 + i * 160, 400)
+      content: labels[i]
+      fontSize: 22
+      color: palette[i]
+      animate { property: alpha, from: 0, to: 1, duration: 0.3, delay: 0.7 + i * 0.15, easing: easeOut }
+    }
+  }
+}

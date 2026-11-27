@@ -17,14 +17,17 @@ import type { FrameSnapshot } from "../renderer/frameSampler";
  *
  * This hashes *simulation output*, so unlike a PNG byte hash it is not tied
  * to one machine's GPU or rasteriser. Measured (`eval/RESULTS-GATE-B.md`
- * method, headless Node against Playwright's Chromium, 4 s at 30 fps):
- * scenes whose only transcendental math is `sin`/`cos` agree bit for bit.
- * Parse-time `sin`/`cos` fold through `detMath.ts`, built from operations
- * IEEE-754 specifies exactly, so no engine's `Math.sin` is involved.
- * `radial-dots.marey` and `fireworks.marey` differed before that change and
- * match after it. **This is still not a guarantee for every scene:** Matter.js
- * calls `Math.sin`/`Math.cos` itself when it rotates bodies, so a scene with
- * physics-driven rotation can still hash differently across engines.
+ * method, headless Node against Playwright's Chromium, 4 s at 30 fps), on
+ * eight scenes only: the two `radial-dots` scenes, `compound-logo`, the
+ * gallery's `aurora`, `fireworks` and `lighthouse`, the Dusk Hills example and
+ * `lottie-line-miter`. All eight hash the same in both engines. Parse-time
+ * `sin`/`cos` fold through `detMath.ts`, built from operations IEEE-754
+ * specifies exactly, so no engine's `Math.sin` is involved. Of the eight,
+ * `eval/scenes-3b/radial-dots` and `fireworks` hashed differently across the
+ * two engines before that change, and match after it. **This says nothing about
+ * any other scene:** Matter.js calls `Math.sin`/`Math.cos` itself when it
+ * rotates bodies, so a scene with physics-driven rotation can still hash
+ * differently across engines.
  * `+`, `-`, `*`, `/` and `Math.sqrt` are the operations ECMA-262 requires to
  * be correctly rounded everywhere; `Math.sin`/`Math.cos` are not.
  */

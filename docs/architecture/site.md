@@ -157,7 +157,7 @@ do), and add the id to `gallery` in `site.json` at its place in the order.
 The scene must have a finite `duration` and pass
 `marey check --export-ready`; a `poster` must fall inside the duration; the
 `text` tag must be present exactly when the scene has a `text` object.
-`gallery.test.ts` pins the full order of the 22 entries.
+`gallery.test.ts` pins the full order of the 23 entries.
 
 `site.json` and the content directories must agree both ways: a listed page
 without its file and a file that is not listed are both build errors.

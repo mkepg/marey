@@ -268,9 +268,9 @@ scene {
 ## Animation
 
 `animate` is a child block of a shape or `group`. It requires `property`,
-`to`, and `duration`. `delay`, `easing`, `loop`, `yoyo`, and `handoff` are
-optional. `handoff` applies to an `animate` with a `physics` sibling that can
-receive its exit velocity — directly on the same object, inside one
+`to`, and `duration`. `from`, `delay`, `easing`, `bounce`, `loop`, `yoyo`, and
+`handoff` are optional. `handoff` applies to an `animate` with a `physics`
+sibling that can receive its exit velocity — directly on the same object, inside one
 `parallel`, or as a later `sequence` step — and is covered under Sequencing.
 
 `duration` is a number of seconds and must be strictly greater than 0.
@@ -285,14 +285,15 @@ those five.
 `rotation` and `alpha` require a number. `scale` accepts either a number
 (applied to both axes) or a point. `color` requires a colour.
 
-`easing` is one of four unquoted keywords: `linear`, `easeIn`, `easeOut`, or
-`easeInOut`. Omitting `easing` defaults to `easeInOut`.
+`easing` is one of five unquoted keywords: `linear`, `easeIn`, `easeOut`,
+`easeInOut`, or `spring`. Omitting `easing` defaults to `easeInOut`. The first
+four are covered here; `spring` has its own section below.
 
-**An animation starts from the value the object holds when the animation
-starts — there is no `from` property.** Declaring a property (e.g.
-`position: (-60, 300)`) and then animating that same property is not a
-conflict: the declared value is read as the animation's starting point, and
-`to` is where it ends up.
+**Without `from`, an animation starts from the value the object holds when the
+animation starts.** Declaring a property (e.g. `position: (-60, 300)`) and then
+animating that same property is not a conflict: the declared value is read as
+the animation's starting point, and `to` is where it ends up. `from` names the
+starting point in the animation itself, and is covered next.
 
 An object may have more than one `animate` block. All of an object's
 `animate` blocks are collected and started together when the scene is built,
@@ -317,6 +318,131 @@ scene {
   }
 }
 ```
+
+### from
+
+`from` is an optional start value, of the same kind as `to`: a number, a point
+or a colour, matching the property being animated. Without it an animation
+starts from whatever the object holds when the animation begins, and a reveal
+has to be written by declaring the object in its hidden state. With it, the
+object is declared in its resting state and the animation says where it comes
+from:
+
+```marey
+scene {
+  size: (800, 600)
+
+  circle dot {
+    position: (400, 300)
+    radius: 40
+    color: cyan
+    animate { property: alpha, from: 0, to: 1, duration: 0.8 }
+  }
+}
+```
+
+Every check on `to` applies to `from`, under the same codes. A `from` of the
+wrong kind for the property is a type mismatch, a negative `scale` component
+is `TYPE_INVALID_SCALE`, a zero `scale` component on an object that takes part
+in physics is `TYPE_ZERO_SCALE_PHYSICS`, and a colour on a property that cannot
+take one is rejected as it is for `to`. A `from` is also checked when `to` is
+missing, so both errors report together.
+
+**`from` is written to the object the moment the animation is scheduled, and
+held through its `delay`.** A top-level `animate` is scheduled at tick 0. One
+inside a `sequence` is scheduled when its step begins. The reason is the
+staggered reveal. If the object showed its resting value for the length of the
+`delay` and only then jumped to `from`, every fade-in would flash. With `from`
+held, an object with `from: 0` and `delay: 2` is invisible from the first
+frame. CSS's `animation-fill-mode: backwards` is the same rule.
+
+**A sequence step's `from` has no effect before the step begins.** An object
+never shows a later step's start value at tick 0. And because a sequence's
+first step starts one tick in (see Sequencing), a `from` on a first step lands
+at tick 1, not tick 0. For a reveal that must be hidden from the very first
+frame, put the `from` on a top-level `animate`, or declare the hidden value on
+the object.
+
+With `from`, `loop` restarts at `from` and `yoyo` returns to `from`. On
+`position`, `from` holds the object at `from` through the delay, under the same
+hold a position animation already keeps on a physics object's body, so a body
+never simulates from a position it was never drawn at. Two animations of one
+property follow the same rules as without `from`; it adds no new conflict.
+
+```marey
+scene {
+  size: (800, 600)
+
+  generate i in 0 to 4 {
+    circle dot {
+      position: (160 + i * 120, 300)
+      radius: 30
+      color: orange
+      animate { property: alpha, from: 0, to: 1, duration: 0.5, delay: i * 0.2 }
+    }
+  }
+}
+```
+
+### spring
+
+`easing: spring` is an easing that overshoots `to`, swings back and settles on
+it. `bounce` sets how far it overshoots: `0` settles with no overshoot, and
+`0.9` swings the most. `bounce` defaults to `0.25` and must be between `0` and
+`0.9` inclusive.
+
+```marey
+scene {
+  size: (800, 600)
+
+  circle pop {
+    position: (400, 300)
+    radius: 80
+    color: magenta
+    animate { property: scale, from: 0.4, to: 1, duration: 0.8, easing: spring, bounce: 0.35 }
+  }
+}
+```
+
+A spring is a curve over the animation's `duration`, not a simulation, so it
+ends exactly at `duration`, on exactly `to`. The curve is a damped oscillation
+whose swing has died down to a ten-thousandth of the move by the end of the
+duration, and the last frame lands on `to` itself, so `duration` is when the
+spring has settled. That is what keeps `sequence` timing and every export
+exact. Being a curve, a spring plays the same on every output: the same value
+for the same tick, in the preview, in PNG and video export, and in a fitted
+Lottie, where it becomes more keyframes.
+
+**A spring is clamped where the language forbids values.** Its value passes
+`to`, and at `bounce: 0.9` it reaches about 1.7 times the move. For `scale`
+that could be below zero, and for `alpha` outside `0` to `1`, and the compiler
+only sees the endpoints you wrote. So the renderer clamps a spring's value: each
+`scale` component to `0` or more, and `alpha` to `0` to `1`. The clamp applies
+to `spring` only. `animate` does not range-check an `alpha` endpoint, so
+`to: 1.5` compiles, and clamping every easing would change what such a scene
+draws. The cost is that overshoot toward a target at or near zero is cut off,
+which suits properties the language already keeps from going below zero.
+
+Three rules keep a spring out of places it cannot work:
+
+- `bounce` with any other easing is `TYPE_BOUNCE_WITHOUT_SPRING`. The message
+  names the easing actually in effect, `easeInOut` included when you wrote none.
+  `bounce` here is not the `bounce` of `physics`, which sets how much energy a
+  collision keeps; the two sit in different blocks.
+- `handoff: true` with `easing: spring` is `TYPE_HANDOFF_SPRING`. A spring
+  settles at rest, so it has no momentum to hand to physics. Use `easeOut`,
+  which still moves as it ends.
+- `easing: spring` on `property: scale` of an object that takes part in physics
+  is `TYPE_SPRING_SCALE_PHYSICS`, under the same test as
+  `TYPE_ZERO_SCALE_PHYSICS`. A collider that swings through zero is the hazard
+  that rule exists for. Use `easeOut` for scale there.
+
+With `yoyo`, the return leg plays the same curve on reversed progress, as every
+easing does. A spring's oscillation then sits at the far end of the return leg.
+
+**`spring` is a reserved word.** It is lexed as an easing keyword, like
+`linear` and `easeInOut`, so it cannot name an object, a `let` binding or a
+template parameter.
 
 ### Animating colour
 
@@ -582,7 +708,8 @@ An easing that would arrive at rest would hand off no momentum, so with
 The average speed is the displacement from the starting value to `to`,
 divided by `duration`. Only the arriving end changes: an `easeOut` still
 starts fast and an `easeInOut` still starts from rest. Without `handoff` every
-easing keeps its usual curve.
+easing keeps its usual curve. `easing: spring` has no such reshaping and is
+rejected with `handoff: true` (`TYPE_HANDOFF_SPRING`).
 
 | Animation | Release speed, as a multiple of the average speed |
 |---|---|
@@ -604,10 +731,12 @@ speed and a yoyo `easeOut` at twice it, as the yoyo rows of the table show.
 Its runtime is `2 × duration`, and that is the figure the duration rule below
 compares against.
 
-Six rules govern `handoff: true`, each a compile error when broken:
+Seven rules govern `handoff: true`, each a compile error when broken:
 
 - It is only valid on `property: position`; on any other property it is a
   compile error (`TYPE_HANDOFF_PROP`).
+- It cannot coexist with `easing: spring`, which settles at rest and so has no
+  momentum to hand over (`TYPE_HANDOFF_SPRING`).
 - It cannot coexist with `loop: true` on the same `animate` block, since a
   looping animation never ends and so never hands off (`TYPE_HANDOFF_LOOP`).
 - It requires a sibling `physics` block on the same object
@@ -1424,8 +1553,9 @@ runtime warning or a silent clamp.
 - `duration` (on `animate` or `physics`) must be strictly greater than 0;
   `delay` must be 0 or greater; `radius`, `thickness`, and `fontSize` must be
   greater than 0; `size`'s width and height must each be greater than 0;
-  `alpha`, `airDrag`, and `bounce` must fall between `0.0` and `1.0`
-  inclusive; no `scale` component may be negative; and `polygon`
+  `alpha`, `airDrag`, and a `physics` block's `bounce` must fall between `0.0`
+  and `1.0` inclusive, while an `animate` block's `bounce` must fall between
+  `0.0` and `0.9`; no `scale` component may be negative; and `polygon`
   requires at least 3 points, `line` at least 2, with no shape's point list
   exceeding 10,000 points. Each of these is declared once, per property, as
   a `constraint` on that property's entry in `languageContract.ts`, and

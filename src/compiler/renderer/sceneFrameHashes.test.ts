@@ -115,6 +115,7 @@ const BASELINE: Readonly<Record<string, string>> = {
   "../../../site/gallery/postcard.marey": "text",
   "../../../site/gallery/ripple.marey": "d0184acb",
   "../../../site/gallery/set-sail.marey": "text",
+  "../../../site/gallery/spring-cards.marey": "text",
   "../../../site/gallery/sunrise.marey": "1d86398c",
   "../../../site/gallery/title-card.marey": "text",
   "../../../site/gallery/toy-box.marey": "text",

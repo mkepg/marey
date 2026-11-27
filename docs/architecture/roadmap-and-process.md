@@ -368,6 +368,16 @@ explicitly rather than quietly deviating.
     and the workflow examples moved their pins to 0.7.0. Design:
     `docs/specs/2026-11-13-marey-phase-9c-docs-site-and-gallery-design.md`.
     Plan: `docs/plans/2026-11-13-phase-9c-docs-site-and-gallery.md`.
+- **Phase 10A — `from`, spring easing and portable trigonometry** (roadmap
+  §13, past the finish line; the first of 10A–10D).
+  - **Status: merged into `main` (`MERGE_SHA`); evidence in
+    `eval/RESULTS-PHASE-10A.md`.** It adds `from` on `animate`, `easing: spring`
+    with `bounce`, `src/compiler/detMath.ts` (parse-time `sin`/`cos` and the
+    spring through operations IEEE-754 specifies exactly) and four diagnostics:
+    `TYPE_PARALLEL_ONE_PHYSICS`, `TYPE_BOUNCE_WITHOUT_SPRING`,
+    `TYPE_HANDOFF_SPRING` and `TYPE_SPRING_SCALE_PHYSICS`. Design:
+    `docs/specs/2026-11-27-marey-phase-10a-from-spring-and-determinism-design.md`.
+    Plan: `docs/plans/2026-11-27-phase-10a-from-spring-and-determinism.md`.
 
 ## Reference docs
 

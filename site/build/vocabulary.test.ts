@@ -109,7 +109,7 @@ describe("lesson vocabulary in the repository", () => {
     expect(config.learn).toEqual([
       { slug: "first-scene", vocabulary: ["scene", "size", "background", "duration", "circle", "rectangle", "position", "radius", "color", "animate", "property", "to"] },
       { slug: "shapes", vocabulary: ["polygon", "line", "text", "points", "thickness", "content", "fontSize", "alpha", "rotation", "origin", "layer", "fit", "contain", "cover", "fill", "none"] },
-      { slug: "animate", vocabulary: ["easing", "linear", "easeIn", "easeOut", "easeInOut", "scale"] },
+      { slug: "animate", vocabulary: ["easing", "linear", "easeIn", "easeOut", "easeInOut", "spring", "from", "scale"] },
       { slug: "timing", vocabulary: ["loop", "yoyo", "delay", "true", "false"] },
       { slug: "groups", vocabulary: ["group"] },
       { slug: "sequence", vocabulary: ["sequence", "parallel"] },

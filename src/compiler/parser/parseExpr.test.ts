@@ -1136,8 +1136,9 @@ describe("trigonometry", () => {
     expect(foldOf(expr)).toMatchObject({ kind: "number", value: expected });
   });
 
-  // The old radian conversion gave 0.49999999999999994 and 0.5000000000000001
-  // here; the portable fold gives the exact half.
+  // The old radian conversion gave 0.49999999999999994 for sin(30), sin(150)
+  // and cos(60), and -0.5000000000000004 for sin(-30); the portable fold
+  // gives the exact half.
   it.each([
     ["sin(30)", 0.5], ["sin(150)", 0.5], ["cos(60)", 0.5], ["sin(-30)", -0.5],
   ])("folds %s to the exact value", (expr, expected) => {
