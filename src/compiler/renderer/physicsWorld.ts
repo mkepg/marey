@@ -534,6 +534,13 @@ export class MatterWorld implements IPhysicsWorld {
       // A body locked while it already turns (a sibling block's spin, flushed
       // before this one's params arrived) would otherwise keep that angular
       // velocity: with infinite inertia no contact impulse can reduce it.
+      // As of TYPE_PARALLEL_ONE_PHYSICS no legal source reaches this with a
+      // nonzero angular velocity: the shape that did (spin and lockRotation in
+      // sibling blocks of one parallel) is rejected, and a spin ends with its
+      // step, which freezes the body before a later step's lock arrives. A
+      // sentinel throwing here on a nonzero angular velocity left the full
+      // suite and a probe of seven spin-then-lock shapes green. Kept so a
+      // future route to a free, turning body still stops turning.
       const wasFree = Number.isFinite(rec.body.inertia);
       Matter.Body.setInertia(rec.body, Infinity);
       if (wasFree) Matter.Body.setAngularVelocity(rec.body, 0);
