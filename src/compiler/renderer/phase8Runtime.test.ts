@@ -431,6 +431,27 @@ describe("lockRotation", () => {
     for (const a of locked.angles) expect(a).toBe(locked.angles[0]);
   });
 
+  it("a lock that lands on a free, turning body stops the turning: spin in one step, lock in the next", () => {
+    // The spin step ends and the body is free and still turning when the next
+    // step's lockRotation arrives. The lock makes the inertia infinite, so
+    // without zeroing the angular velocity the body kept turning for good.
+    const locked = dropCrate(
+      "sequence { physics { spin: 360, duration: 0.5 } physics { lockRotation: true, duration: 5 } }"
+    );
+    expect(locked.fell).toBeGreaterThan(50);
+    const turned = locked.angles[10];
+    expect(Math.abs(turned - START)).toBeGreaterThan(0.1);
+    for (const a of locked.angles.slice(60)) expect(a).toBe(locked.angles[60]);
+  });
+
+  it("a lock that lands on a free body with a plain sibling block holds too", () => {
+    const locked = dropCrate(
+      "physics { duration: 0.5 } sequence { physics { lockRotation: true, duration: 5 } }"
+    );
+    expect(locked.fell).toBeGreaterThan(50);
+    for (const a of locked.angles.slice(60)) expect(a).toBe(locked.angles[60]);
+  });
+
   it.each([
     ["a lock in the second of two physics blocks", "physics { duration: 5 } physics { lockRotation: true, duration: 5 }"],
     ["a lock beside a sibling block's spin", "physics { spin: 360, duration: 5 } physics { lockRotation: true, duration: 5 }"],
