@@ -85,29 +85,70 @@ describe("spring easing at runtime", () => {
       expect(world.readState(id, 1)!.x, `body at tick ${k}`).toBeCloseTo(sprung(100, 200, k, 60), 9);
     }
   });
+});
 
-  it("corrects a bottom-origin body's centre by the spring scale with its bounce", () => {
-    // scaleOf's call site. A 40x20 rectangle with origin (0.5, 1) has its
-    // body's centre 10 px above its pivot at scale 1, and 10 * sy above at
-    // scale sy. The scale runner is declared first and the position runner
-    // second, so the position push lands last, and it places the centre by
-    // `tickScaleOf`, which asks the scale runner for its own value.
-    const { world, runtime, obj } = build(`scene {
-  size: (400, 600)
-  rectangle r {
-    position: (100, 500)
-    size: (40, 20)
-    origin: (0.5, 1)
-    animate { property: scale, to: (1, 3), duration: 0.5, easing: spring, bounce: 0.5 }
-    animate { property: position, to: (140, 500), duration: 0.5, easing: linear }
-    physics { duration: indefinitely, gravity: (0, 0) }
+describe("spring overshoot is clamped to the ranges scale and alpha allow", () => {
+  it("never reads a scale below 0 on any tick, and ends on the double every easing ends on", () => {
+    // At bounce 0.9 the curve peaks near 1.73, so the unclamped lerp from 1
+    // toward 0.05 would reach about 1 - 0.95 * 1.73, well below zero.
+    const peak = Math.max(...Array.from({ length: 121 }, (_, k) => evaluateEasing(k / 120, "spring", null, 0.9)));
+    expect(1 + (0.05 - 1) * peak).toBeLessThan(-0.5);
+
+    const source = `scene {
+  size: (400, 300)
+  circle c {
+    position: (200, 150)
+    radius: 20
+    animate { property: scale, from: 1, to: 0.05, duration: 1, easing: spring, bounce: 0.9 }
+  }
+}`;
+    const { runtime, obj } = build(source);
+    const layout = obj.__mareyLayout!;
+    let clampedTicks = 0;
+    for (let tick = 1; tick <= 120; tick++) {
+      step(runtime);
+      expect(layout.currentScale.x, `scale x at tick ${tick}`).toBeGreaterThanOrEqual(0);
+      expect(layout.currentScale.y, `scale y at tick ${tick}`).toBeGreaterThanOrEqual(0);
+      if (layout.currentScale.x === 0) clampedTicks++;
+    }
+    // The clamp did act, on more than one tick.
+    expect(clampedTicks).toBeGreaterThan(1);
+    // The end is the runner's lerp at eased progress exactly 1, which every
+    // easing shares: 1 + (0.05 - 1) rounds to 0.050000000000000044, not 0.05.
+    // The spring lands on the same double an easeOut does.
+    const easeOut = build(source.replace("easing: spring, bounce: 0.9", "easing: easeOut"));
+    for (let tick = 1; tick <= 120; tick++) step(easeOut.runtime);
+    const end = 1 + (0.05 - 1) * 1;
+    expect(easeOut.obj.__mareyLayout!.currentScale).toEqual({ x: end, y: end });
+    expect(layout.currentScale).toEqual({ x: end, y: end });
+    expect(Math.abs(layout.currentScale.x - 0.05)).toBeLessThan(1e-15);
+  });
+
+  it("never reads an alpha above 1 or below 0", () => {
+    const trace = (from: number, to: number) => {
+      const { runtime, obj } = build(`scene {
+  size: (400, 300)
+  circle c {
+    position: (200, 150)
+    radius: 20
+    animate { property: alpha, from: ${from}, to: ${to}, duration: 1, easing: spring, bounce: 0.5 }
   }
 }`);
-    const id = bodyOf(obj);
-    for (let k = 1; k < 60; k++) {
-      step(runtime);
-      const sy = sprung(1, 3, k, 60);
-      expect(world.readState(id, 1)!.y, `centre at tick ${k}`).toBeCloseTo(500 - 10 * sy, 9);
-    }
+      const out: number[] = [];
+      for (let tick = 1; tick <= 120; tick++) {
+        step(runtime);
+        out.push(obj.alpha);
+      }
+      return out;
+    };
+    // Unclamped, bounce 0.5 overshoots by about 16% of the travel.
+    const up = trace(0, 1);
+    expect(Math.max(...up)).toBe(1);
+    expect(up.filter((a) => a === 1).length).toBeGreaterThan(1);
+    expect(up[119]).toBe(1);
+    const down = trace(1, 0);
+    expect(Math.min(...down)).toBe(0);
+    expect(down.filter((a) => a === 0).length).toBeGreaterThan(1);
+    expect(down[119]).toBe(0);
   });
 });

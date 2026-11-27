@@ -770,6 +770,22 @@ export function collectErrors(ast: AstNode): CompilerError[] {
         });
       }
 
+      // A spring overshoots its target, and the runtime clamp keeps scale
+      // from going below zero, so a spring toward a small scale can sit a
+      // body's collider at zero, the hazard TYPE_ZERO_SCALE_PHYSICS exists
+      // for. It uses the same participation test as that rule.
+      if (easing === "spring" && propVal?.kind === "animProperty" && propVal.value === "scale") {
+        const springOwnerIdx = ownerIndex(ancestors);
+        if (springOwnerIdx >= 0
+            && physicsParticipationReason(ancestors[springOwnerIdx], ancestors.slice(0, springOwnerIdx)) !== null) {
+          errors.push({
+            phase: "TYPE",
+            message: `[TYPE_SPRING_SCALE_PHYSICS] ${label}: a spring on 'scale' overshoots its target, which can swing a physics body's collider through zero. Use 'easing: easeOut' for scale on an object that takes part in physics.`,
+            ...errPosOf(easingVal ?? propVal),
+          });
+        }
+      }
+
       const handoffVal = node.props["handoff"];
       if (handoffVal?.kind === "boolean" && handoffVal.value === true) {
         if (propVal?.kind === "animProperty" && propVal.value !== "position") {

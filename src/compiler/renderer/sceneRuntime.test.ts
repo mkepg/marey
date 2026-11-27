@@ -526,6 +526,60 @@ function positionPushes(world: RecordingWorld): string[] {
   return world.calls.filter((s) => s.startsWith("setPosition:"));
 }
 
+/**
+ * A scale spring on a body. TYPE_SPRING_SCALE_PHYSICS rejects this in source,
+ * so it is built straight from the IR: it pins what reaches the world if that
+ * rule is ever relaxed. The scale runner comes first and a linear position
+ * runner second, so the position push lands last and places the body's
+ * centre by `tickScaleOf`, which asks the scale runner for `scaleOf`.
+ */
+describe("SceneRuntime · a scale spring reaching the world", () => {
+  const TICKS = 60;
+  function springScaleBody(to: { x: number; y: number }, bounce: number) {
+    const c = makeContainer({
+      position: { x: 100, y: 500 },
+      centreOffset: BOTTOM_ORIGIN,
+      animations: [
+        anim({ property: "scale", to, duration: TICKS / TICK_HZ, easing: "spring", bounce }),
+        anim({ to: { x: 140, y: 500 }, duration: TICKS / TICK_HZ }),
+      ],
+      physics: { ...PHYSICS, duration: "indefinitely" },
+    });
+    const world = new RecordingWorld();
+    const rt = new SceneRuntime(world, makeRoot(c));
+    return { c, world, rt };
+  }
+
+  it("places a bottom-origin body's centre by the spring scale with its own bounce", () => {
+    // scaleOf's call site: at bounce 0.5, not the default 0.25.
+    const { c, world, rt } = springScaleBody({ x: 1, y: 3 }, 0.5);
+    for (let k = 1; k < TICKS; k++) {
+      rt.advanceOneTick();
+      const sy = 1 + 2 * evaluateEasing(k / TICKS, "spring", null, 0.5);
+      expect(world.positions.get(c.__body!)!.y, `centre at tick ${k}`).toBeCloseTo(500 - 10 * sy, 9);
+    }
+  });
+
+  it("clamps the scale it pushes and the scale it places the centre by at 0", () => {
+    // Unclamped, bounce 0.9 from 1 toward 0.05 swings well below zero.
+    const { c, world, rt } = springScaleBody({ x: 0.05, y: 0.05 }, 0.9);
+    let zeroPushes = 0;
+    for (let k = 1; k <= TICKS; k++) {
+      world.calls.length = 0;
+      rt.advanceOneTick();
+      for (const call of world.calls.filter((s) => s.startsWith("setScale:"))) {
+        const [sx, sy] = call.split(":")[2].split(",").map(Number);
+        expect(sx, `${call} at tick ${k}`).toBeGreaterThanOrEqual(0);
+        expect(sy, `${call} at tick ${k}`).toBeGreaterThanOrEqual(0);
+        if (sy === 0) zeroPushes++;
+      }
+      // A negative scale would put the centre below the pivot at y = 500.
+      expect(world.positions.get(c.__body!)!.y, `centre at tick ${k}`).toBeLessThanOrEqual(500);
+    }
+    expect(zeroPushes).toBeGreaterThan(1);
+  });
+});
+
 describe("SceneRuntime · origin through the physics seam", () => {
   it("moves a bottom-origin body's centre as its scale animation grows it", () => {
     // A 40x20 rect standing on y = 500, origin (0.5, 1), growing 1x -> 3x in y.

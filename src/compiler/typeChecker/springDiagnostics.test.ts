@@ -88,4 +88,70 @@ describe("spring diagnostics", () => {
     expect(out.errors.map((e) => e.message)).toEqual([]);
     expect(out.ir!.children[0].props.animations[0].bounce).toBe(0.25);
   });
+
+  describe("TYPE_SPRING_SCALE_PHYSICS", () => {
+    const SPRING_SCALE_PHYSICS =
+      "[TYPE_SPRING_SCALE_PHYSICS] The 'animate' block: a spring on 'scale' overshoots its target, which can swing a physics body's collider through zero. Use 'easing: easeOut' for scale on an object that takes part in physics.";
+
+    it("fires on an object that declares physics, at the easing value", () => {
+      const src = withAnimate("easing: spring", "    physics { duration: 1 }");
+      const { errors } = compile(src);
+      expect(errors.map((e) => e.message)).toEqual([SPRING_SCALE_PHYSICS]);
+      const lines = src.split("\n");
+      const line = lines.findIndex((l) => l.includes("easing: spring")) + 1;
+      expect([errors[0].line, errors[0].col]).toEqual([line, lines[line - 1].indexOf("spring") + 1]);
+      // The suggested easing compiles, so the rejection is the spring's alone.
+      expect(errorsOf(src.replace("easing: spring", "easing: easeOut"))).toEqual([]);
+    });
+
+    it("fires on a child of a group that declares physics", () => {
+      expect(errorsOf(`scene {
+  size: (400, 300)
+  group g {
+    position: (100, 100)
+    physics { duration: 1 }
+    circle c {
+      position: (0, 0)
+      radius: 10
+      animate { property: scale, to: 2, duration: 1, easing: spring }
+    }
+  }
+}`)).toEqual([SPRING_SCALE_PHYSICS]);
+    });
+
+    it("fires on a group whose child declares physics, inside a sequence", () => {
+      // The participation test's third case. Any animation on such a group is
+      // already TYPE_PHYSICS_IN_ANIMATED_GROUP, so both diagnostics fire here;
+      // this pins that the spring rule follows the same participation test.
+      const errors = errorsOf(`scene {
+  size: (400, 300)
+  group g {
+    position: (100, 100)
+    circle c {
+      position: (0, 0)
+      radius: 10
+      physics { duration: 1 }
+    }
+    sequence { animate { property: scale, to: 2, duration: 1, easing: spring } }
+  }
+}`);
+      expect(errors).toContain(SPRING_SCALE_PHYSICS);
+      expect(errors.filter((m) => m !== SPRING_SCALE_PHYSICS).map((m) => m.slice(0, 33))).toEqual([
+        "[TYPE_PHYSICS_IN_ANIMATED_GROUP] ",
+      ]);
+    });
+
+    it("does not fire on a shape without physics, or for another property", () => {
+      expect(errorsOf(withAnimate("easing: spring"))).toEqual([]);
+      expect(errorsOf(`scene {
+  size: (400, 300)
+  circle c {
+    position: (100, 100)
+    radius: 10
+    physics { duration: 1 }
+    animate { property: position, to: (200, 100), duration: 1, easing: spring }
+  }
+}`)).toEqual([]);
+    });
+  });
 });

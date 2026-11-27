@@ -83,6 +83,37 @@ function lerp(a: number, b: number, t: number): number {
 }
 
 /**
+ * A scale runner's value at eased progress `e`, each component clamped to
+ * `>= 0` (Phase 10A spec §3.2, "Overshoot and the protected ranges"). A
+ * spring goes past `to`, so a spring toward a small target would otherwise
+ * swing negative, which the language forbids for scale. Every scale value a
+ * runner produces comes from here: the paint (`applyAnim`), this tick's
+ * scale (`scaleOf`) and the world push (`pushAnimToWorld`).
+ *
+ * The validator keeps both endpoints `>= 0`, and every other easing stays in
+ * [0, 1], so for them the lerp is already `>= 0` and the clamp returns it
+ * unchanged. It is written `v < 0 ? 0 : v`, not `Math.max(0, v)`, so a `-0`
+ * passes through as `-0` and no existing value changes by a bit.
+ */
+function scaleAt(ra: RunningAnim, e: number): IRPoint {
+  const s = ra.startVal as IRPoint;
+  const t = ra.targetVal as IRPoint;
+  const x = lerp(s.x, t.x, e);
+  const y = lerp(s.y, t.y, e);
+  return { x: x < 0 ? 0 : x, y: y < 0 ? 0 : y };
+}
+
+/**
+ * An alpha runner's value at eased progress `e`, clamped to [0, 1] for the
+ * same reason as `scaleAt`. With endpoints in [0, 1] and any easing but a
+ * spring, the lerp already lies in [0, 1] and is returned unchanged.
+ */
+function alphaAt(ra: RunningAnim, e: number): number {
+  const a = lerp(ra.startVal as number, ra.targetVal as number, e);
+  return a < 0 ? 0 : a > 1 ? 1 : a;
+}
+
+/**
  * The velocity an animation had over its final tick, in px/s: the
  * displacement of that tick times `TICK_HZ` (Phase 6C spec §2.1). A
  * non-looping yoyo's final tick is the last of its return leg, from progress
@@ -118,7 +149,7 @@ function applyAnim(ra: RunningAnim, p: number): void {
   const e = evaluateEasing(p, ra.anim.easing, releaseEndOf(ra.anim), ra.anim.bounce);
 
   if (ra.anim.property === "alpha") {
-    ra.container.alpha = lerp(ra.startVal as number, ra.targetVal as number, e);
+    ra.container.alpha = alphaAt(ra, e);
   } else if (ra.anim.property === "rotation") {
     ra.container.rotation = lerp(ra.startVal as number, ra.targetVal as number, e);
   } else if (ra.anim.property === "position" && ra.container.__mareyLayout) {
@@ -132,10 +163,9 @@ function applyAnim(ra: RunningAnim, p: number): void {
     ra.container.__updateLayout?.();
   } else if (ra.anim.property === "scale" && ra.container.__mareyLayout) {
     const layout = ra.container.__mareyLayout;
-    const startPt = ra.startVal as IRPoint;
-    const targetPt = ra.targetVal as IRPoint;
-    layout.currentScale.x = lerp(startPt.x, targetPt.x, e);
-    layout.currentScale.y = lerp(startPt.y, targetPt.y, e);
+    const scale = scaleAt(ra, e);
+    layout.currentScale.x = scale.x;
+    layout.currentScale.y = scale.y;
     ra.container.__updateLayout?.();
   } else if (ra.anim.property === "color" && ra.container.__mareyLayout) {
     ra.container.__mareyLayout.currentColor = lerpColor(ra.startVal as number, ra.targetVal as number, e);
@@ -350,9 +380,7 @@ export class SceneRuntime {
   /** A scale runner's own value for this tick, evaluated at `alpha = 0`. */
   private scaleOf(ra: RunningAnim): { x: number; y: number } {
     const e = evaluateEasing(animProgress(ra.time, 0), ra.anim.easing, releaseEndOf(ra.anim), ra.anim.bounce);
-    const s = ra.startVal as IRPoint;
-    const t = ra.targetVal as IRPoint;
-    return { x: lerp(s.x, t.x, e), y: lerp(s.y, t.y, e) };
+    return scaleAt(ra, e);
   }
 
   /**
@@ -441,11 +469,8 @@ export class SceneRuntime {
       const rad = lerp(ra.startVal as number, ra.targetVal as number, e);
       this.world.overrideAngle(id, bodyTransformOf(ra.container).rot + rad);
     } else if (ra.anim.property === "scale") {
-      const startPt = ra.startVal as IRPoint;
-      const targetPt = ra.targetVal as IRPoint;
       const t = bodyTransformOf(ra.container);
-      const sx = lerp(startPt.x, targetPt.x, e);
-      const sy = lerp(startPt.y, targetPt.y, e);
+      const { x: sx, y: sy } = scaleAt(ra, e);
 
       // Exactly one runner corrects the centre per container per tick, and it
       // is the one whose `setScale` the body ends up carrying. Every scale
