@@ -395,11 +395,13 @@ describe("lockRotation", () => {
     const crate = root.children[1] as Container;
     const startY = posOf(world, crate).y;
     const angles: number[] = [];
+    const ys: number[] = [];
     for (let i = 0; i < 600; i++) {
       advance(runtime, 1);
       angles.push(world.readState(bodyOf(crate), 1)!.angle);
+      ys.push(posOf(world, crate).y);
     }
-    return { angles, fell: posOf(world, crate).y - startY, rotation: crate.rotation };
+    return { angles, ys, fell: posOf(world, crate).y - startY, rotation: crate.rotation };
   }
 
   const START = (30 * Math.PI) / 180;
@@ -444,6 +446,9 @@ describe("lockRotation", () => {
     expect(lockedAt).toBeGreaterThan(0);
     expect(Math.abs(locked.angles[lockedAt] - START)).toBeGreaterThan(0.1);
     for (const a of locked.angles.slice(lockedAt)) expect(a).toBe(locked.angles[lockedAt]);
+    // A body that was never released would hold its angle too. This one
+    // falls after the lock lands, so the lock is holding a free body.
+    expect(locked.ys.at(-1)! - locked.ys[lockedAt]).toBeGreaterThan(50);
   });
 
   it.each([

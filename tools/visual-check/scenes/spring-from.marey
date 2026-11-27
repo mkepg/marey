@@ -1,0 +1,54 @@
+// Frame-hash fixture for `from` and `easing: spring` (Phase 10A). No text and
+// no simulated bodies, so it hashes headless and its Node and Chromium hashes can be
+// compared (eval/RESULTS-PHASE-10A.md, section 4).
+//
+// Three springs at bounce 0, 0.25 and 0.9, across scale, position and alpha,
+// each starting from a written `from`. The last object opens a sequence with
+// `from`, so frame 0 shows that start value too.
+scene {
+  size: (480, 270)
+  duration: 3
+  background: #0f172a
+
+  // bounce 0: critically damped, no overshoot. Scale and alpha from a start.
+  circle settle {
+    position: (90, 135)
+    radius: 28
+    color: #38bdf8
+    animate { property: scale, from: 0.3, to: 1, duration: 0.8, easing: spring, bounce: 0 }
+    animate { property: alpha, from: 0.2, to: 1, duration: 0.8, easing: spring, bounce: 0 }
+  }
+
+  // bounce 0.25 (the default written out): a position spring, held at its
+  // `from` through the delay, then a scale spring on a non-uniform start.
+  rectangle drop {
+    position: (200, 150)
+    size: (56, 56)
+    color: #fbbf24
+    animate { property: position, from: (200, 40), to: (200, 150), duration: 1, delay: 0.4, easing: spring, bounce: 0.25 }
+    animate { property: scale, from: (1.6, 0.4), to: 1, duration: 1, delay: 0.4, easing: spring, bounce: 0.25 }
+  }
+
+  // bounce 0.9: about eleven swings. Its alpha overshoots 1 and is clamped,
+  // and its scale toward a small target is clamped at 0.
+  polygon wobble {
+    position: (310, 135)
+    points: [(0, -34), (30, 18), (-30, 18)]
+    color: #f97316
+    animate { property: scale, from: 1.4, to: 0.05, duration: 1.5, easing: spring, bounce: 0.9 }
+    animate { property: alpha, from: 0, to: 1, duration: 1.5, easing: spring, bounce: 0.9 }
+  }
+
+  // A sequence whose first step has `from`: shown at frame 0, before the
+  // step's motion starts one tick in. The second step's `from` is not shown
+  // until that step begins.
+  circle story {
+    position: (410, 135)
+    radius: 22
+    color: #a78bfa
+    sequence {
+      animate { property: alpha, from: 0, to: 1, duration: 0.6, easing: spring, bounce: 0.9 }
+      animate { property: position, from: (410, 60), to: (410, 200), duration: 1.2, easing: spring, bounce: 0.25 }
+    }
+  }
+}

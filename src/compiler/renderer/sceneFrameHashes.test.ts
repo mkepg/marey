@@ -18,7 +18,7 @@ import type { IRSceneNode } from "../sceneIR";
  *
  * The corpus is every tracked .marey file, pulled in through import.meta.glob
  * (src/** type-checks with browser types only, so node:fs is not available).
- * Dot-directories (.visual-check, .superpowers, .worktrees, .claude),
+ * Dot-directories (git-ignored local state such as .visual-check and .worktrees),
  * node_modules, dist and demo/ (git-ignored local scratch) hold no tracked
  * scene and are excluded.
  *
@@ -156,6 +156,7 @@ const BASELINE: Readonly<Record<string, string>> = {
   "../../../tools/visual-check/scenes/origin-physics.marey": "text",
   "../../../tools/visual-check/scenes/pile.marey": "1d3fae36",
   "../../../tools/visual-check/scenes/ring-pulse.marey": "text",
+  "../../../tools/visual-check/scenes/spring-from.marey": "59bc2edc",
   "../../../tools/visual-check/scenes/test-card.marey": "text",
   "../../../tools/visual-check/scenes/timeline-sweep.marey": "text",
   "../../../tools/visual-check/scenes/tumble.marey": "fe842e1e",
