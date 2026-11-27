@@ -200,6 +200,15 @@ diagnostics (`TYPE_PARALLEL_ONE_PHYSICS`, `TYPE_BOUNCE_WITHOUT_SPRING`,
 plan: `docs/plans/2026-11-27-phase-10a-from-spring-and-determinism.md`.
 `roadmap-and-process.md`'s Phase 10A bullet carries the same status.
 
+**10B — layout, measured first, is merged into `main` (`MERGE_SHA`); evidence
+in `eval/RESULTS-PHASE-10B-MEASUREMENT.md`.** R11 required authorability
+evidence before any layout primitive. Four blind authors wrote nine layout
+briefs each, and all 36 scenes passed every clause of a geometry checker
+(`eval/layout/`) that was validated on 41 reference scenes first. Under the
+rule fixed before the round, no primitive is built and the language is
+unchanged. Design: `docs/specs/2026-11-27-marey-phase-10b-layout-design.md`;
+plan: `docs/plans/2026-11-27-phase-10b-1-layout-measurement.md`.
+
 **9A — the embeddable player is merged into `main`** (fast-forward,
 2026-11-06). It adds `<marey-player>`, a custom element
 shipped as `marey-lang/player`: it plays a `.marey` scene from a `src` or an

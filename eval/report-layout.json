@@ -1,0 +1,1210 @@
+[
+  {
+    "scene": "A-badge-row.marey",
+    "author": "A",
+    "brief": "L5",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "pairing",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "spacing",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "centreline",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "row",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "A-card-grid.marey",
+    "author": "A",
+    "brief": "L6",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "lattice",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "hgap",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "vgap",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "grid",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "A-clock-ticks.marey",
+    "author": "A",
+    "brief": "L9",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "longcount",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "distance",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "step",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "orient",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "fifth",
+        "tag": "radial",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "A-left-stack.marey",
+    "author": "A",
+    "brief": "L4",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "order",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "left",
+        "tag": "align",
+        "pass": true
+      },
+      {
+        "clause": "gaps",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "row",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "A-mixed-row.marey",
+    "author": "A",
+    "brief": "L2",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "order",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "gaps",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "bottom",
+        "tag": "align",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "A-ring-12.marey",
+    "author": "A",
+    "brief": "L8",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "distance",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "start",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "step",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "direction",
+        "tag": "radial",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "A-spread-dots.marey",
+    "author": "A",
+    "brief": "L3",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "order",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "centreline",
+        "tag": "distribute",
+        "pass": true
+      },
+      {
+        "clause": "left-edge",
+        "tag": "distribute",
+        "pass": true
+      },
+      {
+        "clause": "right-edge",
+        "tag": "distribute",
+        "pass": true
+      },
+      {
+        "clause": "equal-gaps",
+        "tag": "distribute",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "A-stack-columns.marey",
+    "author": "A",
+    "brief": "L7",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "columns",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "vgap",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "hgap",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "grid",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "A-toolbar-row.marey",
+    "author": "A",
+    "brief": "L1",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "centreline",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "gaps",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "row",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "B-badge-row.marey",
+    "author": "B",
+    "brief": "L5",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "pairing",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "spacing",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "centreline",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "row",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "B-card-grid.marey",
+    "author": "B",
+    "brief": "L6",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "lattice",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "hgap",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "vgap",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "grid",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "B-clock-ticks.marey",
+    "author": "B",
+    "brief": "L9",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "longcount",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "distance",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "step",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "orient",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "fifth",
+        "tag": "radial",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "B-left-stack.marey",
+    "author": "B",
+    "brief": "L4",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "order",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "left",
+        "tag": "align",
+        "pass": true
+      },
+      {
+        "clause": "gaps",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "row",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "B-mixed-row.marey",
+    "author": "B",
+    "brief": "L2",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "order",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "gaps",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "bottom",
+        "tag": "align",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "B-ring-12.marey",
+    "author": "B",
+    "brief": "L8",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "distance",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "start",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "step",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "direction",
+        "tag": "radial",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "B-spread-dots.marey",
+    "author": "B",
+    "brief": "L3",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "order",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "centreline",
+        "tag": "distribute",
+        "pass": true
+      },
+      {
+        "clause": "left-edge",
+        "tag": "distribute",
+        "pass": true
+      },
+      {
+        "clause": "right-edge",
+        "tag": "distribute",
+        "pass": true
+      },
+      {
+        "clause": "equal-gaps",
+        "tag": "distribute",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "B-stack-columns.marey",
+    "author": "B",
+    "brief": "L7",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "columns",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "vgap",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "hgap",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "grid",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "B-toolbar-row.marey",
+    "author": "B",
+    "brief": "L1",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "centreline",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "gaps",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "row",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "C-badge-row.marey",
+    "author": "C",
+    "brief": "L5",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "pairing",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "spacing",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "centreline",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "row",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "C-card-grid.marey",
+    "author": "C",
+    "brief": "L6",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "lattice",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "hgap",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "vgap",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "grid",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "C-clock-ticks.marey",
+    "author": "C",
+    "brief": "L9",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "longcount",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "distance",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "step",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "orient",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "fifth",
+        "tag": "radial",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "C-left-stack.marey",
+    "author": "C",
+    "brief": "L4",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "order",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "left",
+        "tag": "align",
+        "pass": true
+      },
+      {
+        "clause": "gaps",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "row",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "C-mixed-row.marey",
+    "author": "C",
+    "brief": "L2",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "order",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "gaps",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "bottom",
+        "tag": "align",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "C-ring-12.marey",
+    "author": "C",
+    "brief": "L8",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "distance",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "start",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "step",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "direction",
+        "tag": "radial",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "C-spread-dots.marey",
+    "author": "C",
+    "brief": "L3",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "order",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "centreline",
+        "tag": "distribute",
+        "pass": true
+      },
+      {
+        "clause": "left-edge",
+        "tag": "distribute",
+        "pass": true
+      },
+      {
+        "clause": "right-edge",
+        "tag": "distribute",
+        "pass": true
+      },
+      {
+        "clause": "equal-gaps",
+        "tag": "distribute",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "C-stack-columns.marey",
+    "author": "C",
+    "brief": "L7",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "columns",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "vgap",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "hgap",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "grid",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "C-toolbar-row.marey",
+    "author": "C",
+    "brief": "L1",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "centreline",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "gaps",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "row",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "D-badge-row.marey",
+    "author": "D",
+    "brief": "L5",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "pairing",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "spacing",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "centreline",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "row",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "D-card-grid.marey",
+    "author": "D",
+    "brief": "L6",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "lattice",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "hgap",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "vgap",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "grid",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "D-clock-ticks.marey",
+    "author": "D",
+    "brief": "L9",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "longcount",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "distance",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "step",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "orient",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "fifth",
+        "tag": "radial",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "D-left-stack.marey",
+    "author": "D",
+    "brief": "L4",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "order",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "left",
+        "tag": "align",
+        "pass": true
+      },
+      {
+        "clause": "gaps",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "row",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "D-mixed-row.marey",
+    "author": "D",
+    "brief": "L2",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "order",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "gaps",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "bottom",
+        "tag": "align",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "D-ring-12.marey",
+    "author": "D",
+    "brief": "L8",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "distance",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "start",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "step",
+        "tag": "radial",
+        "pass": true
+      },
+      {
+        "clause": "direction",
+        "tag": "radial",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "D-spread-dots.marey",
+    "author": "D",
+    "brief": "L3",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "order",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "centreline",
+        "tag": "distribute",
+        "pass": true
+      },
+      {
+        "clause": "left-edge",
+        "tag": "distribute",
+        "pass": true
+      },
+      {
+        "clause": "right-edge",
+        "tag": "distribute",
+        "pass": true
+      },
+      {
+        "clause": "equal-gaps",
+        "tag": "distribute",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "D-stack-columns.marey",
+    "author": "D",
+    "brief": "L7",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "columns",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "vgap",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "hgap",
+        "tag": "grid",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "grid",
+        "pass": true
+      }
+    ]
+  },
+  {
+    "scene": "D-toolbar-row.marey",
+    "author": "D",
+    "brief": "L1",
+    "compiled": true,
+    "clauses": [
+      {
+        "clause": "count",
+        "tag": "brief",
+        "pass": true
+      },
+      {
+        "clause": "centreline",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "gaps",
+        "tag": "row",
+        "pass": true
+      },
+      {
+        "clause": "centred",
+        "tag": "row",
+        "pass": true
+      }
+    ]
+  }
+]

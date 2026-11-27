@@ -2,6 +2,10 @@
 
 **Date:** 2026-11-27
 **Status:** design. Stage 1 (§2) runs before any of Stage 2 (§3) is built.
+
+> **Outcome, 2026-11-27:** Stage 1 ran. All 36 scenes passed every clause, so
+> §2.4 builds nothing and Stage 2 is not built. §3 stays as the design that
+> was pre-registered. Evidence: `eval/RESULTS-PHASE-10B-MEASUREMENT.md`.
 **Roadmap:** `2026-09-09-marey-engineering-roadmap-design.md` §13, amended
 2026-11-27 (Phase 10). R10 (measure semantic compression) and R11 (investigate
 high-level layout primitives only after authorability evidence supports them)

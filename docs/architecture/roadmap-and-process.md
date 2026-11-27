@@ -378,6 +378,15 @@ explicitly rather than quietly deviating.
     `TYPE_HANDOFF_SPRING` and `TYPE_SPRING_SCALE_PHYSICS`. Design:
     `docs/specs/2026-11-27-marey-phase-10a-from-spring-and-determinism-design.md`.
     Plan: `docs/plans/2026-11-27-phase-10a-from-spring-and-determinism.md`.
+- **Phase 10B — layout, measured first** (roadmap §13, R11; the second of
+  10A–10D).
+  - **Status: merged into `main` (`MERGE_SHA`); evidence in
+    `eval/RESULTS-PHASE-10B-MEASUREMENT.md`.** A blind round of 36 layout
+    scenes, judged by a geometry checker validated on reference scenes, found
+    no layout errors, so no layout primitive is built (spec §2.4) and the
+    language is unchanged. Design:
+    `docs/specs/2026-11-27-marey-phase-10b-layout-design.md`. Plan:
+    `docs/plans/2026-11-27-phase-10b-1-layout-measurement.md`.
 
 ## Reference docs
 

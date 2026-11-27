@@ -4,7 +4,7 @@
  * clause and one wrong scene per non-`brief` clause that fails that clause.
  */
 import { describe, expect, it } from "vitest";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { compileSource } from "../src/compiler/compileSource";
 import { worldBoxes, type WorldShape } from "./layout/geometry";
@@ -153,5 +153,41 @@ describe("reference scenes", () => {
       const others = r.results.filter((c) => c.tag !== named.tag);
       expect(others.filter((c) => !c.pass).map((c) => c.clause), p.file).toEqual([]);
     }
+  });
+});
+
+/**
+ * The blind corpus: every `<author>-<brief>.marey` in eval/scenes-layout is
+ * checked against its brief and written to eval/report-layout.json. This
+ * reports; it does not fail on a geometric failure, because a wrong layout is
+ * the measurement, not a defect. It fails only if a file cannot be mapped to
+ * a brief.
+ */
+const CORPUS_DIR = "eval/scenes-layout";
+const BRIEF_BY_FILE: Record<string, BriefId> = {
+  "toolbar-row": "L1",
+  "mixed-row": "L2",
+  "spread-dots": "L3",
+  "left-stack": "L4",
+  "badge-row": "L5",
+  "card-grid": "L6",
+  "stack-columns": "L7",
+  "ring-12": "L8",
+  "clock-ticks": "L9",
+};
+
+describe.runIf(existsSync(CORPUS_DIR))("the blind layout corpus", () => {
+  it("checks every scene against its brief and writes eval/report-layout.json", () => {
+    const files = readdirSync(CORPUS_DIR).filter((f) => f.endsWith(".marey")).sort();
+    const report = files.map((f) => {
+      const m = /^([A-Z])-(.+)\.marey$/.exec(f);
+      expect(m, f).not.toBeNull();
+      const brief = BRIEF_BY_FILE[m![2]];
+      expect(brief, f).toBeDefined();
+      const r = checkScene(brief, readFileSync(join(CORPUS_DIR, f), "utf8"));
+      return { scene: f, author: m![1], brief, compiled: r.compiled, clauses: r.results };
+    });
+    writeFileSync("eval/report-layout.json", JSON.stringify(report, null, 2) + "\n");
+    expect(report.length).toBe(files.length);
   });
 });
