@@ -233,6 +233,8 @@ describe("lottieFitted · canonical scenes", () => {
   }
 });
 
+const SPRING_KEYFRAME_CEILING = 16;
+
 describe("lottieFitted · spring easing", () => {
   it("fits a spring track within tolerance", { timeout: 30_000 }, () => {
     // A spring becomes keyframes like any sampled track (spec §3.2): the same
@@ -256,7 +258,11 @@ describe("lottieFitted · spring easing", () => {
     expectRoundTrip("spring-scale", run);
     const keyframes = countKeyframes(run.doc);
     console.log(`lottieFitted: spring-scale, ${run.frames.length} frames at 30 fps, ${keyframes} keyframes`);
+    // Same rule as CEILINGS: the fitter is deterministic, so the ceiling is the
+    // measured count (45 frames fit to 16 keyframes). It rises only if the fit
+    // gets worse, or if the spring curve itself changes.
     expect(keyframes).toBeGreaterThan(0);
+    expect(keyframes).toBeLessThanOrEqual(SPRING_KEYFRAME_CEILING);
   });
 });
 
