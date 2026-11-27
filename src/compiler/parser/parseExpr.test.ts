@@ -305,7 +305,7 @@ describe("structural nesting depth", () => {
 
   // A sibling test used to sit here, named "rejects the 51st alternating
   // level structurally" (nestListsAndPoints(51), asserting only that some
-  // "nested too deeply" message appears). It was deleted: two reviewers
+  // "nested too deeply" message appears). It was deleted: review
   // found its assertion did not check what its name claimed. Verified by
   // swapping `parseListLiteral`'s entry transition from `intoGroup` to
   // `intoCoordinate` (making each level cost two structural levels instead
@@ -620,7 +620,7 @@ describe("type rules on the new operators", () => {
 });
 
 describe("comparisons are non-associative", () => {
-  // Fix round: `toContain("cannot be chained.")` alone pins nothing about
+  // `toContain("cannot be chained.")` alone pins nothing about
   // *which* operator's name the template interpolates — a fixed string
   // substituted for `op.name` in `'${op.name}' cannot be chained.` would
   // still pass every row below. Each row now names the operator that
@@ -990,7 +990,7 @@ describe("indexing and length", () => {
   });
 
   /**
-   * Task 7's brief specifies `intoGroup` for the index expression, but no
+   * Phase 3B's Task 7 specified `intoGroup` for the index expression, but no
    * fixture above distinguishes it from a bare, unadvanced `ctx` — every one
    * of them stays far under the 50-level expression cap either way. Verified
    * directly: swapping `intoGroup(ctx)` for a bare `ctx` in `parsePostfix`'s
@@ -1014,7 +1014,7 @@ describe("indexing and length", () => {
   });
 
   /**
-   * Same gap, same fix, for `length`'s argument: the brief's `intoGroup(ctx)`
+   * Same gap, same fix, for `length`'s argument: the specified `intoGroup(ctx)`
    * is likewise unpinned by every fixture above. Verified the same way —
    * swapping it for a bare `ctx` in the 'length' branch and running the whole
    * suite leaves it green.
@@ -1048,7 +1048,7 @@ describe("indexing and length", () => {
 
   it("rejects an out-of-range index, naming the index and the length", () => {
     const msg = diagnosticsForExpr("[1,2][5]")[0].message;
-    // The brief's own draft asserted "index 5" (lowercase), but the message
+    // The first draft of this test asserted "index 5" (lowercase), but the message
     // template capitalises "Index" at the start of the sentence — toContain is
     // case-sensitive, so the lowercase form never matches. The wording stands
     // (design section 8 only requires the diagnostic name the index and the
@@ -1057,7 +1057,7 @@ describe("indexing and length", () => {
     expect(msg).toContain("length 2");
   });
 
-  // Fix round 1, Important 2: the brief's own fixtures only ever put a
+  // The first fixtures for this rule only ever put a
   // non-integer or negative *number* in the index position, so
   // `index.kind !== "number"` (parseExpr.ts) had no fixture anywhere that
   // reached it — confirmed by deleting the guard and running the whole
@@ -1122,12 +1122,12 @@ describe("trigonometry", () => {
   // `toMatchObject`'s primitive-field comparison is exact equality, which is
   // the point: Math.sin(Math.PI) is 1.2246e-16, and a naive radian conversion
   // fails every one of the four `0`/`1` rows below outright — confirmed by
-  // revert check 1 (task-8-report.md), which shows this exact table's
+  // a revert check, which showed this exact table's
   // `sin(180)`/`cos(90)`/`cos(270)` rows going red on that float noise. A
-  // separate "exact at the cardinal angles" test was cut in fix round 1: it
+  // separate "exact at the cardinal angles" test was cut in review: it
   // asserted `toBe(0)` twice and never `1` at all (a name that claimed more
   // than it checked), and was fully subsumed by this table regardless — see
-  // the revert-1 evidence above for proof that this `it.each` alone already
+  // the revert evidence above for proof that this `it.each` alone already
   // discriminates the exactness property, at both `0` and `1`.
   it.each([
     ["sin(0)", 0], ["sin(90)", 1], ["sin(180)", 0], ["sin(270)", -1],
@@ -1146,7 +1146,7 @@ describe("trigonometry", () => {
   });
 
   /**
-   * The brief's own two rows here (`sin(-90)`, `cos(720)`) do not actually
+   * The first two rows here (`sin(-90)`, `cos(720)`) do not actually
    * discriminate the `+ 360` correction this test claims to pin. Worked out
    * with `node -e` before writing this test:
    *
@@ -1158,8 +1158,8 @@ describe("trigonometry", () => {
    *    triggers for `cos(720)` (routed through `sinDegrees(810)`) at all.
    *
    * Both rows pass unchanged even with `deg % 360` in place of
-   * `((deg % 360) + 360) % 360` — confirmed by the revert in
-   * task-8-report.md, revert check 2. `sin(-180)` is added because it is not
+   * `((deg % 360) + 360) % 360` — confirmed by a revert
+   * check. `sin(-180)` is added because it is not
    * this lucky: `-180 % 360` is `-180` (matches no cardinal), and
    * `Math.sin(-Math.PI)` is `-1.2246...e-16`, not `0` — the exact float-noise
    * failure the cardinal-exactness design exists to prevent, reached through
@@ -1187,7 +1187,7 @@ describe("trigonometry", () => {
   });
 
   it("rejects a non-numeric argument, naming the kind", () => {
-    // The brief's own assertion checked only `toContain("requires a
+    // The first draft of this assertion checked only `toContain("requires a
     // number")`, which `Unary '-' requires a number, but got ...` also
     // satisfies — the identical neighbouring-path trap Task 7's review found
     // for the index and 'length' rejections ("naming the kind", above).
@@ -1203,7 +1203,7 @@ describe("trigonometry", () => {
   });
 
   /**
-   * Fix round 1, Minor 4: `sin`/`cos` is the first fold in this module that
+   * `sin`/`cos` is the first fold in this module that
    * can put `NaN` in the IR, and `applyBinary`'s `%`/`/` arms already refuse
    * to do that (division/modulo by zero throw rather than yielding `NaN`).
    *
@@ -1230,10 +1230,10 @@ describe("trigonometry", () => {
   /**
    * Same gap as Task 7's index and 'length' fixtures (see
    * "charges the index expression..." / "charges the length argument..."
-   * above): the brief's `intoGroup(ctx)` for the trig argument is unpinned
+   * above): the specified `intoGroup(ctx)` for the trig argument is unpinned
    * by every fixture above it. Verified directly — swapping `intoGroup(ctx)`
    * for a bare `ctx` in the sin/cos branch and running the whole suite left
-   * it entirely green (see task-8-report.md).
+   * it entirely green.
    *
    * The argument costs one level for the call's own parenthesis, matching
    * the index bracket exactly (not `length`'s argument, which pays a second

@@ -18,8 +18,8 @@ each with its own spec, plan, branch, review and merge:
 10A goes first because 10C's reduced-motion rewrite and 10D's runtime both
 consume the easing set. Fixing that set before them means each is built once.
 
-Every call below is the controller's, made under the owner's delegation, and
-is marked **(call)** where a reasonable builder could have chosen otherwise.
+Every decision below was made under the owner's delegation, and is marked
+**(call)** where a reasonable implementation could have chosen otherwise.
 
 ## 1. Intent
 
@@ -122,6 +122,22 @@ circle dot {
     (`animation-fill-mode: backwards`).
   - Before scheduling, a sequence step's `from` has no effect. An object
     therefore never shows a later step's start value at tick 0.
+  - **Amended 2026-11-27: a first step's `from` is shown at tick 0.** As
+    first written, the rule above also covered a sequence's first step,
+    which is scheduled at the end of the first tick. A sequence opening with
+    `animate { property: alpha, from: 0, to: 1 }` then showed the object at
+    its resting value at frame 0: every export's first frame and the paused
+    player. Nothing precedes a first step, so writing its `from` at tick 0
+    overwrites nothing earlier. The runtime now writes the first step's
+    `from` values when the sequence runner is created, for an `animate`
+    step and for every `animate` in a `parallel` step, and a first step's
+    `delay` holds `from` from tick 0, as for a top-level animation. The step
+    is still scheduled at the end of the first tick, so the one-tick delay
+    of its motion is unchanged; only the first frame's value changes. When
+    the object also has top-level `animate` or `physics` blocks, the
+    sequence waits for them, so its first step is preceded and is treated
+    like any later step: its `from` waits until it is scheduled. A later
+    step's `from` still never shows at tick 0.
 - **The start value.** With `from`, the runner's start value is `from`, not
   the current value. A `loop` restarts at `from`. A `yoyo` returns to `from`.
 - **Position and physics.** A `from` on `position` holds the object at `from`
@@ -177,7 +193,8 @@ animate { property: scale, from: 0.4, to: 1, duration: 0.8, easing: spring, boun
     overshoot.
 - **Where it lives.** In `easing.ts`, beside the other curves, through
   `detMath`. `easing.ts` must still import nothing from `pixi.js`.
-- **Overshoot and the protected ranges (amended 2026-11-27, Task 6 review).**
+- **Overshoot and the protected ranges (amended 2026-11-27, after the
+  design review of Task 6).**
   A spring's value goes past `to`. At `bounce: 0.9`, `y` reaches about
   1.73. So a scale spring toward a small target can go negative, and
   `alpha` can leave `[0, 1]`. The validator only sees the authored
@@ -213,6 +230,17 @@ animate { property: scale, from: 0.4, to: 1, duration: 0.8, easing: spring, boun
   - Degrees reduce through `%`. ECMA-262's `%` on doubles is exact.
   - Then fold by quadrant and octant symmetry into `[0°, 45°]`, so `sin(30)`
     can come out at exactly `0.5`, and convert with a single multiply.
+  - **Amended 2026-11-27: the conversion is not a single multiply.** One
+    rounded `d * (pi/180)` gives `sin(30) = 0.49999999999999994`, and
+    without the pi/180 tail `sin(45)` comes out one ulp below the double
+    nearest `sqrt(1/2)`. `detMath.ts`
+    instead forms the radian angle as a head and a tail: Dekker's exact
+    product of `d` (Veltkamp-split with `2^27 + 1`) and `DEG_TO_RAD`, the
+    double nearest pi/180 split into `DEG_TO_RAD_HI + DEG_TO_RAD_LO`, plus
+    `d * DEG_TO_RAD_TAIL`, the rounding error of `DEG_TO_RAD` against
+    pi/180. The kernels take the low part as their tail argument.
+    `firstOctant`'s comment records why each of `sin(30)` and `sin(45)`
+    needs it.
   - `exp` reduces by `ln 2`, splitting the constant in two (Cody–Waite) so the
     reduction is exact, and scales by a power of two built exactly.
 - **No fused multiply-add.** JavaScript never fuses `a * b + c`. 10D's C port
@@ -313,7 +341,7 @@ block for its object.
 7. The four checks in `AGENTS.md`, `check:export`, `check:pack` and
    `site-check.mjs`, with their output.
 
-## 7. Left to the builder
+## 7. Left to implementation
 
 - Exact polynomial degrees and coefficients, and whether to use a minimax or
   a Taylor fit, provided §3.3's accuracy bound is met and measured.
@@ -323,7 +351,7 @@ block for its object.
 
 ## 8. Process note
 
-No separate builder check was run on this document. The owner delegated
-every decision, so the builder's questions would have come back to the
-controller anyway. The plan's pre-flight scan and the per-task reviews stand
-in for it.
+No separate review of this document was held before planning: the owner
+delegated every decision, so its open questions had no one else to go to.
+The plan's scan against current source and the review of each task stand in
+for it.

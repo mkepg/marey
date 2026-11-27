@@ -636,8 +636,8 @@ lane while the square still crosses at its own pace.
   the pivot, zero is allowed and a negative value is not.
   ([Scene model](/reference/language/#scene-model))
 - `easing` is `linear`, `easeIn`, `easeOut`, `easeInOut` or `spring`, written
-  as a word; `easeInOut` is the default. `bounce` tunes a spring and means
-  nothing to the others. ([Animation](/reference/language/#animation),
+  as a word; `easeInOut` is the default. `bounce` tunes a spring, and writing
+  it with any other easing is an error (`TYPE_BOUNCE_WITHOUT_SPRING`). ([Animation](/reference/language/#animation),
   [spring](/reference/language/#spring))
 - Every `animate` block on a shape starts when the scene starts, and they run
   at the same time. ([Animation](/reference/language/#animation))

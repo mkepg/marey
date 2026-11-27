@@ -220,9 +220,11 @@ site creates a player only for cards near the visible area, and never more than
 
 The frame a player shows at a given moment is the frame `marey export` writes
 for that moment: both run the same tick loop over the same compiled scene. That
-holds in Chromium-based browsers. In Firefox or Safari, a scene that uses `sin`
-or `cos` can differ slightly from a Chromium export, because JavaScript engines
-may disagree on the last bit of those functions
+is measured in Chromium. Marey computes its own `sin`, `cos` and spring curve
+without the engine's versions of those functions, so they are built not to depend on the
+browser. Physics still goes through Matter.js, which uses the engine's own
+`sin` and `cos`, so in Firefox or Safari a scene with physics can differ
+slightly from a Chromium export. Neither browser has been measured
 ([Determinism](/reference/determinism/)).
 
 ## Frameworks

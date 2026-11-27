@@ -555,7 +555,7 @@ describe("handoff targets and duration ordering (P3A-8)", () => {
     // ever removes that specific hold, so which of the two the validator
     // checks against TYPE_HANDOFF_DURATION is not the whole story.
     //
-    // Fix round 1: TYPE_ONE_PHYSICS is general and no longer suppressed when a
+    // TYPE_ONE_PHYSICS is general and no longer suppressed when a
     // handoff animation is present (see the TYPE_ONE_PHYSICS describe block
     // below), so it now co-fires here alongside TYPE_HANDOFF_SCHEDULE_AMBIGUOUS
     // — the same two-independently-true-diagnostics shape TYPE_ONE_STORY and a
@@ -577,7 +577,7 @@ describe("handoff targets and duration ordering (P3A-8)", () => {
   });
 
   it("rejects a handoff whose parallel step starts two concurrent physics runners", () => {
-    // The external reviewer's second shape: a sequence/parallel carrying two
+    // The second shape found in review: a sequence/parallel carrying two
     // physics runners (2s and 0.25s) alongside the handoff animation. Built
     // via 'sequence { parallel { ... } }' because 'parallel' is only legal
     // directly inside a 'sequence' — writing it straight in the object body
@@ -1089,7 +1089,7 @@ describe("TYPE_ONE_PHYSICS", () => {
     expect(errorsFor(src)).toEqual([]);
   });
 
-  // Fix round 1: typeChecker/builder.ts's buildSequencesFromChildren builds every
+  // typeChecker/builder.ts's buildSequencesFromChildren builds every
   // physics child of a sequence/parallel step with a plain loop, not `.find` —
   // so a sequence (or parallel) with two direct physics phases is not the
   // .find()-truncation defect this rule guards against, and must stay legal.
@@ -1133,11 +1133,11 @@ describe("TYPE_ONE_PHYSICS", () => {
     expect(errs[0]).not.toContain("TYPE_ONE_PHYSICS]");
   });
 
-  // Fix round 1: the shipped rule suppressed itself entirely whenever the
+  // The rule as first shipped suppressed itself entirely whenever the
   // object had a handoff: true animate child, relying solely on
   // TYPE_HANDOFF_SCHEDULE_AMBIGUOUS to say anything about the physics count.
   // That suppression is removed — this is the general, handoff-independent
-  // rule the brief specified, and it must fire here regardless of whatever
+  // rule the design specified, and it must fire here regardless of whatever
   // else also fires.
   it("fires TYPE_ONE_PHYSICS on a handoff-adjacent object with two direct physics blocks", () => {
     const src = `
@@ -1199,7 +1199,7 @@ describe("scene duration", () => {
   });
 
   it("rejects a zero or negative duration", () => {
-    // The brief's fixture asserted "greater than zero" (spelled out), but the
+    // The first draft of this fixture asserted "greater than zero" (spelled out), but the
     // existing `key === "duration"` special case in validateLocalConstraint's
     // "positive" branch (validator.ts) produces "greater than 0" with a
     // digit — the same wording `animate.duration` and `physics.duration`

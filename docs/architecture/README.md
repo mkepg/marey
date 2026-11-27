@@ -309,7 +309,7 @@ found three Important defects and twenty Minor findings — consistent with
 every phase that has had one so far — a single fix wave addressed all of them,
 and the scoped re-review of that wave passed with no finding left open.
 Its execution notes record two of the plan's own claims
-that execution measured false, the ten fixture defects implementers found by
+that execution measured false, the ten fixture defects found during execution by
 verifying its code blocks rather than pasting them, and the deferred findings
 Phase 5A inherited — the first of which was that `compiler.worker.ts` had
 no automated test and was rewritten wholesale in that phase. **Phase 5A closed

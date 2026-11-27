@@ -356,12 +356,16 @@ staggered reveal. If the object showed its resting value for the length of the
 held, an object with `from: 0` and `delay: 2` is invisible from the first
 frame. CSS's `animation-fill-mode: backwards` is the same rule.
 
-**A sequence step's `from` has no effect before the step begins.** An object
-never shows a later step's start value at tick 0. And because a sequence's
-first step starts one tick in (see Sequencing), a `from` on a first step lands
-at tick 1, not tick 0. For a reveal that must be hidden from the very first
-frame, put the `from` on a top-level `animate`, or declare the hidden value on
-the object.
+**A later sequence step's `from` has no effect before the step begins.** An
+object never shows a later step's start value at tick 0. The first step is the
+exception: nothing comes before it, so its `from` is written at tick 0, and a
+sequence that opens with `from: 0` on `alpha` is hidden from the very first
+frame. That includes every `from` in a `parallel` first step, and a first step
+with a `delay` holds `from` from tick 0 through the delay. The first step's
+motion still starts one tick in (see Sequencing); only the first frame shows
+`from` earlier. If the object also has a top-level `animate` or `physics`
+block, the sequence waits for it, so its first step is scheduled like any
+later step and its `from` waits too.
 
 With `from`, `loop` restarts at `from` and `yoyo` returns to `from`. On
 `position`, `from` holds the object at `from` through the delay, under the same
@@ -434,8 +438,10 @@ Three rules keep a spring out of places it cannot work:
   which still moves as it ends.
 - `easing: spring` on `property: scale` of an object that takes part in physics
   is `TYPE_SPRING_SCALE_PHYSICS`, under the same test as
-  `TYPE_ZERO_SCALE_PHYSICS`. A collider that swings through zero is the hazard
-  that rule exists for. Use `easeOut` for scale there.
+  `TYPE_ZERO_SCALE_PHYSICS`. A spring can overshoot its target, which would
+  resize the body's collider past the scale you wrote, and toward a small
+  target it can reach zero, the hazard that rule exists for. Use `easeOut` for
+  scale there.
 
 With `yoyo`, the return leg plays the same curve on reversed progress, as every
 easing does. A spring's oscillation then sits at the far end of the return leg.
@@ -637,7 +643,11 @@ meant to finish with the scene must end at least one tick before it.
 
 `parallel` must be placed directly inside a `sequence` — it cannot sit at the
 scene root, directly inside a shape, or nested inside another `parallel`. A
-`parallel` block holds `animate` and `physics` children only. All of a
+`parallel` block holds `animate` and `physics` children only, and at most one
+`physics` block: every `physics` block in a `parallel` would drive the same
+body, and only the last one's settings would apply, so a second one is a
+compile error (`TYPE_PARALLEL_ONE_PHYSICS`), reported on each block after the
+first. Physics blocks in separate sequence steps are fine. All of a
 `parallel`'s children start together, and the sequence advances past that
 step only once every child has finished.
 

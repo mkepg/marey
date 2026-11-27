@@ -54,34 +54,33 @@ accepted or silently dropped.
   about arithmetic rather than about the grammar. Do not add an IR node for an
   operator; if a construct cannot be evaluated during parsing, it does not fit
   the language as it currently works.
-- **`sin`/`cos` are exact at the four cardinal angles on purpose, not by
-  accident.** `sinDegrees` (`parser/parseExpr.ts:692`) reduces the angle modulo
-  360 and returns `0`/`1`/`0`/`-1` outright at 0/90/180/270 instead of calling
-  `Math.sin`, because `Math.sin(Math.PI)` is `1.2246e-16`, not `0`. Under a
-  plain radian conversion **three of the four axis dots** in a radial layout
-  miss their axis — `Math.cos(π/2)` is `6.12e-17`, `Math.sin(π)` is
-  `1.22e-16`, `Math.cos(3π/2)` is `-1.84e-16`; only the 0° dot is exact in both
-  coordinates — and that noise reaches a committed IR golden as a permanent
-  eyesore rather than a rounding error wherever the centre offset is small
-  enough not to round it away. Its own doc comment
-  records the trade-off, including the cost: *off* the cardinal angles the
-  reduction is slightly **less** accurate than a plain conversion —
-  `sinDegrees(-30)` is `-0.5000000000000004` against `Math.sin(-30 * Math.PI /
-  180)`'s `-0.49999999999999994` — because the two feed a different `d` into
-  the same `Math.sin`. The pin for the exactness is the `it.each` table
-  `"evaluates %s in degrees"` (`parser/parseExpr.test.ts:1132-1137`), whose
-  `toMatchObject` compares primitives by exact equality: delete the four
-  early-return lines and `sin(180)` and `cos(90)` go red, along with the
-  `sin(-180)` row of `"reduces angles outside 0-360 before the cardinal check"`
-  (`:1161`). **Nothing else in the suite catches it** — that mutation was run:
-  3 failed / 599 passed, and `determinism.test.ts` stayed **6/6, including the
-  Phase 3B IR golden**. In particular `determinism.test.ts`'s "places twelve
-  dots on a circle of radius 180" does *not* pin cardinal exactness: at radius
-  180 about (400, 300) the mutation moves nothing at all — all twelve `(x, y)`
-  pairs are bit-identical either way, because `180 × 1.2246e-16` is under half
-  a ULP of a coordinate near 300 — and its `toBeCloseTo(…, 9)` tolerance
-  (5e-10) is four orders of magnitude past that noise regardless. What that
-  test does pin is the *sign* of the fallback, and only through its *per-index*
-  assertion; the distance-from-centre and distinct-point checks survive a sign
-  error, because negating the fallback reflects a 30°-spaced sample onto
-  itself.
+- **`sin`/`cos` fold through `detMath`, exact at the cardinal angles and
+  portable by construction.** The fold (`parser/parseExpr.ts:736`) calls `sinDeg`
+  and `cosDeg` from `src/compiler/detMath.ts` (Phase 10A), which replaced the
+  parser's own `sinDegrees` and its call to `Math.sin`. Two properties matter
+  here, and the module's header and `firstOctant`'s comment record how each is
+  reached:
+  - *Exact where an author expects it.* The angle is reduced in degrees with
+    `%` and folded by symmetry into [0°, 45°] with subtractions IEEE 754 does
+    exactly, so a cardinal angle reaches the polynomial as exactly 0 and
+    `sin(180)`, `cos(90)` and `cos(270)` are `0`, not float noise. A plain
+    radian conversion leaves `Math.sin(Math.PI)` at `1.2246e-16`, which puts
+    three of the four axis dots of a radial layout off their axis and leaves
+    that noise in committed IR goldens. The degrees-to-radians step is an
+    exact Dekker product plus the pi/180 tail, so `sin(30)` is exactly `0.5`
+    (the old `sinDegrees` gave `0.49999999999999994`, and `-0.5000000000000004`
+    for `sin(-30)`).
+  - *Portable.* Only `+ - * /`, `%`, `Math.floor`, `Math.abs` and
+    `Math.trunc` are used, each specified to the last bit, so the folded
+    literal should not depend on the engine. Before this, `Math.sin` itself
+    differed between Node's and Chromium's V8 (at 240°, `docs/determinism.md`)
+    and `eval/scenes-3b/radial-dots` hashed differently in the two; they now
+    agree (`eval/RESULTS-PHASE-10A.md`, section 4). Only those two V8 builds
+    were measured.
+
+  The pins are `parser/parseExpr.test.ts`'s `"evaluates %s in degrees"` and
+  `"folds %s to the exact value"` tables, whose `toMatchObject` compares
+  primitives by exact equality, and `detMath.test.ts`'s `"are exact at the
+  cardinal angles"`, `"give exactly 1/2 at 30 degrees and its reflections"`,
+  the ulp sweeps against a 160-bit reference, and the source scan `"calls no
+  Math function but floor, abs and trunc"`.

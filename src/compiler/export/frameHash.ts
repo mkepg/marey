@@ -24,10 +24,13 @@ import type { FrameSnapshot } from "../renderer/frameSampler";
  * `sin`/`cos` fold through `detMath.ts`, built from operations IEEE-754
  * specifies exactly, so no engine's `Math.sin` is involved. Of the eight,
  * `eval/scenes-3b/radial-dots` and `fireworks` hashed differently across the
- * two engines before that change, and match after it. **This says nothing about
- * any other scene:** Matter.js calls `Math.sin`/`Math.cos` itself when it
- * rotates bodies, so a scene with physics-driven rotation can still hash
- * differently across engines.
+ * two engines before that change, and match after it. Section 4.2 of
+ * `eval/RESULTS-PHASE-10A.md` then measured every hashed first-party scene
+ * whose source does not contain the word `physics`, 50 scenes, and all 50
+ * match. **This says nothing about physics scenes beyond those measured, or
+ * about other engines:** Matter.js calls `Math.sin`/`Math.cos` itself when it rotates
+ * bodies, so a scene with physics-driven rotation can still hash differently
+ * across engines, and only two V8 builds were compared.
  * `+`, `-`, `*`, `/` and `Math.sqrt` are the operations ECMA-262 requires to
  * be correctly rounded everywhere; `Math.sin`/`Math.cos` are not.
  */

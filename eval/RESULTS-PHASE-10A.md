@@ -2,7 +2,7 @@
 
 Measured on 2026-11-27 on branch `phase-10a`, at `91f5703` plus the commit
 carrying this file. Every number below was produced by the command beside it
-on that tree, re-run for this document; none is quoted from a task report.
+on that tree, re-run for this document; none is quoted from an earlier record.
 Raw output came from `.visual-check/10a/t8/` and `.visual-check/10a/`
 (git-ignored; re-run the commands to regenerate). The one exception is the
 "before" half of the cross-engine table in section 4, which is the output
@@ -60,8 +60,8 @@ node bin/marey.mjs export site/gallery/spring-cards.marey --format <f> --fps 30 
 |---|---|---|---|---|
 | png | 90 frames, 960x540 | 2 924 553 B | `45c40f2ddca331c7` | `636d8b6c` |
 | apng | 90 frames, 960x540 | 2 915 320 B | `0dc80513a1ae53c9` | `636d8b6c` |
-| webm | 90 frames, 1920x1080 | 378 481 B | `d7f1ea7f5a41742` | `636d8b6c` |
-| mp4 | 90 frames, 1920x1080 | 305 502 B | `6228bc7fdfb1d8396` | `636d8b6c` |
+| webm | 90 frames, 1920x1080 | 378 481 B | `d7f1ea7f5a417427` | `636d8b6c` |
+| mp4 | 90 frames, 1920x1080 | 305 502 B | `6228bc7fdfb1d839` | `636d8b6c` |
 | lottie | 90 frames, 960x540 | 156 769 B | `8ca72174c955427f` | `636d8b6c` |
 
 All five exited 0. Video is at twice the scene's size, as the export contract
@@ -89,8 +89,8 @@ file passes: 20 tests.
 
 **The browser harness on spring-cards.** `lottie-fit-check.mjs` takes no scene
 argument. It takes a per-frame document, a fitted document and a PNG
-directory. The per-frame document is the export the fitter replaced, so I built
-it from the same frames: the base commit's `lottieEncode.ts` (`cd14c3d`) was
+directory. The per-frame document is the export the fitter replaced, so it was
+built from the same frames: the base commit's `lottieEncode.ts` (`cd14c3d`) was
 put in the working tree for one export and restored with `git checkout`
 (`git diff --stat` empty afterwards; `dist` rebuilt from HEAD). It gave
 `frames 636d8b6c`, the same frame hash as every export above, and the fitted
@@ -129,8 +129,8 @@ properties:
 ### 1.3 The player's frame hash equals `marey export`'s
 
 `player-check.mjs` has fixed scenes in its `AGREEMENT_SCENES` and a fixed page
-(`tools/visual-check/player/agreement.html`); it takes no scene argument. I ran
-it twice.
+(`tools/visual-check/player/agreement.html`); it takes no scene argument. It was
+run twice.
 
 **Standing run, unchanged:** `node tools/visual-check/player-check.mjs --out .visual-check/10a/player`:
 
@@ -192,12 +192,12 @@ The bisection bracket is [1, 200]; every ω in the sweep is inside it.
   defining equation exactly, so the limit is ε by construction, and the
   measurement at `1 - 1e-12` lands 1.1e-15 above it. `easing.test.ts` asserts
   `<= ε` for 0.25, 0.5 and 0.9 and `ε(1 ± 1e-10)` for 0. This is the one place
-  the brief's "at most ε" holds to float noise rather than strictly.
-- **A different reading of "step" would fail, and I am recording it.** The
+  spec section 6 item 2's "at most ε" holds to float noise rather than strictly.
+- **A different reading of "step" would fail, and it is recorded here.** The
   last tick-to-tick move, `1 - y(119/120)`, is 1.09 ε at bounce 0 and 1.04 to
   1.07 ε at bounces 0.5 and 0.9, because the curve is still travelling between
   those two ticks. That is the curve's own slope, not a discontinuity, and the
-  spec bounds the discontinuity. I read the spec that way.
+  spec bounds the discontinuity, and this document reads it that way.
 - **Not just at one frame.** `springRuntime.test.ts` runs a looping, yoyoing
   spring for 5 cycles (600 ticks): every leg ends exactly on its end value and
   every tick of every cycle equals cycle 1's bit for bit.
@@ -234,7 +234,7 @@ cross-checked against a direct series. It never uses `Math.sin`, `Math.cos` or
 | `detExp` | every 0.001 on [-50, 0] | 0.8562 ulp | 2 |
 | `detExp` | every 0.1 on [-700, 700] | 0.8010 ulp | none (monotone and finite; error logged, not bounded) |
 
-The last row is a measurement the test does not bound; I report it as logged.
+The last row is a measurement the test does not bound; it is reported as logged.
 Exactness: `are exact at the cardinal angles` (0, 90, 180, 270 degrees, also
 negative and past one turn, and `360e12 + 90`), `give exactly 1/2 at 30 degrees
 and its reflections`, `give the correctly rounded sqrt(1/2) at 45 degrees, from
@@ -280,9 +280,9 @@ Aurora and dusk-hills agreed before and agree after, on their new hashes.
 Spec section 6 item 4 says "every non-physics, non-text scene". The table above
 is eight scenes, chosen in Task 3: the no-text scenes of `eval/scenes-3b`
 (compound-logo has a physics block) plus the trigonometry scenes elsewhere. That is not every one,
-so this section measures the rest. The set: every one of the 77 hashed entries
+so this section measures the rest. The set: every one of the 78 hashed entries
 in `sceneFrameHashes.test.ts`'s baseline whose source has no `physics` word
-(49 scenes; 28 contain the word. `eval/scenes-3b/radial-dots` mentions it only in
+(50 scenes; 28 contain the word. `eval/scenes-3b/radial-dots` mentions it only in
 a comment, and `eval/scenes-3b/compound-logo` has a physics block on a group;
 both are in 4.1 regardless).
 Each was run through Chromium at 4 s and 30 fps and compared with its baseline
@@ -338,8 +338,24 @@ entry (the Node value, which `npm test`'s `matches the recorded baseline` pins).
 | tools/visual-check/scenes/lottie-opacity-flatten.marey | 0e715d13 | 0e715d13 | match |
 | tools/visual-check/scenes/lottie-outpoint.marey | 44e44158 | 44e44158 | match |
 | tools/visual-check/scenes/lottie-version-field.marey | 28d446a7 | 28d446a7 | match |
+| tools/visual-check/scenes/spring-from.marey | 59bc2edc | 59bc2edc | match |
 
-48 of 49 ran in this loop and all 48 match. The 49th, `src/examples/dusk-hills`, was skipped by the loop (its input list had no trailing newline) and is measured in 4.1: Node and Chromium both `64a175b5`. So 49 of 49 match, and none differs. Output: `.visual-check/10a/t8/chromium-all.txt`.
+The first run, at `91f5703`, covered the 49 scenes above `spring-from`: 48 ran in its loop and all 48 matched, and the 49th, `src/examples/dusk-hills`, was skipped by the loop (its input list had no trailing newline) and is measured in 4.1: Node and Chromium both `64a175b5`. Output: `.visual-check/10a/t8/chromium-all.txt`.
+
+`tools/visual-check/scenes/spring-from.marey` was added after the whole-branch
+review, because no hashed scene used `from` or `spring`: every tracked scene
+that did had text. It has no text and no physics, and uses `from` and
+`easing: spring` at `bounce` 0, 0.25 and 0.9 across scale, position and alpha,
+with a sequence whose first step has a `from`. With the runtime change that
+shows a first step's `from` at tick 0 reverted, it hashes `ded39bc7` in Node,
+so the entry also pins that change. The whole set of 50 was then run again
+through Chromium on the final tree, with the input list ending in a newline.
+47 matched in the loop; three (`eval/scenes/slide-card`, `spin-triangle` and
+`stagger-bars`) printed no hash, while a full `npm test` ran beside the loop
+and loaded the machine, and on a rerun alone each printed its baseline hash
+(`19227344`, `013d9036`, `0a974a0c`). So 50 of 50 match, and none differs.
+Output: `.visual-check/10a/fixwave/chromium-all.txt` and
+`chromium-rerun.txt`.
 
 ## 5. Hash movement
 
@@ -393,7 +409,8 @@ gains `"from": null` and `"bounce": 0.25`, the two new IR fields at their
 defaults.
 
 **The table is closed over every tracked scene.** `git ls-files '*.marey' | wc
--l` is 111: the 110 scenes of Task 1 plus `spring-cards`. A script that
+-l` was 111 at `91f5703`: the 110 scenes of Task 1 plus `spring-cards`.
+`spring-from` (section 4.2) makes it 112, with 78 hashed entries. A script that
 normalises the table's keys (relative to `src/compiler/renderer/`) and diffs
 them against `git ls-files '*.marey'`:
 
@@ -547,6 +564,40 @@ site-check: all passed
 
 All 52 pages report `0 problem(s)`; the run took 11 min 29 s.
 
+### 7.5 After the whole-branch review
+
+The review's fixes landed as three code commits after `9bde596`: `26fa106`
+(a sequence's first-step `from` is shown at tick 0), `96c9834` (one
+`TYPE_ANIM_COLOR_TARGET` per block, and truer wordings for
+`TYPE_PARALLEL_ONE_PHYSICS` and `TYPE_SPRING_SCALE_PHYSICS`) and `658f583`
+(the `spring-from` fixture and the free-body lock's fall). No existing
+frame hash moved. The four checks passed on the tree of each of the three
+commits (2218, 2219 and 2220 tests; 111, 111 and 112 files checked), and on
+the final tree:
+
+```
+$ npm test
+ Test Files  121 passed (121)
+      Tests  2220 passed (2220)
+
+$ npx vitest run --config eval/vitest.config.ts
+      Tests  5 passed (5)
+
+$ npm run build
+✓ built in 3.45s        exit 0
+
+$ npm run build:cli && node bin/marey.mjs check $(git ls-files '*.marey')
+check exit 0; 112 lines, 112 ending ": ok"
+```
+
+The closed table against `git ls-files '*.marey'`: 112 keys and 112 files,
+none missing on either side, 78 hashes and 34 `"text"`
+(`.visual-check/10a/fixwave/closed-table.txt`). Section 4.2's Chromium run
+was repeated on this tree. `check:export`, `check:pack` and `site-check.mjs`
+were not re-run: the fixes change no export, packaging or site code, only
+the runtime's tick-0 state for a sequence whose first step has a `from`, and
+no first-party scene outside `spring-from` has one.
+
 ## What this does not show
 
 - **Matter.js's own trigonometry.** `detMath` makes Marey's own `sin`, `cos`
@@ -557,13 +608,15 @@ All 52 pages report `0 problem(s)`; the run took 11 min 29 s.
   before (their `Math.sin` and `Math.cos` are not the same function), and agree
   now. SpiderMonkey and JavaScriptCore were not run. What `detMath` uses
   (`floor`, `abs`, `trunc`, multiplication, addition) is specified exactly by
-  IEEE 754 and ECMAScript, so I expect agreement, but I did not measure it.
+  IEEE 754 and ECMAScript, so agreement is expected, but it was not measured.
   That depends on no engine contracting `a * b + c` into a fused multiply-add;
   ECMAScript forbids it, and `detMath.ts` states the requirement for a port.
-- **Text scenes have no hashes.** 34 of the 111 tracked scenes (including
+- **Text scenes have no hashes.** 34 of the 112 tracked scenes (including
   spring-cards) are recorded as `"text"` in the baseline because text needs a
   DOM. Their agreement was not compared headless against Chromium. For
-  spring-cards the player-versus-export hash (1.3) is the only hash evidence.
+  spring-cards the player-versus-export hash (1.3) is the only hash evidence;
+  `spring-from` (4.2) is the hashed, cross-engine evidence for `from` and
+  `spring`.
 - **`site/gallery/domino-run`'s moved hash was not measured across engines.**
   It is a physics scene and calls `sin`/`cos`, so its new hash `b77f71d6` is
   recorded in the baseline but measured only in Node, and it could still differ
@@ -586,18 +639,18 @@ All 52 pages report `0 problem(s)`; the run took 11 min 29 s.
 - **`spring` is now a reserved word.** It lexes as an easing keyword like
   `easeIn`, so a scene that names an object, a `let` or a template parameter
   `spring` stops compiling. No tracked scene does (`marey check` passes on all
-  111), and `LANGUAGE.md` says so, but a third-party scene would break, and the
+  112), and `LANGUAGE.md` says so, but a third-party scene would break, and the
   parser still gives no hint for an easing token used as a name.
 - **The cross-engine claim is limited to the scenes listed.** Section 4.1 is
   eight scenes; 4.2 is the non-physics, non-text scenes of the baseline, matched
   by the absence of the word `physics` in the source. A scene that builds a
-  physics body without the word (there is none that I know of) would be in 4.2
+  physics body without the word (none is known) would be in 4.2
   by accident, and a non-physics scene with `physics` in a comment would be
   left out of it.
-- **A test failure I did not reproduce.** During Task 3 one `npm test` run
+- **A test failure that was not reproduced.** During Task 3 one `npm test` run
   reported 1 failed of 2136 and the failing test was not recorded; three later
   full runs and every run for this document (121 files, 2212 tests) were green.
-  I have no explanation for it. It may have been a timeout under load.
+  There is no explanation for it. It may have been a timeout under load.
 - **Lottie on spring-cards is judged against the per-frame encoder's output on
   the same frames,** not against an independent oracle, in lottie-web and
   dotlottie-web only. The text in it differs from the PNG export by up to 120 levels

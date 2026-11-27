@@ -285,10 +285,12 @@ A page with more than 16 players in view at once still exceeds the cap.
 
 **Agreement with export.** The frame the player shows at tick *t* is the frame
 `marey export` samples at *t*: both run the same tick loop over the same
-Scene IR. That holds in Chromium-family browsers. `docs/determinism.md` records
-two V8 builds disagreeing on the last bit of `Math.sin`, so in Firefox or
-Safari an embed can differ from a Chromium export on a scene that uses `sin`
-or `cos`.
+Scene IR. That is measured in Chromium. Marey's own `sin`, `cos` and spring
+curve avoid the engine's `Math.sin` and `Math.cos`, and every measured scene
+without physics or text hashes the same in Node and Chromium
+(`docs/determinism.md`). Physics still goes through Matter.js's own
+`Math.sin` and `Math.cos`, so in Firefox or Safari an embed of a physics scene
+can differ from a Chromium export, and no scene has been measured in either.
 
 **Frameworks.** A custom element works as-is; Vue-based tools such as VitePress
 need the tag declared as a custom element.

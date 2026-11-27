@@ -1,7 +1,5 @@
 # Phase 10A — `from`, spring easing, portable trigonometry and follow-ups: implementation plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Add `from` and `easing: spring` (with `bounce`) to `animate`, compute
 trigonometry portably, reject two physics blocks in one `parallel`, and
 frame-hash every first-party scene.
@@ -34,7 +32,7 @@ Matter.js, Playwright for the browser checks.
   - `npm run build:cli && node bin/marey.mjs check $(git ls-files '*.marey')`
 - Run the shell from `C:\Users\gomez\repos\PROGRAMMING_LANGUAGE\marey`, with a capital `C:`. With a lower-case drive letter, vitest reports "no tests".
 - `core.autocrlf` is on: judge changes with `git diff --stat -- <path>`, never `git status`.
-- Branch `phase-10a`. Do not push; the controller merges and pushes.
+- Branch `phase-10a`. Nothing is pushed until the branch is merged; the merge commit is pushed.
 - Browser checks run against `npx vite --port 5199 --strictPort`. Kill it afterwards and confirm the port is free.
 - `easing.ts` and `detMath.ts` import nothing from `pixi.js`.
 - `bounce` on `animate`: number, range `[0, 0.9]`, default `0.25`. Settle tolerance `ε = 1e-4`.
@@ -42,7 +40,7 @@ Matter.js, Playwright for the browser checks.
 - New diagnostic codes, spelled exactly: `TYPE_BOUNCE_WITHOUT_SPRING`, `TYPE_HANDOFF_SPRING`, `TYPE_PARALLEL_ONE_PHYSICS`.
 - `detMath` functions are within 2 ulp of the correctly rounded value, measured, and exact at the cardinal angles (0, 90, 180, 270 degrees).
 - `from` or `spring` alone moves no existing frame hash. Only Task 3 (trig) may move hashes, and only for scenes that call `sin` or `cos`.
-- For every rule a task adds, delete the line that implements it, run the suite, see red, and restore. Report the failing output in the task report (engineering-lessons §2c).
+- For every rule a task adds, delete the line that implements it, run the suite, see red, and restore. Record the failing output in the exit evidence (engineering-lessons §2c).
   - A gap this check finds in a behaviour the task *requires* is in scope.
   - A gap in an adjacent behaviour is filed, not fixed.
 - Site version notes read "0.8.0 or later". Do not change `package.json`'s version.
@@ -68,7 +66,7 @@ Corpus only, and no production change. This fixes the "before" values for the wh
 - Produces: `BASELINE: Readonly<Record<string, string>>`, where each value is an 8-hex hash, `"text"` or `"error"`. Later tasks edit entries and give a reason in their commit message.
 
 - [ ] **Step 1: Widen `SOURCES` to every tracked `.marey` file.**
-  Use one `import.meta.glob("../../../**/*.marey", { query: "?raw", import: "default", eager: true })` that excludes `node_modules`, `dist`, `.visual-check` and `.superpowers`, with `!` patterns.
+  Use one `import.meta.glob("../../../**/*.marey", { query: "?raw", import: "default", eager: true })` that excludes `node_modules`, `dist` and every dot-directory (git-ignored local state such as `.visual-check`), with `!` patterns.
 - [ ] **Step 2: Add the closed-table test** `"has an entry for every first-party scene and no stale entries"`:
   ```ts
   expect(Object.keys(SOURCES).sort()).toEqual(Object.keys(BASELINE).sort());
@@ -110,7 +108,7 @@ Corpus only, and no production change. This fixes the "before" values for the wh
   - Degrees: exact `%` reduction, then quadrant and octant folding into [0°, 45°], then one multiply by `π/180`, then fixed-degree odd and even polynomials.
   - Exp: Cody–Waite reduction by `ln 2`, with a two-part constant so the first product is exact. Evaluate a polynomial on `[-ln2/2, ln2/2]` and build `2^k` exactly, multiplying by powers of two.
   - The header documents the no-FMA requirement for any port (`-ffp-contract=off`).
-- [ ] **Step 4: Run the tests** and see them pass. Record each measured max ulp in the report.
+- [ ] **Step 4: Run the tests** and see them pass. Record each measured max ulp in the exit evidence.
 - [ ] **Step 5: Commit.** Subject: `feat(compiler): add portable sin, cos and exp`
 
 ### Task 3: Parse-time `sin`/`cos` through `detMath`, measured across engines
@@ -123,8 +121,8 @@ Corpus only, and no production change. This fixes the "before" values for the wh
 
 - [ ] **Step 1: Replace the helper.** `parseExpr.ts`'s `sinDegrees`, and whatever computes `cos`, now call `sinDeg`/`cosDeg`. Move the float-noise rationale into `detMath.ts`'s docstring.
 - [ ] **Step 2: Run the suite.**
-  - The determinism snapshot's trig case may change in last digits. List every moved literal, old → new, in the report. Update the snapshot with `-u` only after reading that diff.
-  - Hash-table entries may change only for scenes whose source contains `sin(` or `cos(`. Confirm each one by grep. If any other hash moves, stop and report.
+  - The determinism snapshot's trig case may change in last digits. List every moved literal, old → new, in the exit evidence. Update the snapshot with `-u` only after reading that diff.
+  - Hash-table entries may change only for scenes whose source contains `sin(` or `cos(`. Confirm each one by grep. If any other hash moves, stop and find out why before going on.
 - [ ] **Step 3: Measure across engines** with `tools/visual-check/export-check.mjs`, as `eval/RESULTS-GATE-B.md` lines 95–115 did, against a fresh Vite server on 5199:
   - Run `radial-dots.marey` and `compound-logo.marey`, plus every non-physics, non-text scene in `eval/scenes-3b/`.
   - Record headless and Chromium hashes for each, before this task (on Task 2's commit) and after.
@@ -244,10 +242,10 @@ Corpus only, and no production change. This fixes the "before" values for the wh
 - Modify:
   - `docs/LANGUAGE.md`: the Animation section (`from`, `easing` values, `bounce`), the diagnostics it lists, and "Limits the compiler enforces" if `bounce` belongs there.
   - `site/content/learn/animate.md` and/or `site/content/learn/timing.md`: one live sample each for `from` and `spring`, each with a "0.8.0 or later" note in the site's existing version-note form.
-  - `site/gallery/easing-race.marey` and `.md`: add a spring lane and use `from`. Or add a new gallery entry if the race cannot take it cleanly, and say which in the report.
+  - `site/gallery/easing-race.marey` and `.md`: add a spring lane and use `from`. Or add a new gallery entry if the race cannot take it cleanly, and say which in the commit message.
   - `docs/specs/2026-09-09-marey-engineering-roadmap-design.md`: a dated amendment in §13 recording Phase 10 (10A–10D) and pointing to this spec.
-  - `docs/architecture/README.md` and `docs/architecture/roadmap-and-process.md`: a 10A status line, written in the merged form (the controller fixes the hash after merge).
-- Check that Monaco completion lists `spring`, `from` and `bounce`. It derives from `LANGUAGE_CONTRACT`. If anything is hand-listed, report it rather than adding a second list.
+  - `docs/architecture/README.md` and `docs/architecture/roadmap-and-process.md`: a 10A status line, written in the merged form (the merge commit's hash is filled in after the merge).
+- Check that Monaco completion lists `spring`, `from` and `bounce`. It derives from `LANGUAGE_CONTRACT`. If anything is hand-listed, record it as a finding rather than adding a second list.
 
 - [ ] **Step 1: Write the docs.** Every new fence compiles under `languageDocs.test.ts`.
 - [ ] **Step 2: Run the site build and check.** Run `npm run build`, then `node tools/visual-check/site-check.mjs` per `tools/visual-check/README.md`, against a fresh 5199 server. It should pass. Kill the server.
