@@ -380,7 +380,7 @@ explicitly rather than quietly deviating.
     Plan: `docs/plans/2026-11-27-phase-10a-from-spring-and-determinism.md`.
 - **Phase 10B — layout, measured first** (roadmap §13, R11; the second of
   10A–10D).
-  - **Status: merged into `main` (`MERGE_SHA`); evidence in
+  - **Status: merged into `main` (`6163c48`); evidence in
     `eval/RESULTS-PHASE-10B-MEASUREMENT.md`.** A blind round of 36 layout
     scenes, judged by a geometry checker validated on reference scenes, found
     no layout errors, so no layout primitive is built (spec §2.4) and the

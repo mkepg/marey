@@ -200,7 +200,7 @@ diagnostics (`TYPE_PARALLEL_ONE_PHYSICS`, `TYPE_BOUNCE_WITHOUT_SPRING`,
 plan: `docs/plans/2026-11-27-phase-10a-from-spring-and-determinism.md`.
 `roadmap-and-process.md`'s Phase 10A bullet carries the same status.
 
-**10B — layout, measured first, is merged into `main` (`MERGE_SHA`); evidence
+**10B — layout, measured first, is merged into `main` (`6163c48`); evidence
 in `eval/RESULTS-PHASE-10B-MEASUREMENT.md`.** R11 required authorability
 evidence before any layout primitive. Four blind model authors wrote nine
 layout briefs each, and all 36 scenes passed every clause of a geometry
