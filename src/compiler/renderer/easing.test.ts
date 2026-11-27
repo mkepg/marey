@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { evaluateEasing, releaseEndOf, springOmega, SPRING_EPSILON, type ReleaseEnd } from "./easing";
+import easingSource from "./easing.ts?raw";
 
 const EASINGS = ["linear", "easeIn", "easeOut", "easeInOut"] as const;
 const RELEASES: ReleaseEnd[] = [null, "end", "start"];
@@ -211,5 +212,34 @@ describe("evaluateEasing: spring", () => {
     for (let i = 0; i <= 100; i++) {
       expect(evaluateEasing(i / 100, "spring", null, b)).toBe(evaluateEasing(i / 100, "spring", null, 0));
     }
+  });
+});
+
+describe("spring portability", () => {
+  // The spring must be bit-identical across engines and a C port, so it may
+  // reach no Math function an engine is free to approximate (detMath.ts
+  // explains which). Comments are stripped first so prose may name them.
+  const code = easingSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+
+  it("reads the real source", () => {
+    expect(code).toContain("function springCurve");
+    expect(code).toContain("export function springOmega");
+    expect(code).toContain("Math.sqrt");
+  });
+
+  it("calls no Math function but sqrt, which IEEE 754 rounds correctly", () => {
+    const uses = code.match(/\bMath\b(?:\s*\.\s*\w+)?/g) ?? [];
+    expect(uses.filter((u) => u.replace(/\s+/g, "") !== "Math.sqrt")).toEqual([]);
+  });
+
+  it("uses no exponentiation operator", () => {
+    expect(code).not.toMatch(/\*\*/);
+  });
+
+  it("takes its exponential and trigonometry from detMath", () => {
+    const imports = code.match(/^\s*import\s*\{([^}]*)\}\s*from\s*"\.\.\/detMath";/m);
+    expect(imports).not.toBeNull();
+    const names = imports![1].split(",").map((n) => n.trim()).filter(Boolean);
+    expect(names).toEqual(expect.arrayContaining(["detExp", "sinDeg", "cosDeg"]));
   });
 });
