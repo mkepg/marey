@@ -1,0 +1,17 @@
+- toolbar-row: unsure whether a `let` that divides an expression (`left`) is fine to use before `scene`; assumed yes.
+- mixed-row: unsure that `origin: (0, 1)` on a rectangle puts its bottom-left corner on `position` (taken from the docs on origin); the left edges are built by hand-summing widths because there is no running-sum operator.
+- mixed-row: unsure whether a list literal may hold expressions that index an earlier list (`widths[0]`); assumed yes.
+- spread-dots: the gap works out to 92.5 (a fraction); unsure fractional pixel positions are acceptable.
+- spread-dots: no way to loop a running sum, so each left edge is written out by hand; the arithmetic is easy to get wrong.
+- left-stack: used `left + w / 2` as the centre instead of `origin: (0, 0.5)`; unsure which the checker prefers, both give left edge 120.
+- badge-row: "reusable badge" taken as a zero-parameter template (`template Badge()`); unsure an empty parameter list is valid for a template that is declared rather than just used (the Sun example uses it).
+- badge-row: the brief gives no colours; chose cyan disc and white square, with the square drawn after the disc so it sits on top.
+- card-grid: the card colours alternate by `(row + col) % 2`; the brief gives no colour, so unsure whether plain would be safer.
+- stack-columns: read "80 px apart" as the gap between neighbouring column edges, with each column 40 wide, so centres are 120 apart; the brief does not state column width explicitly.
+- stack-columns: unsure whether the template group's children position correctly (group-local) when a `generate` sits inside a template with no parameters.
+- ring-12: unsure `cos(-90)` and `sin(-90)` are exact for a negative multiple of 90 (docs say exact at multiples of 90).
+- ring-12: the brief does not say whether "evenly spaced on a circle of radius 200" means circle centres on that circle; assumed centres.
+- clock-ticks: unsure whether ticks sit with their centre on radius 220 (what I did) or with the outer or inner end on it.
+- clock-ticks: rotation is `i * 360 / count` (tick's long side is the vertical axis at 0 degrees); unsure about the sign and the quarter-turn offset, though I derived that the radial axis at angle a equals rotation a - 90 modulo 180.
+- clock-ticks: the brief says "4x16 rectangles" so I took width 4, height 16 with the long side vertical.
+- all: scenes omit `duration` (indefinite) because nothing animates; unsure this is fine for a static check.

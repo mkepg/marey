@@ -1,0 +1,17 @@
+// Twelve circles on a ring of radius 200, first at 12 o'clock, clockwise.
+let n = 12
+let ring = 200
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate i in 0 to n - 1 {
+    let a = i * 30
+    circle dot {
+      position: (400 + ring * sin(a), 300 - ring * cos(a))
+      radius: 10
+      color: orange
+    }
+  }
+}

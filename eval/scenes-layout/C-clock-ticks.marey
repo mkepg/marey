@@ -1,0 +1,20 @@
+// Sixty ticks every 6 degrees, centres on a radius-220 ring about (400, 300).
+// A 4 x 16 rectangle's long side is vertical, which is radial at 12 o'clock,
+// so its rotation is the clock angle k * 6 (0 at the top, clockwise).
+let count = 60
+let ring  = 220
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate k in 0 to count - 1 {
+    let angle = k * 6 - 90
+    rectangle tick {
+      position: (400 + ring * cos(angle), 300 + ring * sin(angle))
+      size: (4, if k % 5 == 0 then 32 else 16)
+      rotation: k * 6
+      color: white
+    }
+  }
+}

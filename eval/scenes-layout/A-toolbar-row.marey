@@ -1,0 +1,18 @@
+// 6 squares of 60, 5 gaps of 20: row is 460 wide, left edge 170, first centre 200.
+let side = 60
+let gap  = 20
+let step = side + gap
+let left = 400 - (6 * side + 5 * gap) / 2
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate i in 0 to 5 {
+    rectangle tool {
+      position: (left + side / 2 + i * step, 300)
+      size: (side, side)
+      color: cyan
+    }
+  }
+}

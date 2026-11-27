@@ -1,0 +1,16 @@
+// One square is 2 px out of its column.
+let xs = [280, 280, 280, 280, 400, 402, 400, 400, 520, 520, 520, 520]
+let ys = [225, 275, 325, 375, 225, 275, 325, 375, 225, 275, 325, 375]
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate x, i in xs {
+    rectangle cell {
+      position: (x, ys[i])
+      size: (40, 40)
+      color: green
+    }
+  }
+}

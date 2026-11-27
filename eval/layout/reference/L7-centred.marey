@@ -1,0 +1,22 @@
+// The whole block is 2 px right of centre.
+let colx = [282, 402, 522]
+let offs = [-75, -25, 25, 75]
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate cx, c in colx {
+    group column {
+      position: (cx, 300)
+
+      generate dy in offs {
+        rectangle cell {
+          position: (0, dy)
+          size: (40, 40)
+          color: green
+        }
+      }
+    }
+  }
+}

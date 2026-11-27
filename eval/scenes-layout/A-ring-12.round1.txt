@@ -1,0 +1,16 @@
+// Angles are degrees from the right, clockwise; -90 is 12 o'clock.
+let ring = 200
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate i in 0 to 11 {
+    let angle = i * 30 - 90
+    circle bead {
+      position: (400 + ring * cos(angle), 300 + ring * sin(angle))
+      radius: 10
+      color: yellow
+    }
+  }
+}

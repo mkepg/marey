@@ -1,0 +1,18 @@
+// Three 30 px bars, 30 px apart: height 90 + 60 = 150, so the top is at
+// 300 - 75 = 225. Tops: 225, 285, 345. Left edges on x = 120 via origin (0, 0).
+let widths = [300, 180, 240]
+let tops   = [225, 285, 345]
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate w, i in widths {
+    rectangle bar {
+      position: (120, tops[i])
+      origin: (0, 0)
+      size: (w, 30)
+      color: yellow
+    }
+  }
+}

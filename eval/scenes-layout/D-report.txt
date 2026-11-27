@@ -1,0 +1,11 @@
+- toolbar-row: unsure whether a position-computing expression like 200 + i * 80 is the intended style, versus a hand-computed centre list; no helper for "centre a row" exists, so I did the arithmetic by hand (row 460 wide, left 170).
+- mixed-row: unsure how to accumulate left edges across items of different widths; there are no running sums, so I hand-computed the lefts list [226, 282, 418, 514] and bottom-aligned by centring at y = 375.
+- spread-dots: equal gaps of 92.5 needed hand arithmetic (no division-free path); I hardcoded centres [110, 242.5, 385, 537.5, 685] and am unsure fractional coordinates are fine.
+- left-stack: unsure whether to use origin: (0, 0.5)-style left anchoring; I instead computed centre x = 120 + w / 2 and hand-derived the vertical centres 240, 300, 360.
+- badge-row: unsure whether an empty-parameter template `template Badge()` is allowed with `use Badge() badge { ... }` (the Sun example suggests yes); also unsure the square should be drawn after the circle to sit on top (source order assumed).
+- card-grid: unsure whether the card names card_<col>_<row> are acceptable for nested generate; hand-computed 256 + 144 * col and 144 + 104 * row.
+- stack-columns: "80 px apart" read as edge-to-edge gap per the brief convention (centres 120 apart); unsure whether a template with an inner generate, used inside generate, is the best structure, and its centre-based (0, 0) assumes the block's vertical middle.
+- ring-12: unsure that clockwise on screen equals increasing angle with y down (I believe so since sin is positive downward); unsure cos/sin of negative degrees (-90) are exact.
+- clock-ticks: unsure whether radius 220 refers to the tick centre or its outer/inner end; I placed the tick centres on 220, so long ticks extend 16 each way and short ones 8.
+- clock-ticks: unsure whether size (4, 16) with rotation k * 6 is right versus size (16, 4) rotated by k * 6 - 90; I reasoned the first keeps the 4x16 dimensions as written in the brief.
+- clock-ticks: unsure that the `if` inside a size point `(4, if ... then 32 else 16)` parses without extra parentheses (the clock lesson does the same with both components, so likely fine).

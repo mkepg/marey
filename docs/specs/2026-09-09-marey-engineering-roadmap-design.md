@@ -423,6 +423,16 @@ second non-browser backend.
 > 10D both consume the easing set. Design:
 > `2026-11-27-marey-phase-10a-from-spring-and-determinism-design.md` §0. The
 > finish line (§12) stands. This is work past it.
+>
+> **Amended 2026-11-27 (10B):** R11's measurement ran before any layout
+> primitive was built. Four blind model authors wrote nine layout briefs each;
+> all 36 scenes compiled on the first pass and passed every geometry clause, so
+> under the rule fixed beforehand none of `row`, `column`, `grid`, `radial`,
+> `distribute` or `align` is built, and the language does not change. The one
+> recurring friction, no running sum over a list for mixed widths, is recorded
+> as a candidate, here and in the results file, and not built.
+> Evidence: `eval/RESULTS-PHASE-10B-MEASUREMENT.md`; design:
+> `2026-11-27-marey-phase-10b-layout-design.md`.
 
 ---
 

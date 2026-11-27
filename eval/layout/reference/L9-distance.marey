@@ -1,0 +1,18 @@
+// Tick 7 is 2 px farther out.
+let ring = 220
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate i in 0 to 59 {
+    let a = i * 6
+    let h = if i % 5 == 0 then 32 else 16
+    rectangle tick {
+      position: (400 + (ring + if i == 7 then 2 else 0) * sin(a), 300 - (ring + if i == 7 then 2 else 0) * cos(a))
+      size: (4, h)
+      rotation: a
+      color: white
+    }
+  }
+}

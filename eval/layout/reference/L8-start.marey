@@ -1,0 +1,17 @@
+// The ring starts at 3 o'clock instead of 12.
+let n = 12
+let ring = 200
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate i in 0 to n - 1 {
+    let a = 90 + i * 30
+    circle dot {
+      position: (400 + ring * sin(a), 300 - ring * cos(a))
+      radius: 10
+      color: orange
+    }
+  }
+}

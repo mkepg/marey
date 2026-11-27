@@ -1,0 +1,14 @@
+// Six 60x60 squares, 20 apart. Row width 6*60 + 5*20 = 460, left edge 170.
+// First centre 170 + 30 = 200, then 80 per step.
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate i in 0 to 5 {
+    rectangle tool {
+      position: (200 + i * 80, 300)
+      size: (60, 60)
+      color: cyan
+    }
+  }
+}

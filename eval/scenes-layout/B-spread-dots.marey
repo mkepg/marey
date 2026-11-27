@@ -1,0 +1,25 @@
+let radii = [10, 30, 20, 40, 15]
+let first = 100
+let last  = 700
+// Total diameter is 2 * (10 + 30 + 20 + 40 + 15) = 230; the rest of the span is gaps.
+let gap   = (last - first - 2 * (10 + 30 + 20 + 40 + 15)) / 4
+
+// Left edge of each circle.
+let lefts = [first,
+             first + 2 * radii[0] + gap,
+             first + 2 * radii[0] + 2 * radii[1] + 2 * gap,
+             first + 2 * radii[0] + 2 * radii[1] + 2 * radii[2] + 3 * gap,
+             first + 2 * radii[0] + 2 * radii[1] + 2 * radii[2] + 2 * radii[3] + 4 * gap]
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate r, i in radii {
+    circle dot {
+      position: (lefts[i] + r, 300)
+      radius: r
+      color: magenta
+    }
+  }
+}

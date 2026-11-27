@@ -1,0 +1,26 @@
+let widths = [40, 120, 80, 60]
+let gap    = 16
+let total  = 40 + 120 + 80 + 60 + 3 * gap
+let x0     = 400 - total / 2
+
+// Left edge of each rectangle: the row's left edge plus the widths and gaps before it.
+let lefts = [x0,
+             x0 + widths[0] + gap,
+             x0 + widths[0] + widths[1] + 2 * gap,
+             x0 + widths[0] + widths[1] + widths[2] + 3 * gap]
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  // origin (0, 1) pins each rectangle's bottom-left corner to its position,
+  // so every bottom edge sits on y = 400.
+  generate w, i in widths {
+    rectangle block {
+      position: (lefts[i], 400)
+      origin: (0, 1)
+      size: (w, 50)
+      color: orange
+    }
+  }
+}

@@ -1,0 +1,18 @@
+// One square sits 2 px below the others.
+let xs = [200, 280, 360, 440, 520, 600]
+let ys = [300, 300, 302, 300, 300, 300]
+let ws = [60, 60, 60, 60, 60, 60]
+let hs = [60, 60, 60, 60, 60, 60]
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate x, i in xs {
+    rectangle shape {
+      position: (x, ys[i])
+      size: (ws[i], hs[i])
+      color: cyan
+    }
+  }
+}

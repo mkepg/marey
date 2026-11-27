@@ -1,0 +1,17 @@
+// Heights 3 x 30 plus 2 gaps of 30 = 150, so the stack spans y 225..375.
+// origin (0, 0.5) pins each bar's left-middle point to its position.
+let widths = [300, 180, 240]
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate w, i in widths {
+    rectangle bar {
+      position: (120, 240 + i * 60)
+      origin: (0, 0.5)
+      size: (w, 30)
+      color: yellow
+    }
+  }
+}

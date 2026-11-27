@@ -1,0 +1,25 @@
+// Five badges 100 apart through a template, centred on (400, 300).
+let xs = [200, 300, 400, 500, 600]
+let ys = [300, 300, 300, 300, 300]
+
+template Badge() {
+  circle disc {
+    position: (0, 0)
+    radius: 30
+    color: cyan
+  }
+  rectangle pip {
+    position: (0, 0)
+    size: (20, 20)
+    color: white
+  }
+}
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate x, i in xs {
+    use Badge() badge { position: (x, ys[i]) }
+  }
+}
