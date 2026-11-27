@@ -370,7 +370,7 @@ explicitly rather than quietly deviating.
     Plan: `docs/plans/2026-11-13-phase-9c-docs-site-and-gallery.md`.
 - **Phase 10A — `from`, spring easing and portable trigonometry** (roadmap
   §13, past the finish line; the first of 10A–10D).
-  - **Status: merged into `main` (`MERGE_SHA`); evidence in
+  - **Status: merged into `main` (`b06ea5c`); evidence in
     `eval/RESULTS-PHASE-10A.md`.** It adds `from` on `animate`, `easing: spring`
     with `bounce`, `src/compiler/detMath.ts` (parse-time `sin`/`cos` and the
     spring through operations IEEE-754 specifies exactly) and four diagnostics:

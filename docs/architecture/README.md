@@ -191,7 +191,7 @@ line**, and acquisition work moved past that line. Read its §1 before
 proposing anything the old roadmap justified by adoption.
 
 **10A — `from`, spring easing and portable trigonometry is merged into `main`
-(`MERGE_SHA`); evidence in `eval/RESULTS-PHASE-10A.md`.** It is the first of
+(`b06ea5c`); evidence in `eval/RESULTS-PHASE-10A.md`.** It is the first of
 four sub-phases, 10A–10D, that build the rest of roadmap §13. It adds `from`
 on `animate`, `easing: spring` with `bounce`, `src/compiler/detMath.ts` and four
 diagnostics (`TYPE_PARALLEL_ONE_PHYSICS`, `TYPE_BOUNCE_WITHOUT_SPRING`,
