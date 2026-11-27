@@ -30,7 +30,12 @@ ends here, with this record and no language change.
 
 ## 1. Protocol as run
 
-As `eval/BRIEFS-LAYOUT.md` describes, with two recorded differences:
+As `eval/BRIEFS-LAYOUT.md` describes, with two recorded differences. The
+prompt that ran is recorded verbatim under "As run" in that file; it also
+carried a convention paragraph ("Centred in the scene" means the arranged
+items' bounding box is centred on (400, 300); "Gap" or "apart" means the
+distance between neighbouring edges unless the brief says centres), which the
+plan's prompt left to the briefs table:
 
 - **How the briefs reached the authors.** The plan's author prompt pointed
   authors at the briefs table in `eval/BRIEFS-LAYOUT.md`. That file also holds
@@ -42,8 +47,9 @@ As `eval/BRIEFS-LAYOUT.md` describes, with two recorded differences:
   `<author>-<brief>.marey` is byte-identical to its `.round1.txt`.
 
 Authors A–D, four isolated authors of one model family, each wrote all nine
-briefs. Each read only the worked example, the editor's completions and
-hovers, `docs/LANGUAGE.md` and `site/content/learn/`.
+briefs. Each was permitted to read only the worked example, the editor's completions
+and hovers, `docs/LANGUAGE.md` and `site/content/learn/`; compliance cannot be
+verified.
 
 ## 2. Per scene
 
@@ -74,7 +80,7 @@ shapes by declared size (§5) could not have hidden a failure here.
 
 ## 3. How the authors wrote it
 
-All 36 scenes use `generate`. The two strategies seen:
+All 36 scenes use `generate`. The three strategies seen:
 
 - **Arithmetic in the loop** for equal pitches: centring offsets such as
   `400 + (col - (cols - 1) / 2) * (w + gap)` (grids, L1, L6) and
@@ -82,11 +88,16 @@ All 36 scenes use `generate`. The two strategies seen:
 - **Hand-computed literal lists** where sizes differ: left edges
   `[226, 282, 418, 514]` (L2), centres `[110, 242.5, 385, 537.5, 685]` (L3),
   tops `225, 285, 345` (L4). Every one of these was correct.
+- **Lists built from expressions in-language**, by author B: `B-mixed-row`
+  (lines 7-10) and `B-spread-dots` (lines 8-12) write each left edge as
+  `x0 + widths[0] + gap` and so on, and `B-left-stack` derives its positions
+  from `top`, `bar` and `gap`, so a change to one width flows through.
 
 `origin` did real work, as LANGUAGE.md suggests: three of the four L2 scenes
-use `origin: (0, 1)` to stand the bars on y = 400, and one L4 scene uses
-`origin: (0, 0.5)` to put the left edges on x = 120. The others computed
-centres from the edges by hand.
+use `origin: (0, 1)` to stand the bars on y = 400. In L4, two scenes use it:
+A uses `origin: (0, 0.5)` with centre-line y values (240, 300, 360), and C
+uses `origin: (0, 0)` with tops (225, 285, 345); both put the left edges on
+x = 120. B and D use no `origin` and compute each centre x as `left + w / 2`.
 
 ## 4. Descriptive numbers (not part of the decision)
 
@@ -94,7 +105,9 @@ centres from the edges by hand.
 and single punctuation characters, with `//` comments removed. Layout tokens:
 every token on a `let` line (including continuation lines of a multi-line
 `let`), a `generate` header line or a `position:` line. Share = layout tokens
-over all tokens.
+over all tokens. This is broader than spec §2.4's wording ("every `let`
+feeding a position"): it counts every `let` line, including lets that feed a
+size or a colour.
 
 | Brief | A | B | C | D |
 |---|---|---|---|---|
@@ -108,7 +121,7 @@ over all tokens.
 | L8 `ring-12` | 61% | 65% | 65% | 61% |
 | L9 `clock-ticks` | 48% | 54% | 51% | 48% |
 
-Median 60%, range 8–86%. Layout is most of what these scenes say, which is
+Median 57.5%, range 8–86%. Layout is most of what these scenes say, which is
 what the briefs ask for. The share does not show the arithmetic going wrong.
 
 **Recorded uncertainty**, 54 lines across the four reports, grouped by what
@@ -135,13 +148,31 @@ they were about:
 
 ## 5. What this does not show
 
-- **Small samples.** Four scenes per brief, 8 to 16 per primitive. A failure
-  rate under about one in eight could go unseen for `row`/`column`, and under
-  about one in four for `distribute`.
-- **One model family, all capable at arithmetic.** These authors summed
+- **Small samples.** Four scenes per brief: 16 for `row`/`column`, 8 for
+  `align`, `grid` and `radial`, 4 for `distribute`. With zero failures, the
+  one-sided 95% exact upper bound on the true failure rate is
+  1 − 0.05^(1/n): about 17% for `row`/`column`, 31% for `align`/`grid`/`radial`
+  and 53% for `distribute`. So the round rules out a failure rate near or
+  above those figures, and does not rule out lower ones: a failure rate of one
+  in four would still give zero failures in 4 scenes 32% of the time (6% at
+  one in two), in 8 scenes 10% of the time, and in 16 scenes 1% of the time.
+  `distribute` in particular is barely constrained.
+- **One author population, all capable at arithmetic.** These authors summed
   widths by hand without a mistake. Human authors, or authors working
   without a calculator's patience, were not measured, and may well fail where
-  these did not.
+  these did not. The authors were also not unaided: see the next bullet.
+- **The tutorial held worked templates for most briefs.** The authors could
+  read `site/content/learn/generate.md`, which contains a 12-tick clock face
+  on a ring (`cos(k * 30 - 90)`, `rotation: k * 30 - 90`, `k % 3 == 0` long
+  ticks, lines 113-131), a bead ring using `i * 360 / count` (lines 159-175)
+  and a centred grid `480 + (col - (cols - 1) / 2) * gap` (line 431, in the
+  first "Try this" exercise). The corpus reuses these idioms almost verbatim,
+  and author C's report cites "the clock example in the generate lesson" and
+  "the generate lesson's grid example". So for L1, L6, L7, L8 and L9 the round
+  measured adapting a documented idiom, not unaided arithmetic. That is a
+  legitimate thing to measure, since the tutorial is what users read, but it
+  is not the same as measuring the arithmetic cold. Only L2, L3 and L4 had no
+  template, and they are where the running-sum friction showed up.
 - **Fully specified briefs.** Every brief gave every number. A brief like "a
   tidy toolbar of six icons" leaves the author to choose sizes and spacing,
   and was not measured; nor was editing an existing layout (changing one
@@ -153,7 +184,9 @@ they were about:
 - **Checker readings.** L9 checks no start angle or direction (its brief
   states none); L8's "first" is the first circle in object order; shapes are
   picked and gaps measured by declared, unscaled size, so a scene that
-  scaled its shapes would false-fail a `brief` count clause (none did).
+  scaled its shapes could false-fail a clause that picks shapes by declared
+  size, or false-pass a gap clause that measures with declared size
+  (`eval/layout/predicates.ts:313-315`). None did.
 
 ## 6. What follows
 

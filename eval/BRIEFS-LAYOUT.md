@@ -30,7 +30,7 @@ The protocol of `eval/BRIEFS.md`, with these changes:
 The geometry checker is `eval/layout/predicates.ts`; its correct and
 deliberately wrong reference scenes are in `eval/layout/reference/`.
 
-## Author prompt
+## Author prompt (as planned)
 
 With `<AUTHOR>` set to A, B, C or D:
 
@@ -49,6 +49,38 @@ With `<AUTHOR>` set to A, B, C or D:
 >
 > Then write a report to `<REPORT_PATH>`: one line per place you were unsure
 > how to express something or whether a number was right, naming the brief.
+
+## Author prompt (as run, 2026-11-27)
+
+The prompt above was not the one used: it points authors at this file, which
+also holds the checker's predicates. The authors were given this text instead,
+with `<REPO>` the repository path and `<AUTHOR>` set to A, B, C or D.
+The convention paragraph ("Centred in the scene", "Gap")
+was part of it.
+
+> You are writing scenes in Marey, a small language for 2D motion graphics. You have no prior knowledge of it. The repository is at <REPO>. You may read only:
+> - src/examples/dusk-hills.marey
+> - src/components/Editor/MonacoEditor/language.ts
+> - src/components/Editor/MonacoEditor/constants.ts
+> - docs/LANGUAGE.md
+> - the files under site/content/learn/
+> Do not read anything else in the repository (in particular nothing under eval/, src/compiler/, docs/specs/, docs/plans/ or docs/architecture/), do not search the repository, and do not run any command.
+>
+> Write one scene per brief below, all nine, before checking anything. Scene size is 800×600. Every shape is a `rectangle` or a `circle`. "Centred in the scene" means the bounding box of the arranged items is centred on (400, 300). "Gap" or "apart" means the distance between neighbouring edges, unless the brief says centres.
+>
+> 1. toolbar-row — Six 60×60 squares in a horizontal row, 20 px apart, the row centred in the scene.
+> 2. mixed-row — Four rectangles 50 px tall with widths 40, 120, 80 and 60, left to right, 16 px apart, the row centred horizontally, all their bottom edges on y = 400.
+> 3. spread-dots — Five circles with radii 10, 30, 20, 40 and 15, left to right, centres on y = 300, the leftmost circle's left edge at x = 100, the rightmost circle's right edge at x = 700, and equal gaps between neighbours.
+> 4. left-stack — Three bars 30 px tall with widths 300, 180 and 240, top to bottom, 30 px apart, left edges on x = 120, the stack centred vertically.
+> 5. badge-row — A reusable badge (a circle of radius 30 with a 20×20 square centred on it) placed five times in a horizontal row, 100 px between neighbouring badge centres, the row centred in the scene.
+> 6. card-grid — Twelve 120×80 cards in 3 columns and 4 rows, 24 px apart in both directions, the grid centred in the scene.
+> 7. stack-columns — Three columns side by side, 80 px apart; each column is four 40×40 squares stacked 10 px apart; the whole block centred in the scene.
+> 8. ring-12 — Twelve circles of radius 10 evenly spaced on a circle of radius 200 centred in the scene, the first at the top (12 o'clock), going clockwise.
+> 9. clock-ticks — Sixty 4×16 tick rectangles on a circle of radius 220 centred in the scene, each rotated so its long side points at the centre, every fifth tick 4×32 instead.
+>
+> Save each scene as eval/scenes-layout/<AUTHOR>-<name>.round1.txt (for example <AUTHOR>-toolbar-row.round1.txt). Write them as you would want them to work; you will not be able to test them now.
+>
+> Then write a report: one line per place you were unsure how to express something or whether a number was right, naming the brief.
 
 ## Briefs
 
