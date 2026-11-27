@@ -1,0 +1,23 @@
+// Three columns of four 40x40 squares. Squares 10 px apart: column height
+// 160 + 30 = 190. Columns 80 px apart (edge to edge): block width
+// 3*40 + 2*80 = 280. Column centres step by 120; square centres by 50.
+let side    = 40
+let inner   = 10
+let outer   = 80
+let cols    = 3
+let squares = 4
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate col in 0 to cols - 1 {
+    generate k in 0 to squares - 1 {
+      rectangle cell {
+        position: (400 + (col - (cols - 1) / 2) * (side + outer), 300 + (k - (squares - 1) / 2) * (side + inner))
+        size: (side, side)
+        color: orange
+      }
+    }
+  }
+}

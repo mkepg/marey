@@ -1,0 +1,16 @@
+// Grid width 3*120 + 2*24 = 408, left edge 196; height 4*80 + 3*24 = 392, top edge 104.
+// Column centres 256 + 144 * col; row centres 144 + 104 * row.
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate row in 0 to 3 {
+    generate col in 0 to 2 {
+      rectangle card {
+        position: (256 + col * 144, 144 + row * 104)
+        size: (120, 80)
+        color: cyan
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+// Column width 40, 80 apart: block is 3*40 + 2*80 = 280 wide, column step 120.
+// Four squares of 40 with 10 gaps: 190 tall, row step 50.
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate col in 0 to 2 {
+    group column {
+      position: (400 + (col - 1) * 120, 300)
+      generate row in 0 to 3 {
+        rectangle cell {
+          position: (0, (row - 1.5) * 50)
+          size: (40, 40)
+          color: cyan
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+let count = 12
+let ring  = 200
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  // Angle 0 points right and angles run clockwise, so -90 is 12 o'clock.
+  generate i in 0 to count - 1 {
+    let angle = i * 360 / count - 90
+    circle bead {
+      position: (400 + ring * cos(angle), 300 + ring * sin(angle))
+      radius: 10
+      color: cyan
+    }
+  }
+}

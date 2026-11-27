@@ -1,0 +1,22 @@
+// 3 columns x 4 rows of 120x80 cards, 24 px apart. Pitch is 144 across and
+// 104 down. Grid is 408 x 392, so centres run x 256..544, y 144..456.
+let cols = 3
+let rows = 4
+let w    = 120
+let h    = 80
+let gap  = 24
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate row in 0 to rows - 1 {
+    generate col in 0 to cols - 1 {
+      rectangle card {
+        position: (400 + (col - (cols - 1) / 2) * (w + gap), 300 + (row - (rows - 1) / 2) * (h + gap))
+        size: (w, h)
+        color: #2f8a94
+      }
+    }
+  }
+}

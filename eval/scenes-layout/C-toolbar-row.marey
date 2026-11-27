@@ -1,0 +1,20 @@
+// Six 60x60 squares, 20 px apart. Row width 6*60 + 5*20 = 460, so the
+// first centre is at 400 - 230 + 30 = 200 and centres step by 80.
+let side  = 60
+let gap   = 20
+let count = 6
+let step  = side + gap
+let x0    = 400 - ((count - 1) * step) / 2
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate i in 0 to count - 1 {
+    rectangle tool {
+      position: (x0 + i * step, 300)
+      size: (side, side)
+      color: cyan
+    }
+  }
+}

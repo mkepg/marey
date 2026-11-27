@@ -1,0 +1,18 @@
+let count = 6
+let side  = 60
+let gap   = 20
+let pitch = side + gap
+let left  = 400 - (count * side + (count - 1) * gap) / 2
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate i in 0 to count - 1 {
+    rectangle tool {
+      position: (left + side / 2 + i * pitch, 300)
+      size: (side, side)
+      color: cyan
+    }
+  }
+}

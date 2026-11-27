@@ -1,0 +1,16 @@
+// Stack height 3*30 + 2*30 = 150, top edge 300 - 75 = 225.
+// Bar centres y: 240, 300, 360. Centre x = 120 + width / 2.
+let widths = [300, 180, 240]
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate w, i in widths {
+    rectangle bar {
+      position: (120 + w / 2, 240 + i * 60)
+      size: (w, 30)
+      color: yellow
+    }
+  }
+}

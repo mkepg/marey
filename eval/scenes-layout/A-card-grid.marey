@@ -1,0 +1,22 @@
+// Grid is 3*120 + 2*24 = 408 wide and 4*80 + 3*24 = 392 tall.
+// Column step 144, row step 104; centred on (400, 300).
+let cw = 120
+let ch = 80
+let gap = 24
+let colStep = cw + gap
+let rowStep = ch + gap
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate row in 0 to 3 {
+    generate col in 0 to 2 {
+      rectangle card {
+        position: (400 + (col - 1) * colStep, 300 + (row - 1.5) * rowStep)
+        size: (cw, ch)
+        color: orange
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+// A badge is drawn about its own (0, 0). Centres are 100 apart, so the
+// centres run 200..600 and the row (with the radius-30 circles) spans 170..630.
+template Badge() {
+  circle disc { position: (0, 0), radius: 30, color: cyan }
+  rectangle pip { position: (0, 0), size: (20, 20), color: white }
+}
+
+let count = 5
+let step  = 100
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate i in 0 to count - 1 {
+    use Badge() badge { position: (400 + (i - (count - 1) / 2) * step, 300) }
+  }
+}

@@ -1,0 +1,25 @@
+let count = 5
+let pitch = 100
+
+// A circle of radius 30 with a 20x20 square centred on it, drawn about (0, 0).
+template Badge() {
+  circle disc {
+    position: (0, 0)
+    radius: 30
+    color: cyan
+  }
+  rectangle pip {
+    position: (0, 0)
+    size: (20, 20)
+    color: white
+  }
+}
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate i in 0 to count - 1 {
+    use Badge() badge { position: (400 + (i - (count - 1) / 2) * pitch, 300) }
+  }
+}

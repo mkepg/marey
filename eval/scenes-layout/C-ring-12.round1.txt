@@ -1,0 +1,19 @@
+// Twelve dots every 30 degrees on a radius-200 ring about (400, 300).
+// Angle 0 points right and y grows downward, so -90 is 12 o'clock and
+// increasing angles go clockwise.
+let count = 12
+let ring  = 200
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate k in 0 to count - 1 {
+    let angle = k * 360 / count - 90
+    circle dot {
+      position: (400 + ring * cos(angle), 300 + ring * sin(angle))
+      radius: 10
+      color: cyan
+    }
+  }
+}

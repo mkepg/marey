@@ -1,0 +1,18 @@
+let widths = [300, 180, 240]
+let bar    = 30
+let gap    = 30
+let left   = 120
+let top    = 300 - (3 * bar + 2 * gap) / 2
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate w, i in widths {
+    rectangle bar {
+      position: (left + w / 2, top + bar / 2 + i * (bar + gap))
+      size: (w, bar)
+      color: yellow
+    }
+  }
+}

@@ -1,0 +1,19 @@
+// Each tick is 4 wide, 16 tall (32 every fifth), centred on the ring of radius 220.
+// Unrotated its long side is vertical; rotating by k * 6 degrees aligns it
+// with the radius at angle k * 6 - 90.
+let ring = 220
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate k in 0 to 59 {
+    let angle = k * 6 - 90
+    rectangle tick {
+      position: (400 + ring * cos(angle), 300 + ring * sin(angle))
+      size: (4, if k % 5 == 0 then 32 else 16)
+      rotation: k * 6
+      color: white
+    }
+  }
+}

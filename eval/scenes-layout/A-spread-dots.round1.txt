@@ -1,0 +1,17 @@
+// Diameters sum to 230 across a span of 600, so 4 equal gaps of 92.5.
+// Centres: 110, 242.5, 385, 537.5, 685.
+let radii   = [10, 30, 20, 40, 15]
+let centres = [110, 242.5, 385, 537.5, 685]
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate r, i in radii {
+    circle dot {
+      position: (centres[i], 300)
+      radius: r
+      color: magenta
+    }
+  }
+}

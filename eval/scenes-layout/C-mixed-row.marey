@@ -1,0 +1,20 @@
+// Widths 40, 120, 80, 60 with 16 px gaps: total 300 + 48 = 348, so the row
+// starts at x = 400 - 174 = 226. Left edges are listed (running sums by hand,
+// since there is no accumulation), and each bar stands on y = 400 via
+// origin (0, 1).
+let widths = [40, 120, 80, 60]
+let lefts  = [226, 282, 418, 514]
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate w, i in widths {
+    rectangle block {
+      position: (lefts[i], 400)
+      origin: (0, 1)
+      size: (w, 50)
+      color: orange
+    }
+  }
+}

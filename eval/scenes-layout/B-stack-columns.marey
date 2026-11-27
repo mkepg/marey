@@ -1,0 +1,25 @@
+let columns = 3
+let side    = 40
+let colGap  = 80
+let stackGap = 10
+let squares = 4
+
+// One column: four squares stacked, drawn about the column's own centre (0, 0).
+template Column() {
+  generate r in 0 to squares - 1 {
+    rectangle sq {
+      position: (0, (r - (squares - 1) / 2) * (side + stackGap))
+      size: (side, side)
+      color: orange
+    }
+  }
+}
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate c in 0 to columns - 1 {
+    use Column() col { position: (400 + (c - (columns - 1) / 2) * (side + colGap), 300) }
+  }
+}

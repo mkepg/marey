@@ -1,0 +1,18 @@
+// Widths sum to 300 plus 3 gaps of 16 = 348; row spans x 226..574.
+// origin (0, 1) pins each rectangle's bottom-left corner to its position.
+let widths = [40, 120, 80, 60]
+let lefts  = [226, 282, 418, 514]
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate w, i in widths {
+    rectangle block {
+      position: (lefts[i], 400)
+      origin: (0, 1)
+      size: (w, 50)
+      color: orange
+    }
+  }
+}

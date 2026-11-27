@@ -1,0 +1,21 @@
+// Edge-to-edge gap between columns is 80, so block width 3*40 + 2*80 = 280, left edge 260.
+// Column centres x: 280, 400, 520. Column height 4*40 + 3*10 = 190, top edge 205.
+// A Column is drawn about its own (0, 0), its middle: squares at y = -75, -25, 25, 75.
+template Column() {
+  generate j in 0 to 3 {
+    rectangle sq {
+      position: (0, -75 + j * 50)
+      size: (40, 40)
+      color: orange
+    }
+  }
+}
+
+scene {
+  size: (800, 600)
+  background: #0a0e1a
+
+  generate i in 0 to 2 {
+    use Column() col { position: (280 + i * 120, 300) }
+  }
+}
