@@ -421,8 +421,9 @@ export function collectErrors(ast: AstNode): CompilerError[] {
     // sequence's own "must be inside a renderable" check already do elsewhere).
     // Sequences and parallels are excluded: a timeline step's physics children are
     // built by buildSequencesFromChildren (typeChecker/builder.ts) with a plain
-    // loop, not `.find`, so two sequential (or two parallel) physics phases build
-    // correctly today and are not the defect this rule guards against.
+    // loop, not `.find`, so two sequential physics phases build correctly. Two
+    // physics blocks in one parallel build too, but run against the same body, so
+    // they are rejected by TYPE_PARALLEL_ONE_PHYSICS below.
     if (typeName !== "sequence" && typeName !== "parallel") {
       const directPhysics = node.children.filter((c) => c.type === "physics");
       if (directPhysics.length > 1) {
@@ -464,6 +465,23 @@ export function collectErrors(ast: AstNode): CompilerError[] {
       }
 
       const blockChildren = (node as ObjectNode).children;
+
+      // Only the parallel's own direct physics children count: a physics block in
+      // a nested step is a separate phase, not a concurrent sibling. Concurrent
+      // blocks drive one body and the runtime keeps the last block's settings
+      // (see spawnPhysics), so this also covers 'spin' and 'lockRotation' split
+      // across sibling blocks. One diagnostic per block after the first.
+      if (isParallel) {
+        const parallelPhysics = blockChildren.filter((c) => c.type === "physics");
+        for (const extra of parallelPhysics.slice(1)) {
+          errors.push({
+            phase: "TYPE",
+            message: `[TYPE_PARALLEL_ONE_PHYSICS] A 'parallel' can run only one 'physics' block for its object. Found ${parallelPhysics.length}. Both would drive the same body, and only the last one's settings would apply. Merge them into one block.`,
+            line: extra.line, col: extra.col, endLine: extra.endLine, endCol: extra.endCol,
+          });
+        }
+      }
+
       const validTarget = isParallel ? "animate' or 'physics" : "animate', 'physics', or 'parallel";
       
       const hasValidChild = blockChildren.some(c => 

@@ -431,26 +431,25 @@ describe("lockRotation", () => {
     for (const a of locked.angles) expect(a).toBe(locked.angles[0]);
   });
 
-  it("a lock that reaches a body already free holds too: the second of two physics blocks in one parallel step", () => {
-    // The first block's spawn releases the body's pin, so the second block's
-    // params land on a dynamic body and no unpin follows them.
-    const locked = dropCrate(
-      "sequence { parallel { physics { duration: 5 } physics { lockRotation: true, duration: 5 } } }"
-    );
-    expect(locked.fell).toBeGreaterThan(50);
-    for (const a of locked.angles) expect(a).toBe(locked.angles[0]);
-  });
-
-  it("a lock that arrives after a sibling block's spin has been flushed stops the turning", () => {
-    // The first block's spawn flushes its spin into the free body; the second
-    // block then makes the inertia infinite. Without zeroing the angular
-    // velocity the body kept turning at 360 degrees a second, and contacts
-    // could not stop it.
-    const locked = dropCrate(
-      "sequence { parallel { physics { spin: 360, duration: 5 } physics { lockRotation: true, duration: 5 } } }"
-    );
-    expect(locked.fell).toBeGreaterThan(50);
-    for (const a of locked.angles) expect(a).toBe(locked.angles[0]);
+  it.each([
+    ["a lock in the second of two physics blocks", "physics { duration: 5 } physics { lockRotation: true, duration: 5 }"],
+    ["a lock beside a sibling block's spin", "physics { spin: 360, duration: 5 } physics { lockRotation: true, duration: 5 }"],
+  ])("%s in one parallel step is rejected at compile time, so the runtime never sees it", (_label, blocks) => {
+    // These shapes used to compile and reach the runtime, which had to cope with
+    // a lock landing on an already free body. TYPE_PARALLEL_ONE_PHYSICS now
+    // stops them at the type checker.
+    const out = compileSource(`scene {
+  size: (800, 600)
+  rectangle crate {
+    position: (400, 200)
+    size: (50, 50)
+    sequence { parallel { ${blocks} } }
+  }
+}`);
+    expect(out.ir).toBeNull();
+    expect(out.errors.map((e) => e.message)).toEqual([
+      expect.stringContaining("[TYPE_PARALLEL_ONE_PHYSICS]"),
+    ]);
   });
 });
 

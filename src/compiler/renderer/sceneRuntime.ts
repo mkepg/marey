@@ -589,8 +589,8 @@ export class SceneRuntime {
       // of 0 parks nothing, so it makes no world call at all.
       // Unlike the velocity above, which keeps the earlier block's value
       // (`??`), a later spin overwrites. That is acceptable: the two only meet
-      // when one `parallel` holds two physics blocks, and that already follows
-      // last-block-wins.
+      // when one `parallel` holds two physics blocks, which the type checker
+      // rejects (TYPE_PARALLEL_ONE_PHYSICS), so this path never sees it.
       container.__pendingSpin = phIR.spin !== 0 ? (phIR.spin * Math.PI) / 180 : undefined;
 
       // Unpin before flushing: setStatic(false) collapses the body back to rest,

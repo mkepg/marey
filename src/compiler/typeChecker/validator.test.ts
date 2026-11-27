@@ -596,8 +596,10 @@ describe("handoff targets and duration ordering (P3A-8)", () => {
     }
   }
 }`);
-    expect(out).toHaveLength(1);
-    expect(out[0]).toContain("TYPE_HANDOFF_SCHEDULE_AMBIGUOUS");
+    // Both rules fire: the handoff ambiguity, and the second physics block.
+    expect(out).toHaveLength(2);
+    expect(out.some((m) => m.includes("TYPE_HANDOFF_SCHEDULE_AMBIGUOUS"))).toBe(true);
+    expect(out.some((m) => m.includes("TYPE_PARALLEL_ONE_PHYSICS"))).toBe(true);
   });
 
   it("allows a handoff alongside a concurrent non-position animation", () => {
@@ -1108,7 +1110,7 @@ describe("TYPE_ONE_PHYSICS", () => {
     expect(errorsFor(src)).toEqual([]);
   });
 
-  it("does not raise TYPE_ONE_PHYSICS for a parallel with two direct physics children", () => {
+  it("raises TYPE_PARALLEL_ONE_PHYSICS, not TYPE_ONE_PHYSICS, for a parallel with two direct physics children", () => {
     const src = `
       scene {
         size: (100, 100)
@@ -1125,7 +1127,10 @@ describe("TYPE_ONE_PHYSICS", () => {
         }
       }
     `;
-    expect(errorsFor(src)).toEqual([]);
+    const errs = errorsFor(src);
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toContain("[TYPE_PARALLEL_ONE_PHYSICS]");
+    expect(errs[0]).not.toContain("TYPE_ONE_PHYSICS]");
   });
 
   // Fix round 1: the shipped rule suppressed itself entirely whenever the
