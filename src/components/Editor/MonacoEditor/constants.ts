@@ -80,7 +80,27 @@ export function propertyHoverMarkdown(property: string, blockType?: string): str
 const [trueValue, falseValue] = BOOLEAN_VALUES;
 const [durationValue] = DURATION_VALUES;
 const [containValue, coverValue, fillValue, noneValue] = FIT_VALUES;
-const [linearValue, easeInValue, easeOutValue, easeInOutValue] = EASING_VALUES;
+type EasingValue = (typeof EASING_VALUES)[number];
+
+/**
+ * One description per easing in the contract. Keyed by `EasingValue`, so an
+ * easing added to `EASING_VALUES` without a description here is a type error,
+ * and the hover entries below are built from `EASING_VALUES` itself.
+ */
+const EASING_DESCRIPTIONS: Record<EasingValue, string> = {
+  linear: "Constant speed animation. No acceleration or deceleration.",
+  easeIn: "Starts slow and accelerates towards the end. Useful for objects leaving the screen.",
+  easeOut: "Starts fast and decelerates to a stop. Creates a natural landing effect.",
+  easeInOut: "Starts slow, speeds up, then slows down. Gives a smooth, professional feel.",
+  spring: "Overshoots `to`, swings back and settles on it exactly at the end of `duration`. `bounce` (0 to 0.9, default 0.25) sets how far it overshoots. Not valid with `handoff: true`.",
+};
+
+const EASING_DOCS: Record<string, string> = Object.fromEntries(
+  EASING_VALUES.map((value) => [
+    value,
+    `### \`${value}\`\n**Type:** easing\n\n${EASING_DESCRIPTIONS[value]}\n\n**Example:** \`easing: ${value}\``,
+  ]),
+);
 
 export const VALUE_DOCS: Record<string, string> = {
   [trueValue]: `### \`${trueValue}\`\n**Type:** boolean\n\nRepresents a boolean true value.\n\n**Example:** \`loop: ${trueValue}\``,
@@ -90,10 +110,7 @@ export const VALUE_DOCS: Record<string, string> = {
   [coverValue]: `### \`${coverValue}\`\n**Type:** fit\n\nScales the scene to cover the entire preview window while preserving aspect ratio. The scene may be cropped.\n\n**Example:** \`fit: ${coverValue}\``,
   [fillValue]: `### \`${fillValue}\`\n**Type:** fit\n\nStretches the scene to exactly fill the preview window, ignoring aspect ratio.\n\n**Example:** \`fit: ${fillValue}\``,
   [noneValue]: `### \`${noneValue}\`\n**Type:** fit\n\nDisables scaling; the scene is displayed at its original size.\n\n**Example:** \`fit: ${noneValue}\``,
-  [linearValue]: `### \`${linearValue}\`\n**Type:** easing\n\nConstant speed animation. No acceleration or deceleration.\n\n**Example:** \`easing: ${linearValue}\``,
-  [easeInValue]: `### \`${easeInValue}\`\n**Type:** easing\n\nStarts slow and accelerates towards the end. Useful for objects leaving the screen.\n\n**Example:** \`easing: ${easeInValue}\``,
-  [easeOutValue]: `### \`${easeOutValue}\`\n**Type:** easing\n\nStarts fast and decelerates to a stop. Creates a natural landing effect.\n\n**Example:** \`easing: ${easeOutValue}\``,
-  [easeInOutValue]: `### \`${easeInOutValue}\`\n**Type:** easing\n\nStarts slow, speeds up, then slows down. Gives a smooth, professional feel.\n\n**Example:** \`easing: ${easeInOutValue}\``,
+  ...EASING_DOCS,
 };
 
 const propertyPlaceholder = (blockName: ContractBlockName, property: string): string =>
