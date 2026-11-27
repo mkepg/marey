@@ -90,6 +90,7 @@ function anim(over: Partial<IRAnimation> = {}): IRAnimation {
   return {
     property: "position",
     to: { x: 200, y: 0 },
+    from: null,
     duration: 1,
     delay: 0,
     easing: "linear",
@@ -1188,6 +1189,7 @@ describe("SceneRuntime · a bottom-origin polygon body under a scale animation",
           {
             property: "scale",
             to: { x: 1, y: 2 },
+            from: null,
             duration: 20 / TICK_HZ,
             delay: 0,
             easing: "linear",

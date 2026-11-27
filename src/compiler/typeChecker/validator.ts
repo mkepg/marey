@@ -75,9 +75,9 @@ function scaleHasZeroComponent(val: AstValue): boolean {
  * The sign half of the scale rule, in one place.
  *
  * Two call sites reach it: the `nonNegativeScale` contract arm below, for a
- * declared `scale` property, and `collectErrors`'s `animate` branch, for a
- * `property: scale` block's `to`. Before Phase 3C only the first existed, so
- * `to: (-3, 1)` compiled with zero errors while `scale: (-3, 1)` one line
+ * declared `scale` property, and `animateValueErrors`, for a
+ * `property: scale` block's `to` and `from`. Before Phase 3C only the first
+ * existed, so `to: (-3, 1)` compiled with zero errors while `scale: (-3, 1)` one line
  * above did not (design §2.2) — a rule enforced on the declaration site and
  * not on the property whose entire purpose is to change that value over time.
  * Bringing `to` under it is a narrowing, with the regression test §5.4
@@ -193,6 +193,91 @@ function zeroScalePhysicsError(
     message: `[TYPE_ZERO_SCALE_PHYSICS] ${label}: ${subject} ${clause} on an object that participates in physics, but got ${scaleValueText(val)}. ${reason}`,
     ...errPosOf(val),
   };
+}
+
+/**
+ * Every rule an `animate` block's `to` or `from` value has to satisfy, in one
+ * place, so the two slots cannot drift apart (engineering-lessons §5). Both
+ * reach the same runtime state: `to` is where the animation ends, `from`
+ * where it starts. So each rule that applies to one applies to the other,
+ * under the same code.
+ *
+ * `prop` is the block's `property` value. The messages for `to` are worded
+ * exactly as they were before `from` existed; a `from` message says `'from'`
+ * where its `to` twin says `'to'`.
+ */
+function animateValueErrors(
+  slot: "to" | "from",
+  value: AstValue,
+  prop: AstValue & { kind: "animProperty" },
+  label: string,
+  ancestors: readonly ObjectNode[],
+): CompilerError[] {
+  const errors: CompilerError[] = [];
+  const p = prop.value as string;
+  const at = errPosOf(value);
+
+  if (p === "position" && value.kind !== "point") {
+    errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property 'position' expects a point for '${slot}' (e.g., ${slot}: (100, 100)).`, ...at });
+  }
+  if (p === "scale" && value.kind !== "point" && value.kind !== "number") {
+    errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property 'scale' expects a number or point for '${slot}'.`, ...at });
+  }
+  if ((p === "rotation" || p === "alpha") && value.kind !== "number") {
+    errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property '${p}' expects a number for '${slot}'.`, ...at });
+  }
+  if (p === "color" && value.kind !== "color") {
+    errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property 'color' expects a colour for '${slot}' (e.g., ${slot}: #ff8800).`, ...at });
+  }
+
+  // A group has no colour of its own to blend. The owner is the renderable
+  // the block belongs to, which a `sequence`/`parallel` may sit in front of,
+  // so it is looked up the same way the zero-scale rule below does rather
+  // than taken from the parent node.
+  //
+  // The `to` diagnostic has always pointed at `property: color`. A `from` on
+  // the same block points at its own value instead, so an author who wrote
+  // both sees two marks rather than one diagnostic printed twice.
+  if (p === "color") {
+    const colourOwnerIdx = ownerIndex(ancestors);
+    const colourOwner = colourOwnerIdx >= 0 ? ancestors[colourOwnerIdx] : undefined;
+    if (colourOwner && colourOwner.type === "group") {
+      errors.push({
+        phase: "TYPE",
+        message: `[TYPE_ANIM_COLOR_TARGET] 'property: color' can only animate a shape with a 'color' (circle, rectangle, polygon, line or text); '${colourOwner.name}' is a group.`,
+        ...errPosOf(slot === "to" ? prop : value),
+      });
+    }
+  }
+
+  // A `to` or a `from` reaches exactly the same runtime state a declared
+  // `scale` does, so both scale rules apply to it (design §5.3). Until Phase
+  // 3C this block validated `to` by *kind* alone, which is why the ban on the
+  // declaration site was never an invariant: `to: (-3, 1)` and `to: (1, 0)`
+  // both compiled.
+  if (p === "scale") {
+    const subject = slot === "to" ? "the scale target 'to'" : "the scale start 'from'";
+    const signError = negativeScaleError(label, subject, value);
+    if (signError) errors.push(signError);
+
+    // Zero is a question about the *object*, not the animate block, so it
+    // needs the renderable this block belongs to — which is not necessarily
+    // the parent node, because a `sequence`/`parallel` may sit between them
+    // (D13).
+    const ownerIdx = ownerIndex(ancestors);
+    if (ownerIdx >= 0) {
+      const zeroError = zeroScalePhysicsError(
+        label,
+        subject,
+        value,
+        ancestors[ownerIdx],
+        ancestors.slice(0, ownerIdx),
+      );
+      if (zeroError) errors.push(zeroError);
+    }
+  }
+
+  return errors;
 }
 
 /**
@@ -652,63 +737,19 @@ export function collectErrors(ast: AstNode): CompilerError[] {
 
       const propVal = node.props["property"];
       const toVal = node.props["to"];
+      const fromVal = node.props["from"];
 
       if (propVal && toVal && propVal.kind === "animProperty") {
         const p = propVal.value as string;
         if (!(ANIMATABLE_PROPERTIES as readonly string[]).includes(p)) {
           errors.push({ phase: "TYPE", message: `[TYPE_ANIM_PROP] Cannot animate property '${p}'. Supported properties are: ${ANIMATABLE_PROPERTIES.join(", ")}.`, line: propVal.line, col: propVal.col, endLine: propVal.endLine, endCol: propVal.endCol });
         }
-        if (p === "position" && toVal.kind !== "point") {
-          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property 'position' expects a point for 'to' (e.g., to: (100, 100)).`, line: toVal.line, col: toVal.col, endLine: toVal.endLine, endCol: toVal.endCol });
-        }
-        if (p === "scale" && toVal.kind !== "point" && toVal.kind !== "number") {
-          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property 'scale' expects a number or point for 'to'.`, line: toVal.line, col: toVal.col, endLine: toVal.endLine, endCol: toVal.endCol });
-        }
-        if ((p === "rotation" || p === "alpha") && toVal.kind !== "number") {
-          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property '${p}' expects a number for 'to'.`, line: toVal.line, col: toVal.col, endLine: toVal.endLine, endCol: toVal.endCol });
-        }
-
-        if (p === "color" && toVal.kind !== "color") {
-          errors.push({ phase: "TYPE", message: `[TYPE_ANIM_MISMATCH] Property 'color' expects a colour for 'to' (e.g., to: #ff8800).`, line: toVal.line, col: toVal.col, endLine: toVal.endLine, endCol: toVal.endCol });
-        }
-
-        // A group has no colour of its own to blend. The owner is the
-        // renderable the block belongs to, which a `sequence`/`parallel` may
-        // sit in front of, so it is looked up the same way the zero-scale
-        // rule below does rather than taken from `parentNode`.
-        if (p === "color") {
-          const colourOwnerIdx = ownerIndex(ancestors);
-          const colourOwner = colourOwnerIdx >= 0 ? ancestors[colourOwnerIdx] : undefined;
-          if (colourOwner && colourOwner.type === "group") {
-            errors.push({ phase: "TYPE", message: `[TYPE_ANIM_COLOR_TARGET] 'property: color' can only animate a shape with a 'color' (circle, rectangle, polygon, line or text); '${colourOwner.name}' is a group.`, line: propVal.line, col: propVal.col, endLine: propVal.endLine, endCol: propVal.endCol });
-          }
-        }
-
-        // A `to` reaches exactly the same runtime state a declared `scale`
-        // does, so both scale rules apply to it (design §5.3). Until Phase 3C
-        // this block validated `to` by *kind* alone, which is why the ban on
-        // the declaration site was never an invariant: `to: (-3, 1)` and
-        // `to: (1, 0)` both compiled.
-        if (p === "scale") {
-          const signError = negativeScaleError(label, "the scale target 'to'", toVal);
-          if (signError) errors.push(signError);
-
-          // Zero is a question about the *object*, not the animate block, so
-          // it needs the renderable this block belongs to — which is not
-          // necessarily `parentNode`, because a `sequence`/`parallel` may sit
-          // between them (D13).
-          const ownerIdx = ownerIndex(ancestors);
-          if (ownerIdx >= 0) {
-            const zeroError = zeroScalePhysicsError(
-              label,
-              "the scale target 'to'",
-              toVal,
-              ancestors[ownerIdx],
-              ancestors.slice(0, ownerIdx),
-            );
-            if (zeroError) errors.push(zeroError);
-          }
-        }
+        errors.push(...animateValueErrors("to", toVal, propVal, label, ancestors));
+      }
+      // `from` is optional, so it is checked whether or not `to` was written;
+      // a missing `to` is already the required-property error.
+      if (propVal && fromVal && propVal.kind === "animProperty") {
+        errors.push(...animateValueErrors("from", fromVal, propVal, label, ancestors));
       }
 
       const handoffVal = node.props["handoff"];

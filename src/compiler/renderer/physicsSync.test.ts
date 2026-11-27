@@ -303,6 +303,7 @@ const PHYSICS: IRPhysics = {
 const ANIMATION: IRAnimation = {
   property: "position",
   to: { x: 10, y: 10 },
+  from: null,
   duration: 1,
   delay: 0,
   easing: "linear",

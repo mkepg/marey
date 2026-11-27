@@ -148,6 +148,20 @@ function sameTarget(a: RunningAnim, b: RunningAnim): boolean {
   return a.container === b.container && a.anim.property === b.anim.property;
 }
 
+/**
+ * An authored `to` or `from` as the runner holds it: a number scale or
+ * position broadcast to both axes, a colour as `0xRRGGBB`, and a rotation in
+ * radians, since it is authored in degrees (see getCurrentVal).
+ */
+function runnerValue(prop: string, value: number | IRPoint | IRColor): number | IRPoint {
+  if ((prop === "position" || prop === "scale") && typeof value === "number") {
+    return { x: value, y: value };
+  }
+  if (prop === "color") return colorToInt(value as IRColor);
+  if (prop === "rotation") return (value as number) * (Math.PI / 180);
+  return value as number | IRPoint;
+}
+
 function getCurrentVal(container: Container, prop: string): number | IRPoint {
   if (prop === "position") {
     return container.__mareyLayout
@@ -533,19 +547,17 @@ export class SceneRuntime {
     if (anim.property !== "color") unpinBody(container, this.world, "FROZEN");
     if (isPos) pinBody(container, this.world, "POS_ANIM");
 
-    const sVal = getCurrentVal(container, anim.property);
-    let tVal = anim.to;
-    if ((anim.property === "position" || anim.property === "scale") && typeof tVal === "number") {
-      tVal = { x: tVal, y: tVal };
-    }
-    if (anim.property === "color") tVal = colorToInt(anim.to as IRColor);
-    // `to` is authored in degrees; the runner holds radians (see getCurrentVal).
-    if (anim.property === "rotation") tVal = (anim.to as number) * (Math.PI / 180);
+    // With `from`, the runner starts there rather than at the object's current
+    // value, so a loop restarts at it and a yoyo returns to it.
+    const sVal = anim.from === null
+      ? getCurrentVal(container, anim.property)
+      : runnerValue(anim.property, anim.from);
+    const tVal = runnerValue(anim.property, anim.to);
 
     const ra: RunningAnim = {
       container, anim,
       startVal: sVal,
-      targetVal: tVal as number | IRPoint,
+      targetVal: tVal,
       time: {
         elapsedTicks: 0,
         durationTicks: secondsToTicks(anim.duration),
@@ -569,6 +581,20 @@ export class SceneRuntime {
     };
     this.runningAnims.push(ra);
     localList.push(ra);
+
+    // A `from` is written the moment the animation is scheduled, which is now:
+    // tick 0 for a top-level animation, the start of its step for one in a
+    // sequence. Left to the first tick, a delayed fade-in would show its
+    // resting value until then, and a body bound at its declared position
+    // would sit there although the drawing never does. Progress is 0 here,
+    // delayed or not, so this is the runner's own start value, and the push
+    // runs the same path every later tick does. Only with `from`: without
+    // it the start value is already what the object holds, and writing it
+    // again would add a world call to scenes that never asked for one.
+    if (anim.from !== null) {
+      applyAnim(ra, 0);
+      if (anim.property !== "color") this.pushAnimToWorld(ra, false);
+    }
   }
 
   private spawnPhysics(container: Container, phIR: IRPhysics, localList: AnimOrPhysics[]): void {

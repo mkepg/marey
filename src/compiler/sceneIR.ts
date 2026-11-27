@@ -62,6 +62,12 @@ export interface IRTransform {
 export interface IRAnimation {
   readonly property: string;
   readonly to: number | IRPoint | IRColor;
+  /**
+   * The start value, or `null` to start from the object's current value. The
+   * renderer writes it when the animation is scheduled and holds it through
+   * `delay`.
+   */
+  readonly from: number | IRPoint | IRColor | null;
   readonly duration: number;
   /** Seconds to wait before this animation begins. */
   readonly delay: number;

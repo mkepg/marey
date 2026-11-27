@@ -57,12 +57,15 @@ export type DerivedDefaultStrategy = "polygonMinPoint";
  * `gravity` (itself defaulting to (0, 980)), so a world-level number would
  * override blocks that never asked for one.
  *
+ * `animate.from` is the third: absent, the animation starts from whatever
+ * value the object holds when it is scheduled, which no literal can name.
+ *
  * Declared here rather than left implicit so `languageContract.test.ts`'s gap
  * check keeps enumerating structurally: every optional property still has a
  * documented fallback, and this is a third kind of one rather than an
  * exception to the rule.
  */
-export type AbsentMeaning = "indefinite" | "physicsGravity";
+export type AbsentMeaning = "indefinite" | "physicsGravity" | "currentValue";
 
 export interface PropertySpec {
   readonly kinds: ValueKind | readonly ValueKind[];
@@ -315,6 +318,13 @@ const animateProperties = Object.freeze({
     "to: 360",
     "(0, 0)",
     { required: true },
+  ),
+  from: property(
+    ["number", "point", "color"],
+    "Optional start value. Held from the moment the animation is scheduled, through its 'delay'.",
+    "from: 0",
+    "0",
+    { absentMeans: "currentValue" },
   ),
   duration: property(
     "number",

@@ -40,23 +40,9 @@ scene {
 
 The card slides in from outside the frame. Its `position`, `(-100, 270)`, is
 where the animation starts, and `to` is where it ends. To choose a starting
-point you set the property itself; there is no `from`, and the compiler
-rejects one:
+point you set the property itself.
 
-```marey error
-scene {
-  size: (960, 540)
-  duration: 3
-
-  rectangle card {
-    position: (-100, 270)
-    size: (160, 100)
-    animate { property: position, from: (-100, 270), to: (480, 270), duration: 2 }
-  }
-}
-```
-
-The message lists every property an `animate` block accepts. Four of them,
+An `animate` block accepts more properties than these three. Four of them,
 `delay`, `loop`, `yoyo` and `handoff`, come in later lessons.
 
 ## Five properties
